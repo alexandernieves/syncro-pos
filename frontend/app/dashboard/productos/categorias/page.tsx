@@ -1,0 +1,216 @@
+"use client";
+import React, { useState, useEffect, useCallback } from "react";
+import { ColumnDef } from "@tanstack/react-table";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogDescription, DialogFooter, DialogClose,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  IconPlus, IconPencil, IconTrash, IconDotsVertical,
+  IconTag, IconDeviceFloppy,
+} from "@tabler/icons-react";
+import { toast } from "sonner";
+import { PosTable } from "@/components/pos-table";
+
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+
+type Category = {
+  _id: string;
+  name: string;
+  description: string;
+};
+
+const emptyForm = { name: "", description: "" };
+
+export default function CategoriasPage() {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/categories`, { headers });
+      const data = await res.json();
+      setCategories(Array.isArray(data) ? data : []);
+    } catch {
+      toast.error("Error al cargar las categorías");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openCreate = () => { setForm(emptyForm); setEditId(null); setOpen(true); };
+  const openEdit = (c: Category) => {
+    setForm({ name: c.name, description: c.description || "" });
+    setEditId(c._id);
+    setOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) { toast.error("El nombre de la categoría es obligatorio"); return; }
+    setSaving(true);
+    try {
+      const url = editId ? `${API}/categories/${editId}` : `${API}/categories`;
+      const method = editId ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        toast.success(editId ? `Categoría actualizada` : `Categoría registrada`);
+        setOpen(false);
+        load();
+      } else {
+        toast.error("Error al guardar la categoría");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    try {
+      const res = await fetch(`${API}/categories/${id}`, { method: "DELETE", headers });
+      if (res.ok) {
+        toast.success(`Categoría "${name}" eliminada`);
+        load();
+      } else {
+        toast.error("Error al eliminar la categoría");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    }
+  };
+
+  const columns: ColumnDef<Category>[] = [
+    {
+      accessorKey: "name",
+      header: "Nombre",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3 font-medium">
+          <div className="bg-primary/10 text-primary rounded-lg p-2 shrink-0">
+            <IconTag size={18} />
+          </div>
+          {row.original.name}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "description",
+      header: "Descripción",
+      cell: ({ row }) => (
+        <span className="text-sm text-muted-foreground whitespace-pre-wrap">
+          {row.original.description || "—"}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => {
+        const c = row.original;
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="size-8">
+                <IconDotsVertical size={14} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-36">
+              <DropdownMenuItem onClick={() => openEdit(c)}>
+                <IconPencil size={13} className="mr-2" /> Editar
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={() => handleDelete(c._id, c.name)}>
+                <IconTrash size={13} className="mr-2" /> Eliminar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-6 p-4 lg:p-6">
+      <div>
+        <h1 className="text-2xl font-bold">Categorías</h1>
+        <p className="text-muted-foreground text-sm">{categories.length} categorías registradas</p>
+      </div>
+
+      <PosTable
+        columns={columns}
+        data={categories}
+        loading={loading}
+        searchPlaceholder="Buscar categorías..."
+        actions={
+          <Button className="gap-2" onClick={openCreate}>
+            <IconPlus size={16} /> Nueva Categoría
+          </Button>
+        }
+      />
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <IconTag size={20} /> {editId ? "Editar Categoría" : "Registrar Nueva Categoría"}
+            </DialogTitle>
+            <DialogDescription>
+              {editId ? "Modifica el nombre y descripción de la categoría." : "Ingresa los datos para clasificar tus productos."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4 py-2">
+            <div className="flex flex-col gap-1.5">
+              <Label>Nombre de la Categoría *</Label>
+              <Input
+                placeholder="Ej: Bebidas, Limpieza..."
+                value={form.name}
+                onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label>Descripción</Label>
+              <Input
+                placeholder="Detalles sobre esta categoría..."
+                value={form.description}
+                onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <DialogClose asChild>
+              <Button variant="outline">Cancelar</Button>
+            </DialogClose>
+            <Button onClick={handleSave} disabled={saving} className="gap-2">
+              <IconDeviceFloppy size={16} />
+              {saving ? "Guardando..." : editId ? "Actualizar" : "Registrar Categoría"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
