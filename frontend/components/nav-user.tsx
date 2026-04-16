@@ -96,7 +96,7 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push('/dashboard/cuenta')} className="cursor-pointer">
                 <IconUserCircle />
                 Cuenta
               </DropdownMenuItem>

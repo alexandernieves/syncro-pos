@@ -69,8 +69,8 @@ const data = {
       icon: IconBox,
       items: [
         { title: "Almacén", url: "/dashboard/inventario/almacen" },
+        { title: "Compras (OC)", url: "/dashboard/inventario/compras" },
         { title: "Conteo", url: "/dashboard/inventario/conteo" },
-        { title: "Ingreso", url: "/dashboard/inventario/ingreso" },
         { title: "Movimientos", url: "/dashboard/inventario/movimientos" },
       ],
     },

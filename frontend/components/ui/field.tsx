@@ -3,14 +3,36 @@ import { cn } from "@/lib/utils"
 
 const FieldGroup = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("grid gap-4", className)} {...props} />
+    <div ref={ref} className={cn("grid gap-6", className)} {...props} />
   )
 )
 FieldGroup.displayName = "FieldGroup"
 
-const Field = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+const FieldSet = React.forwardRef<HTMLFieldSetElement, React.FieldsetHTMLAttributes<HTMLFieldSetElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("grid gap-2", className)} {...props} />
+    <fieldset ref={ref} className={cn("grid gap-4", className)} {...props} />
+  )
+)
+FieldSet.displayName = "FieldSet"
+
+const FieldLegend = React.forwardRef<HTMLLegendElement, React.HTMLAttributes<HTMLLegendElement>>(
+  ({ className, ...props }, ref) => (
+    <legend ref={ref} className={cn("text-sm font-bold uppercase tracking-widest text-primary mb-2", className)} {...props} />
+  )
+)
+FieldLegend.displayName = "FieldLegend"
+
+const Field = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { orientation?: "vertical" | "horizontal" }>(
+  ({ className, orientation = "vertical", ...props }, ref) => (
+    <div 
+      ref={ref} 
+      className={cn(
+        "grid gap-2", 
+        orientation === "horizontal" ? "flex items-center gap-4" : "grid gap-2",
+        className
+      )} 
+      {...props} 
+    />
   )
 )
 Field.displayName = "Field"
@@ -37,24 +59,15 @@ const FieldDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttrib
 )
 FieldDescription.displayName = "FieldDescription"
 
-const FieldSeparator = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { children?: React.ReactNode }>(
-  ({ className, children, ...props }, ref) => (
+const FieldSeparator = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn("relative", className)}
+      className={cn("h-px w-full border-t", className)}
       {...props}
-    >
-      <div className="absolute inset-0 flex items-center">
-        <span className="w-full border-t" />
-      </div>
-      <div className="relative flex justify-center text-xs uppercase">
-        <span className="bg-background px-2 text-muted-foreground">
-          {children}
-        </span>
-      </div>
-    </div>
+    />
   )
 )
 FieldSeparator.displayName = "FieldSeparator"
 
-export { Field, FieldDescription, FieldGroup, FieldLabel, FieldSeparator }
+export { Field, FieldDescription, FieldGroup, FieldLabel, FieldSeparator, FieldSet, FieldLegend }

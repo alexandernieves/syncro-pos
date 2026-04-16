@@ -1,44 +1,58 @@
 import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { AccountingEntry, AccountingEntryDocument, EntryType } from './accounting.schema';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class AccountingService {
-  constructor(
-    @InjectModel(AccountingEntry.name) private entryModel: Model<AccountingEntryDocument>,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
-  async createEntry(data: any, userId: string): Promise<AccountingEntryDocument> {
-    const entry = new this.entryModel({
-      ...data,
-      createdBy: new Types.ObjectId(userId),
+  async create(data: any) {
+    const { amount, ...rest } = data;
+    return this.prisma.accountingEntry.create({ 
+      data: {
+        ...rest,
+        amount: Number(amount)
+      } 
     });
-    return entry.save();
   }
 
-  async recordSaleAsIncome(sale: any): Promise<AccountingEntryDocument> {
-    return this.createEntry({
-      description: `Ingreso por Venta #${sale.saleNumber || 'S/N'}`,
-      type: EntryType.INCOME,
-      amount: sale.total,
-      category: 'SALES',
-      saleId: sale._id,
-    }, sale.createdBy);
+  async findAll() {
+    return (this.prisma.accountingEntry as any).findMany({
+      include: { user: true, sale: true },
+      orderBy: { createdAt: 'desc' }
+    });
   }
 
-  async findAll(): Promise<AccountingEntryDocument[]> {
-    return this.entryModel.find().sort({ createdAt: -1 }).exec();
+  async getStats() {
+    const income = await (this.prisma.accountingEntry as any).aggregate({
+      where: { type: 'INCOME' },
+      _sum: { amount: true }
+    });
+
+    const expense = await (this.prisma.accountingEntry as any).aggregate({
+      where: { type: 'EXPENSE' },
+      _sum: { amount: true }
+    });
+
+    return {
+      totalIncome: income._sum?.amount || 0,
+      totalExpense: expense._sum?.amount || 0,
+      balance: (income._sum?.amount || 0) - (expense._sum?.amount || 0)
+    };
   }
 
-  async findByType(type: EntryType): Promise<AccountingEntryDocument[]> {
-    return this.entryModel.find({ type }).sort({ createdAt: -1 }).exec();
-  }
+  async getInvestmentBySupplier() {
+    const entries = await (this.prisma.accountingEntry as any).findMany({
+      where: { category: 'COMPRA_INVENTARIO' }
+    });
 
-  async getSummary(): Promise<any> {
-    const entries = await this.entryModel.find().exec();
-    const income = entries.filter(e => e.type === EntryType.INCOME).reduce((a, b) => a + b.amount, 0);
-    const expense = entries.filter(e => e.type === EntryType.EXPENSE).reduce((a, b) => a + b.amount, 0);
-    return { income, expense, balance: income - expense };
+    // Grouping by description is a bit hacky, but consistent with current implementation.
+    // Ideally we would have a supplierId column.
+    const investment = entries.reduce((acc: any, entry: any) => {
+      const supplierName = entry.description.split('(')[1]?.replace(')', '') || 'Otros';
+      acc[supplierName] = (acc[supplierName] || 0) + entry.amount;
+      return acc;
+    }, {});
+
+    return Object.entries(investment).map(([name, total]) => ({ name, total }));
   }
 }

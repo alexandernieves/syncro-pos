@@ -1,65 +1,55 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { Shift, ShiftDocument, ShiftStatus } from './shift.schema';
-import { Sale, SaleDocument } from '../sales/sale.schema';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class ShiftsService {
-  constructor(
-    @InjectModel(Shift.name) private shiftModel: Model<ShiftDocument>,
-    @InjectModel(Sale.name) private saleModel: Model<SaleDocument>,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
-  async openShift(userId: string, openingBalance: number, branchId: string): Promise<Shift> {
-    const activeShift = await this.getActiveShift(userId);
-    if (activeShift) {
-      throw new BadRequestException('El usuario ya tiene un turno abierto.');
-    }
-
-    const newShift = new this.shiftModel({
-      user: new Types.ObjectId(userId),
-      branch: new Types.ObjectId(branchId),
-      openingBalance,
-      status: ShiftStatus.OPEN,
-      openedAt: new Date(),
+  async open(data: any) {
+    const { userId, branchId, openingBalance } = data;
+    
+    // Check if there is already an open shift for this user/branch
+    const activeShift = await this.prisma.shift.findFirst({
+      where: { userId, branchId, status: 'OPEN' as any }
     });
 
-    return newShift.save();
-  }
-
-  async closeShift(shiftId: string, closingBalance: number, notes?: string): Promise<Shift> {
-    const shift = await this.shiftModel.findById(shiftId);
-    if (!shift || shift.status === ShiftStatus.CLOSED) {
-      throw new NotFoundException('Turno no encontrado o ya cerrado.');
+    if (activeShift) {
+      throw new BadRequestException('Ya existe un turno abierto para esta sucursal.');
     }
 
-    // Calculate expected balance: Opening + Sum of sales totals
-    const sales = await this.saleModel.find({ shiftId: shift._id });
-    const totalSales = sales.reduce((acc, sale) => acc + sale.total, 0);
-    const expectedBalance = shift.openingBalance + totalSales;
-
-    shift.closingBalance = closingBalance;
-    shift.expectedBalance = expectedBalance;
-    shift.status = ShiftStatus.CLOSED;
-    shift.closedAt = new Date();
-    if (notes) shift.notes = notes;
-
-    return shift.save();
+    return this.prisma.shift.create({
+      data: {
+        userId,
+        branchId,
+        openingBalance: Number(openingBalance),
+        status: 'OPEN' as any,
+        openedAt: new Date(),
+      }
+    });
   }
 
-  async getActiveShift(userId: string): Promise<Shift | null> {
-    return this.shiftModel.findOne({ 
-      user: new Types.ObjectId(userId), 
-      status: ShiftStatus.OPEN 
-    })
-    .populate('branch')
-    .exec();
+  async close(id: string, closingBalance: number) {
+    return this.prisma.shift.update({
+      where: { id },
+      data: {
+        closingBalance: Number(closingBalance),
+        status: 'CLOSED' as any,
+        closedAt: new Date()
+      }
+    });
   }
 
-  async getShiftById(shiftId: string): Promise<Shift> {
-    const shift = await this.shiftModel.findById(shiftId);
-    if (!shift) throw new NotFoundException('Turno no encontrado.');
-    return shift;
+  async getActive(userId: string) {
+    return (this.prisma.shift as any).findFirst({
+      where: { userId, status: 'OPEN' },
+      include: { branch: true }
+    });
+  }
+
+  async findAll() {
+    return this.prisma.shift.findMany({
+      include: { user: true, branch: true },
+      orderBy: { openedAt: 'desc' }
+    });
   }
 }

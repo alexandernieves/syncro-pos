@@ -17,6 +17,9 @@ import { ShiftsModule } from './modules/shifts/shifts.module';
 import { BranchesModule } from './modules/branches/branches.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
+import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
+import { SupplierPaymentsModule } from './modules/supplier-payments/supplier-payments.module';
+import { SupplierReturnsModule } from './modules/supplier-returns/supplier-returns.module';
 
 @Module({
   imports: [
@@ -26,15 +29,18 @@ import { PrismaModule } from './modules/prisma/prisma.module';
     ProductsModule,
     CategoriesModule,
     SuppliersModule,
-    // ClientsModule,
-    // InventoryModule,
-    // SalesModule,
+    ClientsModule,
+    InventoryModule,
+    SalesModule,
     SettingsModule,
-    // AccountingModule,
-    // ShiftsModule,
+    AccountingModule,
+    ShiftsModule,
     BranchesModule,
     UploadsModule,
     PrismaModule,
+    PurchaseOrdersModule,
+    SupplierPaymentsModule,
+    SupplierReturnsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { IconCirclePlusFilled, IconMail, type Icon } from "@tabler/icons-react"
 import { ChevronRight } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -88,6 +89,8 @@ export function NavMain({
         <SidebarMenu>
           {items.map((item) => {
             const parentActive = isParentActive(item)
+            const anySubActive = item.items?.some(s => pathname === s.url)
+            const activeIndex = item.items?.findIndex(s => pathname === s.url) ?? -1
 
             return (
               <Collapsible
@@ -104,22 +107,54 @@ export function NavMain({
                       <CollapsibleTrigger asChild>
                         <SidebarMenuButton
                           tooltip={item.title}
-                          isActive={parentActive}
+                          isActive={pathname === item.url}
                         >
                           {item.icon && <item.icon />}
                           <span>{item.title}</span>
-                          <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                         </SidebarMenuButton>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {item.items.map((subItem) => {
-                            const subActive = pathname === subItem.url || pathname.startsWith(subItem.url)
+                        <SidebarMenuSub className="relative border-l-0">
+                          {anySubActive && (
+                            <div className="absolute inset-0 pointer-events-none z-20">
+                              <svg 
+                                className="w-[20px] h-full text-primary overflow-visible" 
+                                fill="none"
+                              >
+                                <path 
+                                  className="transition-all duration-300 ease-in-out"
+                                  d={`
+                                    M 1 0 
+                                    L 1 ${activeIndex * 32 + 16 - 8}
+                                    C 1 ${activeIndex * 32 + 16 - 3.58} 4.58 ${activeIndex * 32 + 16} 9 ${activeIndex * 32 + 16}
+                                    H 12.5
+                                    M 9.5 ${activeIndex * 32 + 16 - 3}
+                                    L 12.5 ${activeIndex * 32 + 16}
+                                    L 9.5 ${activeIndex * 32 + 16 + 3}
+                                  `}
+                                  stroke="currentColor" 
+                                  strokeWidth="2" 
+                                  strokeLinecap="round" 
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </div>
+                          )}
+
+                          {item.items?.map((subItem) => {
+                            const subActive = pathname === subItem.url
+                            
                             return (
-                              <SidebarMenuSubItem key={subItem.title}>
+                              <SidebarMenuSubItem key={subItem.title} className="relative">
                                 <SidebarMenuSubButton
                                   asChild
-                                  isActive={subActive}
+                                  isActive={false}
+                                  className={cn(
+                                    "transition-all duration-200",
+                                    subActive 
+                                      ? "font-bold !text-primary !bg-primary/10 hover:!bg-primary/10" 
+                                      : "text-muted-foreground hover:!text-primary hover:!bg-primary/5"
+                                  )}
                                 >
                                   <Link href={subItem.url}>
                                     <span>{subItem.title}</span>

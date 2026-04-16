@@ -1,67 +1,94 @@
-import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { Sale, SaleDocument, SaleStatus } from './sale.schema';
-import { Product, ProductDocument } from '../products/product.schema';
-import { InventoryService } from '../inventory/inventory.service';
-import { AccountingService } from '../accounting/accounting.service';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { PaymentMethod, MovementType } from '@prisma/client';
 
 @Injectable()
 export class SalesService {
-  constructor(
-    @InjectModel(Sale.name) private saleModel: Model<SaleDocument>,
-    @InjectModel(Product.name) private productModel: Model<ProductDocument>,
-    private inventoryService: InventoryService,
-    private accountingService: AccountingService,
-  ) {}
+  private readonly logger = new Logger(SalesService.name);
 
-  async create(saleData: any, userId: string): Promise<SaleDocument> {
-    const saleNumber = `SALE-${Date.now().toString().slice(-6)}`;
-    
-    const sale = new this.saleModel({
-      ...saleData,
-      saleNumber,
-      createdBy: new Types.ObjectId(userId),
-    });
+  constructor(private prisma: PrismaService) {}
 
-    // Update stock and create inventory movements for each item
-    for (const item of sale.items) {
-      const product = await this.productModel.findById(item.product);
-      if (product) {
-        // Decrease stock
-        product.stock -= item.quantity;
-        await product.save();
+  async create(data: any, userId: string) {
+    const { branchId, items, paymentMethod } = data;
 
-        // Register inventory movement
-        await this.inventoryService.createMovement({
-          product: product._id,
-          type: 'OUT',
-          quantity: item.quantity,
-          previousStock: product.stock + item.quantity,
-          newStock: product.stock,
-          notes: `Venta #${saleNumber}`,
-          createdBy: userId,
+    return this.prisma.$transaction(async (tx) => {
+      let total = 0;
+      const saleItemsData = [];
+
+      for (const item of items) {
+        // 1. Fetch variant and check stock
+        const variant = await tx.productVariant.findUnique({
+          where: { id: item.variantId },
+          include: { inventory: { where: { branchId } } }
         });
+
+        if (!variant) throw new BadRequestException(`Variante ${item.variantId} no encontrada`);
+        
+        const currentStock = variant.inventory[0]?.quantity || 0;
+        if (currentStock < item.quantity) {
+          throw new BadRequestException(`Stock insuficiente para ${variant.name} (${currentStock} disponibles)`);
+        }
+
+        const subtotal = variant.price * item.quantity;
+        total += subtotal;
+
+        saleItemsData.push({
+          variantId: item.variantId,
+          quantity: item.quantity,
+          price: variant.price,
+          subtotal
+        });
+
+        // 2. Discount Stock
+        await tx.inventory.update({
+          where: { variantId_branchId: { variantId: item.variantId, branchId } },
+          data: { quantity: { decrement: item.quantity } }
+        });
+
+        // 3. Register Movement
+        await tx.inventoryMovement.create({
+          data: {
+            variantId: item.variantId,
+            branchId,
+            type: MovementType.OUT,
+            quantity: item.quantity,
+            reason: 'sale'
+          }
+        });
+        
+        this.logger.log(`Stock descontado para variante ${variant.id}: -${item.quantity}`);
       }
-    }
 
-    const savedSale = await sale.save();
-    
-    // Automatically record in accounting
-    await this.accountingService.recordSaleAsIncome(savedSale);
+      // 4. Create Sale
+      const sale = await tx.sale.create({
+        data: {
+          branchId,
+          userId,
+          paymentMethod,
+          total,
+          items: {
+            create: saleItemsData
+          }
+        },
+        include: { items: true }
+      });
 
-    return savedSale;
+      this.logger.log(`Venta creada exitosamente: ${sale.id} por total $${total}`);
+      return sale;
+    });
   }
 
-  async findAll(): Promise<SaleDocument[]> {
-    return this.saleModel.find().populate('client').sort({ createdAt: -1 }).exec();
+  async findAll() {
+    return this.prisma.sale.findMany({
+      include: { items: { include: { variant: true } }, user: true, branch: true },
+      orderBy: { createdAt: 'desc' }
+    });
   }
 
-  async findOne(id: string): Promise<SaleDocument | null> {
-    return this.saleModel.findById(id).populate('client').exec();
-  }
-
-  async delete(id: string): Promise<any> {
-    return this.saleModel.findByIdAndDelete(id).exec();
+  async findOne(id: string) {
+    return this.prisma.sale.findUnique({
+      where: { id },
+      include: { items: { include: { variant: true } }, user: true, branch: true }
+    });
   }
 }

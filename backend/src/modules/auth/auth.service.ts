@@ -21,23 +21,25 @@ export class AuthService {
     }
     const isMatch = await bcrypt.compare(pass, user.password);
     if (isMatch) {
-      // @ts-ignore
-      const { password, ...result } = user.toObject();
+      // Prisma devuelve objetos planos, no necesitamos toObject()
+      const { password, ...result } = user;
       return result;
     }
     return null;
   }
 
   async login(user: any) {
-    const payload = { email: user.email, sub: user._id, role: user.role, name: user.name, country: user.country };
+    const payload = { email: user.email, sub: user.id, role: user.role, name: user.name, country: user.country };
     return {
       access_token: this.jwtService.sign(payload),
       user: {
-        id: user._id,
+        id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
         country: user.country,
+        city: user.city,
+        avatar: user.avatar,
       }
     };
   }

@@ -1,17 +1,10 @@
-import { Module, forwardRef } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { Module } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { SalesController } from './sales.controller';
-import { Sale, SaleSchema } from './sale.schema';
-import { ProductsModule } from '../products/products.module';
-import { InventoryModule } from '../inventory/inventory.module';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
-  imports: [
-    MongooseModule.forFeature([{ name: Sale.name, schema: SaleSchema }]),
-    ProductsModule,
-    InventoryModule,
-  ],
+  imports: [PrismaModule],
   controllers: [SalesController],
   providers: [SalesService],
   exports: [SalesService],

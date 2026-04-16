@@ -1,16 +1,11 @@
-import { Module, Global } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { Module } from '@nestjs/common';
 import { AccountingService } from './accounting.service';
 import { AccountingController } from './accounting.controller';
-import { AccountingEntry, AccountingEntrySchema } from './accounting.schema';
+import { PrismaModule } from '../prisma/prisma.module';
 
-@Global()
 @Module({
-  imports: [
-    MongooseModule.forFeature([{ name: AccountingEntry.name, schema: AccountingEntrySchema }]),
-  ],
+  imports: [PrismaModule],
   controllers: [AccountingController],
   providers: [AccountingService],
-  exports: [AccountingService],
 })
 export class AccountingModule {}

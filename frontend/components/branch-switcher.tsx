@@ -28,12 +28,12 @@ export function BranchSwitcher() {
           
           // Load selected branch from local storage or pick main
           const savedBranchId = localStorage.getItem("currentBranchId");
-          if (savedBranchId && data.some((b: any) => b._id === savedBranchId)) {
+          if (savedBranchId && data.some((b: any) => b.id === savedBranchId)) {
             setSelectedBranch(savedBranchId);
           } else if (data.length > 0) {
             const main = data.find((b: any) => b.isMain) || data[0];
-            setSelectedBranch(main._id);
-            localStorage.setItem("currentBranchId", main._id);
+            setSelectedBranch(main.id);
+            localStorage.setItem("currentBranchId", main.id);
           }
         }
       } catch (error) {
@@ -64,8 +64,8 @@ export function BranchSwitcher() {
           <SelectValue placeholder="Seleccionar Sucursal" />
         </SelectTrigger>
         <SelectContent>
-          {branches.map((b) => (
-            <SelectItem key={b._id} value={b._id} className="text-xs">
+          {branches.map((b, index) => (
+            <SelectItem key={b.id || `branch-${index}-${b.name}`} value={b.id || `branch-${index}`} className="text-xs">
               {b.name}
             </SelectItem>
           ))}

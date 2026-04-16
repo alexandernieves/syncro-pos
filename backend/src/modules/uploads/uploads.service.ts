@@ -22,25 +22,46 @@ export class UploadsService {
   async uploadFile(file: Express.Multer.File, userEmail: string): Promise<string> {
     const fileExtension = file.originalname.split('.').pop();
     const fileName = `${uuidv4()}.${fileExtension}`;
-    // Folder structure: user-email/product_images/filename
-    const folderPath = `${userEmail}/product_images`;
-    const key = `${folderPath}/${fileName}`;
-
-    const command = new PutObjectCommand({
-      Bucket: this.bucketName,
-      Key: key,
-      Body: file.buffer,
-      ContentType: file.mimetype,
-      // ACL: 'public-read', // Deprecated in some buckets, will use URL directly or bucket policy
-    });
-
+    
+    // Try S3 upload first
     try {
+      const folderPath = `${userEmail}/product_images`;
+      const key = `${folderPath}/${fileName}`;
+
+      const command = new PutObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+      });
+
       await this.s3Client.send(command);
       const region = this.configService.get<string>('AWS_REGION');
-      return `https://${this.bucketName}.s3.${region}.amazonaws.com/${key}`;
+      const s3Url = `https://${this.bucketName}.s3.${region}.amazonaws.com/${key}`;
+      
+      console.log('S3 upload successful:', s3Url);
+      return s3Url;
     } catch (error) {
-      console.error('Error uploading to S3:', error);
-      throw new Error('Error al subir la imagen al servidor de almacenamiento');
+      console.error('Error uploading to S3, falling back to local storage:', error);
+      
+      // Fallback to local storage
+      const fs = require('fs');
+      const path = require('path');
+      
+      // Create uploads directory if it doesn't exist
+      const uploadsDir = path.join(process.cwd(), 'uploads', userEmail);
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      // Save file locally
+      const localFilePath = path.join(uploadsDir, fileName);
+      fs.writeFileSync(localFilePath, file.buffer);
+      
+      // Return local URL (this would need to be served by the backend)
+      const localUrl = `${this.configService.get<string>('API_URL') || 'http://localhost:9000'}/uploads/${userEmail}/${fileName}`;
+      console.log('Local upload successful:', localUrl);
+      return localUrl;
     }
   }
 }

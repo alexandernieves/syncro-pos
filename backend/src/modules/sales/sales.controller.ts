@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Body, Param, Req, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { SalesService } from './sales.service';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('sales')
 export class SalesController {
@@ -7,7 +8,8 @@ export class SalesController {
 
   @Post()
   async create(@Body() saleData: any, @Req() req: any) {
-    const userId = req.user?.id || req.user?._id || '60c72b2f9b1d8e001c8e4b3c'; // Sample ID for now
+    // Falls back to a default user if req.user is not set (for testing)
+    const userId = req.user?.id || 'admin-id-placeholder'; 
     return this.salesService.create(saleData, userId);
   }
 
@@ -19,10 +21,5 @@ export class SalesController {
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.salesService.findOne(id);
-  }
-
-  @Delete(':id')
-  async delete(@Param('id') id: string) {
-    return this.salesService.delete(id);
   }
 }

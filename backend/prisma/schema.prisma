@@ -19,6 +19,7 @@ model Product {
   category    Category?        @relation(fields: [categoryId], references: [id])
   supplier    Supplier?        @relation(fields: [supplierId], references: [id])
   variants    ProductVariant[]
+  supplierProducts SupplierProduct[]
 }
 
 model ProductVariant {
@@ -37,6 +38,13 @@ model ProductVariant {
   updatedAt  DateTime    @updatedAt
   inventory  Inventory[]
   product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  saleItems  SaleItem[]
+  movements  InventoryMovement[]
+  
+  // New relations for suppliers
+  supplierProducts SupplierProduct[]
+  purchaseOrderItems PurchaseOrderItem[]
+  supplierReturns SupplierReturn[]
 }
 
 model Inventory {
@@ -61,35 +69,71 @@ model Category {
 }
 
 model Supplier {
-  id        String    @id @default(uuid())
-  name      String    @unique
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  products  Product[]
+  id        String            @id @default(uuid())
+  name      String            @unique
+  taxId     String?           @unique
+  phone     String?
+  email     String?
+  address   String?
+  status    SupplierStatus    @default(ACTIVE)
+  contactName String?
+  paymentTerms String?       @default("CONTADO")
+  creditDays  Int?          @default(0)
+  website     String?
+  notes       String?
+  taxType     String?       @default("ORDINARIO") // ORDINARIO, ESPECIAL, EXENTO
+  bankName    String?
+  bankAccount String?
+  bankId      String?
+  bankPhone   String?
+  currency    String?       @default("USD")
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  
+  // Relations
+  products          Product[]
+  supplierProducts  SupplierProduct[]
+  purchaseOrders    PurchaseOrder[]
+  supplierInvoices  SupplierInvoice[]
+  supplierPayments  SupplierPayment[]
+  supplierReturns   SupplierReturn[]
+}
+
+enum SupplierStatus {
+  ACTIVE
+  BLOCKED
 }
 
 model Branch {
-  id        String      @id @default(uuid())
-  name      String      @unique
-  location  String?
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  country   String?
-  isMain    Boolean     @default(false)
-  state     String?
-  inventory Inventory[]
+  id               String              @id @default(uuid())
+  name             String              @unique
+  location         String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  country          String?
+  isMain           Boolean             @default(false)
+  state            String?
+  inventory        Inventory[]
+  sales            Sale[]
+  inventoryMovements InventoryMovement[]
+  shifts           Shift[]
+  purchaseOrders   PurchaseOrder[]
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String?
-  role      String   @default("pos")
-  country   String?
-  city      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String            @id @default(uuid())
+  email            String            @unique
+  password         String
+  name             String?
+  role             String            @default("pos")
+  country          String?
+  city             String?
+  avatar           String?
+  sales            Sale[]
+  shifts           Shift[]
+  accountingEntries AccountingEntry[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 }
 
 model Setting {
@@ -103,3 +147,245 @@ model Setting {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+model Sale {
+  id            String         @id @default(uuid())
+  branchId      String
+  userId        String
+  clientId      String?
+  paymentMethod PaymentMethod
+  total         Float
+  createdAt     DateTime       @default(now())
+  
+  branch        Branch         @relation(fields: [branchId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
+  client        Client?        @relation(fields: [clientId], references: [id])
+  items         SaleItem[]
+  accountingEntry AccountingEntry?
+}
+
+model SaleItem {
+  id         String         @id @default(uuid())
+  saleId     String
+  variantId  String
+  quantity   Int
+  price      Float
+  subtotal   Float
+  
+  sale       Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  variant    ProductVariant @relation(fields: [variantId], references: [id])
+}
+
+model InventoryMovement {
+  id          String        @id @default(uuid())
+  variantId   String
+  branchId    String
+  type        MovementType
+  quantity    Int
+  reason      String        // e.g., "sale", "restock", "adjustment"
+  referenceId String?       // e.g., saleId
+  createdAt   DateTime      @default(now())
+  
+  variant     ProductVariant @relation(fields: [variantId], references: [id])
+  branch      Branch         @relation(fields: [branchId], references: [id])
+}
+
+model Client {
+  id         String   @id @default(uuid())
+  name       String
+  documentId String?
+  email      String?
+  phone      String?
+  address    String?
+  isActive   Boolean  @default(true)
+  sales      Sale[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Shift {
+  id              String      @id @default(uuid())
+  userId          String
+  branchId        String
+  openingBalance  Float       @default(0)
+  closingBalance  Float       @default(0)
+  status          ShiftStatus @default(OPEN)
+  openedAt        DateTime    @default(now())
+  closedAt        DateTime?
+  notes           String?
+  user            User        @relation(fields: [userId], references: [id])
+  branch          Branch      @relation(fields: [branchId], references: [id])
+}
+
+model AccountingEntry {
+  id          String    @id @default(uuid())
+  description String
+  type        EntryType
+  amount      Float
+  category    String?
+  saleId      String?   @unique
+  userId      String
+  createdAt   DateTime  @default(now())
+  
+  sale        Sale?     @relation(fields: [saleId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+}
+
+enum ShiftStatus {
+  OPEN
+  CLOSED
+}
+
+enum EntryType {
+  INCOME
+  EXPENSE
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+}
+
+// Supplier Products - Products asociados a proveedores
+model SupplierProduct {
+  id            String  @id @default(uuid())
+  supplierId    String
+  productId     String
+  variantId     String?
+  purchasePrice Float
+  minOrderQty   Int     @default(1)
+  leadTimeDays  Int     @default(7)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant  ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  
+  @@unique([supplierId, productId, variantId])
+}
+
+// Purchase Orders - Órdenes de compra
+model PurchaseOrder {
+  id        String            @id @default(uuid())
+  number    String?           @unique // Sequential order number (OC-001)
+  supplierId String
+  branchId  String
+  status    PurchaseOrderStatus @default(DRAFT)
+  subtotal  Float             @default(0)
+  taxRate   Float             @default(0)
+  taxAmount Float             @default(0)
+  discountAmount Float       @default(0)
+  total     Float             @default(0)
+  notes     String?
+  expectedDate DateTime?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  
+  // Relations
+  supplier Supplier           @relation(fields: [supplierId], references: [id])
+  branch   Branch             @relation(fields: [branchId], references: [id])
+  items    PurchaseOrderItem[]
+  invoices SupplierInvoice[]
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SENT
+  RECEIVED
+  CANCELLED
+}
+
+// Purchase Order Items - Items de órdenes de compra
+model PurchaseOrderItem {
+  id             String  @id @default(uuid())
+  purchaseOrderId String
+  variantId      String
+  quantity       Int
+  cost           Float
+  taxRate        Float   @default(0)
+  taxAmount      Float   @default(0)
+  discountAmount Float   @default(0)
+  subtotal       Float
+  total          Float   @default(0)
+  
+  // Relations
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  variant       ProductVariant @relation(fields: [variantId], references: [id])
+}
+
+// Supplier Invoices - Facturas de proveedores
+model SupplierInvoice {
+  id             String              @id @default(uuid())
+  supplierId     String
+  purchaseOrderId String?
+  total          Float
+  balance        Float
+  dueDate        DateTime
+  status         InvoiceStatus        @default(PENDING)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  
+  // Relations
+  supplier      Supplier            @relation(fields: [supplierId], references: [id])
+  purchaseOrder PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
+  invoicePayments SupplierInvoicePayment[]
+}
+
+enum InvoiceStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+// Supplier Payments - Pagos a proveedores
+model SupplierPayment {
+  id         String        @id @default(uuid())
+  supplierId String
+  amount     Float
+  method     PaymentMethod
+  reference  String?
+  createdAt  DateTime      @default(now())
+  
+  // Relations
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  invoicePayments SupplierInvoicePayment[]
+}
+
+// Invoice-Payment junction table
+model SupplierInvoicePayment {
+  id               String @id @default(uuid())
+  supplierInvoiceId String
+  supplierPaymentId String
+  amount           Float
+  createdAt        DateTime @default(now())
+  
+  // Relations
+  invoice SupplierInvoice @relation(fields: [supplierInvoiceId], references: [id], onDelete: Cascade)
+  payment SupplierPayment @relation(fields: [supplierPaymentId], references: [id], onDelete: Cascade)
+  
+  @@unique([supplierInvoiceId, supplierPaymentId])
+}
+
+// Supplier Returns - Devoluciones a proveedores
+model SupplierReturn {
+  id         String  @id @default(uuid())
+  supplierId String
+  variantId  String
+  quantity   Int
+  reason     String
+  createdAt  DateTime @default(now())
+  
+  // Relations
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  variant  ProductVariant @relation(fields: [variantId], references: [id])
+}
+
+enum MovementType {
+  IN
+  OUT
+  ADJUSTMENT
+}
+

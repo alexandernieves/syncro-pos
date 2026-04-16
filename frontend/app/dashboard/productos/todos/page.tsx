@@ -122,7 +122,7 @@ export default function ProductosPage() {
             <div>
               <p className="font-bold text-sm leading-tight text-foreground group-hover/row:text-primary transition-colors">{p.name}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {p.variants.length} variantes
+                {p.variants?.length || 0} variantes
               </p>
             </div>
           </div>
@@ -234,8 +234,8 @@ export default function ProductosPage() {
                 </TabsList>
 
                 <TabsContent value="variantes" className="mt-6 space-y-4">
-                  {selectedProduct.variants.map(v => (
-                    <div key={v.id} className="p-4 rounded-xl border bg-card hover:border-primary/30 transition-all flex items-center justify-between group">
+                  {selectedProduct.variants?.map((v, idx) => (
+                    <div key={v.id || v.sku || idx} className="p-4 rounded-xl border bg-card hover:border-primary/30 transition-all flex items-center justify-between group">
                       <div className="flex items-center gap-4">
                         <div className="size-10 bg-muted rounded-lg flex items-center justify-center font-bold text-xs">
                           {v.name[0]}

@@ -42,6 +42,17 @@ export class UsersService {
     return this.prisma.user.findMany();
   }
 
+  async update(id: string, updateData: any) {
+    const data = { ...updateData };
+    if (data.password) {
+      data.password = await bcrypt.hash(data.password, 10);
+    }
+    return this.prisma.user.update({
+      where: { id },
+      data,
+    });
+  }
+
   async remove(id: string) {
     return this.prisma.user.delete({ where: { id } });
   }

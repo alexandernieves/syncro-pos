@@ -158,15 +158,42 @@ export class ProductsService {
 
   async getStats(id: string) {
     const product = await this.findOne(id);
-    
+    const variantIds = product.variants.map(v => v.id);
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const salesInLast7Days = await this.prisma.saleItem.aggregate({
+      where: {
+        variantId: { in: variantIds },
+        sale: { createdAt: { gte: sevenDaysAgo } }
+      },
+      _sum: {
+        quantity: true
+      }
+    });
+
+    const lastSaleItem = await this.prisma.saleItem.findFirst({
+      where: { variantId: { in: variantIds } },
+      include: { sale: true },
+      orderBy: { sale: { createdAt: 'desc' } }
+    });
+
+    const totalSold = await this.prisma.saleItem.aggregate({
+      where: { variantId: { in: variantIds } },
+      _sum: { quantity: true }
+    });
+
     return {
       productId: id,
       name: product.name,
-      totalSoldLast7Days: Math.floor(Math.random() * 50), // Simulation
-      lastSale: new Date().toISOString(),
+      totalSoldLast7Days: salesInLast7Days._sum.quantity || 0,
+      lastSale: lastSaleItem?.sale.createdAt.toISOString() || null,
       averagePrice: product.variants[0]?.price || 0,
+      totalQuantitySold: totalSold._sum.quantity || 0
     };
   }
+
 
   async validateBarcode(barcode: string) {
     const variant = await this.prisma.productVariant.findUnique({

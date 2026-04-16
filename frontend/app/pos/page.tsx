@@ -28,13 +28,18 @@ import {
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
 
 type Product = {
-  _id: string;
+  id: string;
   name: string;
-  price: number;
-  stock: number;
-  sku: string;
+  totalStock: number;
+  variants: Array<{
+    id: string;
+    name: string;
+    price: number;
+    stock: number;
+    sku: string;
+    barcode?: string;
+  }>;
   image?: string;
-  barcodes?: string[];
   category?: { name: string };
 };
 
@@ -44,15 +49,28 @@ type Client = {
   documentId: string;
 };
 
+type CartProduct = {
+  id: string;
+  variantId: string;
+  name: string;
+  price: number;
+  stock: number;
+};
+
 type CartItem = {
-  product: Product;
+  product: CartProduct;
   quantity: number;
 };
 
 type Shift = {
-  _id: string;
+  id: string;
   status: 'OPEN' | 'CLOSED';
   openingBalance: number;
+  closingBalance?: number;
+  openedAt: string;
+  closedAt?: string;
+  userId: string;
+  branchId: string;
 };
 
 export default function POSPage() {
@@ -147,20 +165,62 @@ export default function POSPage() {
 
   const handleOpenShift = async () => {
     try {
+      // Check if token is valid
+      const currentToken = localStorage.getItem("token");
+      if (!currentToken) {
+        toast.error("No hay sesión activa. Por favor inicie sesión nuevamente.");
+        router.push("/login");
+        return;
+      }
+
+      const currentBranchId = localStorage.getItem("currentBranchId") || "";
+      if (!currentBranchId) {
+        toast.error("No hay una sucursal seleccionada");
+        return;
+      }
+
+      if (!openingBalance || Number(openingBalance) < 0) {
+        toast.error("Monto de apertura inválido");
+        return;
+      }
+      
+      console.log("Opening shift with:", {
+        openingBalance: Number(openingBalance),
+        branchId: currentBranchId,
+        token: currentToken.substring(0, 20) + "..."
+      });
+      
       const res = await fetch(`${API}/shifts/open`, {
         method: "POST",
-        headers,
-        body: JSON.stringify({ openingBalance: Number(openingBalance) }),
+        headers: {
+          Authorization: `Bearer ${currentToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ 
+          openingBalance: Number(openingBalance),
+          branchId: currentBranchId
+        }),
       });
+      
+      console.log("Shift open response status:", res.status);
+      
       if (res.ok) {
         const data = await res.json();
         setActiveShift(data);
         toast.success("Caja abierta correctamente");
       } else {
         const err = await res.json();
-        toast.error(err.message || "Error al abrir caja");
+        console.error("Shift open error:", err);
+        
+        if (res.status === 401) {
+          toast.error("Sesión expirada. Por favor inicie sesión nuevamente.");
+          router.push("/login");
+        } else {
+          toast.error(err.message || "Error al abrir caja");
+        }
       }
-    } catch {
+    } catch (error) {
+      console.error("Shift open error:", error);
       toast.error("Error de conexión");
     }
   };
@@ -168,7 +228,12 @@ export default function POSPage() {
   const handleCloseShift = async () => {
     if (!activeShift) return;
     try {
-      const res = await fetch(`${API}/shifts/close/${activeShift._id}`, {
+      if (!activeShift.id) {
+        toast.error("ID de turno no encontrado");
+        return;
+      }
+      
+      const res = await fetch(`${API}/shifts/close/${activeShift.id}`, {
         method: "POST",
         headers,
         body: JSON.stringify({ closingBalance: Number(closingBalance) }),
@@ -187,28 +252,38 @@ export default function POSPage() {
   };
 
   const addToCart = (product: Product) => {
-    if (product.stock <= 0) {
+    const variant = product.variants?.[0]; // Default to first variant for now
+    if (!variant || variant.stock <= 0) {
       toast.error("Producto sin stock");
       return;
     }
     setCart(prev => {
-      const existing = prev.find(item => item.product._id === product._id);
+      const existing = prev.find(item => item.product.variantId === variant.id);
       if (existing) {
-        if (existing.quantity >= product.stock) {
+        if (existing.quantity >= variant.stock) {
           toast.error("No hay más stock disponible");
           return prev;
         }
         return prev.map(item => 
-          item.product._id === product._id ? { ...item, quantity: item.quantity + 1 } : item
+          item.product.variantId === variant.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-      return [...prev, { product, quantity: 1 }];
+      // Store dummy product with variant details for UI
+      const uiProduct: CartProduct = {
+        id: product.id,
+        variantId: variant.id,
+        name: product.name + (variant.name !== 'Principal' ? ` (${variant.name})` : ''),
+        price: variant.price,
+        stock: variant.stock,
+      };
+      return [...prev, { product: uiProduct, quantity: 1 }];
     });
+
   };
 
   const updateQuantity = (id: string, delta: number) => {
     setCart(prev => prev.map(item => {
-      if (item.product._id === id) {
+      if (item.product.id === id) {
         const newQty = item.quantity + delta;
         if (newQty > item.product.stock) {
           toast.error("Stock insuficiente");
@@ -220,8 +295,9 @@ export default function POSPage() {
     }));
   };
 
+
   const removeFromCart = (id: string) => {
-    setCart(prev => prev.filter(item => item.product._id !== id));
+    setCart(prev => prev.filter(item => item.product.id !== id));
   };
 
   const subtotal = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
@@ -230,29 +306,26 @@ export default function POSPage() {
 
   const processSale = async (paymentMethod: "CASH" | "CARD") => {
     if (cart.length === 0) return toast.error("El carrito está vacío");
-    if (!activeShift) return toast.error("No hay un turno activo");
-
+    
     setProcessing(true);
     
     try {
       const currentBranchId = localStorage.getItem("currentBranchId");
+      if (!currentBranchId) {
+        toast.error("Seleccione una sucursal primero");
+        setProcessing(false);
+        return;
+      }
+
       const saleData = {
-        branch: currentBranchId || null,
-        client: selectedClientId === "consumidor-final" ? null : selectedClientId,
+        branchId: currentBranchId,
         items: cart.map(item => ({
-          product: item.product._id,
-          productName: item.product.name,
+          variantId: item.product.variantId,
           quantity: item.quantity,
-          unitPrice: item.product.price,
-          subtotal: item.product.price * item.quantity,
         })),
         paymentMethod,
-        subtotal,
-        tax,
-        total,
-        shiftId: activeShift._id,
-        status: "COMPLETED",
       };
+
 
       const res = await fetch(`${API}/sales`, {
         method: "POST", headers, body: JSON.stringify(saleData),
@@ -275,8 +348,10 @@ export default function POSPage() {
 
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p as any).barcodes?.some((bc: string) => bc.toLowerCase().includes(searchTerm.toLowerCase()))
+    p.variants?.some(v => 
+      v.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      v.barcode?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
   if (!mounted || initialLoading) {
@@ -503,8 +578,8 @@ export default function POSPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                 {filteredProducts.map(p => (
                   <div 
-                    key={p._id} 
-                    className={`cursor-pointer border rounded-md hover:border-primary bg-background overflow-hidden flex flex-col group transition-all h-full ${p.stock <= 0 ? 'opacity-50 pointer-events-none' : ''}`}
+                    key={p.id} 
+                    className={`cursor-pointer border rounded-md hover:border-primary bg-background overflow-hidden flex flex-col group transition-all h-full ${p.totalStock <= 0 ? 'opacity-50 pointer-events-none' : ''}`}
                     onClick={() => addToCart(p)}
                   >
                     <div className="aspect-square bg-muted/50 overflow-hidden border-b relative">
@@ -515,19 +590,19 @@ export default function POSPage() {
                           <IconBox size={24} />
                         </div>
                       )}
-                      {p.stock <= 5 && (
+                      {p.totalStock <= 5 && (
                         <div className="absolute bottom-0 left-0 right-0 bg-red-600/10 text-red-600 text-[8px] font-bold py-0.5 text-center px-1">
-                          STOCK BAJO: {p.stock}
+                          STOCK BAJO: {p.totalStock}
                         </div>
                       )}
                     </div>
                     <div className="p-2 flex flex-col flex-1 justify-between gap-1">
                       <div>
                         <p className="font-semibold text-[11px] leading-tight line-clamp-2">{p.name}</p>
-                        <p className="text-[9px] text-muted-foreground mt-0.5">{p.sku}</p>
+                        <p className="text-[9px] text-muted-foreground mt-0.5">{p.variants?.[0]?.sku}</p>
                       </div>
                       <div className="flex items-center justify-between mt-1">
-                        <span className="font-bold text-xs">${p.price.toFixed(2)}</span>
+                        <span className="font-bold text-xs">${(p.variants?.[0]?.price || 0).toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -584,22 +659,22 @@ export default function POSPage() {
               </div>
             ) : (
               cart.map(item => (
-                <div key={item.product._id} className="p-3 rounded-lg border bg-muted/5 flex flex-col gap-2">
+                <div key={item.product.id} className="p-3 rounded-lg border bg-muted/5 flex flex-col gap-2">
                   <div className="flex justify-between items-start">
                     <p className="font-bold text-[11px] leading-tight flex-1">{item.product.name}</p>
                     <p className="font-bold text-xs ml-2">${(item.product.price * item.quantity).toFixed(2)}</p>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center border rounded h-7">
-                      <Button variant="ghost" size="icon" className="h-6 w-6 rounded-none border-r" onClick={() => updateQuantity(item.product._id, -1)}>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 rounded-none border-r" onClick={() => updateQuantity(item.product.id, -1)}>
                         <IconMinus size={10} />
                       </Button>
                       <span className="w-8 text-center text-[10px] font-bold">{item.quantity}</span>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 rounded-none border-l" onClick={() => updateQuantity(item.product._id, 1)}>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 rounded-none border-l" onClick={() => updateQuantity(item.product.id, 1)}>
                         <IconPlus size={10} />
                       </Button>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeFromCart(item.product._id)}>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeFromCart(item.product.id)}>
                       <IconTrash size={12} />
                     </Button>
                   </div>

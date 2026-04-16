@@ -1,13 +1,12 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
-import { InventoryMovement, InventoryMovementSchema } from './inventory-movement.schema';
-import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
+import { InventoryController } from './inventory.controller';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
-  imports: [MongooseModule.forFeature([{ name: InventoryMovement.name, schema: InventoryMovementSchema }])],
+  imports: [PrismaModule],
   controllers: [InventoryController],
   providers: [InventoryService],
-  exports: [InventoryService, MongooseModule],
+  exports: [InventoryService],
 })
 export class InventoryModule {}
