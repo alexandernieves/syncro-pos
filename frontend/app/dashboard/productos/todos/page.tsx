@@ -1180,22 +1180,19 @@ export default function ProductosPage() {
 
       {/* 🟢 MODAL: ESCANEO MEJORADO */}
       <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>
-        <DialogContent className={cn(
-          "transition-all duration-500 overflow-hidden border-none shadow-2xl p-0",
-          useCamera ? "sm:max-w-[340px]" : "sm:max-w-[400px]"
-        )}>
-          <DialogHeader className="p-0 h-0">
-            <DialogTitle className="sr-only">Escáner de Productos</DialogTitle>
+        <DialogContent className={cn("overflow-hidden bg-black/95 border-white/10 shadow-2xl p-0 transition-all duration-300", useCamera ? "sm:max-w-[320px]" : "sm:max-w-md")}>
+          <DialogHeader className="sr-only">
+             <DialogTitle>Captura de Código de Barras</DialogTitle>
           </DialogHeader>
+          
+          <Button variant="ghost" size="icon" className="absolute top-3 right-3 size-8 rounded-full bg-black/50 hover:bg-white/10 text-white z-50" onClick={() => setScannerOpen(false)}>
+            <IconX size={16} />
+          </Button>
 
-          <div className={cn(
-              "p-6 space-y-8",
-              useCamera && "bg-background/95 backdrop-blur shadow-2xl rounded-[2.5rem] border border-primary/5"
-            )}>
+          <div className={cn("relative w-full flex flex-col items-center justify-center transition-all duration-300", useCamera ? "h-[320px]" : "h-[360px] sm:h-[400px]")}>
             {!useCamera ? (
-              <div className="space-y-8 flex flex-col items-center">
-                {/* Input invisible para capturar el scanner manual (Pistola) */}
-                <input
+              <div className="flex flex-col items-center w-full max-w-[280px] text-center space-y-6 pt-4 animate-in zoom-in-95 duration-500">
+                <input 
                   ref={scannerInputRef}
                   autoFocus
                   className="opacity-0 absolute top-0 left-0 size-1 pointer-events-none"
@@ -1224,8 +1221,6 @@ export default function ProductosPage() {
                    </div>
                 </div>
 
-
-
                 <Button 
                   variant="ghost" 
                   size="icon" 
@@ -1237,25 +1232,26 @@ export default function ProductosPage() {
                 </Button>
               </div>
             ) : (
-                <div className="w-full space-y-6 relative flex flex-col items-center justify-center py-6">
+                <div className="w-full h-full relative flex flex-col items-center justify-center p-4">
                     <div className={cn(
-                        "relative w-[280px] h-[100px] rounded-xl overflow-hidden border shadow-2xl bg-black transition-all duration-500",
+                        "relative w-full h-full rounded-xl overflow-hidden border shadow-2xl bg-black flex items-center justify-center",
                         isDetected ? "border-green-500" : "border-white/10"
                     )}>
-                        <div id="reader" className="absolute inset-0"></div>
+                        {/* the #reader container must be square-ish so the camera stretches nicely */}
+                        <div id="reader" className="absolute inset-0 [&>video]:object-cover [&>video]:w-full [&>video]:h-full [&>video]:absolute [&>video]:inset-0"></div>
                         
                         {/* Láser Minimalista (Oscilante) */}
                         <div className={cn(
-                            "absolute inset-x-4 z-10 animate-scanline transition-all duration-300",
-                            isDetected ? "text-green-500" : "text-primary"
+                            "absolute inset-x-8 z-10 animate-scanline transition-all duration-300 h-0.5 shadow-[0_0_8px_currentColor]",
+                            isDetected ? "text-green-500 bg-green-500" : "text-primary bg-primary"
                         )} />
                         
-                        {/* Esquinas Rectangulares */}
-                        <div className="absolute inset-3 z-20 pointer-events-none opacity-20">
-                            <div className={cn("absolute top-0 left-0 size-4 border-t border-l transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
-                            <div className={cn("absolute top-0 right-0 size-4 border-t border-r transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
-                            <div className={cn("absolute bottom-0 left-0 size-4 border-b border-l transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
-                            <div className={cn("absolute bottom-0 right-0 size-4 border-b border-r transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                        {/* Esquinas Rectangulares Transparentes */}
+                        <div className="absolute inset-6 z-20 pointer-events-none opacity-40 mix-blend-difference filter drop-shadow-md">
+                            <div className={cn("absolute top-0 left-0 size-8 border-t-2 border-l-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                            <div className={cn("absolute top-0 right-0 size-8 border-t-2 border-r-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                            <div className={cn("absolute bottom-0 left-0 size-8 border-b-2 border-l-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                            <div className={cn("absolute bottom-0 right-0 size-8 border-b-2 border-r-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
                         </div>
 
                         {isDetected && (
@@ -1265,9 +1261,9 @@ export default function ProductosPage() {
 
                     {/* Contexto de Escaneo Iterativo */}
                     {quickCreateOpen && quickFormData.name && (
-                        <div className="text-center animate-in fade-in slide-in-from-top-1 duration-500">
-                            <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest">
-                                Asignando a: <span className="text-foreground">{quickFormData.name}</span>
+                        <div className="absolute bottom-4 left-0 right-0 text-center animate-in fade-in slide-in-from-top-1 duration-500 z-50 pointer-events-none">
+                            <p className="text-[10px] font-semibold text-white/60 uppercase tracking-widest bg-black/50 backdrop-blur px-3 py-1.5 rounded-full inline-block">
+                                Asignando a: <span className="text-white">{quickFormData.name}</span>
                             </p>
                         </div>
                     )}

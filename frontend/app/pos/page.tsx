@@ -1496,25 +1496,16 @@ export default function POSPage() {
 
       {/* DIALOG: ESCÁNER Y CÁMARA (ESTILO UNIFICADO) */}
       <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>
-        <DialogContent className="sm:max-w-md overflow-hidden bg-black/95 border-white/10 shadow-2xl p-0">
+        <DialogContent className={cn("overflow-hidden bg-black/95 border-white/10 shadow-2xl p-0 transition-all duration-300", useCamera ? "sm:max-w-[320px]" : "sm:max-w-md")}>
           <DialogHeader className="sr-only">
              <DialogTitle>Captura de Código de Barras</DialogTitle>
           </DialogHeader>
           
-          <div className="relative w-full h-[360px] sm:h-[400px] flex flex-col items-center justify-center">
-            {/* Header Flotante del Modal */}
-            <div className="absolute top-4 left-4 right-4 flex justify-between items-center z-20">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-full border border-white/10">
-                 <div className={cn("size-2 rounded-full", isDetected ? "bg-green-500" : "bg-emerald-500 animate-pulse")} />
-                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/70">
-                    {useCamera ? "CÁMARA ACTIVA" : "LISTO PARA CAPTURA"}
-                 </span>
-              </div>
-              <Button variant="ghost" size="icon" className="size-8 rounded-full bg-black/50 hover:bg-white/10 text-white" onClick={() => setScannerOpen(false)}>
-                <IconX size={16} />
-              </Button>
-            </div>
+          <Button variant="ghost" size="icon" className="absolute top-3 right-3 size-8 rounded-full bg-black/50 hover:bg-white/10 text-white z-50" onClick={() => setScannerOpen(false)}>
+            <IconX size={16} />
+          </Button>
 
+          <div className={cn("relative w-full flex flex-col items-center justify-center transition-all duration-300", useCamera ? "h-[320px]" : "h-[360px] sm:h-[400px]")}>
             {!useCamera ? (
               <div className="flex flex-col items-center w-full max-w-[280px] text-center space-y-6 pt-4 animate-in zoom-in-95 duration-500">
                 <input 
@@ -1555,25 +1546,26 @@ export default function POSPage() {
                 </Button>
               </div>
             ) : (
-                <div className="w-full space-y-6 relative flex flex-col items-center justify-center py-6">
+                <div className="w-full h-full relative flex flex-col items-center justify-center p-4">
                     <div className={cn(
-                        "relative w-[280px] h-[100px] rounded-xl overflow-hidden border shadow-2xl bg-black transition-all duration-500",
+                        "relative w-full h-full rounded-xl overflow-hidden border shadow-2xl bg-black flex items-center justify-center",
                         isDetected ? "border-green-500" : "border-white/10"
                     )}>
-                        <div id="reader" className="absolute inset-0"></div>
+                        {/* the #reader container must be square-ish so the camera stretches nicely */}
+                        <div id="reader" className="absolute inset-0 [&>video]:object-cover [&>video]:w-full [&>video]:h-full [&>video]:absolute [&>video]:inset-0"></div>
                         
                         {/* Láser Minimalista (Oscilante) */}
                         <div className={cn(
-                            "absolute inset-x-4 z-10 animate-scanline transition-all duration-300",
-                            isDetected ? "text-green-500" : "text-primary"
+                            "absolute inset-x-8 z-10 animate-scanline transition-all duration-300 h-0.5 shadow-[0_0_8px_currentColor]",
+                            isDetected ? "text-green-500 bg-green-500" : "text-primary bg-primary"
                         )} />
                         
-                        {/* Esquinas Rectangulares */}
-                        <div className="absolute inset-3 z-20 pointer-events-none opacity-20">
-                            <div className={cn("absolute top-0 left-0 size-4 border-t border-l transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
-                            <div className={cn("absolute top-0 right-0 size-4 border-t border-r transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
-                            <div className={cn("absolute bottom-0 left-0 size-4 border-b border-l transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
-                            <div className={cn("absolute bottom-0 right-0 size-4 border-b border-r transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                        {/* Esquinas Rectangulares Transparentes */}
+                        <div className="absolute inset-6 z-20 pointer-events-none opacity-40 mix-blend-difference filter drop-shadow-md">
+                            <div className={cn("absolute top-0 left-0 size-8 border-t-2 border-l-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                            <div className={cn("absolute top-0 right-0 size-8 border-t-2 border-r-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                            <div className={cn("absolute bottom-0 left-0 size-8 border-b-2 border-l-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                            <div className={cn("absolute bottom-0 right-0 size-8 border-b-2 border-r-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
                         </div>
 
                         {isDetected && (
