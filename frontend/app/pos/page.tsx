@@ -17,7 +17,7 @@ import {
   IconShoppingCart, IconTrash, IconSearch, IconCash, IconCreditCard,
   IconPlus, IconMinus, IconUser, IconChevronRight, IconUserPlus, IconX, IconBox,
   IconArrowLeft, IconLogout, IconDeviceDesktop, IconCalculator, IconRefresh, IconReceiptTax,
-  IconEye, IconPencil, IconScan, IconCamera, IconBarcode
+  IconEye, IconPencil, IconScan, IconCamera, IconBarcode, IconAlertCircle
 } from "@tabler/icons-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { toast } from "sonner";
