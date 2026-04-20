@@ -1486,6 +1486,9 @@ export default function POSPage() {
       {/* DIALOG: CAMERA SCANNER */}
       <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>
         <DialogContent className="sm:max-w-[450px] overflow-hidden p-0 bg-black border-zinc-800">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Escáner de Productos</DialogTitle>
+          </DialogHeader>
           <div className="relative aspect-square sm:aspect-video bg-zinc-950 flex flex-col items-center justify-center overflow-hidden">
             {!useCamera ? (
               <div className="flex flex-col items-center gap-6 p-8 text-center animate-in fade-in zoom-in duration-300">
