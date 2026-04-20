@@ -73,4 +73,22 @@ export class ProductsController {
   @Get('validate-barcode/:barcode') validateBarcode(@Param('barcode') barcode: string) {
     return this.productsService.validateBarcode(barcode);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('waitlist/all') getWaitlist() {
+    return this.productsService.getWaitlist();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('waitlist') addToWaitlist(@Body() body: any, @Request() req: any) {
+    return this.productsService.addToWaitlist({
+      ...body,
+      userId: req.user.sub, // Assuming sub is the userId from JWT
+    });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('waitlist/:id') removeFromWaitlist(@Param('id') id: string) {
+    return this.productsService.removeFromWaitlist(id);
+  }
 }

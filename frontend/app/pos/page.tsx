@@ -17,8 +17,9 @@ import {
   IconShoppingCart, IconTrash, IconSearch, IconCash, IconCreditCard,
   IconPlus, IconMinus, IconUser, IconChevronRight, IconUserPlus, IconX, IconBox,
   IconArrowLeft, IconLogout, IconDeviceDesktop, IconCalculator, IconRefresh, IconReceiptTax,
-  IconEye, IconPencil
+  IconEye, IconPencil, IconScan, IconCamera, IconBarcode
 } from "@tabler/icons-react";
+import { Html5Qrcode } from "html5-qrcode";
 import { toast } from "sonner";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -179,6 +180,14 @@ export default function POSPage() {
   const [settings, setSettings] = useState<any>(null);
   const [baseCurrency, setBaseCurrency] = useState<"USD" | "EUR">("USD");
 
+  // Scanner & Waitlist State
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [useCamera, setUseCamera] = useState(false);
+  const [isDetected, setIsDetected] = useState(false);
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [waitlistData, setWaitlistData] = useState({ name: "", price: "", stock: "1", barcode: "" });
+  const [savingWaitlist, setSavingWaitlist] = useState(false);
+
   // Auth & Hydration state
   const [user, setUser] = useState<any>(null);
   const [token, setToken] = useState<string>("");
@@ -309,6 +318,70 @@ export default function POSPage() {
     return () => window.removeEventListener("keydown", handleKeyPress);
   }, [barcodeBuffer, lastCharTime]);
 
+  useEffect(() => {
+    let html5QrCode: any = null;
+
+    const startScanner = async () => {
+      try {
+        let element = null;
+        for (let i = 0; i < 10; i++) {
+          element = document.getElementById("reader");
+          if (element) break;
+          await new Promise(r => setTimeout(r, 100));
+        }
+        if (!element) return;
+
+        html5QrCode = new Html5Qrcode("reader");
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          {
+            fps: 60,
+            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+                return { width: viewfinderWidth * 0.9, height: viewfinderHeight * 0.5 };
+            },
+            aspectRatio: 1.0,
+            disableFlip: true,
+            videoConstraints: {
+                width: { min: 1280, ideal: 1920, max: 3840 },
+                height: { min: 720, ideal: 1080, max: 2160 },
+                facingMode: "environment",
+                focusMode: "continuous",
+            }
+          },
+          (decodedText: string) => {
+            setIsDetected(true);
+            const audio = new Audio("/scanner.mp3");
+            audio.play().catch(() => {});
+            processBarcode(decodedText);
+            setTimeout(() => {
+              setScannerOpen(false);
+              setUseCamera(false);
+              setIsDetected(false);
+            }, 800);
+          },
+          () => {}
+        );
+      } catch (err) {
+        console.error("Camera error", err);
+      }
+    };
+
+    if (useCamera && scannerOpen) {
+      startScanner();
+    }
+
+    return () => {
+      if (html5QrCode) {
+        const cleanup = async () => {
+            if (html5QrCode.isScanning) {
+                await html5QrCode.stop();
+            }
+        };
+        cleanup().catch(() => {});
+      }
+    };
+  }, [useCamera, scannerOpen]);
+
   const processBarcode = (code: string) => {
     console.log("Processing Barcode:", code);
     const found = products.find(p => 
@@ -319,6 +392,53 @@ export default function POSPage() {
       toast.success(`Leído: ${found.name}`, { icon: '🔍' });
     } else {
       toast.error(`Producto no encontrado (${code})`);
+      setWaitlistData(prev => ({ ...prev, barcode: code }));
+      setWaitlistOpen(true);
+    }
+  };
+
+  const handleWaitlistSubmit = async () => {
+    if (!waitlistData.name || !waitlistData.price) {
+      return toast.error("Nombre y precio son obligatorios");
+    }
+    setSavingWaitlist(true);
+    try {
+      const currentBranchId = localStorage.getItem("currentBranchId");
+      const res = await fetch(`${API}/products/waitlist`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          ...waitlistData,
+          price: Number(waitlistData.price),
+          stock: Number(waitlistData.stock),
+          branchId: currentBranchId
+        }),
+      });
+
+      if (res.ok) {
+        const created = await res.json();
+        toast.success("Producto agregado a lista de espera y carrito");
+        
+        // Add to cart as a "Ghost/Waitlist" product
+        const waitlistProduct: CartProduct = {
+          id: `waitlist-${created.id}`,
+          variantId: "", // Empty for waitlist
+          name: `(ESPERA) ${created.name}`,
+          price: created.price,
+          stock: created.stock,
+        };
+        
+        setCart(prev => [...prev, { product: waitlistProduct, quantity: 1, waitlistId: created.id } as any]);
+        setWaitlistOpen(false);
+        setWaitlistData({ name: "", price: "", stock: "1", barcode: "" });
+      } else {
+        const err = await res.json();
+        toast.error(err.message || "Error al guardar en lista de espera");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setSavingWaitlist(false);
     }
   };
 
@@ -532,8 +652,11 @@ export default function POSPage() {
       const saleData = {
         branchId: currentBranchId,
         items: cart.map(item => ({
-          variantId: item.product.variantId,
+          variantId: (item as any).waitlistId ? null : item.product.variantId,
+          waitlistId: (item as any).waitlistId || null,
           quantity: item.quantity,
+          price: item.product.price, // Ensure price is sent
+          subtotal: item.product.price * item.quantity
         })),
         payments: addedPayments,
         clientId: selectedClientId === "consumidor-final" ? null : selectedClientId,
@@ -929,6 +1052,16 @@ export default function POSPage() {
                 <IconX size={14} />
               </Button>
             )}
+            <Separator orientation="vertical" className="h-4 mx-1" />
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 text-primary hover:bg-primary/5" 
+              onClick={() => setScannerOpen(true)}
+              title="Escanear con cámara"
+            >
+              <IconScan size={18} />
+            </Button>
           </div>
 
           {/* Rejilla de Productos */}
@@ -1345,6 +1478,98 @@ export default function POSPage() {
             <Button variant="ghost" onClick={() => setIsClosingShift(false)} className="font-bold text-[10px] uppercase">Cancelar</Button>
             <Button onClick={handleCloseShift} disabled={isClosingShift && processing} className="flex-1 bg-rose-600 hover:bg-rose-700 h-11 font-black text-[11px] uppercase tracking-widest">
               {processing ? "PROCESANDO..." : "FINALIZAR JORNADA Y CERRAR CAJA"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: CAMERA SCANNER */}
+      <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>
+        <DialogContent className="sm:max-w-[450px] overflow-hidden p-0 bg-black border-zinc-800">
+          <div className="relative aspect-square sm:aspect-video bg-zinc-950 flex flex-col items-center justify-center overflow-hidden">
+            {!useCamera ? (
+              <div className="flex flex-col items-center gap-6 p-8 text-center animate-in fade-in zoom-in duration-300">
+                <div className="size-20 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                  <IconBarcode size={40} className="text-primary" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-bold text-white uppercase tracking-tight">Listo para Escanear</h3>
+                  <p className="text-zinc-400 text-sm max-w-[280px]">Utilice su lector de códigos de barras (láser) o active la cámara de su dispositivo.</p>
+                </div>
+                <Button size="lg" className="gap-2 h-12 px-8 font-bold shadow-lg shadow-primary/20" onClick={() => setUseCamera(true)}>
+                  <IconCamera size={18} /> ACTIVAR CÁMARA
+                </Button>
+              </div>
+            ) : (
+                <div className="size-full absolute inset-0 flex flex-col">
+                    <div id="reader" className="size-full"></div>
+                    {isDetected && (
+                        <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center animate-in fade-in duration-300">
+                            <div className="bg-emerald-500 text-white rounded-full p-4 shadow-2xl scale-125">
+                                <IconScan size={40} />
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+          </div>
+          <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex justify-between items-center px-6">
+            <div className="flex items-center gap-2">
+                <div className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Sistema de Captura Syncro Activo</span>
+            </div>
+            <Button variant="ghost" size="sm" className="h-8 text-zinc-400 hover:text-white hover:bg-white/5 font-bold text-[10px] uppercase tracking-widest" onClick={() => setScannerOpen(false)}>
+              Cerrar Escáner
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: PRODUCT WAITLIST (FOR NON-EXISTING PRODUCTS) */}
+      <Dialog open={waitlistOpen} onOpenChange={setWaitlistOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+              <IconAlertCircle className="text-amber-500" /> Producto no registrado
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              El código <strong>{waitlistData.barcode}</strong> no existe. Ingréselo en la lista de espera para poder facturarlo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+             <div className="space-y-2">
+               <Label>Nombre del Producto <span className="text-destructive">*</span></Label>
+               <Input 
+                placeholder="Ej. Refresco Cola 2L"
+                value={waitlistData.name}
+                onChange={(e) => setWaitlistData({...waitlistData, name: e.target.value})}
+               />
+             </div>
+             <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-2">
+                 <Label>Precio Sugerido ($) <span className="text-destructive">*</span></Label>
+                 <Input 
+                  type="number"
+                  placeholder="0.00"
+                  value={waitlistData.price}
+                  onChange={(e) => setWaitlistData({...waitlistData, price: e.target.value})}
+                 />
+               </div>
+               <div className="space-y-2">
+                 <Label>Stock Inicial</Label>
+                 <Input 
+                  type="number"
+                  placeholder="1"
+                  value={waitlistData.stock}
+                  onChange={(e) => setWaitlistData({...waitlistData, stock: e.target.value})}
+                 />
+               </div>
+             </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setWaitlistOpen(false)}>Cancelar</Button>
+            <Button onClick={handleWaitlistSubmit} disabled={savingWaitlist} className="bg-amber-500 hover:bg-amber-600">
+              {savingWaitlist ? "Guardando..." : "Agregar a Espera y Carrito"}
             </Button>
           </DialogFooter>
         </DialogContent>

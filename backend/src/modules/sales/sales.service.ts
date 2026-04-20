@@ -22,56 +22,80 @@ export class SalesService {
       const saleItemsData = [];
 
       for (const item of items) {
-        // 1. Fetch variant and check stock
-        const variant = await tx.productVariant.findUnique({
-          where: { id: item.variantId },
-          include: { 
-            inventory: { where: { branchId } },
-            product: { include: { category: true } }
-          }
-        });
+        if (item.waitlistId) {
+          // 1. Handle Waitlist Item (Ghost Sale)
+          const waitlist = await (tx.productWaitlist as any).findUnique({
+            where: { id: item.waitlistId }
+          });
+          
+          if (!waitlist) throw new BadRequestException(`Producto en espera ${item.waitlistId} no encontrado`);
 
-        if (!variant) throw new BadRequestException(`Variante ${item.variantId} no encontrada`);
-        
-        const inventory = variant.inventory[0];
-        const currentStock = inventory?.quantity || 0;
-        if (currentStock < item.quantity) {
-          throw new BadRequestException(`Stock insuficiente para ${variant.name} (${currentStock} disponibles)`);
-        }
+          const itemSubtotal = waitlist.price * item.quantity;
+          netSubtotal += itemSubtotal;
 
-        const itemSubtotal = variant.price * item.quantity;
-        netSubtotal += itemSubtotal;
-
-        saleItemsData.push({
-          variantId: item.variantId,
-          quantity: item.quantity,
-          price: variant.price,
-          cost: variant.cost,
-          subtotal: itemSubtotal
-        });
-
-        // 2. Discount Stock
-        await tx.inventory.update({
-          where: { variantId_branchId: { variantId: item.variantId, branchId } },
-          data: { quantity: { decrement: item.quantity } }
-        });
-
-        await tx.productVariant.update({
-          where: { id: item.variantId },
-          data: { stock: { decrement: item.quantity } }
-        });
-
-        // 3. Register Movement
-        await tx.inventoryMovement.create({
-          data: {
-            variantId: item.variantId,
-            branchId,
-            type: MovementType.OUT,
+          saleItemsData.push({
+            waitlistId: item.waitlistId,
+            variantId: null,
             quantity: item.quantity,
-            reason: 'sale',
-            referenceId: 'pending' // Will update later or just leave as is
+            price: waitlist.price,
+            cost: null,
+            subtotal: itemSubtotal
+          });
+
+          // Note: We don't discount stock or record movement for waitlist items as they lack variants.
+        } else {
+          // 1. Fetch variant and check stock
+          const variant = await tx.productVariant.findUnique({
+            where: { id: item.variantId },
+            include: { 
+              inventory: { where: { branchId } },
+              product: { include: { category: true } }
+            }
+          });
+
+          if (!variant) throw new BadRequestException(`Variante ${item.variantId} no encontrada`);
+          
+          const inventory = variant.inventory[0];
+          const currentStock = inventory?.quantity || 0;
+          if (currentStock < item.quantity) {
+            throw new BadRequestException(`Stock insuficiente para ${variant.name} (${currentStock} disponibles)`);
           }
-        });
+
+          const itemSubtotal = variant.price * item.quantity;
+          netSubtotal += itemSubtotal;
+
+          saleItemsData.push({
+            variantId: item.variantId,
+            waitlistId: null,
+            quantity: item.quantity,
+            price: variant.price,
+            cost: variant.cost,
+            subtotal: itemSubtotal
+          });
+
+          // 2. Discount Stock
+          await tx.inventory.update({
+            where: { variantId_branchId: { variantId: item.variantId, branchId } },
+            data: { quantity: { decrement: item.quantity } }
+          });
+
+          await tx.productVariant.update({
+            where: { id: item.variantId },
+            data: { stock: { decrement: item.quantity } }
+          });
+
+          // 3. Register Movement
+          await tx.inventoryMovement.create({
+            data: {
+              variantId: item.variantId,
+              branchId,
+              type: MovementType.OUT,
+              quantity: item.quantity,
+              reason: 'sale',
+              referenceId: 'pending' 
+            }
+          });
+        }
       }
 
       // 4. Calculate Taxes

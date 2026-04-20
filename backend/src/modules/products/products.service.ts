@@ -228,4 +228,25 @@ export class ProductsService {
     });
     return !variant;
   }
+
+  async getWaitlist() {
+    return (this.prisma.productWaitlist as any).findMany({
+      where: { status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+      include: { branch: true }
+    });
+  }
+
+  async addToWaitlist(data: { name: string, price: number, stock: number, barcode: string, userId: string, branchId?: string }) {
+    return (this.prisma.productWaitlist as any).create({
+      data: {
+        ...data,
+        status: 'PENDING'
+      }
+    });
+  }
+
+  async removeFromWaitlist(id: string) {
+    return (this.prisma.productWaitlist as any).delete({ where: { id } });
+  }
 }

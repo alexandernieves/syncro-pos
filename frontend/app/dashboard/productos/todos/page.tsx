@@ -59,6 +59,15 @@ type Product = {
   variants: Variant[];
 };
 
+type WaitlistItem = {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+  barcode: string;
+  createdAt: string;
+};
+
 
 export default function ProductosPage() {
   const router = useRouter();
@@ -82,6 +91,9 @@ export default function ProductosPage() {
   const [gridPage, setGridPage] = useState(1);
   const [gridPageSize, setGridPageSize] = useState(10);
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [waitlistItems, setWaitlistItems] = useState<WaitlistItem[]>([]);
+  const [loadingWaitlist, setLoadingWaitlist] = useState(false);
 
   const { isOnline, pullRemoteData } = useSync();
 
@@ -138,6 +150,37 @@ export default function ProductosPage() {
       const res = await fetch(`${API}/products/${p.id}/stats`);
       if (res.ok) setStats(await res.json());
     } catch (e) {}
+  };
+
+  const loadWaitlist = async () => {
+    setLoadingWaitlist(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/products/waitlist/all`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) setWaitlistItems(await res.json());
+      setWaitlistOpen(true);
+    } catch (e) {
+      toast.error("Error al cargar lista de espera");
+    } finally {
+      setLoadingWaitlist(false);
+    }
+  };
+
+  const handleApproveWaitlist = (item: WaitlistItem) => {
+    setQuickFormData({
+      name: item.name,
+      price: item.price.toString(),
+      stock: item.stock.toString()
+    });
+    setScannedBarcodes([item.barcode]);
+    setWaitlistOpen(false);
+    setQuickCreateOpen(true);
+    
+    // Suggest deleting from waitlist once approved
+    // Actually, I'll delete it when handleQuickSave finishes.
+    (window as any)._pendingWaitlistId = item.id;
   };
 
   const onScanComplete = async (barcode: string) => {
@@ -336,6 +379,18 @@ export default function ProductosPage() {
         });
       if (res.ok) {
         toast.success("Producto creado exitosamente");
+        
+        // Remove from waitlist if came from there
+        const pendingId = (window as any)._pendingWaitlistId;
+        if (pendingId) {
+          const token = localStorage.getItem("token");
+          await fetch(`${API}/products/waitlist/${pendingId}`, {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          (window as any)._pendingWaitlistId = null;
+        }
+
         setQuickCreateOpen(false);
         setQuickFormData({ name: "", price: "", stock: "" });
         setScannedBarcodes([]);
@@ -705,6 +760,10 @@ export default function ProductosPage() {
           </Button>
           <Button variant="outline" className="gap-2 border-primary/20 text-primary" onClick={handleStartScanner}>
             <IconScan size={16} /> Escaneo
+          </Button>
+          <Button variant="outline" className="gap-2 border-primary/20 text-orange-500 hover:bg-orange-500/10" onClick={loadWaitlist}>
+            <IconList size={16} /> Lista de Espera 
+            {waitlistItems.length > 0 && <Badge className="ml-1 px-1 h-4 bg-orange-500">{waitlistItems.length}</Badge>}
           </Button>
           <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => router.push("/dashboard/productos/nuevo")}>
             <IconPlus size={16} /> Nuevo Producto
@@ -1439,6 +1498,65 @@ export default function ProductosPage() {
               </p>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: WAITLIST MANAGEMENT */}
+      <Dialog open={waitlistOpen} onOpenChange={setWaitlistOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <IconList className="text-orange-500" /> Productos en Lista de Espera
+            </DialogTitle>
+            <DialogDescription>
+              Estos productos fueron vendidos en el POS pero aún no están registrados formalmente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {loadingWaitlist ? (
+              <div className="space-y-2">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : waitlistItems.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No hay productos en espera</p>
+            ) : (
+              <div className="border rounded-md overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="p-2 text-left">Producto</th>
+                      <th className="p-2 text-left">Código</th>
+                      <th className="p-2 text-right">Precio</th>
+                      <th className="p-2 text-right">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {waitlistItems.map((item) => (
+                      <tr key={item.id} className="border-t">
+                        <td className="p-2">{item.name}</td>
+                        <td className="p-2 font-mono text-[10px]">{item.barcode}</td>
+                        <td className="p-2 text-right">${item.price.toFixed(2)}</td>
+                        <td className="p-2 text-right">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-primary h-7 px-2"
+                            onClick={() => handleApproveWaitlist(item)}
+                          >
+                            Aprobar
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setWaitlistOpen(false)}>Cerrar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
