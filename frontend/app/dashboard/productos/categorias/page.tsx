@@ -19,7 +19,8 @@ import {
 import { toast } from "sonner";
 import { PosTable } from "@/components/pos-table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { IconX } from "@tabler/icons-react";
+import { IconX, IconDownload } from "@tabler/icons-react";
+import * as XLSX from "xlsx";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
 
@@ -87,6 +88,33 @@ export default function CategoriasPage() {
       toast.error("Error de conexión");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleExport = () => {
+    try {
+      const selectedIds = Object.keys(rowSelection);
+      const isSelected = selectedIds.length > 0;
+      
+      const categoriesToExport = isSelected 
+        ? categories.filter(c => selectedIds.includes(c._id)) 
+        : categories;
+
+      if (categoriesToExport.length === 0) return toast.info("No hay categorías para exportar");
+
+      const dataToExport = categoriesToExport.map(c => ({
+        ID: c._id,
+        Nombre: c.name,
+        Descripcion: c.description || ""
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Categorias");
+      XLSX.writeFile(wb, `Syncro_Categorias_${isSelected ? 'Seleccion_' : ''}${new Date().toISOString().split('T')[0]}.xlsx`);
+      toast.success(isSelected ? "Categorías seleccionadas exportadas" : "Todas las categorías exportadas");
+    } catch (e) {
+      toast.error("Error al exportar categorías");
     }
   };
 
@@ -241,9 +269,14 @@ export default function CategoriasPage() {
           )
         }
         actions={
-          <Button className="gap-2" onClick={openCreate}>
-            <IconPlus size={16} /> Nueva Categoría
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="gap-2 border-primary/20 text-muted-foreground" onClick={handleExport}>
+              <IconDownload size={16} /> Exportar
+            </Button>
+            <Button className="gap-2" onClick={openCreate}>
+              <IconPlus size={16} /> Nueva Categoría
+            </Button>
+          </div>
         }
       />
 
