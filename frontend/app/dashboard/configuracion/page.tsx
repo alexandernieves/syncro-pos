@@ -92,7 +92,7 @@ export default function ConfiguracionPage() {
     country: "Venezuela",
   });
 
-  const [iva, setIva] = useState({ rate: "16", enabled: true });
+  const [iva, setIva] = useState({ rate: "16", igtfRate: "3", enabled: true });
   const [receiptFooter, setReceiptFooter] = useState("Gracias por su compra. Vuelva pronto.");
   const [paymentMethods, setPaymentMethods] = useState([
     { id: 1, name: "Efectivo", enabled: true },
@@ -144,7 +144,11 @@ export default function ConfiguracionPage() {
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [createUserOpen, setCreateUserOpen] = useState(false);
   const [newUser, setNewUser] = useState({
-    name: "", email: "", password: "", role: "Rol Personalizado", privileges: [] as string[]
+    name: "", email: "", password: "", role: "Rol Personalizado", privileges: [] as string[], branchIds: [] as string[]
+  });
+  const [editUserOpen, setEditUserOpen] = useState(false);
+  const [editUser, setEditUser] = useState({
+    id: "", name: "", email: "", role: "Cajero", privileges: [] as string[], branchIds: [] as string[]
   });
 
   const AVAILABLE_PRIVILEGES = [
@@ -194,7 +198,7 @@ export default function ConfiguracionPage() {
               currency: data.currency || "USD",
               country: data.country || "Venezuela",
             });
-            setIva({ rate: data.taxRate || "16", enabled: data.taxEnabled !== false });
+            setIva({ rate: String(data.taxRate ?? "16"), enabled: data.taxEnabled !== false, igtfRate: String(data.igtfRate ?? "3") });
             setReceiptFooter(data.receiptFooter || "Gracias por su compra. Vuelva pronto.");
             if (data.paymentMethods) {
               setPaymentMethods(data.paymentMethods.map((p: any, idx: number) => ({ id: idx + 1, ...p })));
@@ -245,8 +249,9 @@ export default function ConfiguracionPage() {
     try {
       const payload = {
         ...negocio,
-        taxRate: iva.rate,
+        taxRate: Number(iva.rate),
         taxEnabled: iva.enabled,
+        igtfRate: Number(iva.igtfRate),
         receiptFooter,
         paymentMethods: paymentMethods.map(({ name, enabled }) => ({ name, enabled })),
         ...posConfig,
@@ -438,9 +443,17 @@ export default function ConfiguracionPage() {
                     {iva.enabled ? "Activo" : "Desactivado"}
                   </Badge>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Porcentaje de IVA (%)</Label>
-                  <Input type="number" value={iva.rate} onChange={e => setIva(p => ({ ...p, rate: e.target.value }))} className="max-w-xs" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Porcentaje de IVA (%)</Label>
+                    <p className="text-xs text-muted-foreground mb-1">Aplica al monto base de la venta (Ej: 16). Ajustar a 0 si no aplica.</p>
+                    <Input type="number" value={iva.rate} onChange={e => setIva(p => ({ ...p, rate: e.target.value }))} />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Porcentaje de IGTF (%)</Label>
+                    <p className="text-xs text-muted-foreground mb-1">Aplica al pago en Efectivo Moneda Extranjera. Ajustar a 0 si no aplica.</p>
+                    <Input type="number" value={iva.igtfRate} onChange={e => setIva(p => ({ ...p, igtfRate: e.target.value }))} />
+                  </div>
                 </div>
                 <Separator />
                 <div className="flex flex-col gap-1.5">
@@ -522,14 +535,14 @@ export default function ConfiguracionPage() {
             <div className="flex justify-between items-start">
               <div><h2 className="text-xl font-bold">Usuarios y Roles</h2><p className="text-sm text-muted-foreground">Gestiona quién tiene acceso al sistema.</p></div>
               <Button className="gap-2" onClick={() => {
-                setNewUser({ name: "", email: "", password: "", role: "Cajero", privileges: ["pos"] });
+                setNewUser({ name: "", email: "", password: "", role: "Cajero", privileges: ["pos"], branchIds: [] });
                 setCreateUserOpen(true);
               }}><IconPlus size={16}/>Nuevo Usuario</Button>
             </div>
             {usuarios.length === 0 ? (
               <div className="text-center py-6 text-muted-foreground text-sm">No hay usuarios o el servicio no está disponible</div>
             ) : usuarios.map(u => (
-              <Card key={u._id}>
+              <Card key={u.id}>
                 <CardContent className="p-4 flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <div className="bg-primary/20 text-primary size-10 rounded-full flex items-center justify-center font-bold text-lg">{u.name?.charAt(0) || "U"}</div>
@@ -540,10 +553,21 @@ export default function ConfiguracionPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline">{u.role}</Badge>
+                    <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-primary" onClick={() => {
+                      setEditUser({
+                        id: u.id,
+                        name: u.name || "",
+                        email: u.email || "",
+                        role: u.role || "",
+                        privileges: u.permissions || [],
+                        branchIds: u.branchIds || []
+                      });
+                      setEditUserOpen(true);
+                    }}><IconPencil size={14}/></Button>
                     <Button size="icon" variant="ghost" className="text-destructive" onClick={async () => {
                       if(confirm("¿Eliminar usuario?")) {
                         try {
-                          const res = await fetch(`${API}/users/${u._id}`, { method: "DELETE" });
+                          const res = await fetch(`${API}/users/${u.id}`, { method: "DELETE" });
                           if(res.ok) {
                             toast.success("Usuario eliminado");
                             fetchUsers();
@@ -609,6 +633,32 @@ export default function ConfiguracionPage() {
                       ))}
                     </div>
                   </div>
+
+                  <Separator className="my-2" />
+                  
+                  <div>
+                    <Label className="text-base font-semibold">Sucursales de Acceso</Label>
+                    <p className="text-xs text-muted-foreground mb-4">Selecciona las sucursales donde este usuario podrá operar.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                      {sucursales.map(branch => (
+                        <div key={branch.id} className="flex justify-between items-center py-2 border-b last:border-0 border-muted">
+                          <span className="text-sm font-medium">{branch.name}</span>
+                          <button
+                            onClick={() => {
+                              const has = newUser.branchIds.includes(branch.id);
+                              setNewUser({
+                                ...newUser,
+                                branchIds: has ? newUser.branchIds.filter(id => id !== branch.id) : [...newUser.branchIds, branch.id],
+                              });
+                            }}
+                            className={["w-10 h-5 rounded-full transition-colors relative shrink-0", newUser.branchIds.includes(branch.id) ? "bg-primary" : "bg-muted"].join(" ")}
+                          >
+                            <div className={["absolute top-[2px] w-4 h-4 bg-white rounded-full shadow transition-all", newUser.branchIds.includes(branch.id) ? "left-[22px]" : "left-[2px]"].join(" ")} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setCreateUserOpen(false)}>Cancelar</Button>
@@ -617,9 +667,10 @@ export default function ConfiguracionPage() {
                       toast.error("Rellena todos los campos"); return;
                     }
                     try {
+                      const { privileges, branchIds, ...userDataToSend } = newUser;
                       const res = await fetch(`${API}/users`, {
                         method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ ...newUser, country: "Venezuela", permissions: newUser.privileges })
+                        body: JSON.stringify({ ...userDataToSend, country: "Venezuela", permissions: privileges, branchIds: branchIds })
                       });
                       if(res.ok) {
                         toast.success("Usuario creado con éxito");
@@ -633,6 +684,110 @@ export default function ConfiguracionPage() {
                       toast.error("Error de conexión");
                     }
                   }}>Crear Usuario</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={editUserOpen} onOpenChange={setEditUserOpen}>
+              <DialogContent className="sm:max-w-md md:max-w-2xl h-[90vh] md:h-auto overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Editar Usuario</DialogTitle>
+                  <DialogDescription>
+                    Modifica el perfil del usuario o cambia sus permisos de acceso.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col gap-4 py-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div className="space-y-1.5">
+                       <Label>Nombre Completo</Label>
+                       <Input value={editUser.name} onChange={e => setEditUser({ ...editUser, name: e.target.value })} />
+                     </div>
+                     <div className="space-y-1.5">
+                       <Label>Correo Electrónico</Label>
+                       <Input type="email" value={editUser.email} onChange={e => setEditUser({ ...editUser, email: e.target.value })} />
+                     </div>
+                     <div className="space-y-1.5 md:col-span-2">
+                       <Label>Nombre del Rol Personalizado</Label>
+                       <Input value={editUser.role} onChange={e => setEditUser({ ...editUser, role: e.target.value })} />
+                     </div>
+                  </div>
+
+                  <Separator className="my-2" />
+                  
+                  <div>
+                    <Label className="text-base font-semibold">Permisos de Acceso</Label>
+                    <p className="text-xs text-muted-foreground mb-4">Activa los módulos que este usuario podrá visualizar y administrar.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                      {AVAILABLE_PRIVILEGES.map(priv => (
+                        <div key={priv.id} className="flex justify-between items-center py-2 border-b last:border-0 border-muted">
+                          <span className="text-sm">{priv.label}</span>
+                          <button
+                            onClick={() => {
+                              const has = editUser.privileges.includes(priv.id);
+                              setEditUser({
+                                ...editUser,
+                                privileges: has ? editUser.privileges.filter(p => p !== priv.id) : [...editUser.privileges, priv.id],
+                              });
+                            }}
+                            className={["w-10 h-5 rounded-full transition-colors relative shrink-0", editUser.privileges.includes(priv.id) ? "bg-primary" : "bg-muted"].join(" ")}
+                          >
+                            <div className={["absolute top-[2px] w-4 h-4 bg-white rounded-full shadow transition-all", editUser.privileges.includes(priv.id) ? "left-[22px]" : "left-[2px]"].join(" ")} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <Separator className="my-2" />
+                  
+                  <div>
+                    <Label className="text-base font-semibold">Sucursales de Acceso</Label>
+                    <p className="text-xs text-muted-foreground mb-4">Selecciona las sucursales donde este usuario podrá operar.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                      {sucursales.map(branch => (
+                        <div key={branch.id} className="flex justify-between items-center py-2 border-b last:border-0 border-muted">
+                          <span className="text-sm font-medium">{branch.name}</span>
+                          <button
+                            onClick={() => {
+                              const has = editUser.branchIds.includes(branch.id);
+                              setEditUser({
+                                ...editUser,
+                                branchIds: has ? editUser.branchIds.filter(id => id !== branch.id) : [...editUser.branchIds, branch.id],
+                              });
+                            }}
+                            className={["w-10 h-5 rounded-full transition-colors relative shrink-0", editUser.branchIds.includes(branch.id) ? "bg-primary" : "bg-muted"].join(" ")}
+                          >
+                            <div className={["absolute top-[2px] w-4 h-4 bg-white rounded-full shadow transition-all", editUser.branchIds.includes(branch.id) ? "left-[22px]" : "left-[2px]"].join(" ")} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setEditUserOpen(false)}>Cancelar</Button>
+                  <Button onClick={async () => {
+                    if(!editUser.name || !editUser.email) {
+                      toast.error("Rellena los campos obligatorios"); return;
+                    }
+                    try {
+                      const { id, privileges, branchIds, ...updateData } = editUser;
+                      const res = await fetch(`${API}/users/${id}`, {
+                        method: "PATCH", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ ...updateData, permissions: privileges, branchIds: branchIds })
+                      });
+                      if(res.ok) {
+                        toast.success("Usuario actualizado con éxito");
+                        setEditUserOpen(false);
+                        fetchUsers();
+                      } else {
+                        const errorData = await res.json();
+                        toast.error(errorData.message || "Error al actualizar usuario");
+                      }
+                    } catch(e) {
+                      toast.error("Error de conexión");
+                    }
+                  }}>Guardar Cambios</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -786,7 +941,7 @@ export default function ConfiguracionPage() {
               <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest px-1">Sedes Activas</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {sucursales.map(b => (
-                  <Card key={b._id} className="group hover:border-primary/40 transition-colors bg-background/50">
+                  <Card key={b.id} className="group hover:border-primary/40 transition-colors bg-background/50">
                     <CardContent className="p-4 flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
@@ -827,12 +982,12 @@ export default function ConfiguracionPage() {
                           <Button variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                             onClick={async () => {
                               try {
-                                const res = await fetch(`${API}/branches/${b._id}`, {
+                                const res = await fetch(`${API}/branches/${b.id}`, {
                                   method: "DELETE",
                                   headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
                                 });
                                 if(res.ok) {
-                                  setSucursales(sucursales.filter(s => s._id !== b._id));
+                                  setSucursales(sucursales.filter(s => s.id !== b.id));
                                   toast.success("Sucursal eliminada");
                                   window.dispatchEvent(new Event("branchUpdated"));
                                 } else {

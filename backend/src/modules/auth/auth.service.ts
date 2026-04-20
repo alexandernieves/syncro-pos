@@ -37,6 +37,8 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        permissions: user.permissions,
+        branchIds: user.branchIds,
         country: user.country,
         city: user.city,
         avatar: user.avatar,

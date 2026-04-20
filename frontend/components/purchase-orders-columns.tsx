@@ -41,7 +41,11 @@ export const purchaseOrdersSchema = z.object({
   raw: z.any(),              // Objeto crudo
 })
 
-export const getPurchaseOrdersColumns = (onReceive: (id: string) => void, onDelete: (id: string) => void): ColumnDef<z.infer<typeof purchaseOrdersSchema>>[] => [
+export const getPurchaseOrdersColumns = (actions: {
+  onReceive: (id: string) => void,
+  onSend: (id: string) => void,
+  onDelete: (id: string) => void
+}): ColumnDef<z.infer<typeof purchaseOrdersSchema>>[] => [
   {
     id: "select",
     header: ({ table }) => (
@@ -79,7 +83,7 @@ export const getPurchaseOrdersColumns = (onReceive: (id: string) => void, onDele
             <IconFileText size={18} stroke={1.5} />
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-bold tracking-tight text-foreground leading-none mb-1.5">
+            <span className="text-sm font-medium tracking-tight text-foreground leading-none mb-1.5">
               {data.number || `OC-${row.original.id.substring(0, 4)}`}
             </span>
             <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">
@@ -100,7 +104,7 @@ export const getPurchaseOrdersColumns = (onReceive: (id: string) => void, onDele
           <div className="size-6 rounded-md bg-muted/30 flex items-center justify-center text-muted-foreground shrink-0 border border-muted/20">
             <IconBuildingStore size={12} stroke={1.5} />
           </div>
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+          <span className="text-sm font-medium text-foreground">
             {data.name}
           </span>
         </div>
@@ -114,10 +118,10 @@ export const getPurchaseOrdersColumns = (onReceive: (id: string) => void, onDele
       const data = JSON.parse(row.original.total || '{}');
       return (
         <div className="flex flex-col">
-          <span className="text-sm font-bold tabular-nums text-foreground">
+          <span className="text-sm font-medium tabular-nums text-foreground">
             {data.formattedTotal}
           </span>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-[10px] text-muted-foreground font-medium">
             Exento de IVA
           </span>
         </div>
@@ -142,7 +146,7 @@ export const getPurchaseOrdersColumns = (onReceive: (id: string) => void, onDele
       
       return (
         <Badge variant="outline" className={`px-2 py-0.5 font-bold tracking-tight border-none ${style.color}`}>
-          <span className="mr-1">{style.icon}</span>
+          <span className="mr-1.5">{style.icon}</span>
           {style.label}
         </Badge>
       );
@@ -163,38 +167,50 @@ export const getPurchaseOrdersColumns = (onReceive: (id: string) => void, onDele
     id: "actions",
     cell: ({ row }) => {
       const router = useRouter();
-      const status = JSON.parse(row.original.status || '{}').status;
+      const rawData = row.original.raw || {};
+      const status = rawData.status || "DRAFT";
 
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
+            <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-[#79716b]/10 hover:text-white">
               <span className="sr-only">Abrir menú</span>
-              <IconDotsVertical className="h-4 w-4" />
+              <IconDotsVertical className="h-4 w-4" stroke={1.5} />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem onClick={() => router.push(`/dashboard/inventario/compras/${row.original.id}`)}>
+          <DropdownMenuContent align="end" className="w-56 bg-zinc-950 border-[#79716b]/30 text-white shadow-2xl">
+            <DropdownMenuItem onClick={() => router.push(`/dashboard/inventario/compras/detalle?id=${row.original.id}`)} className="cursor-pointer focus:bg-[#79716b]/20 focus:text-white">
               <IconExternalLink className="mr-2 h-4 w-4" />
               Ver Detalles / Tracking
             </DropdownMenuItem>
             
-            {status === "SENT" && (
-              <DropdownMenuItem onClick={() => onReceive(row.original.id)}>
-                <IconCircleCheckFilled className="mr-2 h-4 w-4 text-emerald-600" />
-                Marcar como RECIBIDA
+            <DropdownMenuSeparator className="bg-[#79716b]/20" />
+
+            {(status === "SENT" || status === "DRAFT") && (
+              <DropdownMenuItem onClick={() => actions.onReceive(row.original.id)} className="text-emerald-400 focus:text-emerald-400 focus:bg-emerald-500/10 cursor-pointer">
+                <IconCircleCheckFilled className="mr-2 h-4 w-4" />
+                Recibir Mercancía
               </DropdownMenuItem>
             )}
 
             {status === "DRAFT" && (
               <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive" onClick={() => onDelete(row.original.id)}>
+                <DropdownMenuItem onClick={() => actions.onSend(row.original.id)} className="text-blue-400 focus:text-blue-400 focus:bg-blue-500/10 cursor-pointer">
+                  <IconTruck className="mr-2 h-4 w-4" />
+                  Marcar como ENVIADA
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-[#79716b]/20" />
+                <DropdownMenuItem className="text-rose-400 focus:text-rose-400 focus:bg-rose-500/10 cursor-pointer" onClick={() => actions.onDelete(row.original.id)}>
                   <IconBan className="mr-2 h-4 w-4" />
                   Anular Orden
                 </DropdownMenuItem>
               </>
             )}
+
+            <DropdownMenuItem onClick={() => window.print()} className="group cursor-pointer focus:bg-[#79716b]/20 focus:text-white">
+              <IconFileText className="mr-2 h-4 w-4 text-muted-foreground group-hover:text-white" />
+              Imprimir / PDF
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       );

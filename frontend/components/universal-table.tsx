@@ -130,9 +130,9 @@ function DragHandle({ id }: { id: number | string }) {
       {...listeners}
       variant="ghost"
       size="icon"
-      className="text-muted-foreground size-7 hover:bg-transparent"
+      className="text-muted-foreground/50 size-7 hover:bg-white/5 hover:text-white transition-colors"
     >
-      <IconGripVertical className="text-muted-foreground size-3" />
+      <IconGripVertical className="size-3" />
       <span className="sr-only">Drag to reorder</span>
     </Button>
   )
@@ -324,7 +324,7 @@ function DraggableRow({ row }: { row: Row<z.infer<typeof baseSchema>> }) {
       data-state={row.getIsSelected() && "selected"}
       data-dragging={isDragging}
       ref={setNodeRef}
-      className="relative z-0 data-[dragging=true]:z-10 data-[dragging=true]:opacity-80"
+      className="relative z-0 data-[dragging=true]:z-10 data-[dragging=true]:opacity-80 bg-transparent border-b border-[#79716b]/30 last:border-0 hover:bg-[#79716b]/5 transition-colors group"
       style={{
         transform: CSS.Transform.toString(transform),
         transition: transition,
@@ -364,6 +364,11 @@ export function UniversalTable({
   hideHeader = false,
 }: UniversalTableProps) {
   const [data, setData] = React.useState(() => initialData)
+  
+  React.useEffect(() => {
+    setData(initialData);
+  }, [initialData]);
+
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({})
@@ -448,7 +453,7 @@ export function UniversalTable({
               <SelectItem value="focus-documents">{tabs.focusDocuments || "Focus Documents"}</SelectItem>
             </SelectContent>
           </Select>
-          <TabsList className="hidden @4xl/main:flex">
+          <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex">
             <TabsTrigger value="outline">{tabs.outline || "Outline"}</TabsTrigger>
             <TabsTrigger value="past-performance">
               {tabs.pastPerformance || "Past Performance"}
@@ -514,10 +519,10 @@ export function UniversalTable({
             <Table>
               <TableHeader className="bg-muted sticky top-0 z-10">
                 {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
+                  <TableRow key={headerGroup.id} className="hover:bg-transparent border-none">
                     {headerGroup.headers.map((header) => {
                       return (
-                        <TableHead key={header.id} colSpan={header.colSpan}>
+                        <TableHead key={header.id} colSpan={header.colSpan} className="text-white font-normal text-[11px] uppercase tracking-wider py-4">
                           {header.isPlaceholder
                             ? null
                             : flexRender(

@@ -52,6 +52,9 @@ export function ProductForm({ productId }: { productId?: string }) {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!productId);
+  const [image, setImage] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -73,8 +76,10 @@ export function ProductForm({ productId }: { productId?: string }) {
             setDescription(p.description || "");
             setCategoryId(p.categoryId || "");
             setSupplierId(p.supplierId || "");
+            setImage(p.image || "");
             setVariants(p.variants.map((v: any) => ({
               ...v,
+              barcode: v.barcode || "",
               price: String(v.price),
               cost: String(v.cost || ""),
               stock: String(v.stock),
@@ -88,6 +93,39 @@ export function ProductForm({ productId }: { productId?: string }) {
     };
     fetchData();
   }, [productId]);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    try {
+      const token = localStorage.getItem("token");
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const res = await fetch(`${API}/uploads`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        },
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setImage(data.url);
+        toast.success("Imagen subida exitosamente");
+      } else {
+        toast.error("Error al subir la imagen");
+      }
+    } catch (e) {
+      toast.error("Error de conexión al subir imagen");
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const handleSave = async () => {
     if (!name) return toast.error("El nombre es obligatorio");
@@ -104,6 +142,7 @@ export function ProductForm({ productId }: { productId?: string }) {
         description,
         categoryId,
         supplierId,
+        image,
         variants: variants.map(v => ({
           ...v,
           price: Number(v.price),
@@ -221,6 +260,44 @@ export function ProductForm({ productId }: { productId?: string }) {
                       }} className="pl-9" placeholder="EAN-13" />
                     </div>
                   </div>
+
+                  {/* Sección de Códigos Secundarios (Tags) */}
+                  <div className="sm:col-span-3 space-y-2">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-wider">Códigos de Barras Secundarios</Label>
+                    <div className="flex flex-wrap gap-2 p-3 bg-muted/10 rounded-xl border border-dashed border-muted-foreground/10">
+                      {(v as any).secondaryBarcodes?.map((bc: string, bIdx: number) => (
+                        <div key={`${bc}-${bIdx}`} className="bg-background border px-3 py-1 rounded-lg text-[10px] font-mono flex items-center gap-2">
+                          {bc}
+                          <button 
+                            type="button"
+                            className="text-destructive hover:scale-110 transition-transform"
+                            onClick={() => {
+                              const n = [...variants];
+                              (n[idx] as any).secondaryBarcodes = (n[idx] as any).secondaryBarcodes.filter((_: any, i: number) => i !== bIdx);
+                              setVariants(n);
+                            }}
+                          >
+                            <IconX size={12}/>
+                          </button>
+                        </div>
+                      ))}
+                      <button 
+                        type="button"
+                        className="text-[10px] font-bold text-primary px-3 py-1 hover:bg-primary/5 rounded-lg border border-dashed border-primary/20 transition-colors"
+                        onClick={() => {
+                          const code = prompt("Nuevo código secundario:");
+                          if (code) {
+                            const n = [...variants];
+                            if (!(n[idx] as any).secondaryBarcodes) (n[idx] as any).secondaryBarcodes = [];
+                            (n[idx] as any).secondaryBarcodes.push(code);
+                            setVariants(n);
+                          }
+                        }}
+                      >
+                        + Añadir
+                      </button>
+                    </div>
+                  </div>
                   <div className="space-y-2">
                     <Label className="text-xs font-bold text-primary">Precio Venta</Label>
                     <Input type="number" value={v.price} onChange={e => {
@@ -258,17 +335,42 @@ export function ProductForm({ productId }: { productId?: string }) {
         </div>
 
         <div className="space-y-6">
-          <div className="p-6 bg-card rounded-2xl border shadow-sm">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-4">Ayuda</h2>
+          <div className="p-6 bg-card rounded-2xl border shadow-sm space-y-4">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Ayuda</h2>
             <div className="space-y-4 text-sm text-muted-foreground">
               <p>• Las variantes permiten gestionar tallas, colores o presentaciones de un mismo producto.</p>
               <p>• El <strong>Precio Promo</strong> tiene prioridad si está configurado.</p>
               <p>• El <strong>Precio Mayor</strong> se activa automáticamente en ventas por volumen (próximamente).</p>
             </div>
           </div>
-          <Button variant="outline" className="w-full gap-2 border-dashed border-2 h-20 text-muted-foreground">
-            <IconPlus size={20}/> Subir Imagen Colectiva
-          </Button>
+          
+          <div className="p-6 bg-card rounded-2xl border shadow-sm space-y-4">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-primary">Imagen Colectiva</h2>
+            <div className="relative border-2 border-dashed border-[#79716b]/30 rounded-xl bg-card hover:bg-muted/30 transition-colors flex flex-col items-center justify-center p-6 text-center cursor-pointer min-h-[200px]" onClick={() => fileInputRef.current?.click()}>
+              <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+              {uploadingImage ? (
+                <div className="space-y-2">
+                  <div className="size-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
+                  <p className="text-sm text-muted-foreground font-medium">Subiendo a AWS S3...</p>
+                </div>
+              ) : image ? (
+                <div className="space-y-4 relative w-full group">
+                  <img src={image} alt="Producto" className="mx-auto max-h-[160px] object-contain rounded-md" />
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-md">
+                    <p className="text-white text-sm font-bold flex items-center gap-2"><IconPlus size={16} /> Cambiar Imagen</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center mb-3 mx-auto">
+                    <IconPlus className="text-primary size-6" />
+                  </div>
+                  <p className="text-sm font-bold mb-1">Subir Imagen Colectiva</p>
+                  <p className="text-xs text-muted-foreground px-4 leading-relaxed">Esta imagen representará el producto principal en el POS. Soporta JPG, PNG, WEBP.</p>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

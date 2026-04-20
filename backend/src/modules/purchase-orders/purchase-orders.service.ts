@@ -118,7 +118,8 @@ export class PurchaseOrdersService {
       include: {
         items: { include: { variant: { include: { product: true } } } },
         supplier: true,
-        branch: true
+        branch: true,
+        invoices: true
       }
     });
 
@@ -137,18 +138,24 @@ export class PurchaseOrdersService {
     });
 
     if (!purchaseOrder) throw new NotFoundException('Orden de compra no encontrada');
-    if (purchaseOrder.status !== PurchaseOrderStatus.SENT) {
-      throw new BadRequestException('La orden debe estar enviada antes de recibir');
+
+    if (purchaseOrder.status !== PurchaseOrderStatus.SENT && purchaseOrder.status !== PurchaseOrderStatus.DRAFT) {
+      throw new BadRequestException('La orden debe estar enviada o en borrador antes de recibir');
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Update Order Status
+      // 1. Check if we need to auto-send first
+      if (purchaseOrder.status === PurchaseOrderStatus.DRAFT) {
+        await tx.purchaseOrder.update({ where: { id }, data: { status: PurchaseOrderStatus.SENT } });
+      }
+
+      // 2. Update Order Status to RECEIVED
       const updatedOrder = await tx.purchaseOrder.update({
         where: { id },
         data: { status: PurchaseOrderStatus.RECEIVED }
       });
 
-      // 2. Process Items
+      // 3. Process Items
       for (const item of purchaseOrder.items) {
         // Find existing inventory
         const inventory = await tx.inventory.findUnique({
@@ -230,6 +237,18 @@ export class PurchaseOrdersService {
       return { updatedOrder, invoice };
     }, { 
       timeout: 10000 // Higher timeout for complex transactions
+    });
+  }
+
+  async send(id: string) {
+    const purchaseOrder = await this.prisma.purchaseOrder.findUnique({ where: { id } });
+    if (!purchaseOrder) throw new NotFoundException('Orden de compra no encontrada');
+    if (purchaseOrder.status !== PurchaseOrderStatus.DRAFT) {
+      throw new BadRequestException('Solo se pueden enviar órdenes en estado BORRADOR');
+    }
+    return this.prisma.purchaseOrder.update({
+      where: { id },
+      data: { status: PurchaseOrderStatus.SENT }
     });
   }
 

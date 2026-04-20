@@ -24,14 +24,23 @@ export function BranchSwitcher() {
         });
         if (res.ok) {
           const data = await res.json();
-          setBranches(data);
+          const userStr = localStorage.getItem("user");
+          const user = userStr ? JSON.parse(userStr) : null;
+          const isAdmin = user?.role === "ownerpos" || user?.role === "admin";
+          
+          let filteredBranches = data;
+          if (!isAdmin && user?.branchIds && user.branchIds.length > 0) {
+            filteredBranches = data.filter((b: any) => user.branchIds.includes(b.id));
+          }
+          
+          setBranches(filteredBranches);
           
           // Load selected branch from local storage or pick main
           const savedBranchId = localStorage.getItem("currentBranchId");
-          if (savedBranchId && data.some((b: any) => b.id === savedBranchId)) {
+          if (savedBranchId && filteredBranches.some((b: any) => b.id === savedBranchId)) {
             setSelectedBranch(savedBranchId);
-          } else if (data.length > 0) {
-            const main = data.find((b: any) => b.isMain) || data[0];
+          } else if (filteredBranches.length > 0) {
+            const main = filteredBranches.find((b: any) => b.isMain) || filteredBranches[0];
             setSelectedBranch(main.id);
             localStorage.setItem("currentBranchId", main.id);
           }

@@ -27,7 +27,7 @@ export class ProductsController {
   }
 
   @Post('quick-create')
-  async quickCreate(@Body() data: { name: string, price: number, stock: number, branchId?: string }) {
+  async quickCreate(@Body() data: { name: string, price: number, stock: number, barcodes: string[], branchId?: string }) {
     return this.productsService.quickCreate(data);
   }
 
@@ -59,9 +59,15 @@ export class ProductsController {
     return this.productsService.update(id, body);
   }
 
-  @Delete(':id') remove(@Param('id') id: string) { 
-    // Not implemented in service yet but keep shell
-    return { message: 'Soft delete recommended' };
+  @Delete(':id') async remove(@Param('id') id: string) { 
+    console.log('[ProductsController] DELETE request received for ID:', id);
+    const result = await this.productsService.remove(id);
+    return { 
+      message: 'Product deletion processed', 
+      id, 
+      verification: 'CODE_V2_ACTIVE',
+      result 
+    };
   }
 
   @Get('validate-barcode/:barcode') validateBarcode(@Param('barcode') barcode: string) {

@@ -1,15 +1,15 @@
 import { Controller, Get, Post, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { SalesService } from './sales.service';
-import { AuthGuard } from '@nestjs/passport';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('sales')
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
+  @UseGuards(JwtAuthGuard)
   @Post()
   async create(@Body() saleData: any, @Req() req: any) {
-    // Falls back to a default user if req.user is not set (for testing)
-    const userId = req.user?.id || 'admin-id-placeholder'; 
+    const userId = req.user?.sub || req.user?.id;
     return this.salesService.create(saleData, userId);
   }
 

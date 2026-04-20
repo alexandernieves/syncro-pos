@@ -8,13 +8,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BranchSwitcher } from "@/components/branch-switcher";
+import { ModeSwitcher } from "@/components/mode-switcher";
+import { ThemeSelector } from "@/components/theme-selector";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   IconShoppingCart, IconTrash, IconSearch, IconCash, IconCreditCard,
   IconPlus, IconMinus, IconUser, IconChevronRight, IconUserPlus, IconX, IconBox,
-  IconArrowLeft, IconLogout, IconDeviceDesktop, IconCalculator
+  IconArrowLeft, IconLogout, IconDeviceDesktop, IconCalculator, IconRefresh, IconReceiptTax,
+  IconEye, IconPencil
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import {
@@ -24,6 +27,9 @@ import { Label } from "@/components/ui/label";
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+import { db } from "@/lib/db";
+import { useSync } from "@/hooks/useSync";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
 
@@ -44,9 +50,10 @@ type Product = {
 };
 
 type Client = {
-  _id: string;
+  id: string;
+  _id?: string;
   name: string;
-  documentId: string;
+  documentId?: string;
 };
 
 type CartProduct = {
@@ -73,6 +80,65 @@ type Shift = {
   branchId: string;
 };
 
+// Ticket View for Printing
+const ThermalTicket = ({ order, settings }: { order: any, settings: any }) => {
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+
+  if (!mounted) return null;
+
+  return (
+    <div className="hidden print:block font-mono text-[10px] w-[80mm] p-4 text-black bg-white mx-auto uppercase">
+      <div className="text-center mb-4">
+        <h2 className="text-sm font-black tracking-widest">{settings?.businessName || 'SYNCRO POS'}</h2>
+        <p>{settings?.businessAddress || 'S/N'}</p>
+        <p>{settings?.businessPhone || 'TEL: 000-0000000'}</p>
+        <div className="my-2 border-b border-dashed border-black" />
+      </div>
+      <div className="flex justify-between mb-1">
+        <span>#VENTA: {order.id?.substring(0,8) || '0000'}</span>
+        <span>{order.date}</span>
+      </div>
+      <div className="flex justify-between mb-4">
+        <span>CLIENTE: {order.clientName}</span>
+      </div>
+      <div className="border-b border-dashed border-black mb-2" />
+      <table className="w-full mb-2">
+        <thead>
+          <tr className="border-b border-black">
+            <th className="text-left font-normal pb-1">CANT</th>
+            <th className="text-left font-normal pb-1 uppercase">DETALLE</th>
+            <th className="text-right font-normal pb-1">SUB</th>
+          </tr>
+        </thead>
+        <tbody>
+          {order.items.map((it: any, i: number) => (
+            <tr key={it.id || i}>
+              <td className="py-1">{it.quantity}X</td>
+              <td className="py-1 uppercase">{it.product.name}</td>
+              <td className="py-1 text-right">${(it.product.price * it.quantity).toFixed(2)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="border-t border-dashed border-black pt-2 space-y-1">
+        <div className="flex justify-between font-black text-xs">
+          <span>TOTAL USD:</span>
+          <span>${order.total.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between italic">
+          <span>TASA BCV: Bs {(order?.payments?.[0]?.exchangeRate || settings?.exchangeRate || 1).toFixed(2)}</span>
+          <span>BS: {(order.total * (order?.payments?.[0]?.exchangeRate || settings?.exchangeRate || 1)).toLocaleString('es-VE')}</span>
+        </div>
+      </div>
+      <div className="text-center mt-6">
+        <p>¡GRACIAS POR SU COMPRA!</p>
+        <p className="text-[8px] mt-2 italic text-slate-500">Documento no fiscal • Generado por Syncro POS</p>
+      </div>
+    </div>
+  );
+};
+
 export default function POSPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
@@ -91,19 +157,46 @@ export default function POSPage() {
   const [isClosingShift, setIsClosingShift] = useState(false);
   const [closingBalance, setClosingBalance] = useState<string>("0");
 
+  // Payment Modal State
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD">("CASH");
+  const [amountReceived, setAmountReceived] = useState<string>("0");
+  
+  // Quick Client State
+  const [isQuickClientOpen, setIsQuickClientOpen] = useState(false);
+  const [newClient, setNewClient] = useState({ name: "", documentId: "", phone: "" });
+  const [savingClient, setSavingClient] = useState(false);
+
+  // Client document search
+  const [clientDocSearch, setClientDocSearch] = useState("");
+  const [searchingClient, setSearchingClient] = useState(false);
+
+  // Advanced Payment State
+  const [addedPayments, setAddedPayments] = useState<any[]>([]);
+  const [tempPaymentMethod, setTempPaymentMethod] = useState<"CASH" | "CARD" | "TRANSFER">("CASH");
+  const [tempAmount, setTempAmount] = useState<string>("0");
+  const [syncingBcv, setSyncingBcv] = useState(false);
+  const [settings, setSettings] = useState<any>(null);
+  const [baseCurrency, setBaseCurrency] = useState<"USD" | "EUR">("USD");
+
   // Auth & Hydration state
   const [user, setUser] = useState<any>(null);
   const [token, setToken] = useState<string>("");
   const [mounted, setMounted] = useState(false);
 
-  const isOwner = user && user.role !== "pos";
+  const { isOnline, syncPendingSales, pullRemoteData } = useSync();
+
+  const canAccessDashboard = user?.permissions?.includes("dashboard") || user?.role === "ownerpos" || user?.role === "admin";
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const currentExchangeRate = baseCurrency === "USD" ? (settings?.exchangeRate || 1) : (settings?.exchangeRateEur || 1);
 
   const checkShift = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/shifts/active`, { headers });
+      const currentToken = localStorage.getItem("token") || "";
+      const h = { Authorization: `Bearer ${currentToken}`, "Content-Type": "application/json" };
+      const res = await fetch(`${API}/shifts/active`, { headers: h });
       const data = await res.json();
-      if (data && data.status === "OPEN") {
+      if (res.ok && data && data.status === "OPEN") {
         setActiveShift(data);
       } else {
         setActiveShift(null);
@@ -117,29 +210,49 @@ export default function POSPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const currentBranchId = localStorage.getItem("currentBranchId") || "";
+    
+    // First, load from LOCAL DB for an instant UI
     try {
-      const pUrl = currentBranchId ? `${API}/products?branchId=${currentBranchId}` : `${API}/products`;
-      const [pRes, cRes, sRes] = await Promise.all([
-        fetch(pUrl, { headers }),
-        fetch(`${API}/clients`, { headers }),
-        fetch(`${API}/settings`, { headers }),
-      ]);
-      const pData = await pRes.json();
-      const cData = await cRes.json();
-      const sData = await sRes.json();
-
-      setProducts(Array.isArray(pData) ? pData : []);
-      setClients(Array.isArray(cData) ? cData : []);
-      if (sData && sData.taxRate) {
-        setTaxRate(Number(sData.taxRate));
+      const localProducts = await db.products.toArray();
+      const localClients = await db.clients.toArray();
+      
+      if (localProducts.length > 0) {
+        setProducts(localProducts as any);
       }
-    } catch {
-      toast.error("Error al cargar datos del punto de venta");
+      if (localClients.length > 0) {
+        setClients(localClients as any);
+      }
+    } catch (e) {
+      console.error("Local load error", e);
     } finally {
-      setLoading(false);
+      if (products.length > 0) setLoading(false);
     }
-  }, []);
+
+    // Then, pull from remote to update local DB and refresh UI
+    if (navigator.onLine) {
+      await pullRemoteData();
+      
+      // Refresh local state from updated DB
+      const updatedProducts = await db.products.toArray();
+      const updatedClients = await db.clients.toArray();
+      setProducts(updatedProducts as any);
+      setClients(updatedClients as any);
+      
+      // Also fetch settings which aren't in IndexedDB yet
+      const currentToken = localStorage.getItem("token") || "";
+      const h = { Authorization: `Bearer ${currentToken}`, "Content-Type": "application/json" };
+      try {
+        const sRes = await fetch(`${API}/settings`, { headers: h });
+        const sData = await sRes.json();
+        setSettings(sData);
+        if (sData && sData.taxRate) {
+          setTaxRate(Number(sData.taxRate));
+        }
+      } catch (e) {}
+    }
+    
+    setLoading(false);
+  }, [pullRemoteData, products.length]);
 
   useEffect(() => {
     setMounted(true);
@@ -162,6 +275,54 @@ export default function POSPage() {
       loadData();
     }
   }, [activeShift, loadData]);
+
+  // BARCODE SCANNER GLOBAL LISTENER
+  const [barcodeBuffer, setBarcodeBuffer] = useState("");
+  const [lastCharTime, setLastCharTime] = useState(0);
+
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Ignore if focus is in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      const currentTime = new Date().getTime();
+      const diff = currentTime - lastCharTime;
+
+      // Reset buffer if delay > 50ms (typing manually vs scanner)
+      if (diff > 50) {
+        if (e.key.length === 1) setBarcodeBuffer(e.key);
+      } else {
+        if (e.key.length === 1) setBarcodeBuffer(prev => prev + e.key);
+      }
+
+      setLastCharTime(currentTime);
+
+      if (e.key === "Enter") {
+        if (barcodeBuffer.length > 2) {
+          processBarcode(barcodeBuffer);
+        }
+        setBarcodeBuffer("");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyPress);
+    return () => window.removeEventListener("keydown", handleKeyPress);
+  }, [barcodeBuffer, lastCharTime]);
+
+  const processBarcode = (code: string) => {
+    console.log("Processing Barcode:", code);
+    const found = products.find(p => 
+      p.variants?.some(v => v.barcode === code || v.sku === code)
+    );
+    if (found) {
+      addToCart(found);
+      toast.success(`Leído: ${found.name}`, { icon: '🔍' });
+    } else {
+      toast.error(`Producto no encontrado (${code})`);
+    }
+  };
+
+
 
   const handleOpenShift = async () => {
     try {
@@ -301,11 +462,62 @@ export default function POSPage() {
   };
 
   const subtotal = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
-  const tax = subtotal * (taxRate / 100);
-  const total = subtotal + tax;
+  const updatedTotal = subtotal + (subtotal * (taxRate / 100));
+  
+  // Calculate IGTF based on CASH payments added
+  const cashPaymentsTotal = addedPayments
+    .filter(p => p.method === "CASH")
+    .reduce((acc, p) => acc + p.amount, 0);
+  
+  const igtfRateVal = settings?.igtfRate !== undefined && settings?.igtfRate !== null ? Number(settings.igtfRate) : 3;
+  const igtfAmount = cashPaymentsTotal * (igtfRateVal / 100);
+  const finalTotalWithIgtf = updatedTotal + igtfAmount;
+  const remainingToPay = finalTotalWithIgtf - addedPayments.reduce((acc, p) => acc + p.amount, 0);
 
-  const processSale = async (paymentMethod: "CASH" | "CARD") => {
+  const openPaymentModal = (method: "CASH" | "CARD") => {
+    setPaymentMethod(method);
+    setAddedPayments([]); // Start fresh for mixed payment logic if needed, or just keep it
+    setTempPaymentMethod(method);
+    setTempAmount(finalTotalWithIgtf.toFixed(2));
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleSyncBcv = async () => {
+    setSyncingBcv(true);
+    try {
+      const res = await fetch(`${API}/settings/sync-bcv`, { method: "POST", headers });
+      if (res.ok) {
+        const updated = await res.json();
+        setSettings(updated);
+        toast.success(`Tasas BCV actualizadas exitosamente`);
+        loadData();
+      } else {
+        toast.error("No se pudo sincronizar la tasa");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setSyncingBcv(false);
+    }
+  };
+
+  const addPayment = () => {
+    const amt = Number(tempAmount);
+    if (amt <= 0) return toast.error("Monto inválido");
+    
+    setAddedPayments([...addedPayments, {
+      method: tempPaymentMethod,
+      amount: amt,
+      amountLocal: amt * currentExchangeRate,
+      exchangeRate: currentExchangeRate,
+      reference: ""
+    }]);
+    setTempAmount("0");
+  };
+
+  const processSale = async () => {
     if (cart.length === 0) return toast.error("El carrito está vacío");
+    if (remainingToPay > 0.01) return toast.error("Aún falta saldo por cubrir");
     
     setProcessing(true);
     
@@ -323,26 +535,130 @@ export default function POSPage() {
           variantId: item.product.variantId,
           quantity: item.quantity,
         })),
-        paymentMethod,
+        payments: addedPayments,
+        clientId: selectedClientId === "consumidor-final" ? null : selectedClientId,
       };
 
+      // OFFLINE MODE: If offline, queue the sale
+      if (!navigator.onLine) {
+        await db.pendingSales.add({
+          data: saleData,
+          status: "pending",
+          createdAt: Date.now()
+        });
 
+        toast.success("Venta guardada localmente (Pendiente de sincronizar)", {
+          description: "La venta se subirá al sistema automáticamente cuando se recupere la conexión.",
+          duration: 6000
+        });
+
+        setCart([]);
+        setIsPaymentModalOpen(false);
+        setProcessing(false);
+        return;
+      }
+
+      // ONLINE MODE: Direct POST
       const res = await fetch(`${API}/sales`, {
         method: "POST", headers, body: JSON.stringify(saleData),
       });
 
       if (res.ok) {
         toast.success("Venta realizada con éxito");
+        // Print logic
+        const settings = {
+          businessName: user?.companyName || "SYNCRO POS",
+          exchangeRate: currentExchangeRate
+        }
+        // Small delay to allow react to render ThermalTicket if needed
+        setTimeout(() => window.print(), 100);
+
         setCart([]);
+        setIsPaymentModalOpen(false);
         loadData(); // Refresh stock
       } else {
         const err = await res.json();
         toast.error(err.message || "Error al procesar la venta");
       }
-    } catch {
-      toast.error("Error de conexión con el servidor");
+    } catch (e) {
+      // Catch network errors and queue locally
+      console.error("Sale error, checking offline fallback", e);
+      
+      const currentBranchId = localStorage.getItem("currentBranchId");
+      const saleData = {
+        branchId: currentBranchId,
+        items: cart.map(item => ({ variantId: item.product.variantId, quantity: item.quantity })),
+        payments: addedPayments,
+        clientId: selectedClientId === "consumidor-final" ? null : selectedClientId,
+      };
+
+      await db.pendingSales.add({
+        data: saleData,
+        status: "pending",
+        createdAt: Date.now()
+      });
+
+      toast.warning("Error de red. Venta guardada localmente.", {
+        description: "Se sincronizará al recuperar conexión."
+      });
+
+      setCart([]);
+      setIsPaymentModalOpen(false);
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const handleCreateClient = async () => {
+    if (!newClient.name) return toast.error("El nombre es obligatorio");
+    setSavingClient(true);
+    try {
+      const res = await fetch(`${API}/clients`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(newClient),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        toast.success(`Cliente "${created.name}" registrado correctamente`);
+        setClients(prev => [...prev, created]);
+        setSelectedClientId(created.id || created._id);
+        setIsQuickClientOpen(false);
+        setNewClient({ name: "", documentId: "", phone: "" });
+        setClientDocSearch("");
+      } else {
+        const err = await res.json();
+        toast.error(err.message || "Error al registrar cliente");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setSavingClient(false);
+    }
+  };
+
+  const handleClientDocSearch = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter" || !clientDocSearch.trim()) return;
+    setSearchingClient(true);
+    try {
+      const res = await fetch(`${API}/clients/search?q=${encodeURIComponent(clientDocSearch.trim())}`, { headers });
+      const results = await res.json();
+      if (results && results.length > 0) {
+        const found = results[0];
+        setSelectedClientId(found.id);
+        // Ensure client is in local list
+        setClients(prev => prev.find(c => c.id === found.id) ? prev : [...prev, found]);
+        toast.success(`Cliente encontrado: ${found.name}`);
+        setClientDocSearch("");
+      } else {
+        toast.warning("Cliente no encontrado. Complete el registro.");
+        setNewClient(prev => ({ ...prev, documentId: clientDocSearch.trim() }));
+        setIsQuickClientOpen(true);
+      }
+    } catch {
+      toast.error("Error buscando cliente");
+    } finally {
+      setSearchingClient(false);
     }
   };
 
@@ -413,13 +729,16 @@ export default function POSPage() {
     return (
       <div className="h-screen w-full flex flex-col bg-muted/10">
         {/* Header for opening screen */}
-        <header className="h-14 bg-background border-b px-6 flex items-center shrink-0">
-          {isOwner && (
-            <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard")} className="h-8 w-8 mr-4">
-              <IconArrowLeft className="size-4" />
-            </Button>
-          )}
-          <h1 className="font-bold text-lg tracking-tight">SYNCRO POS</h1>
+        <header className="h-14 bg-background border-b px-6 flex items-center justify-between shrink-0">
+          <div className="flex items-center">
+            {canAccessDashboard && (
+              <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard")} className="h-8 w-8 mr-4">
+                <IconArrowLeft className="size-4" />
+              </Button>
+            )}
+            <h1 className="font-bold text-lg tracking-tight">SYNCRO POS</h1>
+          </div>
+          <BranchSwitcher />
         </header>
 
         <div className="flex-1 flex items-center justify-center p-4">
@@ -469,7 +788,7 @@ export default function POSPage() {
               </Button>
               
               <div className="flex flex-col gap-1">
-                {isOwner ? (
+                {canAccessDashboard ? (
                   <Button 
                     variant="ghost" 
                     size="sm"
@@ -484,11 +803,12 @@ export default function POSPage() {
                     size="sm"
                     className="w-full h-9 text-destructive hover:bg-destructive/5"
                     onClick={() => {
+                      toast.info("Sesión cerrada");
                       localStorage.clear();
                       router.push("/");
                     }}
                   >
-                    Cerrar Sesión
+                    <IconLogout className="size-4 mr-2" /> Cerrar Sesión
                   </Button>
                 )}
               </div>
@@ -508,18 +828,44 @@ export default function POSPage() {
 
   // MAIN POS INTERFACE
   return (
-    <div className="flex flex-col h-screen bg-muted/20">
+    <div className="flex flex-col h-screen bg-muted/20 print:bg-white p-0">
       
-      <header className="h-14 bg-background border-b px-6 flex items-center justify-between sticky top-0 z-10 shrink-0">
+      {/* THERMAL TICKET RENDER */}
+      <ThermalTicket 
+        order={{
+          id: 'POS-INTERNAL',
+          date: new Date().toLocaleDateString(),
+          clientName: clients.find(c => c.id === selectedClientId || c._id === selectedClientId)?.name || "Consumidor Final",
+          total: updatedTotal,
+          items: cart,
+          payments: addedPayments.map(p => ({
+            method: p.method,
+            amount: p.amount,
+            amountLocal: p.amountLocal,
+            exchangeRate: p.exchangeRate || currentExchangeRate
+          }))
+        }}
+        settings={{
+          businessName: "SYNCRO POS",
+          exchangeRate: currentExchangeRate
+        }}
+      />
+
+      <header className="h-14 bg-background border-b px-6 flex items-center justify-between sticky top-0 z-10 shrink-0 print:hidden">
         <div className="flex items-center gap-4">
-          {isOwner && (
+          {canAccessDashboard && (
             <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard")} className="h-8 w-8">
               <IconArrowLeft className="size-4" />
             </Button>
           )}
           <div className="flex items-center gap-2">
             <h1 className="font-bold text-lg tracking-tight">SYNCRO POS</h1>
-            <Badge variant="outline" className="hidden sm:inline-flex text-[10px] h-5 py-0">Terminal Activa</Badge>
+            <Badge variant="outline" className={cn(
+              "hidden sm:inline-flex text-[10px] h-5 py-0 px-1.5 font-bold uppercase tracking-wider",
+              isOnline ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border-rose-500/20"
+            )}>
+              {isOnline ? 'Online' : 'Offline'}
+            </Badge>
           </div>
         </div>
 
@@ -528,8 +874,33 @@ export default function POSPage() {
             <p className="text-[10px] text-muted-foreground leading-none">Cajero</p>
             <p className="text-xs font-semibold leading-none mt-1">{user?.name || "Administrador"}</p>
           </div>
+          {settings?.bcvUpdateDate && (
+            <div className="hidden lg:flex flex-col items-end mr-1">
+              <p className="text-[10px] text-muted-foreground leading-none">Fecha Valor</p>
+              <p className="text-xs font-semibold text-[#79716b] leading-none mt-1">{settings.bcvUpdateDate}</p>
+            </div>
+          )}
+          <div className="flex items-center gap-1">
+            <Select value={baseCurrency} onValueChange={(v: "USD" | "EUR") => setBaseCurrency(v)}>
+              <SelectTrigger className="h-8 w-[72px] text-[10px] font-bold border-[#79716b]/30 focus:ring-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="USD" className="text-xs font-semibold">USD</SelectItem>
+                <SelectItem value="EUR" className="text-xs font-semibold">EUR</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" className="h-8 border-[#79716b]/30 gap-2" onClick={handleSyncBcv} disabled={syncingBcv}>
+              <IconRefresh size={14} className={syncingBcv ? "animate-spin" : ""} />
+              <span className="text-[10px] font-bold">BCV: {currentExchangeRate.toFixed(2)}</span>
+            </Button>
+          </div>
           <Separator orientation="vertical" className="h-6 mx-1" />
-          {isOwner && <BranchSwitcher />}
+          <BranchSwitcher />
+          <div className="flex items-center gap-1">
+            <ThemeSelector />
+            <ModeSwitcher />
+          </div>
           <Button 
             variant="ghost" 
             size="sm"
@@ -630,21 +1001,37 @@ export default function POSPage() {
             
             <Separator className="mt-4 mb-3" />
             
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <div className="flex justify-between items-center px-0.5">
-                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Cliente</Label>
-                <button className="text-primary text-[10px] hover:underline" onClick={() => toast.info("Módulo de clientes pronto...")}>
-                  Nuevo
+                <Label className="text-[10px] font-black uppercase text-[#79716b] tracking-widest">Identificación Cliente</Label>
+                <button className="text-primary text-[10px] font-bold hover:underline" onClick={() => setIsQuickClientOpen(true)}>
+                  + NUEVO
                 </button>
               </div>
+              {/* Smart document search */}
+              <div className="relative">
+                <Input
+                  placeholder="Buscar por cédula / RIF... (Enter)"
+                  value={clientDocSearch}
+                  onChange={e => setClientDocSearch(e.target.value)}
+                  onKeyDown={handleClientDocSearch}
+                  className="h-8 text-xs pr-8"
+                  disabled={searchingClient}
+                />
+                {searchingClient && (
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <IconRefresh size={12} className="animate-spin text-muted-foreground" />
+                  </div>
+                )}
+              </div>
               <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                <SelectTrigger className="h-9 text-xs">
+                <SelectTrigger className="h-9 text-xs bg-muted/20 border-[#79716b]/30">
                   <SelectValue placeholder="Seleccionar Cliente" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-zinc-900 border-[#79716b]/30">
                   <SelectItem value="consumidor-final">Consumidor Final</SelectItem>
                   {clients.map(c => (
-                    <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}>{c.name} ({c.documentId || 'S/D'})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -684,16 +1071,29 @@ export default function POSPage() {
           </div>
 
           <div className="p-4 border-t bg-muted/5 shrink-0 space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Total Cobrar</span>
-              <span className="text-2xl font-bold tracking-tight text-primary">${total.toFixed(2)}</span>
+            <div className="space-y-1.5 px-1">
+              <div className="flex justify-between text-xs font-medium text-muted-foreground">
+                <span>Subtotal</span>
+                <span className="tabular-nums">${subtotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-xs font-medium text-muted-foreground">
+                <span>IVA ({taxRate}%)</span>
+                <span className="tabular-nums">${(subtotal * (taxRate / 100)).toFixed(2)}</span>
+              </div>
+            </div>
+            <div className="flex justify-between items-center pt-2 border-t">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-bold text-foreground">Total Checkout</span>
+                <span className="text-[10px] text-muted-foreground font-medium tabular-nums">~ Bs {(updatedTotal * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <span className="text-2xl font-black tracking-tight tabular-nums">${updatedTotal.toFixed(2)}</span>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Button size="sm" className="h-10 font-bold text-xs uppercase" onClick={() => processSale("CASH")} disabled={cart.length === 0 || processing}>
-                <IconCash className="size-4 mr-2" /> Efectivo
+              <Button size="sm" className="h-11 font-black text-[10px] uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-900/20" onClick={() => openPaymentModal("CASH")} disabled={cart.length === 0 || processing}>
+                <IconCash className="size-4 mr-2" /> Pagar Mixto
               </Button>
-              <Button size="sm" variant="outline" className="h-10 font-bold text-xs uppercase" onClick={() => processSale("CARD")} disabled={cart.length === 0 || processing}>
-                <IconCreditCard className="size-4 mr-2" /> Tarjeta
+              <Button size="sm" variant="outline" className="h-11 font-black text-[10px] uppercase tracking-widest border-[#79716b]/30 hover:bg-[#79716b]/10" onClick={() => openPaymentModal("CARD")} disabled={cart.length === 0 || processing}>
+                <IconCreditCard className="size-4 mr-2" /> Crédito / Débito
               </Button>
             </div>
           </div>
@@ -732,6 +1132,223 @@ export default function POSPage() {
         </DialogContent>
       </Dialog>
       
+      {/* DIALOG: PAYMENT CALCULATION */}
+      <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-full border ${paymentMethod === 'CASH' ? 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20' : 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/10 dark:border-blue-500/20'}`}>
+                {paymentMethod === 'CASH' ? <IconCash size={20} /> : <IconCreditCard size={20} />}
+              </div>
+              <div className="space-y-1">
+                <DialogTitle>Finalizar Venta</DialogTitle>
+                <DialogDescription>
+                  Revisa los montos y añade los pagos correspondientes.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            {/* Totals Summary */}
+            <div className="flex justify-between items-center bg-muted/50 p-4 rounded-lg border">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Monto a Pagar (Base + IVA)</p>
+                <p className="text-2xl font-bold">${updatedTotal.toFixed(2)}</p>
+              </div>
+              {igtfAmount > 0 && (
+                <div className="text-right">
+                  <p className="text-sm font-medium text-emerald-600 dark:text-emerald-500 mb-1">Impacto IGTF (3%)</p>
+                  <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                    + ${igtfAmount.toFixed(2)}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Payment Entry Form */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <h4 className="text-sm font-medium leading-none">Registrar Pago</h4>
+                <Badge variant="secondary" className="font-mono text-xs">
+                  Total Final: ${finalTotalWithIgtf.toFixed(2)}
+                </Badge>
+              </div>
+
+              <div className="flex gap-2">
+                <Select value={tempPaymentMethod} onValueChange={(v: any) => setTempPaymentMethod(v)}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CASH">Efectivo</SelectItem>
+                    <SelectItem value="CARD">Tarjeta</SelectItem>
+                    <SelectItem value="TRANSFER">Transferencia</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                  <Input 
+                    type="number" 
+                    className="pl-7 font-medium"
+                    value={tempAmount}
+                    onChange={(e) => setTempAmount(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <Button variant="secondary" onClick={addPayment}>Añadir</Button>
+              </div>
+            </div>
+
+            {/* List of Added Payments */}
+            {addedPayments.length > 0 && (
+              <div className="space-y-2 max-h-[160px] overflow-y-auto pr-2 mt-2">
+                {addedPayments.map((p, i) => (
+                  <div key={i} className="flex justify-between items-center p-3 rounded-md border bg-card animate-in slide-in-from-left-2 duration-200">
+                    <div className="flex items-center gap-3">
+                      <div className="size-8 rounded-full border bg-muted flex items-center justify-center text-muted-foreground">
+                        {p.method === 'CASH' ? <IconCash size={14} /> : p.method === 'CARD' ? <IconCreditCard size={14} /> : <IconRefresh size={14} />}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{p.method === 'CASH' ? 'Efectivo' : p.method === 'CARD' ? 'Tarjeta' : 'Transferencia'}</span>
+                        <span className="text-xs text-muted-foreground">Bs {p.amountLocal.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-base font-semibold tabular-nums">${p.amount.toFixed(2)}</span>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setAddedPayments(addedPayments.filter((_, idx) => idx !== i))}>
+                        <IconX size={14} />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Remaining Balance Summary */}
+            {remainingToPay > 0.001 ? (
+              <div className="flex justify-between items-center px-4 py-3 rounded-lg bg-rose-50 border border-rose-100 dark:bg-rose-500/10 dark:border-rose-500/20">
+                  <span className="text-sm font-medium text-rose-600 dark:text-rose-400">Saldo Pendiente</span>
+                  <span className="text-xl font-bold text-rose-600 dark:text-rose-400 tabular-nums">${remainingToPay.toFixed(2)}</span>
+              </div>
+            ) : (
+              <div className="flex justify-between items-center px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20">
+                  <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Total Cubierto</span>
+                  <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">$0.00</span>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsPaymentModalOpen(false)}>Cancelar</Button>
+            <Button 
+                onClick={processSale} 
+                disabled={processing || remainingToPay > 0.01}
+                className="w-full sm:w-auto"
+            >
+              {processing ? "Procesando..." : "Confirmar Venta y Emitir Recibo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: QUICK CLIENT REGISTRATION */}
+      <Dialog open={isQuickClientOpen} onOpenChange={setIsQuickClientOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <IconUserPlus size={18} className="text-primary" /> Nuevo Cliente
+            </DialogTitle>
+            <DialogDescription>
+              Completa los datos para registrar el cliente en el sistema.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+             <div className="space-y-2">
+               <Label>Nombre Completo <span className="text-destructive">*</span></Label>
+               <Input 
+                placeholder="Juan Pérez"
+                value={newClient.name}
+                onChange={(e) => setNewClient({...newClient, name: e.target.value})}
+               />
+             </div>
+             <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-2">
+                 <Label>Cédula / RIF</Label>
+                 <Input 
+                  placeholder="V-12345678"
+                  className="tabular-nums"
+                  value={newClient.documentId}
+                  onChange={(e) => setNewClient({...newClient, documentId: e.target.value})}
+                 />
+               </div>
+               <div className="space-y-2">
+                 <Label>Teléfono</Label>
+                 <Input 
+                  placeholder="0414-0000000"
+                  className="tabular-nums"
+                  value={newClient.phone}
+                  onChange={(e) => setNewClient({...newClient, phone: e.target.value})}
+                 />
+               </div>
+             </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsQuickClientOpen(false)}>Cancelar</Button>
+            <Button onClick={handleCreateClient} disabled={savingClient}>
+              {savingClient ? "Guardando..." : "Registrar Cliente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: CLOSE SHIFT (ARQUEO DE CAJA) */}
+      <Dialog open={isClosingShift} onOpenChange={setIsClosingShift}>
+        <DialogContent className="sm:max-w-[400px] bg-zinc-950 border-[#79716b]/30 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
+              <IconCalculator className="text-rose-500" /> Cierre de Turno
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground font-bold uppercase tracking-widest">
+              Finalización de jornada y arqueo de caja
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-6">
+             <div className="p-4 rounded-xl bg-[#79716b]/5 border border-[#79716b]/10 space-y-3">
+               <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-[#79716b]">
+                 <span>Monto de Apertura</span>
+                 <span className="text-white">${activeShift?.openingBalance?.toFixed(2)}</span>
+               </div>
+               <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-[#79716b]">
+                 <span>Ventas en Efectivo</span>
+                 <span className="text-emerald-500">CONSULTANDO...</span>
+               </div>
+             </div>
+
+             <div className="space-y-3">
+               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Monto Real en Caja (Contado)</Label>
+               <div className="relative">
+                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">$</span>
+                 <Input 
+                  type="number"
+                  className="h-14 pl-8 bg-zinc-900 border-[#79716b]/30 text-2xl font-black tabular-nums"
+                  value={closingBalance}
+                  onChange={(e) => setClosingBalance(e.target.value)}
+                 />
+               </div>
+               <p className="text-[9px] text-muted-foreground italic text-center">Ingrese el monto total de efectivo que tiene físicamente en la gaveta.</p>
+             </div>
+          </div>
+          <DialogFooter className="gap-3">
+            <Button variant="ghost" onClick={() => setIsClosingShift(false)} className="font-bold text-[10px] uppercase">Cancelar</Button>
+            <Button onClick={handleCloseShift} disabled={isClosingShift && processing} className="flex-1 bg-rose-600 hover:bg-rose-700 h-11 font-black text-[11px] uppercase tracking-widest">
+              {processing ? "PROCESANDO..." : "FINALIZAR JORNADA Y CERRAR CAJA"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -12,8 +12,8 @@ import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ChartAreaInteractive } from "@/components/chart-area-interactive";
-import { ChartBarAccounting } from "@/components/chart-bar-accounting";
-import { ChartRadialAccounting } from "@/components/chart-radial-accounting";
+import { ChartBarSales } from "@/components/ChartBarSales";
+import { ChartRadialCategories } from "@/components/ChartRadialCategories";
 import { 
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
@@ -44,6 +44,37 @@ export default function ReportsPage() {
   const totalRevenue = sales.reduce((acc, s) => acc + s.total, 0);
   const totalOrders = sales.length;
   const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+  
+  // Dynamic top products calculation
+  const topProducts = React.useMemo(() => {
+    const counts: any = {};
+    sales.forEach(s => {
+      s.items?.forEach((it: any) => {
+        const name = it.variant?.product?.name || "Desconocido";
+        counts[name] = (counts[name] || 0) + it.quantity;
+      });
+    });
+    return Object.entries(counts)
+      .sort((a: any, b: any) => (b[1] as number) - (a[1] as number))
+      .slice(0, 5)
+      .map(([name, value]) => ({ name, value }));
+  }, [sales]);
+
+  // Dynamic Chart Data Calculation (Real Postgres Data)
+  const chartData = React.useMemo(() => {
+    const daily: Record<string, { date: string, revenue: number, orders: number }> = {};
+    
+    sales.forEach(sale => {
+      const day = new Date(sale.createdAt || sale.date).toISOString().split('T')[0];
+      if (!daily[day]) {
+        daily[day] = { date: day, revenue: 0, orders: 0 };
+      }
+      daily[day].revenue += sale.total;
+      daily[day].orders += 1;
+    });
+
+    return Object.values(daily).sort((a, b) => a.date.localeCompare(b.date));
+  }, [sales]);
 
   return (
     <div className="flex flex-col gap-6 py-4 md:gap-8 md:py-6 font-sans">
@@ -77,7 +108,7 @@ export default function ReportsPage() {
 
       {/* Main Interactive Chart */}
       <div className="px-4 lg:px-6">
-        <ChartAreaInteractive />
+        <ChartAreaInteractive data={chartData} />
       </div>      {/* Optimized Metric Cards - NEW PREMIUM PATTERN */}
       <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card text-secondary-foreground">
           <Card className="@container/card shadow-sm border-none">
@@ -151,23 +182,23 @@ export default function ReportsPage() {
 
           <Card className="@container/card shadow-sm border-none">
             <CardHeader>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Nuevos Clientes</CardDescription>
+              <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Clientes Registrados</CardDescription>
               <CardTitle className="text-2xl font-bold tabular-nums @[250px]/card:text-3xl text-primary font-black">
-                12
+                {Array.from(new Set(sales.map(s => s.clientId))).filter(Boolean).length || 0}
               </CardTitle>
               <CardAction>
                 <Badge variant="outline" className="gap-1 border-primary/20 text-primary bg-primary/5">
-                  <IconTrendingUp size={12} />
-                  +8%
+                   <IconUsers size={12} />
+                   Verificado
                 </Badge>
               </CardAction>
             </CardHeader>
             <CardFooter className="flex-col items-start gap-1 text-[10px] pb-5">
               <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground uppercase tracking-tight">
-                Adquisición de mercado <IconTrendingUp className="size-3 text-primary" />
+                Cartera de clientes con compras <IconCheck className="size-3 text-primary" />
               </div>
               <div className="text-muted-foreground/60 font-medium italic">
-                Nivel de satisfacción registrado: Alto
+                Basado en transacciones reales
               </div>
             </CardFooter>
           </Card>
@@ -175,8 +206,8 @@ export default function ReportsPage() {
 
       {/* Secondary Dynamic Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-4 lg:px-6">
-          <ChartBarAccounting />
-          <ChartRadialAccounting />
+          <ChartBarSales data={topProducts} />
+          <ChartRadialCategories sales={sales} />
       </div>
 
       {/* Footer Info / Log mirroring dashboard look */}

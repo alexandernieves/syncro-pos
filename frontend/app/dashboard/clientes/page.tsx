@@ -22,6 +22,9 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 
+import { db } from "@/lib/db";
+import { useSync } from "@/hooks/useSync";
+
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
 
 type Client = {
@@ -38,24 +41,31 @@ type Client = {
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const { pullRemoteData } = useSync();
 
-  useEffect(() => {
-    fetchClients();
-  }, []);
-
-  const fetchClients = async () => {
-    try {
-      const res = await fetch(`${API}/clients`);
-      if (res.ok) {
-        const data = await res.json();
-        setClients(data);
-      }
-    } catch (error) {
-      toast.error("Error al cargar clientes");
-    } finally {
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    // 1. Cargar locales
+    const localClients = await db.clients.toArray();
+    if (localClients.length > 0) {
+      setClients(localClients as any);
       setLoading(false);
     }
-  };
+
+    // 2. Sincronizar
+    if (navigator.onLine) {
+      await pullRemoteData();
+      const updated = await db.clients.toArray();
+      setClients(updated as any);
+    }
+    setLoading(false);
+  }, [pullRemoteData]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const fetchClients = load;
 
   const columns: ColumnDef<Client>[] = [
     {

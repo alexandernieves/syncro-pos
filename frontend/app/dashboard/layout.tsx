@@ -20,7 +20,9 @@ export default function DashboardLayout({
     const userStr = localStorage.getItem("user");
     if (userStr) {
       const user = JSON.parse(userStr);
-      if (user.role === "pos") {
+      const p = user.permissions || [];
+      const isPosOnly = p.includes("pos") && !p.some((perm: string) => perm !== "pos");
+      if (isPosOnly || user.role === "pos") {
         router.replace("/pos");
       }
     }

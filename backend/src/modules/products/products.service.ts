@@ -16,6 +16,7 @@ export class ProductsService {
             name: v.name,
             sku: v.sku,
             barcode: v.barcode,
+            secondaryBarcodes: v.secondaryBarcodes || [],
             price: v.price,
             cost: v.cost,
             promoPrice: v.promoPrice,
@@ -28,7 +29,7 @@ export class ProductsService {
                 quantity: v.stock
               }] : []
             }
-          }))
+          } as any))
         }
       },
       include: {
@@ -37,8 +38,15 @@ export class ProductsService {
     });
   }
 
-  async quickCreate(data: { name: string, price: number, stock: number, branchId?: string }) {
+  async quickCreate(data: { name: string, price: number, stock: number, barcodes: string[], branchId?: string }) {
+    console.log('[QuickCreate] Incoming Data:', data);
     const sku = `QC-${Date.now()}`;
+    const barcodes = data.barcodes || [];
+    const primary = barcodes[0] || null;
+    const secondary = barcodes.slice(1);
+
+    console.log('[QuickCreate] Assigned Barcodes:', { primary, secondary });
+
     return this.prisma.product.create({
       data: {
         name: data.name,
@@ -46,6 +54,8 @@ export class ProductsService {
           create: [{
             name: 'Default',
             sku,
+            barcode: primary,
+            secondaryBarcodes: secondary,
             price: data.price,
             stock: data.stock,
             inventory: {
@@ -54,7 +64,7 @@ export class ProductsService {
                 quantity: data.stock
               }] : []
             }
-          }]
+          } as any]
         }
       },
       include: {
@@ -130,20 +140,21 @@ export class ProductsService {
                 name: v.name,
                 sku: v.sku,
                 barcode: v.barcode,
+                secondaryBarcodes: v.secondaryBarcodes || [],
                 price: v.price,
                 cost: v.cost,
                 promoPrice: v.promoPrice,
                 bulkPrice: v.bulkPrice,
                 stock: v.stock,
                 minStock: v.minStock,
-              }
+              } as any
             });
           } else {
             await tx.productVariant.create({
               data: {
                 ...v,
                 productId: id
-              }
+              } as any
             });
           }
         }
@@ -153,7 +164,18 @@ export class ProductsService {
   }
 
   async remove(id: string) {
-    return this.prisma.product.delete({ where: { id } });
+    console.log('[ProductsService] Attempting to remove product ID:', id);
+    try {
+      const result = await this.prisma.product.delete({ where: { id } });
+      console.log('[ProductsService] Successfully removed product:', result.name);
+      return result;
+    } catch (error) {
+      console.error('[ProductsService] Error deleting product:', error.message);
+      if (error.code === 'P2003') {
+        throw new BadRequestException('Este producto tiene historial de ventas o movimientos de inventario y no puede ser eliminado por razones de auditoría.');
+      }
+      throw error;
+    }
   }
 
   async getStats(id: string) {
@@ -196,8 +218,13 @@ export class ProductsService {
 
 
   async validateBarcode(barcode: string) {
-    const variant = await this.prisma.productVariant.findUnique({
-      where: { barcode }
+    const variant = await (this.prisma.productVariant as any).findFirst({
+      where: {
+        OR: [
+          { barcode: barcode },
+          { secondaryBarcodes: { has: barcode } }
+        ]
+      }
     });
     return !variant;
   }

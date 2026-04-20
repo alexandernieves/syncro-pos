@@ -16,6 +16,18 @@ export class ClientsService {
     });
   }
 
+  async searchByDocument(q: string) {
+    return this.prisma.client.findMany({
+      where: {
+        OR: [
+          { documentId: { contains: q, mode: 'insensitive' } },
+          { name: { contains: q, mode: 'insensitive' } },
+        ]
+      },
+      take: 10,
+    });
+  }
+
   async findOne(id: string) {
     return this.prisma.client.findUnique({
       where: { id },

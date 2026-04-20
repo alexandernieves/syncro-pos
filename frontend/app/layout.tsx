@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import type { Metadata } from "next";
 
 import "./globals.css";
@@ -20,23 +19,17 @@ export const metadata: Metadata = {
 
 import { SessionMonitor } from "@/components/session-monitor";
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const cookieStore = await cookies();
-  const activeThemeValue = cookieStore.get("active_theme")?.value;
-  const isScaled = activeThemeValue?.endsWith("-scaled");
-
   return (
     <html lang="en" suppressHydrationWarning>
       <body
         suppressHydrationWarning
         className={cn(
-          "bg-background overscroll-none font-sans antialiased",
-          activeThemeValue ? `theme-${activeThemeValue}` : "",
-          isScaled ? "theme-scaled" : ""
+          "bg-background overscroll-none font-sans antialiased"
         )}
       >
         <ThemeProvider
@@ -46,7 +39,7 @@ export default async function RootLayout({
           disableTransitionOnChange
           enableColorScheme
         >
-          <ActiveThemeProvider initialTheme={activeThemeValue}>
+          <ActiveThemeProvider>
             {children}
             <SessionMonitor timeoutMinutes={15} />
             <Toaster position="top-right" />

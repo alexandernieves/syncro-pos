@@ -12,6 +12,9 @@ import {
 } from "@tabler/icons-react"
 import { ColumnDef } from "@tanstack/react-table"
 import { useSortable } from "@dnd-kit/sortable"
+import { useRouter } from "next/navigation"
+
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -23,6 +26,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -42,6 +53,7 @@ export const inventorySchema = z.object({
   target: z.string(),        // Existencia
   limit: z.string(),         // Mínimo
   reviewer: z.string(),      // Proveedor / Categoría
+  productId: z.string().optional(),
 })
 
 export const inventoryColumns: ColumnDef<z.infer<typeof inventorySchema>>[] = [
@@ -227,7 +239,54 @@ export const inventoryColumns: ColumnDef<z.infer<typeof inventorySchema>>[] = [
   },
   {
     id: "actions",
-    cell: () => (
+    cell: ({ row }) => <ActionsCell row={row} />,
+  },
+]
+
+function ActionsCell({ row }: { row: any }) {
+  const router = useRouter();
+  const [showDelete, setShowDelete] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const productId = row.original.productId;
+  const variantId = row.original.id;
+
+  const handleDelete = async () => {
+    console.log('[Inventory] Deleting Product ID:', productId);
+    
+    toast.promise(
+      async () => {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API}/products/${productId}`, {
+          method: "DELETE",
+          headers: { 
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          }
+        });
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.message || "Error al eliminar");
+        }
+
+        setShowDelete(false);
+        setTimeout(() => window.location.reload(), 1000);
+        return true;
+      },
+      {
+        loading: "Eliminando producto...",
+        success: "Producto eliminado correctamente",
+        error: (err) => err.message,
+      }
+    );
+  };
+
+  const handleDuplicate = async () => {
+      toast.info("Funcionalidad de duplicación próximamente...");
+  };
+
+  return (
+    <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -240,13 +299,55 @@ export const inventoryColumns: ColumnDef<z.infer<typeof inventorySchema>>[] = [
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48 border-none shadow-2xl rounded-xl">
-          <DropdownMenuItem className="text-xs">Editar Producto</DropdownMenuItem>
-          <DropdownMenuItem className="text-xs">Duplicar</DropdownMenuItem>
-          <DropdownMenuItem className="text-xs">Kardex de Movimientos</DropdownMenuItem>
+          <DropdownMenuItem 
+            className="text-xs"
+            onClick={() => router.push(`/dashboard/productos/editar/${productId}`)}
+          >
+            Editar Producto
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            className="text-xs"
+            onClick={handleDuplicate}
+          >
+            Duplicar
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            className="text-xs"
+            onClick={() => router.push(`/dashboard/inventario/movimientos?variantId=${variantId}`)}
+          >
+            Kardex de Movimientos
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" className="text-xs text-rose-600">Eliminar</DropdownMenuItem>
+          <DropdownMenuItem 
+            variant="destructive" 
+            className="text-xs text-rose-600"
+            onClick={() => setShowDelete(true)}
+          >
+            Eliminar
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    ),
-  },
-]
+
+      <Dialog open={showDelete} onOpenChange={setShowDelete}>
+        <DialogContent className="max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>¿Eliminar producto?</DialogTitle>
+            <DialogDescription>
+              Esta acción eliminará <span className="font-semibold text-foreground">"{row.original.header}"</span> permanentemente del catálogo. No se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+             <Button variant="ghost" onClick={() => setShowDelete(false)}>Cancelar</Button>
+             <Button 
+                variant="destructive" 
+                onClick={handleDelete}
+                disabled={isDeleting}
+             >
+                {isDeleting ? 'Eliminando...' : 'Eliminar'}
+             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

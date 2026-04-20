@@ -52,39 +52,6 @@ export function NavMain({
   return (
     <SidebarGroup>
       <SidebarGroupContent className="flex flex-col gap-2">
-        {/* Dashboard / Quick Action button */}
-        <SidebarMenu>
-          <SidebarMenuItem className="flex items-center gap-2">
-            <SidebarMenuButton
-              asChild
-              tooltip="Dashboard"
-              isActive={isDashboardActive}
-              className={[
-                "min-w-8 duration-200 ease-linear",
-                isDashboardActive
-                  ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
-                  : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-              ].join(" ")}
-            >
-              <Link href="/dashboard">
-                <IconCirclePlusFilled />
-                <span>Dashboard</span>
-              </Link>
-            </SidebarMenuButton>
-            <Button
-              size="icon"
-              className="size-8 group-data-[collapsible=icon]:opacity-0"
-              variant="outline"
-              asChild
-            >
-              <Link href="/dashboard/mensajes">
-                <IconMail />
-                <span className="sr-only">Mensajes</span>
-              </Link>
-            </Button>
-          </SidebarMenuItem>
-        </SidebarMenu>
-
         {/* Main nav items */}
         <SidebarMenu>
           {items.map((item) => {
@@ -170,7 +137,11 @@ export function NavMain({
                     <SidebarMenuButton
                       asChild
                       tooltip={item.title}
-                      isActive={pathname === item.url || pathname.startsWith(item.url + "/")}
+                      isActive={
+                        item.url === "/dashboard"
+                          ? pathname === "/dashboard"
+                          : pathname === item.url || pathname.startsWith(item.url + "/")
+                      }
                     >
                       <Link href={item.url}>
                         {item.icon && <item.icon />}

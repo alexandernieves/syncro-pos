@@ -29,10 +29,34 @@ export class ShiftsService {
   }
 
   async close(id: string, closingBalance: number) {
+    const shift = await this.prisma.shift.findUnique({ 
+      where: { id },
+      include: { 
+        sales: { 
+          include: { 
+            payments: { where: { method: 'CASH' } } 
+          } 
+        } 
+      }
+    });
+
+    if (!shift) throw new BadRequestException('Turno no encontrado');
+
+    // Calculate expected cash: Opening + All CASH payments from all sales in this shift
+    const totalCashPayments = shift.sales.reduce((total: number, sale: any) => {
+      const saleCash = sale.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
+      return total + saleCash;
+    }, 0);
+    
+    const expectedBalance = shift.openingBalance + totalCashPayments;
+    const difference = Number(closingBalance) - expectedBalance;
+
     return this.prisma.shift.update({
       where: { id },
       data: {
         closingBalance: Number(closingBalance),
+        expectedBalance,
+        difference,
         status: 'CLOSED' as any,
         closedAt: new Date()
       }

@@ -2,11 +2,62 @@
   "name": "orcish-dashboard",
   "version": "0.1.0",
   "private": true,
+  "main": "main/index.js",
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev -p 3001 --turbopack",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "start": "next start -p 3001",
+    "lint": "next lint",
+    "electron:dev": "NODE_ENV=development electron .",
+    "electron:build": "next build && electron-builder",
+    "dist:win": "next build && electron-builder --win",
+    "dist:mac": "next build && electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.syncro.pos",
+    "productName": "Syncro POS",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main/**/*",
+      "out/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "icon": "public/syncro.png",
+      "category": "public.app-category.business",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "dmg": {
+      "title": "Syncro POS Installer",
+      "icon": "public/syncro.png",
+      "background": "public/syncro.png",
+      "window": {
+        "width": 512,
+        "height": 512
+      },
+      "contents": [
+        {
+          "x": 130,
+          "y": 410
+        },
+        {
+          "x": 380,
+          "y": 410,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "win": {
+      "icon": "public/syncro.png",
+      "target": "nsis"
+    }
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -30,6 +81,9 @@
     "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dexie": "^4.4.2",
+    "dexie-react-hooks": "^4.4.0",
+    "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.562.0",
     "next": "16.1.1",
     "next-themes": "^0.4.6",
@@ -48,9 +102,12 @@
     "@types/node": "^25.0.3",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "electron": "^41.2.1",
+    "electron-builder": "^26.8.1",
     "eslint": "^9.39.2",
     "eslint-config-next": "16.1.1",
     "tailwindcss": "^4.1.18",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "xlsx": "^0.18.5"
   }
 }

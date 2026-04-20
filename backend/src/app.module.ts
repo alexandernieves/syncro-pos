@@ -20,6 +20,8 @@ import { PrismaModule } from './modules/prisma/prisma.module';
 import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
 import { SupplierPaymentsModule } from './modules/supplier-payments/supplier-payments.module';
 import { SupplierReturnsModule } from './modules/supplier-returns/supplier-returns.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -41,6 +43,8 @@ import { SupplierReturnsModule } from './modules/supplier-returns/supplier-retur
     PurchaseOrdersModule,
     SupplierPaymentsModule,
     SupplierReturnsModule,
+    DashboardModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

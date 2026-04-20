@@ -64,7 +64,9 @@ export function LoginForm({
       loading: "Iniciando sesión...",
       success: (data) => {
         setLoading(false)
-        const targetPath = data.user.role === "pos" ? "/pos" : "/dashboard"
+        const p = data.user.permissions || [];
+        const isPosOnly = p.includes("pos") && !p.some((perm: string) => perm !== "pos");
+        const targetPath = (isPosOnly || data.user.role === "pos") ? "/pos" : "/dashboard"
         setTimeout(() => {
           router.push(targetPath)
         }, 500)

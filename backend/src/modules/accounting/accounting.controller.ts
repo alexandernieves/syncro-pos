@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Req, Query } from '@nestjs/common';
 import { AccountingService } from './accounting.service';
 
 @Controller('accounting')
@@ -19,6 +19,11 @@ export class AccountingController {
   @Get('stats')
   async getStats() {
     return this.accountingService.getStats();
+  }
+
+  @Get('advanced-stats')
+  async getAdvancedStats(@Query('branchId') branchId?: string, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string) {
+    return this.accountingService.getAdvancedStats(branchId, startDate, endDate);
   }
 
   @Get('investment-by-supplier')

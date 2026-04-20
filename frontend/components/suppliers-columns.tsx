@@ -196,7 +196,7 @@ export const getSuppliersColumns = (onEdit: (supplier: any) => void, onDelete: (
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => router.push(`/dashboard/proveedores/${row.original.id}`)}>
+            <DropdownMenuItem onClick={() => router.push(`/dashboard/proveedores/perfil?id=${row.original.id}`)}>
               <IconExternalLink className="mr-2 h-4 w-4" />
               Ficha Técnica del Proveedor
             </DropdownMenuItem>
@@ -211,7 +211,7 @@ export const getSuppliersColumns = (onEdit: (supplier: any) => void, onDelete: (
               <IconPackage className="mr-2 h-4 w-4" />
               Catálogo de Suministros
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push(`/dashboard/proveedores/${row.original.id}?tab=compras`)}>
+            <DropdownMenuItem onClick={() => router.push(`/dashboard/proveedores/perfil?id=${row.original.id}&tab=compras`)}>
               <IconPlus className="mr-2 h-4 w-4" />
               Generar Orden Compra
             </DropdownMenuItem>

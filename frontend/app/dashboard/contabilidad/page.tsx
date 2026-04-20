@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
-  IconPlus, IconReceipt, IconReportAnalytics, IconArrowRight, IconLoader2, IconDotsVertical, IconFilter, IconCash, IconArrowUpRight, IconArrowDownLeft, IconDeviceDesktop, IconPackage, IconUserCog, IconDatabase, IconTrendingUp, IconTrendingDown, IconCheck
+  IconPlus, IconReceipt, IconReportAnalytics, IconArrowRight, IconLoader2, IconDotsVertical, IconFilter, IconCash, IconArrowUpRight, IconArrowDownLeft, IconDeviceDesktop, IconPackage, IconUserCog, IconDatabase, IconTrendingUp, IconTrendingDown, IconCheck, IconTicket, IconShoppingCart, IconStack2, IconWallet, IconBuildingStore
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,10 +29,31 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { ChartAreaInteractive } from "@/components/chart-area-interactive";
-import { ChartBarAccounting } from "@/components/chart-bar-accounting";
-import { ChartRadialAccounting } from "@/components/chart-radial-accounting";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+
+type AdvancedStats = {
+  revenue: {
+    totalSales: number;
+    totalNetSales: number;
+    totalTickets: number;
+    ticketPromedio: number;
+    upt: number;
+  };
+  profitability: {
+    cogs: number;
+    grossMargin: number;
+    grossMarginPercentage: number;
+    operatingExpenses: number;
+    netProfit: number;
+    netMarginPercentage: number;
+  };
+  inventory: {
+    totalValue: number;
+  };
+  payments: Record<string, number>;
+  trend: any[];
+};
 
 type AccountingEntry = {
   id: string;
@@ -42,6 +63,7 @@ type AccountingEntry = {
   category: string;
   origin: "POS" | "INVENTARIO" | "MANUAL" | "SISTEMA";
   createdAt: string;
+  branch?: { name: string };
 };
 
 const originConfig: Record<string, { label: string; icon: any; color: string }> = {
@@ -53,16 +75,17 @@ const originConfig: Record<string, { label: string; icon: any; color: string }> 
 
 export default function AccountingPage() {
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
+  const [stats, setStats] = useState<AdvancedStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Form state
+  // Form state for manual entries
   const [formData, setFormData] = useState({
       description: "",
-      type: "INCOME",
+      type: "EXPENSE",
       amount: "",
-      category: "GENERAL",
+      category: "OPERATIVO",
       origin: "MANUAL"
   });
 
@@ -71,12 +94,21 @@ export default function AccountingPage() {
   }, []);
 
   const fetchData = async () => {
+    setLoading(true);
     try {
-      const res = await fetch(`${API}/accounting`);
-      if (res.ok) {
-        // We ensure all items have an origin for the UI
-        const data = await res.json();
+      const [entriesRes, statsRes] = await Promise.all([
+        fetch(`${API}/accounting`),
+        fetch(`${API}/accounting/advanced-stats`)
+      ]);
+      
+      if (entriesRes.ok) {
+        const data = await entriesRes.json();
         setEntries(data.map((item: any) => ({ ...item, origin: item.origin || "MANUAL" })));
+      }
+      
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setStats(statsData);
       }
     } catch (error) {
       toast.error("Error al cargar datos contables");
@@ -106,7 +138,7 @@ export default function AccountingPage() {
           if (res.ok) {
               toast.success("Movimiento registrado correctamente");
               setIsModalOpen(false);
-              setFormData({ description: "", type: "INCOME", amount: "", category: "GENERAL" , origin: "MANUAL" });
+              setFormData({ description: "", type: "EXPENSE", amount: "", category: "OPERATIVO" , origin: "MANUAL" });
               fetchData(); 
           } else {
               toast.error("Error al registrar movimiento");
@@ -119,32 +151,6 @@ export default function AccountingPage() {
   };
 
   const columns: ColumnDef<AccountingEntry>[] = [
-    {
-        id: "select",
-        header: ({ table }) => (
-          <div className="flex items-center justify-center w-8">
-            <Checkbox
-              checked={
-                table.getIsAllPageRowsSelected() ||
-                (table.getIsSomePageRowsSelected() && "indeterminate")
-              }
-              onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-              aria-label="Select all"
-            />
-          </div>
-        ),
-        cell: ({ row }) => (
-          <div className="flex items-center justify-center w-8">
-            <Checkbox
-              checked={row.getIsSelected()}
-              onCheckedChange={(value) => row.toggleSelected(!!value)}
-              aria-label="Select row"
-            />
-          </div>
-        ),
-        enableSorting: false,
-        enableHiding: false,
-    },
     {
       accessorKey: "createdAt",
       header: "Fecha / Registro",
@@ -163,28 +169,18 @@ export default function AccountingPage() {
       cell: ({ row }) => {
           const origin = row.original.origin || "MANUAL";
           const config = originConfig[origin];
-          const Icon = config.icon;
+          const Icon = config?.icon || IconDatabase;
           return (
             <div className="flex items-center gap-3">
-                <div className={`size-8 rounded-lg bg-muted/40 flex items-center justify-center ${config.color}`}>
+                <div className={`size-8 rounded-lg bg-muted/40 flex items-center justify-center ${config?.color || 'text-primary'}`}>
                     <Icon size={16} />
                 </div>
-                <span className="text-sm font-semibold tracking-tight">{row.getValue("description")}</span>
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold tracking-tight">{row.getValue("description")}</span>
+                  <span className="text-[10px] text-muted-foreground uppercase">{row.original.category} {row.original.branch ? `• ${row.original.branch.name}` : ""}</span>
+                </div>
             </div>
           )
-      }
-    },
-    {
-      accessorKey: "origin",
-      header: "Origen",
-      cell: ({ row }) => {
-        const origin = row.getValue("origin") as string;
-        const config = originConfig[origin] || originConfig.MANUAL;
-        return (
-            <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-1.5 h-6 opacity-70">
-                {config.label}
-            </Badge>
-        )
       }
     },
     {
@@ -219,19 +215,13 @@ export default function AccountingPage() {
           <div className="flex justify-end">
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                <Button
-                    variant="ghost"
-                    className="data-[state=open]:bg-muted text-muted-foreground flex size-8 p-0"
-                    size="icon"
-                >
+                <Button variant="ghost" className="data-[state=open]:bg-muted text-muted-foreground flex size-8 p-0" size="icon">
                     <IconDotsVertical size={16} />
                 </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44 border-none shadow-2xl rounded-xl">
                 <DropdownMenuItem className="text-xs gap-2"><IconReceipt size={14} /> Ver comprobante</DropdownMenuItem>
-                <DropdownMenuItem className="text-xs gap-2"><IconReportAnalytics size={14} /> Auditoría de movimiento</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" className="text-xs gap-2">Eliminar registro</DropdownMenuItem>
+                <DropdownMenuItem className="text-xs gap-2"><IconReportAnalytics size={14} /> Auditoría</DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -239,130 +229,227 @@ export default function AccountingPage() {
     },
   ];
 
+  if (loading && !stats) {
+    return (
+      <div className="flex flex-col gap-6 py-4 md:gap-8 md:py-6 animate-pulse">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 px-6">
+          <Skeleton className="h-32 w-full rounded-2xl" />
+          <Skeleton className="h-32 w-full rounded-2xl" />
+          <Skeleton className="h-32 w-full rounded-2xl" />
+          <Skeleton className="h-32 w-full rounded-2xl" />
+        </div>
+        <div className="px-6">
+          <Skeleton className="h-[400px] w-full rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6 py-4 md:gap-8 md:py-6 font-sans text-secondary-foreground">
-      {/* Metrics Row - NEW PREMIUM PATTERN */}
-      <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card text-secondary-foreground">
-          <Card className="@container/card shadow-sm border-none">
-            <CardHeader>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Ingresos Totales</CardDescription>
-              <CardTitle className="text-2xl font-bold tabular-nums @[250px]/card:text-3xl text-emerald-600">
-                $45,678.00
+      
+      {/* 💰 MÉTRICAS CLAVE (Modo CEO) */}
+      <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 sm:grid-cols-2 xl:grid-cols-4">
+          
+          {/* 1. VENTAS TOTALES */}
+          <Card className="shadow-sm border-none bg-gradient-to-br from-emerald-500/5 to-transparent">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-start">
+                <IconCash className="text-emerald-500" size={20} />
+                <Badge variant="outline" className="border-emerald-500/20 text-emerald-600 bg-emerald-500/5">Ventas</Badge>
+              </div>
+              <CardDescription className="text-[10px] font-black uppercase tracking-widest mt-2">Ventas Brutas</CardDescription>
+              <CardTitle className="text-3xl font-bold tabular-nums text-emerald-600">
+                ${(stats?.revenue.totalSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </CardTitle>
-              <CardAction>
-                <Badge variant="outline" className="gap-1 border-emerald-500/20 text-emerald-600 bg-emerald-500/5">
-                  <IconTrendingUp size={12} />
-                  +12.5%
-                </Badge>
-              </CardAction>
             </CardHeader>
-            <CardFooter className="flex-col items-start gap-1 text-[10px] pb-5">
-              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground uppercase tracking-tight">
-                Flujo positivo mensual <IconTrendingUp className="size-3 text-emerald-500" />
-              </div>
-              <div className="text-muted-foreground/60 font-medium italic">
-                Rendimiento superior al mes anterior
-              </div>
+            <CardFooter className="pb-4 pt-0">
+               <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground uppercase italic px-1">
+                 Total de {stats?.revenue.totalTickets || 0} transacciones realizadas
+               </div>
             </CardFooter>
           </Card>
 
-          <Card className="@container/card shadow-sm border-none">
-            <CardHeader>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Gastos Operativos</CardDescription>
-              <CardTitle className="text-2xl font-bold tabular-nums @[250px]/card:text-3xl text-rose-600">
-                $12,234.00
+          {/* 2. MARGEN BRUTO */}
+          <Card className="shadow-sm border-none bg-gradient-to-br from-blue-500/5 to-transparent">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-start">
+                <IconTrendingUp className="text-blue-500" size={20} />
+                <Badge variant="outline" className="border-blue-500/20 text-blue-600 bg-blue-500/5">Rentabilidad</Badge>
+              </div>
+              <CardDescription className="text-[10px] font-black uppercase tracking-widest mt-2">Margen Bruto (Utilidad)</CardDescription>
+              <CardTitle className="text-3xl font-bold tabular-nums text-blue-600">
+                ${(stats?.profitability.grossMargin || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </CardTitle>
-              <CardAction>
-                <Badge variant="outline" className="gap-1 border-rose-500/20 text-rose-600 bg-rose-500/5">
-                  <IconTrendingDown size={12} />
-                  -8.2%
-                </Badge>
-              </CardAction>
             </CardHeader>
-            <CardFooter className="flex-col items-start gap-1 text-[10px] pb-5">
-              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground uppercase tracking-tight">
-                Reducción de costos <IconTrendingDown className="size-3 text-rose-500" />
-              </div>
-              <div className="text-muted-foreground/60 font-medium italic">
-                Optimización de egresos en inventario
-              </div>
+            <CardFooter className="pb-4 pt-0">
+               <div className="flex items-center gap-1.5 text-[10px] font-bold text-blue-600/80 uppercase">
+                 <IconCheck size={12} /> {(stats?.profitability.grossMarginPercentage || 0).toFixed(1)}% de rendimiento por producto
+               </div>
             </CardFooter>
           </Card>
 
-          <Card className="@container/card shadow-sm border-none">
-            <CardHeader>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Balance Neto</CardDescription>
-              <CardTitle className="text-2xl font-bold tabular-nums @[250px]/card:text-3xl text-primary font-black">
-                $33,444.00
+          {/* 3. TICKET PROMEDIO / UPT */}
+          <Card className="shadow-sm border-none bg-gradient-to-br from-purple-500/5 to-transparent">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-start">
+                <IconTicket className="text-purple-500" size={20} />
+                <Badge variant="outline" className="border-purple-500/20 text-purple-600 bg-purple-500/5">Eficacia</Badge>
+              </div>
+              <CardDescription className="text-[10px] font-black uppercase tracking-widest mt-2">Ticket Promedio</CardDescription>
+              <CardTitle className="text-3xl font-bold tabular-nums text-purple-600">
+                ${(stats?.revenue.ticketPromedio || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </CardTitle>
-              <CardAction>
-                <Badge variant="outline" className="gap-1 border-primary/20 text-primary bg-primary/5">
-                  <IconTrendingUp size={12} />
-                  Saludable
-                </Badge>
-              </CardAction>
             </CardHeader>
-            <CardFooter className="flex-col items-start gap-1 text-[10px] pb-5">
-              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground uppercase tracking-tight">
-                Margen operativo sólido <IconCheck className="size-3 text-primary" />
-              </div>
-              <div className="text-muted-foreground/60 font-medium italic">
-                Utilidad neta proyectada
-              </div>
+            <CardFooter className="pb-4 pt-0">
+               <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground uppercase">
+                 <IconShoppingCart size={12} /> {(stats?.revenue.upt || 0).toFixed(1)} productos por compra (UPT)
+               </div>
             </CardFooter>
           </Card>
 
-          <Card className="@container/card shadow-sm border-none">
-            <CardHeader>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Proyección Trimestral</CardDescription>
-              <CardTitle className="text-2xl font-bold tabular-nums @[250px]/card:text-3xl text-amber-600">
-                8.4%
+          {/* 4. INVENTARIO VALORIZADO */}
+          <Card className="shadow-sm border-none bg-gradient-to-br from-amber-500/5 to-transparent">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-start">
+                <IconStack2 className="text-amber-500" size={20} />
+                <Badge variant="outline" className="border-amber-500/20 text-amber-600 bg-amber-500/5">Patrimonio</Badge>
+              </div>
+              <CardDescription className="text-[10px] font-black uppercase tracking-widest mt-2">Valor de Inventario (Costo)</CardDescription>
+              <CardTitle className="text-3xl font-bold tabular-nums text-amber-600">
+                ${(stats?.inventory.totalValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </CardTitle>
-              <CardAction>
-                <Badge variant="outline" className="gap-1 border-amber-500/20 text-amber-600 bg-amber-500/5">
-                  <IconTrendingUp size={12} />
-                  +1.2%
-                </Badge>
-              </CardAction>
             </CardHeader>
-            <CardFooter className="flex-col items-start gap-1 text-[10px] pb-5">
-              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground uppercase tracking-tight">
-                Crecimiento sostenido <IconTrendingUp className="size-3 text-amber-500" />
-              </div>
-              <div className="text-muted-foreground/60 font-medium italic">
-                Dentro de las metas corporativas
-              </div>
+            <CardFooter className="pb-4 pt-0">
+               <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground uppercase">
+                 Inversión total en mercancía actual
+               </div>
             </CardFooter>
           </Card>
       </div>
 
-      {/* Chart Section - Main Area Chart Full Width */}
+      {/* 🚀 MARGEN NETO Y SALUD OPERATIVA */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 px-4 lg:px-6">
+          
+          {/* Main Chart: Sales Trend */}
+          <div className="lg:col-span-2">
+             <Card className="border-none shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg font-bold">Tendencia de Ingresos</CardTitle>
+                  <CardDescription>Histórico de ventas brutas de los últimos 7 días</CardDescription>
+                </CardHeader>
+                <CardContent className="h-[300px]">
+                   <ChartAreaInteractive data={stats?.trend || []} />
+                </CardContent>
+             </Card>
+          </div>
+
+          {/* Margen Operativo & Cash Flow */}
+          <div className="flex flex-col gap-6">
+             <Card className="border-none shadow-sm bg-primary/5">
+                <CardHeader className="pb-2 text-center">
+                   <CardDescription className="text-[10px] font-black uppercase tracking-widest text-primary">Ganancia Neta Final</CardDescription>
+                   <CardTitle className="text-4xl font-black text-primary">${(stats?.profitability.netProfit || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</CardTitle>
+                </CardHeader>
+                <CardContent className="pb-6">
+                   <div className="space-y-4">
+                      <div className="flex justify-between items-center text-xs">
+                         <span className="text-muted-foreground font-medium">Margen Bruto</span>
+                         <span className="font-bold text-emerald-600">+${(stats?.profitability.grossMargin || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                         <span className="text-muted-foreground font-medium">Gastos Operativos</span>
+                         <span className="font-bold text-rose-600">-${(stats?.profitability.operatingExpenses || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="h-px bg-primary/10 w-full" />
+                      <div className="flex justify-between items-center text-xs font-black">
+                         <span>SALUD DEL NEGOCIO</span>
+                         <Badge className={(stats?.profitability.netProfit || 0) > 0 ? "bg-emerald-500" : "bg-rose-500"}>
+                           {(stats?.profitability.netMarginPercentage || 0).toFixed(1)}% ROI
+                         </Badge>
+                      </div>
+                   </div>
+                </CardContent>
+             </Card>
+
+             <Card className="border-none shadow-sm">
+                <CardHeader className="pb-2">
+                   <div className="flex items-center gap-2">
+                     <IconWallet className="text-muted-foreground" size={18} />
+                     <CardTitle className="text-sm">Métodos de Cobro</CardTitle>
+                   </div>
+                </CardHeader>
+                <CardContent>
+                   <div className="space-y-2">
+                      {Object.entries(stats?.payments || {}).map(([method, amount]: any) => (
+                        <div key={method} className="flex justify-between items-center text-[11px]">
+                           <span className="font-medium text-muted-foreground uppercase">{method}</span>
+                           <span className="font-bold tabular-nums">${amount.toLocaleString()}</span>
+                        </div>
+                      ))}
+                      {Object.keys(stats?.payments || {}).length === 0 && (
+                        <p className="text-center text-[10px] text-muted-foreground italic">No hay pagos registrados</p>
+                      )}
+                   </div>
+                </CardContent>
+             </Card>
+          </div>
+      </div>
+
+      {/* 🏆 TOP PRODUCTOS RENTABLES */}
       <div className="px-4 lg:px-6">
-        <ChartAreaInteractive />
-      </div>
-
-      {/* Diversified Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-4 lg:px-6">
-          <ChartBarAccounting />
-          <ChartRadialAccounting />
+        <Card className="border-none shadow-sm overflow-hidden">
+          <CardHeader className="bg-muted/10 pb-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="text-lg font-bold">Top 5 Productos más Rentables</CardTitle>
+                <CardDescription>Productos que dejan más utilidad neta al negocio</CardDescription>
+              </div>
+              <IconTrendingUp className="text-emerald-500" size={24} />
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-muted/30 text-[10px] uppercase font-black tracking-widest text-muted-foreground border-b">
+                  <tr>
+                    <th className="px-6 py-3">Producto</th>
+                    <th className="px-6 py-3 text-center">Unid. Vendidas</th>
+                    <th className="px-6 py-3 text-right">Utilidad Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {(stats as any)?.topProducts?.map((p: any, i: number) => (
+                    <tr key={i} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-6 py-4 font-semibold">{p.name}</td>
+                      <td className="px-6 py-4 text-center font-medium opacity-70">{p.quantity}</td>
+                      <td className="px-6 py-4 text-right font-black text-emerald-600">${p.profit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                  ))}
+                  {(!stats || (stats as any).topProducts?.length === 0) && (
+                    <tr>
+                      <td colSpan={3} className="px-6 py-8 text-center text-muted-foreground italic">No hay datos de ventas disponibles</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tabs Layout with Table */}
       <Tabs defaultValue="movimientos" className="w-full flex flex-col gap-6">
         <div className="flex items-center justify-between px-4 lg:px-6">
-          <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1">
-            <TabsTrigger value="movimientos">Registro Maestro</TabsTrigger>
-            <TabsTrigger value="manual">Entradas Manuales</TabsTrigger>
-            <TabsTrigger value="analisis">Libro Mayor <Badge variant="secondary" className="ml-2">3</Badge></TabsTrigger>
+          <TabsList>
+            <TabsTrigger value="movimientos">Libro Diario</TabsTrigger>
+            <TabsTrigger value="manual">Gestión de Gastos</TabsTrigger>
           </TabsList>
           
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="gap-2 h-9 shadow-sm">
-                <IconFilter size={16} /> Filtros Rápidos
-            </Button>
             <Button size="sm" onClick={() => setIsModalOpen(true)} className="gap-2 h-9 shadow-sm font-medium">
                 <IconPlus size={16} />
-                <span className="hidden lg:inline">Nuevo Registro Manual</span>
+                <span className="hidden lg:inline">Registrar Gasto / Ingreso</span>
                 <span className="lg:hidden">Nuevo</span>
             </Button>
           </div>
@@ -370,62 +457,75 @@ export default function AccountingPage() {
 
         <TabsContent value="movimientos" className="px-4 lg:px-6 space-y-4">
             <div className="flex flex-col gap-1 mb-2">
-                <h2 className="text-xl font-bold tracking-tight">Libro Diario de Control</h2>
-                <p className="text-sm text-muted-foreground font-medium">Centralización de toda actividad transaccional y operativa del sistema.</p>
+                <h2 className="text-xl font-bold tracking-tight">Transacciones Maestras</h2>
+                <p className="text-sm text-muted-foreground font-medium">Auditoría completa de toda la actividad financiera del sistema.</p>
             </div>
             <div className="overflow-hidden">
-                {loading ? (
-                    <Skeleton className="h-[450px] w-full rounded-xl" />
-                ) : (
-                    <DataTable 
-                        columns={columns} 
-                        data={entries} 
-                        filterColumn="description" 
-                        filterPlaceholder="Buscar por concepto o ID..." 
-                    />
-                )}
+                <DataTable 
+                    columns={columns} 
+                    data={entries} 
+                    filterColumn="description" 
+                    filterPlaceholder="Buscar por concepto o ID..." 
+                />
             </div>
         </TabsContent>
-
+        
         <TabsContent value="manual" className="px-4 lg:px-6">
-            <div className="aspect-video w-full flex-1 rounded-2xl border border-dashed flex items-center justify-center text-muted-foreground text-sm italic bg-muted/20">
-                Filtro especializado para movimientos financieros manuales...
-            </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="border-dashed flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
+                 <IconBuildingStore size={40} className="mb-4 opacity-20" />
+                 <p className="text-sm font-medium underline cursor-pointer hover:text-primary transition-colors" onClick={() => setIsModalOpen(true)}> Haz clic aquí para registrar un gasto operativo </p>
+                 <p className="text-[10px] mt-2 italic">(Alquiler, sueldos, servicios, etc.)</p>
+              </Card>
+           </div>
         </TabsContent>
       </Tabs>
 
-      {/* Modal - Syncro Style */}
+      {/* Modal Manual Entry */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="sm:max-w-md font-sans p-0 overflow-hidden border shadow-2xl rounded-2xl">
               <DialogHeader className="p-6 bg-muted/20 border-b">
-                  <DialogTitle className="text-xl font-bold italic font-black uppercase tracking-tight">Registro Manual</DialogTitle>
-                  <DialogDescription className="text-sm font-medium">Asigne los fondos a la categoría correspondiente.</DialogDescription>
+                  <DialogTitle className="text-xl font-bold font-black uppercase tracking-tight">Nuevo Registro Contable</DialogTitle>
+                  <DialogDescription className="text-sm font-medium">Registra un movimiento manual fuera de ventas.</DialogDescription>
               </DialogHeader>
               <div className="p-6">
                 <form onSubmit={handleSave} className="space-y-4">
-                    <div className="space-y-1.5 min-h-[4.5rem]">
-                        <Label htmlFor="desc" className="text-xs font-semibold uppercase opacity-50">Descripción / Glosa</Label>
-                        <Input id="desc" placeholder="Concepto del movimiento" className="h-9 text-sm" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} required />
+                    <div className="space-y-1.5">
+                        <Label htmlFor="desc" className="text-xs font-semibold uppercase opacity-50">Descripción / Concepto</Label>
+                        <Input id="desc" placeholder="Ej. Pago de Alquiler Abril" className="h-9 text-sm" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} required />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5 min-h-[4.5rem]">
-                            <Label className="text-xs font-semibold uppercase opacity-50">Flujo</Label>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold uppercase opacity-50">Tipo</Label>
                             <Select value={formData.type} onValueChange={(val) => setFormData({...formData, type: val as any})}>
                                 <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                                <SelectContent><SelectItem value="INCOME">Ingreso (+)</SelectItem><SelectItem value="EXPENSE">Egreso (-)</SelectItem></SelectContent>
+                                <SelectContent><SelectItem value="EXPENSE">Egreso (-)</SelectItem><SelectItem value="INCOME">Ingreso (+)</SelectItem></SelectContent>
                             </Select>
                         </div>
-                        <div className="space-y-1.5 min-h-[4.5rem]">
+                        <div className="space-y-1.5">
                             <Label className="text-xs font-semibold uppercase opacity-50">Monto (USD)</Label>
                             <Input type="number" step="0.01" className="h-9 text-sm font-bold" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} required />
                         </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold uppercase opacity-50">Categoría</Label>
+                        <Select value={formData.category} onValueChange={(val) => setFormData({...formData, category: val})}>
+                            <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                               <SelectItem value="OPERATIVO">Gasto Operativo</SelectItem>
+                               <SelectItem value="SALARIO">Sueldos / Salarios</SelectItem>
+                               <SelectItem value="MARKETING">Marketing / Publicidad</SelectItem>
+                               <SelectItem value="SERVICIOS">Servicios (Luz, Agua, Internet)</SelectItem>
+                               <SelectItem value="OTROS">Otros</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                 </form>
               </div>
               <DialogFooter className="bg-muted/10 p-6 border-t gap-3">
                   <Button variant="ghost" size="sm" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
                   <Button size="sm" onClick={handleSave} disabled={submitting} className="shadow-sm font-semibold">
-                      {submitting ? <IconLoader2 className="animate-spin mr-2" size={16} /> : "Finalizar Registro"}
+                      {submitting ? <IconLoader2 className="animate-spin mr-2" size={16} /> : "Registrar Movimiento"}
                   </Button>
               </DialogFooter>
           </DialogContent>

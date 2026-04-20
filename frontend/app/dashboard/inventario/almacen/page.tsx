@@ -13,28 +13,39 @@ import { Badge } from "@/components/ui/badge";
 import { UniversalTable } from "@/components/universal-table";
 import { inventoryColumns } from "@/components/inventory-columns";
 
+import { db } from "@/lib/db";
+import { useSync } from "@/hooks/useSync";
+
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
 
 export default function AlmacenPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { pullRemoteData } = useSync();
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  const fetchProducts = async () => {
-    try {
-      const res = await fetch(`${API}/products`);
-      if (res.ok) {
-        setProducts(await res.json());
-      }
-    } catch (error) {
-      toast.error("Error al cargar inventario");
-    } finally {
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    // 1. Cargar locales (Offline-First)
+    const localProducts = await db.products.toArray();
+    if (localProducts.length > 0) {
+      setProducts(localProducts as any);
       setLoading(false);
     }
-  };
+
+    // 2. Sincronizar con Postgres
+    if (navigator.onLine) {
+      await pullRemoteData();
+      const updated = await db.products.toArray();
+      setProducts(updated as any);
+    }
+    setLoading(false);
+  }, [pullRemoteData]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const fetchProducts = load;
 
   const tableData = useMemo(() => {
     return products.flatMap(p => 
@@ -47,6 +58,7 @@ export default function AlmacenPage() {
 
         return {
           id: v.id || `${p.id}-${v.name}`,
+          productId: p.id,
           header: `${p.name} - ${v.name}`,
           type: v.sku || "N/A",
           status: status,

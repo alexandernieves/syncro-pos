@@ -59,6 +59,15 @@ export class PurchaseOrdersController {
     return this.purchaseOrdersService.findOne(id);
   }
 
+  @Post(':id/send')
+  async send(@Req() req: any, @Param('id') id: string) {
+    if (!req.user || !req.user.id) {
+      throw new BadRequestException('Usuario no autenticado');
+    }
+
+    return this.purchaseOrdersService.send(id);
+  }
+
   @Post(':id/receive')
   async receive(@Req() req: any, @Param('id') id: string) {
     if (!req.user || !req.user.id) {

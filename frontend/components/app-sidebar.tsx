@@ -18,6 +18,7 @@ import {
   IconHexagon,
   IconCheck,
   IconChevronDown,
+  IconCirclePlusFilled,
 } from "@tabler/icons-react";
 
 import {
@@ -47,8 +48,15 @@ const data = {
     name: "Administrador",
     email: "admin@mipos.com",
     avatar: "/avatars/shadcn.jpg",
+    role: "admin",
+    permissions: [] as string[],
   },
   navMain: [
+    {
+      title: "Dashboard",
+      url: "/dashboard",
+      icon: IconCirclePlusFilled,
+    },
     {
       title: "Punto de Venta",
       url: "/pos",
@@ -160,6 +168,42 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }, []);
 
+  const filteredNavMain = React.useMemo(() => {
+    const isAdmin = user.role === "ownerpos" || user.role === "admin";
+    if (isAdmin) return data.navMain;
+    if (!user.permissions || user.permissions.length === 0) return [];
+    
+    return data.navMain.filter(item => {
+      const urlStr = item.url.toLowerCase();
+      const p = user.permissions as string[];
+
+      if (p.includes("dashboard") && urlStr === "/dashboard") return true;
+      if (p.includes("pos") && urlStr === "/pos") return true;
+      if (p.includes("productos") && urlStr.includes("/productos")) return true;
+      if (p.includes("inventario") && urlStr.includes("/inventario")) return true;
+      if (p.includes("proveedores") && urlStr.includes("/proveedores")) return true;
+      if (p.includes("reportes") && urlStr.includes("/reportes")) return true;
+      if (p.includes("clientes") && urlStr.includes("/clientes")) return true;
+      if (p.includes("contabilidad") && urlStr.includes("/contabilidad")) return true;
+      if (p.includes("historial") && urlStr.includes("/historial")) return true;
+      
+      return false;
+    });
+  }, [user]);
+
+  const filteredNavSecondary = React.useMemo(() => {
+    const isAdmin = user.role === "ownerpos" || user.role === "admin";
+    if (isAdmin) return data.navSecondary;
+    if (!user.permissions || user.permissions.length === 0) return [];
+    
+    return data.navSecondary.filter(item => {
+      const urlStr = item.url.toLowerCase();
+      if ((user.permissions as string[]).includes("configuracion") && urlStr.includes("/configuracion")) return true;
+      if (urlStr.includes("/ayuda") || urlStr === "#") return true; 
+      return false;
+    });
+  }, [user]);
+
   if (!mounted) {
     return <Sidebar {...props } className="bg-sidebar" />; // Return an empty sidebar to avoid flash but maintain structure
   }
@@ -185,8 +229,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        <NavMain items={filteredNavMain} />
+        <NavSecondary items={filteredNavSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user} />

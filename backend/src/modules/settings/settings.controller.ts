@@ -1,10 +1,13 @@
-import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Post, Body } from '@nestjs/common';
 import { SettingsService } from './settings.service';
-import { Setting } from './settings.schema';
+import { BcvService } from './bcv.service';
 
 @Controller('settings')
 export class SettingsController {
-  constructor(private readonly settingsService: SettingsService) {}
+  constructor(
+    private readonly settingsService: SettingsService,
+    private readonly bcvService: BcvService
+  ) {}
 
   @Get()
   async getSettings() {
@@ -12,7 +15,12 @@ export class SettingsController {
   }
 
   @Put()
-  async updateSettings(@Body() updateData: Partial<Setting>) {
+  async updateSettings(@Body() updateData: any) {
     return this.settingsService.updateSettings(updateData);
+  }
+
+  @Post('sync-bcv')
+  async syncBcv() {
+    return this.bcvService.syncRate();
   }
 }

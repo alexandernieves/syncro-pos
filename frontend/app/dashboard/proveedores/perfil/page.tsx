@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardAction, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -110,10 +110,10 @@ interface SupplierReturn {
   };
 }
 
-export default function SupplierDetailPage() {
-  const params = useParams();
+function SupplierDetailContent() {
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const supplierId = params.id as string;
+  const supplierId = searchParams.get("id");
 
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [stats, setStats] = useState<SupplierStats | null>(null);
@@ -129,6 +129,7 @@ export default function SupplierDetailPage() {
 
   useEffect(() => {
     if (supplierId) loadSupplierData();
+    else setLoading(false);
   }, [supplierId]);
 
   const handlePayment = async () => {
@@ -169,6 +170,7 @@ export default function SupplierDetailPage() {
   };
 
   const loadSupplierData = async () => {
+    if (!supplierId) return;
     try {
       const token = localStorage.getItem("token");
       if (!token) { router.push("/login"); return; }
@@ -237,7 +239,7 @@ export default function SupplierDetailPage() {
     );
   }
 
-  if (!supplier) {
+  if (!supplierId || !supplier) {
     return (
       <div className="container mx-auto p-6 text-center">
         <h2 className="text-2xl font-bold">Proveedor no encontrado</h2>
@@ -435,7 +437,7 @@ export default function SupplierDetailPage() {
                   ) : (
                     <div className="space-y-4">
                       {purchaseOrders.map((order) => (
-                        <div key={order.id} className="flex justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/inventario/compras/${order.id}`)}>
+                        <div key={order.id} className="flex justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/inventario/compras/detalle?id=${order.id}`)}>
                           <div>
                             <p className="font-medium">Orden #{order.id.substring(0, 8)}</p>
                             <p className="text-sm text-muted-foreground">{order.branch.name} • {formatDate(order.createdAt)}</p>
@@ -692,5 +694,13 @@ export default function SupplierDetailPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function SupplierDetailPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Cargando perfil de proveedor...</div>}>
+      <SupplierDetailContent />
+    </Suspense>
   );
 }

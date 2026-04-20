@@ -28,6 +28,7 @@ model ProductVariant {
   name       String
   sku        String      @unique
   barcode    String?     @unique
+  secondaryBarcodes String[] @default([])
   price      Float
   cost       Float?
   promoPrice Float?
@@ -118,6 +119,7 @@ model Branch {
   inventoryMovements InventoryMovement[]
   shifts           Shift[]
   purchaseOrders   PurchaseOrder[]
+  accountingEntries AccountingEntry[]
 }
 
 model User {
@@ -132,6 +134,8 @@ model User {
   sales            Sale[]
   shifts           Shift[]
   accountingEntries AccountingEntry[]
+  permissions      String[]          @default([])
+  branchIds        String[]          @default([])
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 }
@@ -144,6 +148,11 @@ model Setting {
   businessEmail   String?
   businessIcon    String?
   currency        String   @default("USD")
+  exchangeRate    Float    @default(1)
+  exchangeRateEur Float    @default(1)
+  bcvUpdateDate   String?
+  taxRate         Float    @default(16)
+  igtfRate        Float    @default(3)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -153,15 +162,34 @@ model Sale {
   branchId      String
   userId        String
   clientId      String?
-  paymentMethod PaymentMethod
+  paymentMethod PaymentMethod? // Deprecated in favor of payments relation
+  subtotal      Float          @default(0)
+  taxAmount     Float          @default(0)
+  igtfAmount    Float          @default(0)
   total         Float
+  status        String         @default("COMPLETED") // COMPLETED, CANCELLED
+  shiftId       String?
   createdAt     DateTime       @default(now())
   
   branch        Branch         @relation(fields: [branchId], references: [id])
   user          User           @relation(fields: [userId], references: [id])
   client        Client?        @relation(fields: [clientId], references: [id])
+  shift         Shift?         @relation(fields: [shiftId], references: [id])
   items         SaleItem[]
+  payments      SalePayment[]
   accountingEntry AccountingEntry?
+}
+
+model SalePayment {
+  id             String        @id @default(uuid())
+  saleId         String
+  method         PaymentMethod
+  amount         Float         // Amount in USD (Main currency)
+  amountLocal    Float?        // Amount in local currency (VES) at time of sale
+  exchangeRate   Float?        // Rate at time of sale
+  reference      String?       // Confirmation #, last 4 digits, etc.
+  
+  sale           Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
 }
 
 model SaleItem {
@@ -170,6 +198,7 @@ model SaleItem {
   variantId  String
   quantity   Int
   price      Float
+  cost       Float?
   subtotal   Float
   
   sale       Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
@@ -209,12 +238,15 @@ model Shift {
   branchId        String
   openingBalance  Float       @default(0)
   closingBalance  Float       @default(0)
+  expectedBalance Float       @default(0)
+  difference      Float       @default(0)
   status          ShiftStatus @default(OPEN)
   openedAt        DateTime    @default(now())
   closedAt        DateTime?
   notes           String?
   user            User        @relation(fields: [userId], references: [id])
   branch          Branch      @relation(fields: [branchId], references: [id])
+  sales           Sale[]
 }
 
 model AccountingEntry {
@@ -224,10 +256,12 @@ model AccountingEntry {
   amount      Float
   category    String?
   saleId      String?   @unique
+  branchId    String?
   userId      String
   createdAt   DateTime  @default(now())
   
   sale        Sale?     @relation(fields: [saleId], references: [id])
+  branch      Branch?   @relation(fields: [branchId], references: [id])
   user        User      @relation(fields: [userId], references: [id])
 }
 

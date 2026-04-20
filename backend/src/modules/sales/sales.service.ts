@@ -9,40 +9,56 @@ export class SalesService {
   constructor(private prisma: PrismaService) {}
 
   async create(data: any, userId: string) {
-    const { branchId, items, paymentMethod } = data;
+    const { branchId, items, payments, clientId } = data;
 
-    return this.prisma.$transaction(async (tx) => {
-      let total = 0;
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+      // 0. Get current settings for taxes
+      const settings = await tx.setting.findFirst();
+      const taxRate = settings?.taxRate || 16;
+      const igtfRate = settings?.igtfRate || 3;
+
+      let netSubtotal = 0;
       const saleItemsData = [];
 
       for (const item of items) {
         // 1. Fetch variant and check stock
         const variant = await tx.productVariant.findUnique({
           where: { id: item.variantId },
-          include: { inventory: { where: { branchId } } }
+          include: { 
+            inventory: { where: { branchId } },
+            product: { include: { category: true } }
+          }
         });
 
         if (!variant) throw new BadRequestException(`Variante ${item.variantId} no encontrada`);
         
-        const currentStock = variant.inventory[0]?.quantity || 0;
+        const inventory = variant.inventory[0];
+        const currentStock = inventory?.quantity || 0;
         if (currentStock < item.quantity) {
           throw new BadRequestException(`Stock insuficiente para ${variant.name} (${currentStock} disponibles)`);
         }
 
-        const subtotal = variant.price * item.quantity;
-        total += subtotal;
+        const itemSubtotal = variant.price * item.quantity;
+        netSubtotal += itemSubtotal;
 
         saleItemsData.push({
           variantId: item.variantId,
           quantity: item.quantity,
           price: variant.price,
-          subtotal
+          cost: variant.cost,
+          subtotal: itemSubtotal
         });
 
         // 2. Discount Stock
         await tx.inventory.update({
           where: { variantId_branchId: { variantId: item.variantId, branchId } },
           data: { quantity: { decrement: item.quantity } }
+        });
+
+        await tx.productVariant.update({
+          where: { id: item.variantId },
+          data: { stock: { decrement: item.quantity } }
         });
 
         // 3. Register Movement
@@ -52,30 +68,76 @@ export class SalesService {
             branchId,
             type: MovementType.OUT,
             quantity: item.quantity,
-            reason: 'sale'
+            reason: 'sale',
+            referenceId: 'pending' // Will update later or just leave as is
           }
         });
-        
-        this.logger.log(`Stock descontado para variante ${variant.id}: -${item.quantity}`);
       }
 
-      // 4. Create Sale
+      // 4. Calculate Taxes
+      const taxAmount = netSubtotal * (taxRate / 100);
+      
+      // Calculate IGTF (3% for Cash payments in USD)
+      const cashAmount = payments
+        .filter((p: any) => p.method === 'CASH')
+        .reduce((acc: number, curr: any) => acc + curr.amount, 0);
+      
+      const igtfAmount = cashAmount * (igtfRate / 100);
+      const total = netSubtotal + taxAmount + igtfAmount;
+
+      // 5. Create Sale
+      // Find active shift for this user and branch
+      const activeShift = await tx.shift.findFirst({
+        where: { userId, branchId, status: 'OPEN' }
+      });
+
       const sale = await tx.sale.create({
         data: {
           branchId,
           userId,
-          paymentMethod,
+          clientId,
+          shiftId: activeShift?.id, // Link to active shift if exists
+          subtotal: netSubtotal,
+          taxAmount,
+          igtfAmount,
           total,
           items: {
             create: saleItemsData
+          },
+          payments: {
+            create: payments.map((p: any) => ({
+              method: p.method,
+              amount: p.amount,
+              amountLocal: p.amountLocal,
+              exchangeRate: p.exchangeRate,
+              reference: p.reference
+            }))
           }
         },
-        include: { items: true }
+        include: { items: true, payments: true }
       });
 
-      this.logger.log(`Venta creada exitosamente: ${sale.id} por total $${total}`);
+      this.logger.log(`Venta creada exitosamente: ${sale.id} por total $${total} (Sub: ${netSubtotal}, Tax: ${taxAmount}, IGTF: ${igtfAmount})`);
+
+      // 6. Create Accounting Entry for Ledger
+      await (tx.accountingEntry as any).create({
+        data: {
+          description: `Venta POS #${sale.id.slice(-4).toUpperCase()}`,
+          amount: total,
+          type: 'INCOME',
+          category: 'VENTA_POS',
+          saleId: sale.id,
+          branchId,
+          userId
+        }
+      });
+
       return sale;
-    });
+      });
+    } catch (error: any) {
+      this.logger.error('CRITICAL SALE ERROR:', error);
+      throw new BadRequestException(error.message || 'Error occurred during sale creation');
+    }
   }
 
   async findAll() {
