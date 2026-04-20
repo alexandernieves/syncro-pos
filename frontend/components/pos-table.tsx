@@ -59,6 +59,11 @@ interface PosTableProps<TData> {
   actions?: React.ReactNode;
   /** Number of skeleton rows while loading */
   skeletonRows?: number;
+  /** Selection state */
+  rowSelection?: Record<string, boolean>;
+  onRowSelectionChange?: (selection: any) => void;
+  getRowId?: (row: TData) => string;
+  bulkActions?: React.ReactNode;
 }
 
 export function PosTable<TData>({
@@ -69,6 +74,10 @@ export function PosTable<TData>({
   searchColumn,
   actions,
   skeletonRows = 6,
+  rowSelection = {},
+  onRowSelectionChange,
+  getRowId,
+  bulkActions,
 }: PosTableProps<TData>) {
   const [sorting, setSorting]               = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters]   = React.useState<ColumnFiltersState>([]);
@@ -79,7 +88,9 @@ export function PosTable<TData>({
   const table = useReactTable({
     data,
     columns,
-    state: { sorting, columnFilters, columnVisibility, pagination, globalFilter },
+    state: { sorting, columnFilters, columnVisibility, pagination, globalFilter, rowSelection },
+    enableRowSelection: true,
+    onRowSelectionChange: onRowSelectionChange,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
@@ -89,6 +100,7 @@ export function PosTable<TData>({
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    getRowId: getRowId,
     globalFilterFn: "includesString",
   });
 
@@ -138,6 +150,9 @@ export function PosTable<TData>({
               })}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Bulk Actions beside Columns */}
+        {bulkActions && <div className="flex items-center gap-2">{bulkActions}</div>}
 
         {/* Extra actions slot */}
         {actions && <div className="ml-auto">{actions}</div>}

@@ -29,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
 
@@ -80,6 +81,7 @@ export default function ProductosPage() {
   const [gridSearch, setGridSearch] = useState('');
   const [gridPage, setGridPage] = useState(1);
   const [gridPageSize, setGridPageSize] = useState(10);
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
 
   const { isOnline, pullRemoteData } = useSync();
 
@@ -344,6 +346,77 @@ export default function ProductosPage() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    const selectedIds = Object.keys(rowSelection);
+    if (selectedIds.length === 0) return;
+
+    const confirmed = window.confirm(`¿Estás seguro de eliminar ${selectedIds.length} productos?`);
+    if (!confirmed) return;
+
+    toast.promise(
+      async () => {
+        const token = localStorage.getItem("token");
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const id of selectedIds) {
+          try {
+            const res = await fetch(`${API}/products/${id}`, {
+              method: "DELETE",
+              headers: { "Authorization": `Bearer ${token}` }
+            });
+            if (res.ok) {
+              await db.products.delete(id);
+              successCount++;
+            } else {
+              failCount++;
+            }
+          } catch (e) {
+            failCount++;
+          }
+        }
+
+        setProducts(prev => prev.filter(p => !selectedIds.includes(p.id)));
+        setRowSelection({});
+        
+        if (failCount > 0) {
+          throw new Error(`Se eliminaron ${successCount} productos, pero ${failCount} fallaron (posiblemente por historial de ventas).`);
+        }
+        return true;
+      },
+      {
+        loading: "Eliminando productos seleccionados...",
+        success: "Productos eliminados correctamente",
+        error: (err) => err.message,
+      }
+    );
+  };
+
+  const handleBulkExport = () => {
+    const selectedIds = Object.keys(rowSelection);
+    const dataToExport = products
+      .filter(p => selectedIds.includes(p.id))
+      .map(p => ({
+        ID: p.id,
+        Nombre: p.name,
+        Descripcion: p.description,
+        Categoria: p.category?.name || "",
+        Stock_Total: p.totalStock,
+        Estado: p.status,
+        Precio_Venta: p.variants?.[0]?.price || 0,
+        SKU: p.variants?.[0]?.sku || "",
+        Codigo_Barras: p.variants?.[0]?.barcode || ""
+      }));
+
+    if (dataToExport.length === 0) return;
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Seleccion_Productos");
+    XLSX.writeFile(wb, `Syncro_Seleccion_${new Date().toISOString().split('T')[0]}.xlsx`);
+    toast.success("Exportación de selección completada");
+  };
+
   const handleDelete = async () => {
     if (!productToDelete) return;
     const deletingId = productToDelete.id;
@@ -390,6 +463,27 @@ export default function ProductosPage() {
   };
 
   const columns: ColumnDef<Product>[] = [
+    {
+      id: "select",
+      header: ({ table }) => (
+        <Checkbox
+          checked={table.getIsAllPageRowsSelected()}
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+          className="translate-y-[2px]"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+          className="translate-y-[2px]"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
     {
       accessorKey: "name",
       header: "Producto",
@@ -462,16 +556,23 @@ export default function ProductosPage() {
 
   const handleExport = () => {
     try {
-      const dataToExport = products.map(p => ({
+      const selectedIds = Object.keys(rowSelection);
+      const isSelected = selectedIds.length > 0;
+      
+      const productsToExport = isSelected 
+        ? products.filter(p => selectedIds.includes(p.id)) 
+        : products;
+
+      if (productsToExport.length === 0) return toast.info("No hay productos para exportar");
+
+      const dataToExport = productsToExport.map(p => ({
         ID: p.id,
         Nombre: p.name,
         Descripcion: p.description,
         Categoria: p.category?.name || "",
-        Proveedor: p.supplier?.name || "",
         Stock_Total: p.totalStock,
         Estado: p.status,
         Precio_Venta: p.variants?.[0]?.price || 0,
-        Costo: p.variants?.[0]?.cost || 0,
         SKU: p.variants?.[0]?.sku || "",
         Codigo_Barras: p.variants?.[0]?.barcode || ""
       }));
@@ -479,8 +580,8 @@ export default function ProductosPage() {
       const ws = XLSX.utils.json_to_sheet(dataToExport);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Productos");
-      XLSX.writeFile(wb, `Syncro_Productos_${new Date().toISOString().split('T')[0]}.xlsx`);
-      toast.success("Exportación completada");
+      XLSX.writeFile(wb, `Syncro_Productos_${isSelected ? 'Seleccion_' : ''}${new Date().toISOString().split('T')[0]}.xlsx`);
+      toast.success(isSelected ? "Selección exportada exitosamente" : "Catálogo completo exportado");
     } catch (e) {
       toast.error("Error al exportar datos");
     }
@@ -617,7 +718,22 @@ export default function ProductosPage() {
           columns={columns}
           data={products}
           loading={loading}
+          rowSelection={rowSelection}
+          onRowSelectionChange={setRowSelection}
+          getRowId={(row) => row.id}
           searchPlaceholder="Buscar por nombre, SKU o código de barras..."
+          bulkActions={
+            Object.keys(rowSelection).length > 0 && (
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                className="h-8 gap-2 font-bold text-xs"
+                onClick={handleBulkDelete}
+              >
+                <IconTrash size={14} /> Eliminar ({Object.keys(rowSelection).length})
+              </Button>
+            )
+          }
         />
       )}
 
@@ -625,15 +741,27 @@ export default function ProductosPage() {
       {viewMode === 'grid' && (
         <div className="flex flex-col gap-4">
           {/* Search bar for grid */}
-          <div className="relative">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5C10 8.433 8.433 10 6.5 10C4.567 10 3 8.433 3 6.5C3 4.567 4.567 3 6.5 3C8.433 3 10 4.567 10 6.5ZM9.30884 10.0159C8.53901 10.6318 7.56251 11 6.5 11C4.01472 11 2 8.98528 2 6.5C2 4.01472 4.01472 2 6.5 2C8.98528 2 11 4.01472 11 6.5C11 7.56251 10.6318 8.53901 10.0159 9.30884L12.8536 12.1464C13.0488 12.3417 13.0488 12.6583 12.8536 12.8536C12.6583 13.0488 12.3417 13.0488 12.1464 12.8536L9.30884 10.0159Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
-            <input
-              type="text"
-              placeholder="Buscar por nombre o categoría..."
-              value={gridSearch}
-              onChange={e => { setGridSearch(e.target.value); setGridPage(1); }}
-              className="w-full h-9 pl-9 pr-4 rounded-lg border bg-background text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all"
-            />
+          <div className="flex items-center gap-4">
+            <div className="relative flex-1">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 6.5C10 8.433 8.433 10 6.5 10C4.567 10 3 8.433 3 6.5C3 4.567 4.567 3 6.5 3C8.433 3 10 4.567 10 6.5ZM9.30884 10.0159C8.53901 10.6318 7.56251 11 6.5 11C4.01472 11 2 8.98528 2 6.5C2 4.01472 4.01472 2 6.5 2C8.98528 2 11 4.01472 11 6.5C11 7.56251 10.6318 8.53901 10.0159 9.30884L12.8536 12.1464C13.0488 12.3417 13.0488 12.6583 12.8536 12.8536C12.6583 13.0488 12.3417 13.0488 12.1464 12.8536L9.30884 10.0159Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
+              <input
+                type="text"
+                placeholder="Buscar por nombre o categoría..."
+                value={gridSearch}
+                onChange={e => { setGridSearch(e.target.value); setGridPage(1); }}
+                className="w-full h-9 pl-9 pr-4 rounded-lg border bg-background text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+              />
+            </div>
+            {Object.keys(rowSelection).length > 0 && (
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                className="h-9 gap-2 font-bold text-xs px-4 shadow-lg shadow-rose-500/10"
+                onClick={handleBulkDelete}
+              >
+                <IconTrash size={14} /> Eliminar Seleccionados ({Object.keys(rowSelection).length})
+              </Button>
+            )}
           </div>
 
           {/* Skeleton grid */}
@@ -710,6 +838,28 @@ export default function ProductosPage() {
                           >
                             <IconTrash size={14} />
                           </button>
+                        </div>
+                        
+                        {/* Selector para modo Grid */}
+                        <div 
+                          className={cn(
+                            "absolute top-2 left-2 z-20 transition-opacity duration-200",
+                            Object.keys(rowSelection).length > 0 ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                          )}
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <Checkbox
+                            checked={!!rowSelection[p.id]}
+                            onCheckedChange={(val) => {
+                              setRowSelection(prev => {
+                                const next = { ...prev };
+                                if (val) next[p.id] = true;
+                                else delete next[p.id];
+                                return next;
+                              });
+                            }}
+                            className="bg-background shadow-md border-primary/20 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                          />
                         </div>
                       </div>
 

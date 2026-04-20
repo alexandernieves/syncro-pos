@@ -18,6 +18,8 @@ import {
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { PosTable } from "@/components/pos-table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { IconX } from "@tabler/icons-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
 
@@ -36,6 +38,7 @@ export default function CategoriasPage() {
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
 
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
@@ -101,7 +104,67 @@ export default function CategoriasPage() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    const selectedIds = Object.keys(rowSelection);
+    if (selectedIds.length === 0) return;
+
+    const confirmed = window.confirm(`¿Estás seguro de eliminar ${selectedIds.length} categorías?`);
+    if (!confirmed) return;
+
+    toast.promise(
+      async () => {
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const id of selectedIds) {
+          try {
+            const res = await fetch(`${API}/categories/${id}`, {
+              method: "DELETE",
+              headers
+            });
+            if (res.ok) successCount++;
+            else failCount++;
+          } catch (e) {
+            failCount++;
+          }
+        }
+
+        setRowSelection({});
+        load();
+        
+        if (failCount > 0) {
+          throw new Error(`Se eliminaron ${successCount} categorías, pero ${failCount} fallaron.`);
+        }
+        return true;
+      },
+      {
+        loading: "Eliminando categorías seleccionadas...",
+        success: "Categorías eliminadas correctamente",
+        error: (err) => err.message,
+      }
+    );
+  };
+
   const columns: ColumnDef<Category>[] = [
+    {
+      id: "select",
+      header: ({ table }) => (
+        <Checkbox
+          checked={table.getIsAllPageRowsSelected()}
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
     {
       accessorKey: "name",
       header: "Nombre",
@@ -161,7 +224,22 @@ export default function CategoriasPage() {
         columns={columns}
         data={categories}
         loading={loading}
+        rowSelection={rowSelection}
+        onRowSelectionChange={setRowSelection}
+        getRowId={(row) => row._id}
         searchPlaceholder="Buscar categorías..."
+        bulkActions={
+          Object.keys(rowSelection).length > 0 && (
+            <Button 
+              variant="destructive" 
+              size="sm" 
+              className="h-8 gap-2 font-bold text-xs"
+              onClick={handleBulkDelete}
+            >
+              <IconTrash size={14} /> Eliminar Seleccionadas ({Object.keys(rowSelection).length})
+            </Button>
+          )
+        }
         actions={
           <Button className="gap-2" onClick={openCreate}>
             <IconPlus size={16} /> Nueva Categoría
