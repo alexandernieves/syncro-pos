@@ -192,6 +192,17 @@ export default function POSPage() {
   const [user, setUser] = useState<any>(null);
   const [token, setToken] = useState<string>("");
   const [mounted, setMounted] = useState(false);
+  const scannerInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Auto-focus hidden input for laser scanner
+  useEffect(() => {
+    if (scannerOpen && !useCamera) {
+      const timer = setTimeout(() => {
+        scannerInputRef.current?.focus();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [scannerOpen, useCamera]);
 
   const { isOnline, syncPendingSales, pullRemoteData } = useSync();
 
@@ -1483,47 +1494,94 @@ export default function POSPage() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG: CAMERA SCANNER */}
+      {/* DIALOG: ESCÁNER Y CÁMARA (ESTILO UNIFICADO) */}
       <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>
-        <DialogContent className="sm:max-w-[450px] overflow-hidden p-0 bg-black border-zinc-800">
+        <DialogContent className="sm:max-w-md overflow-hidden bg-black/95 border-white/10 shadow-2xl p-0">
           <DialogHeader className="sr-only">
-            <DialogTitle>Escáner de Productos</DialogTitle>
+             <DialogTitle>Captura de Código de Barras</DialogTitle>
           </DialogHeader>
-          <div className="relative aspect-square sm:aspect-video bg-zinc-950 flex flex-col items-center justify-center overflow-hidden">
+          
+          <div className="relative w-full h-[360px] sm:h-[400px] flex flex-col items-center justify-center">
+            {/* Header Flotante del Modal */}
+            <div className="absolute top-4 left-4 right-4 flex justify-between items-center z-20">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-full border border-white/10">
+                 <div className={cn("size-2 rounded-full", isDetected ? "bg-green-500" : "bg-emerald-500 animate-pulse")} />
+                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/70">
+                    {useCamera ? "CÁMARA ACTIVA" : "LISTO PARA CAPTURA"}
+                 </span>
+              </div>
+              <Button variant="ghost" size="icon" className="size-8 rounded-full bg-black/50 hover:bg-white/10 text-white" onClick={() => setScannerOpen(false)}>
+                <IconX size={16} />
+              </Button>
+            </div>
+
             {!useCamera ? (
-              <div className="flex flex-col items-center gap-6 p-8 text-center animate-in fade-in zoom-in duration-300">
-                <div className="size-20 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
-                  <IconBarcode size={40} className="text-primary" />
+              <div className="flex flex-col items-center w-full max-w-[280px] text-center space-y-6 pt-4 animate-in zoom-in-95 duration-500">
+                <input 
+                  ref={scannerInputRef}
+                  autoFocus
+                  className="opacity-0 absolute top-0 left-0 size-1 pointer-events-none"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = (e.target as HTMLInputElement).value;
+                      if (val) processBarcode(val);
+                      (e.target as HTMLInputElement).value = '';
+                    }
+                  }}
+                  onBlur={() => {
+                    if (scannerOpen && !useCamera) {
+                       setTimeout(() => scannerInputRef.current?.focus(), 100);
+                    }
+                  }}
+                />
+                <div className="w-full flex flex-col items-center justify-center py-12 gap-8 bg-muted/10 border border-muted/20 rounded-2xl relative overflow-hidden">
+                   <div className="size-24 rounded-xl bg-background border border-muted/50 shadow-sm flex items-center justify-center text-muted-foreground relative z-10">
+                     <IconBarcode size={48} stroke={1.2} />
+                   </div>
+                   <div className="text-center space-y-2 relative z-10">
+                     <p className="font-semibold text-lg tracking-tight">Escáner Listo</p>
+                     <p className="text-[11px] text-muted-foreground/50 font-normal tracking-tight">Esperando lector láser...</p>
+                   </div>
                 </div>
-                <div className="space-y-2">
-                  <h3 className="text-xl font-bold text-white uppercase tracking-tight">Listo para Escanear</h3>
-                  <p className="text-zinc-400 text-sm max-w-[280px]">Utilice su lector de códigos de barras (láser) o active la cámara de su dispositivo.</p>
-                </div>
-                <Button size="lg" className="gap-2 h-12 px-8 font-bold shadow-lg shadow-primary/20" onClick={() => setUseCamera(true)}>
-                  <IconCamera size={18} /> ACTIVAR CÁMARA
+
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="mx-auto size-14 hover:bg-primary/5 transition-all group" 
+                  onClick={() => setUseCamera(true)}
+                  title="Usar Cámara"
+                >
+                  <IconCamera size={32} className="text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all duration-500" />
                 </Button>
               </div>
             ) : (
-                <div className="size-full absolute inset-0 flex flex-col">
-                    <div id="reader" className="size-full"></div>
-                    {isDetected && (
-                        <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center animate-in fade-in duration-300">
-                            <div className="bg-emerald-500 text-white rounded-full p-4 shadow-2xl scale-125">
-                                <IconScan size={40} />
-                            </div>
+                <div className="w-full space-y-6 relative flex flex-col items-center justify-center py-6">
+                    <div className={cn(
+                        "relative w-[280px] h-[100px] rounded-xl overflow-hidden border shadow-2xl bg-black transition-all duration-500",
+                        isDetected ? "border-green-500" : "border-white/10"
+                    )}>
+                        <div id="reader" className="absolute inset-0"></div>
+                        
+                        {/* Láser Minimalista (Oscilante) */}
+                        <div className={cn(
+                            "absolute inset-x-4 z-10 animate-scanline transition-all duration-300",
+                            isDetected ? "text-green-500" : "text-primary"
+                        )} />
+                        
+                        {/* Esquinas Rectangulares */}
+                        <div className="absolute inset-3 z-20 pointer-events-none opacity-20">
+                            <div className={cn("absolute top-0 left-0 size-4 border-t border-l transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                            <div className={cn("absolute top-0 right-0 size-4 border-t border-r transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                            <div className={cn("absolute bottom-0 left-0 size-4 border-b border-l transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                            <div className={cn("absolute bottom-0 right-0 size-4 border-b border-r transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
                         </div>
-                    )}
+
+                        {isDetected && (
+                            <div className="absolute inset-0 bg-green-500/20 z-10 animate-in fade-in zoom-in duration-300" />
+                        )}
+                    </div>
                 </div>
             )}
-          </div>
-          <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex justify-between items-center px-6">
-            <div className="flex items-center gap-2">
-                <div className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Sistema de Captura Syncro Activo</span>
-            </div>
-            <Button variant="ghost" size="sm" className="h-8 text-zinc-400 hover:text-white hover:bg-white/5 font-bold text-[10px] uppercase tracking-widest" onClick={() => setScannerOpen(false)}>
-              Cerrar Escáner
-            </Button>
           </div>
         </DialogContent>
       </Dialog>
