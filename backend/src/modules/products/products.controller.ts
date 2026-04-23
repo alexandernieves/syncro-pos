@@ -80,10 +80,17 @@ export class ProductsController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post('waitlist') addToWaitlist(@Body() body: any, @Request() req: any) {
+  @Post('waitlist')
+  addToWaitlist(@Body() body: any, @Request() req: any) {
+    const userId = req.user?.id || req.user?.sub;
+    
     return this.productsService.addToWaitlist({
-      ...body,
-      userId: req.user.sub, // Assuming sub is the userId from JWT
+      name: body.name,
+      price: Number(body.price),
+      stock: Number(body.stock),
+      barcode: body.barcode,
+      branchId: body.branchId,
+      userId: userId,
     });
   }
 

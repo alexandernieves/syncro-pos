@@ -238,12 +238,24 @@ export class ProductsService {
   }
 
   async addToWaitlist(data: { name: string, price: number, stock: number, barcode: string, userId: string, branchId?: string }) {
-    return (this.prisma.productWaitlist as any).create({
-      data: {
-        ...data,
-        status: 'PENDING'
+    try {
+      return await (this.prisma.productWaitlist as any).create({
+        data: {
+          name: data.name,
+          price: data.price,
+          stock: data.stock,
+          barcode: data.barcode,
+          userId: data.userId,
+          branchId: data.branchId,
+          status: 'PENDING'
+        }
+      });
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        throw new BadRequestException('Este código de barras ya está registrado en la lista de espera.');
       }
-    });
+      throw error;
+    }
   }
 
   async removeFromWaitlist(id: string) {

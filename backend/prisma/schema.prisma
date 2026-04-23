@@ -46,6 +46,7 @@ model ProductVariant {
   supplierProducts SupplierProduct[]
   purchaseOrderItems PurchaseOrderItem[]
   supplierReturns SupplierReturn[]
+  saleReturnItems SaleReturnItem[]
 }
 
 model Inventory {
@@ -133,6 +134,7 @@ model User {
   city             String?
   avatar           String?
   sales            Sale[]
+  returns          SaleReturn[]
   shifts           Shift[]
   accountingEntries AccountingEntry[]
   permissions      String[]          @default([])
@@ -142,18 +144,63 @@ model User {
 }
 
 model Setting {
-  id              String   @id @default(uuid())
-  businessName    String   @default("Syncro POS")
-  businessAddress String?
-  businessPhone   String?
-  businessEmail   String?
-  businessIcon    String?
-  currency        String   @default("USD")
-  exchangeRate    Float    @default(1)
-  exchangeRateEur Float    @default(1)
-  bcvUpdateDate   String?
-  taxRate         Float    @default(16)
-  igtfRate        Float    @default(3)
+  id               String   @id @default(uuid())
+  businessName     String   @default("Syncro POS")
+  businessAddress  String?  // Keep for legacy
+  businessPhone    String?  // Keep for legacy
+  businessEmail    String?  // Keep for legacy
+  businessIcon     String?
+  
+  // New standardized fields matching frontend state
+  ruc              String?  @default("")
+  address          String?  @default("")
+  phone            String?  @default("")
+  email            String?  @default("")
+  website          String?  @default("")
+  country          String?  @default("Venezuela")
+  
+  currency         String   @default("USD")
+  exchangeRate     Float    @default(1)
+  exchangeRateEur  Float    @default(1)
+  bcvUpdateDate    String?
+  taxRate          Float    @default(16)
+  taxEnabled       Boolean  @default(true)
+  igtfRate         Float    @default(3)
+  receiptFooter    String?  @default("Gracias por su compra. Vuelva pronto.")
+  
+  // Pago Móvil
+  pagoMovilBank    String?
+  pagoMovilId      String?
+  pagoMovilPhone   String?
+  pagoMovilEnabled Boolean? @default(false)
+  
+  // Cripto / Binance
+  binanceId      String?
+  binanceEmail   String?
+  binanceEnabled Boolean? @default(false)
+  
+  // Zinli
+  zinliEmail   String?
+  zinliEnabled Boolean? @default(false)
+  
+  // PayPal
+  paypalEmail   String?
+  paypalEnabled Boolean? @default(false)
+
+  // POS Configuration
+  requireClient      Boolean  @default(false)
+  printOnSale        Boolean  @default(true)
+  lowStockAlert      Int      @default(5)
+  allowNegativeStock Boolean  @default(false)
+  
+  // Printing Configuration
+  defaultPrinter     String?  @default("")
+  paperWidth         Int      @default(80)
+  copiesPerSale      Int      @default(1)
+
+  // Generic payment methods list
+  paymentMethods Json?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -178,7 +225,35 @@ model Sale {
   shift         Shift?         @relation(fields: [shiftId], references: [id])
   items         SaleItem[]
   payments      SalePayment[]
+  returns       SaleReturn[]
   accountingEntry AccountingEntry?
+}
+
+model SaleReturn {
+  id            String           @id @default(uuid())
+  saleId        String
+  userId        String
+  reason        String?
+  subtotal      Float            @default(0)
+  taxAmount     Float            @default(0)
+  total         Float
+  createdAt     DateTime         @default(now())
+  
+  sale          Sale             @relation(fields: [saleId], references: [id])
+  user          User             @relation(fields: [userId], references: [id])
+  items         SaleReturnItem[]
+}
+
+model SaleReturnItem {
+  id            String           @id @default(uuid())
+  returnId      String
+  variantId     String?
+  quantity      Int
+  price         Float
+  subtotal      Float
+  
+  return        SaleReturn       @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  variant       ProductVariant?  @relation(fields: [variantId], references: [id])
 }
 
 model SalePayment {
@@ -246,6 +321,7 @@ model Client {
   phone      String?
   address    String?
   isActive   Boolean  @default(true)
+  walletBalance Float @default(0)
   sales      Sale[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

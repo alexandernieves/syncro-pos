@@ -22,4 +22,15 @@ export class SalesController {
   async findOne(@Param('id') id: string) {
     return this.salesService.findOne(id);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/return')
+  async returnItems(
+    @Param('id') id: string,
+    @Body() returnData: any,
+    @Req() req: any,
+  ) {
+    const userId = req.user?.sub || req.user?.id;
+    return this.salesService.returnItems(id, returnData, userId);
+  }
 }

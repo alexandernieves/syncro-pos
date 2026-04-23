@@ -47,6 +47,7 @@ export class ReportsService {
     // 4. Top Selling Products (by Volume)
     const productMap: Record<string, number> = {};
     sales.flatMap(s => s.items).forEach(item => {
+      if (!item.variant) return;
       const name = item.variant.product.name;
       productMap[name] = (productMap[name] || 0) + item.quantity;
     });
@@ -58,6 +59,7 @@ export class ReportsService {
     // 5. Sales by Category (by Revenue)
     const categoryMap: Record<string, number> = {};
     sales.flatMap(s => s.items).forEach(item => {
+      if (!item.variant) return;
       const cat = item.variant.product.category?.name || 'Otros';
       const itemRevenue = item.price * item.quantity;
       categoryMap[cat] = (categoryMap[cat] || 0) + itemRevenue;

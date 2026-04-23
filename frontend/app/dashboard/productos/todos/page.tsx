@@ -301,10 +301,7 @@ export default function ProductosPage() {
           { facingMode: "environment" },
           {
             fps: 60,
-            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-                // Caja dinámica: pequeña para códigos de barras, grande para QR
-                return { width: viewfinderWidth * 0.9, height: viewfinderHeight * 0.5 };
-            },
+            qrbox: 250,
             aspectRatio: 1.0, // Cambiado a 1.0 para maximizar el área de captura
             disableFlip: true,
             rememberLastUsedCamera: true,
@@ -597,7 +594,7 @@ export default function ProductosPage() {
             <Button variant="ghost" size="icon" className="size-8 text-primary" title="Ver ficha" onClick={() => openDetail(p)}>
               <IconEye size={16} />
             </Button>
-            <Button variant="ghost" size="icon" className="size-8" title="Editar producto" onClick={() => router.push(`/dashboard/productos/editar/${p.id}`)}>
+            <Button variant="ghost" size="icon" className="size-8" title="Editar producto" onClick={() => router.push(`/dashboard/productos/editar?id=${p.id}`)}>
               <IconPencil size={15} />
             </Button>
             <Button variant="ghost" size="icon" className="size-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50" title="Eliminar producto" onClick={() => setProductToDelete(p)}>
@@ -1238,7 +1235,7 @@ export default function ProductosPage() {
                         isDetected ? "border-green-500" : "border-white/10"
                     )}>
                         {/* the #reader container must be square-ish so the camera stretches nicely */}
-                        <div id="reader" className="absolute inset-0 [&>video]:object-cover [&>video]:w-full [&>video]:h-full [&>video]:absolute [&>video]:inset-0"></div>
+                        <div id="reader" className="w-full h-full [&_video]:object-cover [&_video]:w-full [&_video]:h-full [&_video]:min-h-full [&_#qr-shaded-region]:hidden"></div>
                         
                         {/* Láser Minimalista (Oscilante) */}
                         <div className={cn(

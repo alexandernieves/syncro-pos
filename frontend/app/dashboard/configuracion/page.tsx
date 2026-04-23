@@ -46,6 +46,7 @@ import {
   IconChevronDown,
 } from "@tabler/icons-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 const ICONS_MAP: Record<string, React.ElementType> = {
   IconInnerShadowTop,
@@ -90,6 +91,29 @@ export default function ConfiguracionPage() {
     website: "",
     currency: "USD",
     country: "Venezuela",
+  });
+
+  const [pagoMovil, setPagoMovil] = useState({
+    bank: "",
+    id: "",
+    phone: "",
+    enabled: false
+  });
+
+  const [binance, setBinance] = useState({
+    binanceId: "",
+    email: "",
+    enabled: false
+  });
+
+  const [zinli, setZinli] = useState({
+    email: "",
+    enabled: false
+  });
+
+  const [paypal, setPaypal] = useState({
+    email: "",
+    enabled: false
   });
 
   const [iva, setIva] = useState({ rate: "16", igtfRate: "3", enabled: true });
@@ -214,6 +238,25 @@ export default function ConfiguracionPage() {
               paperWidth: String(data.paperWidth || "80"),
               copiesPerSale: String(data.copiesPerSale || "1"),
             });
+            setPagoMovil({
+              bank: data.pagoMovilBank || "",
+              id: data.pagoMovilId || "",
+              phone: data.pagoMovilPhone || "",
+              enabled: data.pagoMovilEnabled || false,
+            });
+            setBinance({
+              binanceId: data.binanceId || "",
+              email: data.binanceEmail || "",
+              enabled: data.binanceEnabled || false,
+            });
+            setZinli({
+              email: data.zinliEmail || "",
+              enabled: data.zinliEnabled || false,
+            });
+            setPaypal({
+              email: data.paypalEmail || "",
+              enabled: data.paypalEnabled || false,
+            });
           }
         }
       } catch (err) {
@@ -259,6 +302,17 @@ export default function ConfiguracionPage() {
         ...printConfig,
         paperWidth: Number(printConfig.paperWidth),
         copiesPerSale: Number(printConfig.copiesPerSale),
+        pagoMovilBank: pagoMovil.bank,
+        pagoMovilId: pagoMovil.id,
+        pagoMovilPhone: pagoMovil.phone,
+        pagoMovilEnabled: pagoMovil.enabled,
+        binanceId: binance.binanceId,
+        binanceEmail: binance.email,
+        binanceEnabled: binance.enabled,
+        zinliEmail: zinli.email,
+        zinliEnabled: zinli.enabled,
+        paypalEmail: paypal.email,
+        paypalEnabled: paypal.enabled,
       };
 
       const res = await fetch(`${API}/settings`, {
@@ -494,7 +548,167 @@ export default function ConfiguracionPage() {
                 ))}
               </CardContent>
             </Card>
-            <Button className="self-start gap-2" onClick={() => handleSave("Pagos")}><IconDeviceFloppy size={16}/>Guardar</Button>
+
+            <Card>
+              <CardContent className="p-6 flex flex-col gap-6">
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-xl bg-blue-600/10 flex items-center justify-center text-blue-600">
+                      <IconDevices size={20} />
+                    </div>
+                    <div>
+                      <p className="font-bold">Pago Móvil</p>
+                      <p className="text-xs text-muted-foreground">Datos que verá el cliente para transferir</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setPagoMovil(p => ({ ...p, enabled: !p.enabled }))}
+                    className={["w-11 h-6 rounded-full transition-colors relative", pagoMovil.enabled ? "bg-primary" : "bg-muted"].join(" ")}
+                  >
+                    <div className={["absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all", pagoMovil.enabled ? "left-5" : "left-0.5"].join(" ")} />
+                  </button>
+                </div>
+
+                <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-4 transition-all duration-300", !pagoMovil.enabled && "opacity-40 pointer-events-none")}>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Banco</Label>
+                    <Input 
+                      placeholder="Ej. Banesco" 
+                      value={pagoMovil.bank} 
+                      onChange={e => setPagoMovil({...pagoMovil, bank: e.target.value})} 
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Cédula / RIF</Label>
+                    <Input 
+                      placeholder="V-12345678" 
+                      value={pagoMovil.id} 
+                      onChange={e => setPagoMovil({...pagoMovil, id: e.target.value})} 
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Teléfono</Label>
+                    <Input 
+                      placeholder="0412 1234567" 
+                      value={pagoMovil.phone} 
+                      onChange={e => setPagoMovil({...pagoMovil, phone: e.target.value})} 
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ─── BINANCE ─── */}
+            <Card>
+              <CardContent className="p-6 flex flex-col gap-6">
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-xl bg-yellow-500/10 flex items-center justify-center text-yellow-600">
+                      <IconHexagon size={20} />
+                    </div>
+                    <div>
+                      <p className="font-bold">Binance Pay</p>
+                      <p className="text-xs text-muted-foreground">Recibe criptomonedas directamente</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setBinance(p => ({ ...p, enabled: !p.enabled }))}
+                    className={cn("w-11 h-6 rounded-full transition-colors relative", binance.enabled ? "bg-yellow-500" : "bg-muted")}
+                  >
+                    <div className={cn("absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all", binance.enabled ? "left-5" : "left-0.5")} />
+                  </button>
+                </div>
+
+                <div className={cn("grid grid-cols-1 md:grid-cols-2 gap-4 transition-all duration-300", !binance.enabled && "opacity-40 pointer-events-none")}>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Binance ID</Label>
+                    <Input 
+                      placeholder="Ej. 123456789" 
+                      value={binance.binanceId} 
+                      onChange={e => setBinance({...binance, binanceId: e.target.value})} 
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Correo de la Cuenta</Label>
+                    <Input 
+                      placeholder="ali@binance.com" 
+                      value={binance.email} 
+                      onChange={e => setBinance({...binance, email: e.target.value})} 
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ─── ZINLI ─── */}
+            <Card>
+              <CardContent className="p-6 flex flex-col gap-6">
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-600">
+                      <IconWorld size={20} />
+                    </div>
+                    <div>
+                      <p className="font-bold">Zinli</p>
+                      <p className="text-xs text-muted-foreground">Billetera digital panameña</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setZinli(p => ({ ...p, enabled: !p.enabled }))}
+                    className={cn("w-11 h-6 rounded-full transition-colors relative", zinli.enabled ? "bg-purple-600" : "bg-muted")}
+                  >
+                    <div className={cn("absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all", zinli.enabled ? "left-5" : "left-0.5")} />
+                  </button>
+                </div>
+
+                <div className={cn("grid grid-cols-1 gap-4 transition-all duration-300", !zinli.enabled && "opacity-40 pointer-events-none")}>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Correo Zinli</Label>
+                    <Input 
+                      placeholder="tienda@zinli.com" 
+                      value={zinli.email} 
+                      onChange={e => setZinli({...zinli, email: e.target.value})} 
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ─── PAYPAL ─── */}
+            <Card>
+              <CardContent className="p-6 flex flex-col gap-6">
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-xl bg-blue-700/10 flex items-center justify-center text-blue-800">
+                      <IconBuilding size={20} />
+                    </div>
+                    <div>
+                      <p className="font-bold">PayPal</p>
+                      <p className="text-xs text-muted-foreground">Pagos internacionales</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setPaypal(p => ({ ...p, enabled: !p.enabled }))}
+                    className={cn("w-11 h-6 rounded-full transition-colors relative", paypal.enabled ? "bg-blue-800" : "bg-muted")}
+                  >
+                    <div className={cn("absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all", paypal.enabled ? "left-5" : "left-0.5")} />
+                  </button>
+                </div>
+
+                <div className={cn("grid grid-cols-1 gap-4 transition-all duration-300", !paypal.enabled && "opacity-40 pointer-events-none")}>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Correo PayPal</Label>
+                    <Input 
+                      placeholder="pagos@negocio.com" 
+                      value={paypal.email} 
+                      onChange={e => setPaypal({...paypal, email: e.target.value})} 
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Button className="self-start gap-2" onClick={() => handleSave("Pagos")}><IconDeviceFloppy size={16}/>Guardar Configuración de Pagos</Button>
           </div>
         )}
 

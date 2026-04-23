@@ -64,10 +64,47 @@ export class ShiftsService {
   }
 
   async getActive(userId: string) {
-    return (this.prisma.shift as any).findFirst({
+    const shift = await (this.prisma.shift as any).findFirst({
       where: { userId, status: 'OPEN' },
-      include: { branch: true }
+      include: { 
+        branch: true,
+        sales: {
+          include: { payments: true }
+        }
+      }
     });
+
+    if (!shift) return null;
+
+    // Calculate expected totals by payment method
+    const expectedTotals = {
+      CASH: shift.openingBalance, // Base cash includes opening balance
+      CARD: 0,
+      TRANSFER: 0,
+      PAGO_MOVIL: 0,
+      BINANCE: 0,
+      ZINLI: 0,
+      PAYPAL: 0
+    };
+
+    shift.sales.forEach((sale: any) => {
+      // Only count completed sales
+      if (sale.status !== 'CANCELLED') {
+        sale.payments.forEach((p: any) => {
+          if (expectedTotals[p.method as keyof typeof expectedTotals] !== undefined) {
+            expectedTotals[p.method as keyof typeof expectedTotals] += p.amount;
+          }
+        });
+      }
+    });
+
+    // Return the shift without the huge sales array to save bandwidth, but with the calculated totals
+    const { sales, ...shiftData } = shift;
+    
+    return {
+      ...shiftData,
+      expectedTotals
+    };
   }
 
   async findAll() {

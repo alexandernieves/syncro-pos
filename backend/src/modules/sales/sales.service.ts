@@ -9,7 +9,7 @@ export class SalesService {
   constructor(private prisma: PrismaService) {}
 
   async create(data: any, userId: string) {
-    const { branchId, items, payments, clientId } = data;
+    const { branchId, items, payments, clientId, saveChangeToWallet } = data;
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -143,6 +143,15 @@ export class SalesService {
 
       this.logger.log(`Venta creada exitosamente: ${sale.id} por total $${total} (Sub: ${netSubtotal}, Tax: ${taxAmount}, IGTF: ${igtfAmount})`);
 
+      // 5.5 Handle Virtual Wallet (Monedero)
+      if (saveChangeToWallet > 0 && clientId) {
+        await tx.client.update({
+          where: { id: clientId },
+          data: { walletBalance: { increment: saveChangeToWallet } }
+        });
+        this.logger.log(`Abonado $${saveChangeToWallet} al monedero del cliente ${clientId}`);
+      }
+
       // 6. Create Accounting Entry for Ledger
       await (tx.accountingEntry as any).create({
         data: {
@@ -174,7 +183,131 @@ export class SalesService {
   async findOne(id: string) {
     return this.prisma.sale.findUnique({
       where: { id },
-      include: { items: { include: { variant: true } }, user: true, branch: true }
+      include: { 
+        items: { include: { variant: { include: { product: true } } } }, 
+        user: true, 
+        branch: true,
+        client: true,
+        returns: { include: { items: true } },
+        payments: true
+      }
     });
   }
+
+  async returnItems(saleId: string, data: any, userId: string) {
+    const { items, reason } = data; // items is an array of { variantId, quantity }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // 1. Validate Sale
+        const sale = await tx.sale.findUnique({
+          where: { id: saleId },
+          include: { items: true, returns: { include: { items: true } } }
+        });
+        if (!sale) throw new BadRequestException(`Venta ${saleId} no encontrada`);
+
+        let netSubtotal = 0;
+        const returnItemsData = [];
+
+        // Calculate already returned quantities for validation
+        const returnedQuantities: Record<string, number> = {};
+        for (const r of sale.returns) {
+          for (const ri of r.items) {
+            if (ri.variantId) {
+              returnedQuantities[ri.variantId] = (returnedQuantities[ri.variantId] || 0) + ri.quantity;
+            }
+          }
+        }
+
+        for (const item of items) {
+          // Find original sale item
+          const saleItem = sale.items.find(si => si.variantId === item.variantId);
+          if (!saleItem) throw new BadRequestException(`El artículo no pertenece a esta venta`);
+
+          const alreadyReturned = returnedQuantities[item.variantId] || 0;
+          if (item.quantity > (saleItem.quantity - alreadyReturned)) {
+            throw new BadRequestException(`Cantidad máxima a devolver superada para una de las variantes`);
+          }
+
+          if (item.quantity <= 0) continue;
+
+          const itemSubtotal = saleItem.price * item.quantity;
+          netSubtotal += itemSubtotal;
+
+          returnItemsData.push({
+            variantId: item.variantId,
+            quantity: item.quantity,
+            price: saleItem.price,
+            subtotal: itemSubtotal
+          });
+
+          // Restore Inventory
+          await tx.inventory.update({
+             where: { variantId_branchId: { variantId: item.variantId, branchId: sale.branchId } },
+             data: { quantity: { increment: item.quantity } }
+          });
+
+          await tx.productVariant.update({
+             where: { id: item.variantId },
+             data: { stock: { increment: item.quantity } }
+          });
+
+          // Register Movement IN
+          await tx.inventoryMovement.create({
+            data: {
+              variantId: item.variantId,
+              branchId: sale.branchId,
+              type: MovementType.IN,
+              quantity: item.quantity,
+              reason: `Devolución de Venta #${saleId.slice(-4).toUpperCase()}`,
+              referenceId: saleId
+            }
+          });
+        }
+
+        if (returnItemsData.length === 0) {
+          throw new BadRequestException("No se enviaron artículos válidos para devolver");
+        }
+
+        // Fetch settings for proper tax calculation
+        const settings = await tx.setting.findFirst();
+        const taxRate = settings?.taxRate || 16;
+        const taxAmount = netSubtotal * (taxRate / 100);
+        const total = netSubtotal + taxAmount; 
+
+        // Create SaleReturn
+        const saleReturn = await tx.saleReturn.create({
+          data: {
+            saleId,
+            userId,
+            reason,
+            subtotal: netSubtotal,
+            taxAmount,
+            total,
+            items: { create: returnItemsData }
+          },
+          include: { items: true }
+        });
+
+        // Accounting Entry (EXPENSE/RETURN)
+        await (tx.accountingEntry as any).create({
+          data: {
+            description: `Devolución Venta #${saleId.slice(-4).toUpperCase()}`,
+            amount: total,
+            type: 'EXPENSE',
+            category: 'DEVOLUCION_VENTA',
+            saleId: null, 
+            branchId: sale.branchId,
+            userId
+          }
+        });
+
+        return saleReturn;
+      });
+    } catch (error: any) {
+      this.logger.error('CRITICAL RETURN ERROR:', error);
+      throw new BadRequestException(error.message || 'Error occurred during return creation');
+    }
+  }
 }
+

@@ -41,6 +41,14 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --animate-scanline: scanline 2.5s ease-in-out infinite alternate;
+
+  @keyframes scanline {
+    0% { top: 20%; opacity: 0.1; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { top: 80%; opacity: 0.1; }
+  }
 }
 
 :root {

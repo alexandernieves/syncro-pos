@@ -26,3 +26,10 @@ docker-compose.override.yml
 # Prisma
 /backend/prisma/migrations
 *.dmg
+
+frontend/dist 2/
+
+frontend/dist*
+frontend/build
+frontend/out
+backend/dist

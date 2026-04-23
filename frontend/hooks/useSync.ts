@@ -116,7 +116,8 @@ export function useSync() {
           await db.clients.bulkPut(clients.map((c: any) => ({
             id: c.id,
             name: c.name,
-            documentId: c.documentId
+            documentId: c.documentId,
+            walletBalance: c.walletBalance || 0
           })));
         });
       }

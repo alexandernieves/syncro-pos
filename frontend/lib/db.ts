@@ -14,6 +14,7 @@ export interface LocalClient {
   id: string;
   name: string;
   documentId?: string;
+  walletBalance?: number;
 }
 
 export interface PendingSale {

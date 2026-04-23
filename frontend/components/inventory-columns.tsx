@@ -301,7 +301,7 @@ function ActionsCell({ row }: { row: any }) {
         <DropdownMenuContent align="end" className="w-48 border-none shadow-2xl rounded-xl">
           <DropdownMenuItem 
             className="text-xs"
-            onClick={() => router.push(`/dashboard/productos/editar/${productId}`)}
+            onClick={() => router.push(`/dashboard/productos/editar?id=${productId}`)}
           >
             Editar Producto
           </DropdownMenuItem>
