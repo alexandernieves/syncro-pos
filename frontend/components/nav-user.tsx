@@ -100,14 +100,18 @@ export function NavUser({
                 <IconUserCircle />
                 Cuenta
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <IconCreditCard />
-                Facturación
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <IconNotification />
-                Notificaciones
-              </DropdownMenuItem>
+              {((user as any).role !== "syncropos") && (
+                <>
+                  <DropdownMenuItem onClick={() => router.push('/dashboard/facturacion')} className="cursor-pointer">
+                    <IconCreditCard />
+                    Facturación
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push('/dashboard/notificaciones')} className="cursor-pointer">
+                    <IconNotification />
+                    Notificaciones
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">

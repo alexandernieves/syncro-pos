@@ -50,7 +50,7 @@ export class SuppliersAlertsService {
       }
     });
 
-    return overdueInvoices.map(invoice => ({
+    return overdueInvoices.map((invoice: any) => ({
       id: `overdue-${invoice.id}`,
       type: 'overdue_invoice',
       priority: invoice.dueDate < new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) ? 'critical' : 'high',
@@ -87,7 +87,7 @@ export class SuppliersAlertsService {
       }
     });
 
-    return inactiveSuppliers.map(supplier => {
+    return inactiveSuppliers.map((supplier: any) => {
       const lastOrder = supplier.purchaseOrders[0];
       const daysSinceLastOrder = lastOrder 
         ? Math.floor((Date.now() - lastOrder.createdAt.getTime()) / (1000 * 60 * 60 * 24))
@@ -116,14 +116,14 @@ export class SuppliersAlertsService {
     });
 
     const priceChanges = supplierProducts
-      .filter(sp => {
+      .filter((sp: any) => {
         if (!sp.variant) return false;
         const currentCost = sp.variant.cost || 0;
         const supplierPrice = sp.purchasePrice;
         const variation = currentCost > 0 ? Math.abs(((currentCost - supplierPrice) / supplierPrice) * 100) : 0;
         return variation > 20; // Más del 20% de variación
       })
-      .map(sp => {
+      .map((sp: any) => {
         // We know sp.variant exists because of the filter
         const variant = sp.variant!;
         const currentCost = variant.cost || 0;
@@ -160,7 +160,7 @@ export class SuppliersAlertsService {
       }
     });
 
-    return delayedOrders.map(order => {
+    return delayedOrders.map((order: any) => {
       const daysDelayed = Math.floor((Date.now() - order.createdAt.getTime()) / (1000 * 60 * 60 * 24));
       
       return {
@@ -205,7 +205,7 @@ export class SuppliersAlertsService {
       }
     });
 
-    return lowStockItems.map(item => ({
+    return lowStockItems.map((item: any) => ({
       id: `low-stock-${item.id}`,
       type: 'low_stock',
       priority: item.quantity === 0 ? 'critical' : 'medium',
@@ -238,7 +238,7 @@ export class SuppliersAlertsService {
     });
 
     const highReturnSuppliers = suppliers
-      .filter(supplier => {
+      .filter((supplier: any) => {
         const totalOrders = supplier.purchaseOrders.length;
         const totalReturns = supplier.supplierReturns.length;
         
@@ -247,7 +247,7 @@ export class SuppliersAlertsService {
         const returnRate = (totalReturns / totalOrders) * 100;
         return returnRate > 10; // Más del 10% de tasa de devolución
       })
-      .map(supplier => {
+      .map((supplier: any) => {
         const totalOrders = supplier.purchaseOrders.length;
         const totalReturns = supplier.supplierReturns.length;
         const returnRate = (totalReturns / totalOrders) * 100;

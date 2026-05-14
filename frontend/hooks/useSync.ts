@@ -75,12 +75,16 @@ export function useSync() {
   }, [isOnline, syncPendingSales]);
 
   // Function to perform a "fresh" pull of products and clients
-  const pullRemoteData = useCallback(async () => {
+  const pullRemoteData = useCallback(async (forcedBranchId?: string | null) => {
     const token = localStorage.getItem("token");
     if (!token || !navigator.onLine) return;
 
     try {
-      const currentBranchId = localStorage.getItem("currentBranchId") || "";
+      let currentBranchId = localStorage.getItem("currentBranchId") || "";
+      if (forcedBranchId !== undefined) {
+        currentBranchId = forcedBranchId || "";
+      }
+      
       const pUrl = currentBranchId ? `${API}/products?branchId=${currentBranchId}` : `${API}/products`;
       
       const [pRes, cRes] = await Promise.all([

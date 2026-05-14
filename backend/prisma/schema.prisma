@@ -7,12 +7,63 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Business {
+  id            String    @id @default(uuid())
+  name          String
+  status        String    @default("ACTIVE") // ACTIVE, SUSPENDED, TRIAL
+  subscription  String    @default("BASIC")  // BASIC, PRO, ENTERPRISE
+  logo          String?
+  ruc           String?
+  email         String?
+  phone         String?
+  address       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  users         User[]
+  branches      Branch[]
+  products      Product[]
+  categories    Category[]
+  suppliers     Supplier[]
+  clients       Client[]
+  sales         Sale[]
+  settings      Setting[]
+  expenses      Expense[]
+  auditLogs     AuditLog[]
+  conversations Conversation[]
+}
+
+model Conversation {
+  id            String    @id @default(uuid())
+  businessId    String?
+  business      Business? @relation(fields: [businessId], references: [id])
+  lastMessage   String?
+  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime  @default(now())
+  messages      Message[]
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id])
+  text           String?
+  type           String       @default("TEXT") // TEXT, IMAGE, VIDEO, AUDIO
+  fileUrl        String?
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+}
+
 model Product {
   id          String           @id @default(uuid())
   name        String
   description String?
   categoryId  String?
   supplierId  String?
+  isWeighable Boolean          @default(false)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   image       String?
@@ -20,6 +71,9 @@ model Product {
   supplier    Supplier?        @relation(fields: [supplierId], references: [id])
   variants    ProductVariant[]
   supplierProducts SupplierProduct[]
+  
+  businessId  String?
+  business    Business?        @relation(fields: [businessId], references: [id])
 }
 
 model ProductVariant {
@@ -47,6 +101,7 @@ model ProductVariant {
   purchaseOrderItems PurchaseOrderItem[]
   supplierReturns SupplierReturn[]
   saleReturnItems SaleReturnItem[]
+  transferItems   InventoryTransferItem[]
 }
 
 model Inventory {
@@ -68,6 +123,9 @@ model Category {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   products  Product[]
+  
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id])
 }
 
 model Supplier {
@@ -92,6 +150,9 @@ model Supplier {
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
   
+  businessId String?
+  business   Business?        @relation(fields: [businessId], references: [id])
+  
   // Relations
   products          Product[]
   supplierProducts  SupplierProduct[]
@@ -115,6 +176,10 @@ model Branch {
   country          String?
   isMain           Boolean             @default(false)
   state            String?
+  
+  businessId       String?
+  business         Business?           @relation(fields: [businessId], references: [id])
+  
   inventory        Inventory[]
   sales            Sale[]
   inventoryMovements InventoryMovement[]
@@ -122,6 +187,10 @@ model Branch {
   purchaseOrders   PurchaseOrder[]
   accountingEntries AccountingEntry[]
   waitlistItems     ProductWaitlist[]
+  transfersSource   InventoryTransfer[] @relation("SourceBranch")
+  transfersDest     InventoryTransfer[] @relation("DestinationBranch")
+  expenses          Expense[]
+  notifications     Notification[] @relation("BranchNotifications")
 }
 
 model User {
@@ -141,6 +210,25 @@ model User {
   branchIds        String[]          @default([])
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+  
+  businessId       String?
+  business         Business?         @relation(fields: [businessId], references: [id])
+  auditLogs         AuditLog[]
+  messages          Message[]
+  transfers         InventoryTransfer[]
+  expenses          Expense[]
+  notifications     Notification[] @relation("UserNotifications")
+  pushSubscriptions PushSubscription[]
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
 }
 
 model Setting {
@@ -163,6 +251,11 @@ model Setting {
   exchangeRate     Float    @default(1)
   exchangeRateEur  Float    @default(1)
   bcvUpdateDate    String?
+  
+  // Dashboard Independent Rates
+  exchangeRateDashboard    Float    @default(1)
+  exchangeRateDashboardEur Float    @default(1)
+  bcvUpdateDateDashboard   String?
   taxRate          Float    @default(16)
   taxEnabled       Boolean  @default(true)
   igtfRate         Float    @default(3)
@@ -201,8 +294,19 @@ model Setting {
   // Generic payment methods list
   paymentMethods Json?
 
+  // Security PIN for POS discount authorization
+  discountPin    String?
+  pinPermissions Json?
+
+  // Dashboard Metrics
+  salesGoal      Float    @default(10000)
+  showSalesGoal  Boolean  @default(true)
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  
+  businessId      String?
+  business        Business?        @relation(fields: [businessId], references: [id])
 }
 
 model Sale {
@@ -214,6 +318,8 @@ model Sale {
   subtotal      Float          @default(0)
   taxAmount     Float          @default(0)
   igtfAmount    Float          @default(0)
+  discountAmt   Float          @default(0)
+  discountPct   Float          @default(0)
   total         Float
   status        String         @default("COMPLETED") // COMPLETED, CANCELLED
   shiftId       String?
@@ -227,6 +333,9 @@ model Sale {
   payments      SalePayment[]
   returns       SaleReturn[]
   accountingEntry AccountingEntry?
+  
+  businessId    String?
+  business      Business?      @relation(fields: [businessId], references: [id])
 }
 
 model SaleReturn {
@@ -292,6 +401,8 @@ model SaleItem {
   quantity   Int
   price      Float
   cost       Float?
+  discountAmt Float        @default(0)
+  discountPct Float        @default(0)
   subtotal   Float
   
   sale       Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
@@ -314,17 +425,51 @@ model InventoryMovement {
 }
 
 model Client {
-  id         String   @id @default(uuid())
-  name       String
-  documentId String?
-  email      String?
-  phone      String?
-  address    String?
-  isActive   Boolean  @default(true)
-  walletBalance Float @default(0)
-  sales      Sale[]
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id              String   @id @default(uuid())
+  name            String
+  documentId      String?
+  email           String?
+  phone           String?
+  address         String?
+  isActive        Boolean  @default(true)
+  walletBalance   Float    @default(0)
+  creditLimit     Float    @default(0)
+  currentDebt     Float    @default(0)
+  
+  // New Credit Tracking Fields
+  downPaymentPercentage Float   @default(50)
+  paymentCycleDays      Int     @default(15)
+  lastPaymentDate       DateTime?
+  nextPaymentDate       DateTime?
+  
+  // Credit Scoring & Behavior
+  creditScore           Float     @default(50) // 0 to 100
+  totalPaymentsCount    Int       @default(0)
+  latePaymentsCount     Int       @default(0)
+  
+  sales           Sale[]
+  creditTransactions CreditTransaction[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  businessId      String?
+  business        Business?      @relation(fields: [businessId], references: [id])
+}
+
+model CreditTransaction {
+  id          String   @id @default(uuid())
+  clientId    String
+  amount      Float    
+  type        CreditTxType
+  saleId      String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  client      Client   @relation(fields: [clientId], references: [id])
+}
+
+enum CreditTxType {
+  DEBT
+  PAYMENT
 }
 
 model Shift {
@@ -374,6 +519,12 @@ enum PaymentMethod {
   CASH
   CARD
   TRANSFER
+  WALLET
+  CREDIT
+  PAGO_MOVIL
+  BINANCE
+  ZINLI
+  PAYPAL
 }
 
 // Supplier Products - Products asociados a proveedores
@@ -518,3 +669,81 @@ enum MovementType {
   ADJUSTMENT
 }
 
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String   // e.g., "CREATE", "UPDATE", "DELETE", "LOGIN", "SALE"
+  entity    String   // e.g., "PRODUCT", "SALE", "INVENTORY"
+  entityId  String?
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id])
+}
+model InventoryTransfer {
+  id                    String                @id @default(uuid())
+  sourceBranchId        String
+  destinationBranchId   String
+  userId                String
+  status                TransferStatus        @default(PENDING)
+  notes                 String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  sourceBranch          Branch                @relation("SourceBranch", fields: [sourceBranchId], references: [id])
+  destinationBranch     Branch                @relation("DestinationBranch", fields: [destinationBranchId], references: [id])
+  user                  User                  @relation(fields: [userId], references: [id])
+  items                 InventoryTransferItem[]
+}
+
+model InventoryTransferItem {
+  id                    String                @id @default(uuid())
+  transferId            String
+  variantId             String
+  quantity              Int
+
+  transfer              InventoryTransfer     @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  variant               ProductVariant        @relation(fields: [variantId], references: [id])
+}
+
+enum TransferStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  branchId    String
+  userId      String
+  amount      Float
+  category    String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+  
+  businessId  String?
+  business    Business? @relation(fields: [businessId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  type      String   // SALE, EXPENSE, TRANSFER, ALERT
+  title     String
+  message   String
+  branchId  String?
+  userId    String?  // Target user (null means global/all admins)
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  branch    Branch?  @relation(fields: [branchId], references: [id], name: "BranchNotifications")
+  user      User?    @relation(fields: [userId], references: [id], name: "UserNotifications")
+}

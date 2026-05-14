@@ -45,7 +45,8 @@ export default function PurchaseOrdersPage() {
   const fetchOrders = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API}/purchase-orders`, {
+      const branchId = localStorage.getItem("currentBranchId") || "";
+      const res = await fetch(`${API}/purchase-orders${branchId ? `?branchId=${branchId}` : ""}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

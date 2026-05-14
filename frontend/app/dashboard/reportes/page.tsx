@@ -30,7 +30,8 @@ export default function ReportsPage() {
 
   const fetchSales = async () => {
     try {
-      const res = await fetch(`${API}/sales`);
+      const branchId = localStorage.getItem("currentBranchId") || "";
+      const res = await fetch(`${API}/sales${branchId ? `?branchId=${branchId}` : ""}`);
       if (res.ok) {
         setSales(await res.json());
       }

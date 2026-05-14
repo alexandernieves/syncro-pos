@@ -1,12 +1,19 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentMethod, MovementType } from '@prisma/client';
+import { HistoryService } from '../history/history.service';
+
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class SalesService {
   private readonly logger = new Logger(SalesService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private historyService: HistoryService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   async create(data: any, userId: string) {
     const { branchId, items, payments, clientId, saveChangeToWallet } = data;
@@ -21,6 +28,11 @@ export class SalesService {
       let netSubtotal = 0;
       const saleItemsData = [];
 
+      // Fetch active shift
+      const activeShift = await tx.shift.findFirst({
+        where: { userId, branchId, status: 'OPEN' as any }
+      });
+
       for (const item of items) {
         if (item.waitlistId) {
           // 1. Handle Waitlist Item (Ghost Sale)
@@ -30,7 +42,9 @@ export class SalesService {
           
           if (!waitlist) throw new BadRequestException(`Producto en espera ${item.waitlistId} no encontrado`);
 
-          const itemSubtotal = waitlist.price * item.quantity;
+          const discountAmt = item.discountAmt || 0;
+          const discountPct = item.discountPct || 0;
+          const itemSubtotal = (waitlist.price * item.quantity) - discountAmt;
           netSubtotal += itemSubtotal;
 
           saleItemsData.push({
@@ -39,6 +53,8 @@ export class SalesService {
             quantity: item.quantity,
             price: waitlist.price,
             cost: null,
+            discountAmt,
+            discountPct,
             subtotal: itemSubtotal
           });
 
@@ -61,7 +77,9 @@ export class SalesService {
             throw new BadRequestException(`Stock insuficiente para ${variant.name} (${currentStock} disponibles)`);
           }
 
-          const itemSubtotal = variant.price * item.quantity;
+          const discountAmt = item.discountAmt || 0;
+          const discountPct = item.discountPct || 0;
+          const itemSubtotal = (variant.price * item.quantity) - discountAmt;
           netSubtotal += itemSubtotal;
 
           saleItemsData.push({
@@ -70,6 +88,8 @@ export class SalesService {
             quantity: item.quantity,
             price: variant.price,
             cost: variant.cost,
+            discountAmt,
+            discountPct,
             subtotal: itemSubtotal
           });
 
@@ -98,6 +118,11 @@ export class SalesService {
         }
       }
 
+      // Apply global discount
+      const globalDiscountAmt = data.discountAmt || 0;
+      const globalDiscountPct = data.discountPct || 0;
+      netSubtotal = Math.max(0, netSubtotal - globalDiscountAmt);
+
       // 4. Calculate Taxes
       const taxAmount = netSubtotal * (taxRate / 100);
       
@@ -109,21 +134,79 @@ export class SalesService {
       const igtfAmount = cashAmount * (igtfRate / 100);
       const total = netSubtotal + taxAmount + igtfAmount;
 
-      // 5. Create Sale
-      // Find active shift for this user and branch
-      const activeShift = await tx.shift.findFirst({
-        where: { userId, branchId, status: 'OPEN' }
-      });
+      // 5. Handle Payments, Wallet and Credit
+      for (const p of payments) {
+        if (p.method === 'WALLET') {
+          if (!clientId) throw new BadRequestException('Se requiere un cliente para pagar con monedero');
+          
+          const client = await tx.client.findUnique({ where: { id: clientId } });
+          if (!client || (client.walletBalance || 0) < p.amount) {
+            throw new BadRequestException(`Saldo insuficiente en monedero (Disponible: $${client?.walletBalance || 0})`);
+          }
+
+          await tx.client.update({
+            where: { id: clientId },
+            data: { walletBalance: { decrement: p.amount } }
+          });
+          this.logger.log(`Debitado $${p.amount} del monedero del cliente ${clientId}`);
+        }
+
+        if (p.method === 'CREDIT') {
+          if (!clientId) throw new BadRequestException('Se requiere un cliente para pagar con crédito / fiado');
+          
+          const client = await tx.client.findUnique({ where: { id: clientId } });
+          if (!client) throw new BadRequestException('Cliente no encontrado');
+          
+          /* 
+          // 1. Validate Down Payment (Inicial) - DISABLED IN CONSTRUCTION MODE
+          const downPaymentRequired = total * (client.downPaymentPercentage / 100);
+          const otherPaymentsTotal = payments
+            .filter((px: any) => px.method !== 'CREDIT')
+            .reduce((acc: number, curr: any) => acc + curr.amount, 0);
+          
+          if (otherPaymentsTotal < downPaymentRequired - 0.01) { // 0.01 tolerance
+            throw new BadRequestException(`Se requiere un pago inicial del ${client.downPaymentPercentage}% ($${downPaymentRequired.toFixed(2)}). Solo ha pagado $${otherPaymentsTotal.toFixed(2)}.`);
+          }
+
+          // 2. Validate Credit Limit - DISABLED IN CONSTRUCTION MODE
+          const availableCredit = (client.creditLimit || 0) - (client.currentDebt || 0);
+          if (availableCredit < p.amount) {
+            throw new BadRequestException(`Límite de crédito insuficiente (Disponible: $${availableCredit.toFixed(2)})`);
+          }
+          */
+
+          // 3. Update Client Debt and Schedule
+          // If frontend provides promisedPaymentDate, use it. Otherwise calculate based on cycle.
+          let nextPayment = new Date();
+          if (data.promisedPaymentDate) {
+            nextPayment = new Date(data.promisedPaymentDate);
+          } else {
+            nextPayment.setDate(nextPayment.getDate() + client.paymentCycleDays);
+          }
+
+          await tx.client.update({
+            where: { id: clientId },
+            data: { 
+              currentDebt: { increment: p.amount },
+              nextPaymentDate: nextPayment
+            }
+          });
+
+          this.logger.log(`Registrado consumo de crédito de $${p.amount} para el cliente ${clientId}. Próximo pago: ${nextPayment.toDateString()}`);
+        }
+      }
 
       const sale = await tx.sale.create({
         data: {
           branchId,
           userId,
           clientId,
-          shiftId: activeShift?.id, // Link to active shift if exists
+          shiftId: activeShift?.id,
           subtotal: netSubtotal,
           taxAmount,
           igtfAmount,
+          discountAmt: globalDiscountAmt,
+          discountPct: globalDiscountPct,
           total,
           items: {
             create: saleItemsData
@@ -141,9 +224,24 @@ export class SalesService {
         include: { items: true, payments: true }
       });
 
-      this.logger.log(`Venta creada exitosamente: ${sale.id} por total $${total} (Sub: ${netSubtotal}, Tax: ${taxAmount}, IGTF: ${igtfAmount})`);
+      this.logger.log(`Venta creada exitosamente: ${sale.id} por total $${total}`);
 
-      // 5.5 Handle Virtual Wallet (Monedero)
+      // 6. Create Credit Transactions for record
+      for (const p of payments) {
+        if (p.method === 'CREDIT') {
+          await tx.creditTransaction.create({
+            data: {
+              clientId: clientId!,
+              amount: p.amount,
+              type: 'DEBT',
+              saleId: sale.id,
+              notes: `Compra a crédito - Ticket #${sale.id.slice(0, 8)}`
+            }
+          });
+        }
+      }
+
+      // 5.5 Handle Virtual Wallet (Monedero) - Incrementing balance from change
       if (saveChangeToWallet > 0 && clientId) {
         await tx.client.update({
           where: { id: clientId },
@@ -152,7 +250,7 @@ export class SalesService {
         this.logger.log(`Abonado $${saveChangeToWallet} al monedero del cliente ${clientId}`);
       }
 
-      // 6. Create Accounting Entry for Ledger
+      // 6. Create Accounting Entry
       await (tx.accountingEntry as any).create({
         data: {
           description: `Venta POS #${sale.id.slice(-4).toUpperCase()}`,
@@ -165,6 +263,26 @@ export class SalesService {
         }
       });
 
+      // 7. Log Action in History
+      await this.historyService.logAction({
+        userId,
+        action: 'PROCESS_SALE',
+        entity: 'SALE',
+        entityId: sale.id,
+        details: { total, itemsCount: items.length, clientId }
+      });
+
+      // 8. Trigger Real-time Notification for the Owner
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      const branch = await tx.branch.findUnique({ where: { id: branchId } });
+      
+      await this.notificationsService.create({
+        type: 'SALE',
+        title: 'Nueva Venta Procesada',
+        message: `El cajero ${user?.name} ha procesado una venta por $${total.toFixed(2)} en ${branch?.name}.`,
+        branchId,
+      });
+
       return sale;
       });
     } catch (error: any) {
@@ -173,8 +291,10 @@ export class SalesService {
     }
   }
 
-  async findAll() {
+  async findAll(branchId?: string) {
+    const where = branchId ? { branchId } : {};
     return this.prisma.sale.findMany({
+      where,
       include: { items: { include: { variant: true } }, user: true, branch: true },
       orderBy: { createdAt: 'desc' }
     });
@@ -300,6 +420,17 @@ export class SalesService {
             branchId: sale.branchId,
             userId
           }
+        });
+
+        this.logger.log(`Devolución procesada: ${saleReturn.id} para venta ${saleId}`);
+
+        // 7. Log Action in History
+        await this.historyService.logAction({
+          userId,
+          action: 'SALE_RETURN',
+          entity: 'SALE',
+          entityId: saleId,
+          details: { returnId: saleReturn.id, itemsCount: items.length, total }
         });
 
         return saleReturn;

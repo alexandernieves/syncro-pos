@@ -20,7 +20,7 @@ export class SettingsController {
   }
 
   @Post('sync-bcv')
-  async syncBcv() {
-    return this.bcvService.syncRate();
+  async syncBcv(@Body('target') target?: 'pos' | 'dashboard') {
+    return this.bcvService.syncRate(target || 'pos');
   }
 }

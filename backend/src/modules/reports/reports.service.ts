@@ -82,7 +82,19 @@ export class ReportsService {
         });
     }
 
-    // 7. Sales by Branch (if global)
+    // 7. Calculate Costs and Profit
+    const totalCosts = sales.flatMap(s => s.items).reduce((acc, item) => acc + (item.cost ? item.cost * item.quantity : 0), 0);
+    
+    // 8. Fetch Expenses for the period
+    const expenses = await this.prisma.expense.findMany({
+      where: queryWhere
+    });
+    const totalExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
+    
+    const grossProfit = totalRevenue - totalCosts;
+    const netProfit = grossProfit - totalExpenses;
+
+    // 9. Sales by Branch (if global)
     let branchStats: any[] = [];
     if (!branchId) {
         const branchMap: Record<string, number> = {};
@@ -99,7 +111,11 @@ export class ReportsService {
         totalRevenue,
         totalOrders,
         avgTicket,
-        newCustomers
+        newCustomers,
+        totalCosts,
+        totalExpenses,
+        grossProfit,
+        netProfit
       },
       topProducts,
       categories: categoriesCharts,

@@ -19,8 +19,17 @@ import {
   IconArrowLeft, IconLogout, IconDeviceDesktop, IconDevices, IconCalculator, IconRefresh, IconReceiptTax,
   IconEye, IconPencil, IconScan, IconCamera, IconBarcode, IconAlertCircle, IconCircleCheckFilled,
   IconHexagon, IconWorld, IconBuilding, IconHistory, IconReceipt, IconFilter, IconArrowBackUp,
-  IconPlayerPause, IconReceiptOff
+  IconPlayerPause, IconReceiptOff, IconList, IconFingerprint, IconCalendar as IconCalendarTabler, IconKeyboard,
+  IconPackage, IconScale, IconLock, IconDiscount
 } from "@tabler/icons-react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Html5Qrcode } from "html5-qrcode";
 import { toast } from "sonner";
 import {
@@ -34,6 +43,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
+import { useCurrency } from "@/context/CurrencyContext";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
 
@@ -51,6 +61,7 @@ type Product = {
   }>;
   image?: string;
   category?: { name: string };
+  isWeighable?: boolean;
 };
 
 type Client = {
@@ -59,6 +70,10 @@ type Client = {
   name: string;
   documentId?: string;
   walletBalance?: number;
+  creditLimit?: number;
+  currentDebt?: number;
+  creditScore?: number;
+  downPaymentPercentage?: number;
 };
 
 type CartProduct = {
@@ -87,6 +102,7 @@ type ProductWaitlist = {
 type CartItem = {
   product: CartProduct;
   quantity: number;
+  discount?: { type: 'pct' | 'amt', value: number };
 };
 
 type Shift = {
@@ -168,6 +184,283 @@ const ThermalTicket = ({ order, settings }: { order: any, settings: any }) => {
   );
 };
 
+function PosNumpad({ onClose, onEnter }: { onClose: () => void, onEnter: (val: string) => void }) {
+  const [display, setDisplay] = useState("");
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    setPosition({ x: window.innerWidth / 2 - 140, y: window.innerHeight / 2 - 200 });
+  }, []);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (isDragging) {
+      setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    setIsDragging(false);
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+
+  const handleNum = (num: string) => setDisplay(prev => prev + num);
+  const handleClear = () => setDisplay("");
+  const handleBackspace = () => setDisplay(prev => prev.slice(0, -1));
+  const handleSubmit = () => {
+    if (display) {
+      onEnter(display);
+      setDisplay("");
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement instanceof HTMLInputElement || 
+        document.activeElement instanceof HTMLTextAreaElement
+      ) {
+        if (e.key === "Escape") onClose();
+        return;
+      }
+
+      const key = e.key;
+      if (/[0-9]/.test(key)) handleNum(key);
+      else if (key === "Enter") {
+        e.preventDefault();
+        handleSubmit();
+      }
+      else if (key === "Escape") onClose();
+      else if (key === "Backspace") handleBackspace();
+      else if (key === "Delete" || key.toLowerCase() === "c") handleClear();
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [display, onClose]);
+
+  return (
+    <div 
+      className="fixed z-[100] w-[280px] bg-background/95 backdrop-blur-md border border-border/50 rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden transition-shadow"
+      style={{ left: position.x, top: position.y, touchAction: 'none' }}
+    >
+      <div 
+        className="h-10 bg-muted/40 w-full cursor-grab active:cursor-grabbing flex items-center justify-between px-4 border-b border-border/30"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
+        <span className="text-xs font-bold text-muted-foreground flex items-center gap-2"><IconKeyboard size={14}/> Teclado Numérico</span>
+        <button 
+          onPointerDown={(e) => e.stopPropagation()} 
+          onClick={onClose} 
+          className="p-1 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors" 
+          title="Cerrar (Esc)"
+        >
+          <IconX size={14} />
+        </button>
+      </div>
+
+      <div className="p-4 flex flex-col gap-3">
+        <div className="bg-muted/30 p-3 rounded-xl text-right overflow-hidden shadow-inner border border-muted/50 flex items-center min-h-[60px]">
+          <span className="text-2xl font-mono font-bold tracking-tighter truncate block w-full">{display || "0"}</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <Button variant="outline" className="h-14 font-bold text-rose-500 bg-rose-500/10 border-none hover:bg-rose-500/20 text-sm shadow-sm" onClick={handleClear}>CLS</Button>
+          <Button variant="outline" className="h-14 font-bold bg-muted/50 border-none hover:bg-muted text-lg shadow-sm" onClick={handleBackspace}>←</Button>
+          <Button variant="default" className="h-14 font-bold bg-primary text-primary-foreground text-sm shadow-sm" onClick={handleSubmit}>Enter</Button>
+
+          {[7, 8, 9, 4, 5, 6, 1, 2, 3].map(num => (
+            <Button key={num} variant="outline" className="h-14 font-bold text-2xl border-none bg-muted/20 hover:bg-muted/50 shadow-sm" onClick={() => handleNum(String(num))}>{num}</Button>
+          ))}
+          
+          <Button variant="outline" className="h-14 font-bold text-2xl border-none bg-muted/20 hover:bg-muted/50 col-span-2 shadow-sm" onClick={() => handleNum("0")}>0</Button>
+          <Button variant="outline" className="h-14 font-bold text-2xl border-none bg-muted/20 hover:bg-muted/50 shadow-sm" onClick={() => handleNum("00")}>00</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PosCalculator({ onClose }: { onClose: () => void }) {
+  const [display, setDisplay] = useState("0");
+  const [prev, setPrev] = useState<number | null>(null);
+  const [op, setOp] = useState<string | null>(null);
+  const [waitingForNewValue, setWaitingForNewValue] = useState(false);
+
+  // Drag state
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    setPosition({ x: window.innerWidth / 2 - 192, y: window.innerHeight / 2 - 250 });
+  }, []);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (isDragging) {
+      setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    setIsDragging(false);
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+
+  const handleNum = (num: string) => {
+    if (waitingForNewValue) {
+      setDisplay(num);
+      setWaitingForNewValue(false);
+    } else {
+      setDisplay(display === "0" ? num : display + num);
+    }
+  };
+
+  const handleOp = (operator: string) => {
+    if (op && !waitingForNewValue) {
+      calculate();
+    } else {
+      setPrev(parseFloat(display));
+    }
+    setOp(operator);
+    setWaitingForNewValue(true);
+  };
+
+  const calculate = () => {
+    if (prev === null || op === null) return;
+    const current = parseFloat(display);
+    let result = 0;
+    switch (op) {
+      case "+": result = prev + current; break;
+      case "-": result = prev - current; break;
+      case "*": result = prev * current; break;
+      case "/": result = prev / current; break;
+    }
+    // Round to 4 decimal places to avoid JS floating point issues
+    result = Math.round(result * 10000) / 10000;
+    setDisplay(String(result));
+    setPrev(result);
+    setOp(null);
+    setWaitingForNewValue(true);
+  };
+
+  const handleClear = () => {
+    setDisplay("0");
+    setPrev(null);
+    setOp(null);
+    setWaitingForNewValue(false);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignorar si el usuario está escribiendo en algún input (ej. barra de búsqueda)
+      if (
+        document.activeElement instanceof HTMLInputElement || 
+        document.activeElement instanceof HTMLTextAreaElement
+      ) {
+        if (e.key === "Escape") onClose();
+        return;
+      }
+
+      const key = e.key;
+      if (/[0-9]/.test(key)) {
+        handleNum(key);
+      } else if (key === "+" || key === "-") {
+        handleOp(key);
+      } else if (key === "*" || key.toLowerCase() === "x") {
+        handleOp("*");
+      } else if (key === "/") {
+        e.preventDefault();
+        handleOp("/");
+      } else if (key === "Enter" || key === "=") {
+        e.preventDefault();
+        calculate();
+      } else if (key === "Escape") {
+        onClose();
+      } else if (key === "Backspace" || key === "Delete" || key.toLowerCase() === "c") {
+        handleClear();
+      } else if (key === "." || key === ",") {
+        if (!display.includes(".")) handleNum(".");
+      }
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [display, prev, op, waitingForNewValue, onClose]);
+
+
+  return (
+    <div 
+      className="fixed z-[100] w-[384px] bg-background/95 backdrop-blur-md border border-border/50 rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden transition-shadow"
+      style={{ left: position.x, top: position.y, touchAction: 'none' }}
+    >
+      <div 
+        className="h-10 bg-muted/40 w-full cursor-grab active:cursor-grabbing flex items-center justify-between px-4 border-b border-border/30"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
+        <span className="text-xs font-bold text-muted-foreground flex items-center gap-2"><IconCalculator size={14}/> Calculadora</span>
+        <button 
+          onPointerDown={(e) => e.stopPropagation()} 
+          onClick={onClose} 
+          className="p-1 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors" 
+          title="Cerrar (Esc)"
+        >
+          <IconX size={14} />
+        </button>
+      </div>
+
+      <div className="p-5 flex flex-col gap-4">
+      <div className="bg-muted/30 p-4 rounded-xl text-right overflow-hidden shadow-inner border border-muted/50 flex flex-col justify-end min-h-[80px]">
+        <div className="h-4 mb-1 text-xs text-muted-foreground font-semibold">
+           {prev !== null && op && `${prev} ${op} ${waitingForNewValue ? '' : display}`}
+        </div>
+        <span className="text-4xl font-mono font-bold tracking-tighter truncate block">{display}</span>
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        <Button variant="outline" className="h-14 font-bold text-rose-500 bg-rose-500/10 border-none hover:bg-rose-500/20 text-lg shadow-sm" onClick={handleClear}>C</Button>
+        <Button variant="outline" className="h-14 font-bold bg-muted/50 border-none hover:bg-muted text-lg shadow-sm" onClick={() => handleOp("/")}>/</Button>
+        <Button variant="outline" className="h-14 font-bold bg-muted/50 border-none hover:bg-muted text-lg shadow-sm" onClick={() => handleOp("*")}>x</Button>
+        <Button variant="outline" className="h-14 font-bold bg-muted/50 border-none hover:bg-muted text-xl shadow-sm" onClick={() => { setDisplay(display.includes("-") ? display.replace("-", "") : "-" + display) }}>±</Button>
+        
+        {[7, 8, 9].map(num => (
+          <Button key={num} variant="outline" className="h-14 font-bold text-xl border-none bg-muted/20 hover:bg-muted/50 shadow-sm" onClick={() => handleNum(String(num))}>{num}</Button>
+        ))}
+        <Button variant="outline" className="h-14 font-bold bg-muted/50 border-none hover:bg-muted text-2xl shadow-sm" onClick={() => handleOp("-")}>-</Button>
+
+        {[4, 5, 6].map(num => (
+          <Button key={num} variant="outline" className="h-14 font-bold text-xl border-none bg-muted/20 hover:bg-muted/50 shadow-sm" onClick={() => handleNum(String(num))}>{num}</Button>
+        ))}
+        <Button variant="outline" className="h-14 font-bold bg-muted/50 border-none hover:bg-muted text-2xl shadow-sm" onClick={() => handleOp("+")}>+</Button>
+
+        {[1, 2, 3].map(num => (
+          <Button key={num} variant="outline" className="h-14 font-bold text-xl border-none bg-muted/20 hover:bg-muted/50 shadow-sm" onClick={() => handleNum(String(num))}>{num}</Button>
+        ))}
+        <Button variant="default" className="h-full row-span-2 font-black text-2xl rounded-xl shadow-md bg-primary hover:bg-primary/90 text-primary-foreground" onClick={calculate}>=</Button>
+
+        <Button variant="outline" className="h-14 font-bold text-xl border-none bg-muted/20 hover:bg-muted/50 col-span-2 shadow-sm" onClick={() => handleNum("0")}>0</Button>
+        <Button variant="outline" className="h-14 font-bold text-xl border-none bg-muted/20 hover:bg-muted/50 shadow-sm" onClick={() => { if (!display.includes(".")) handleNum(".") }}>.</Button>
+      </div>
+      </div>
+    </div>
+  );
+}
+
 export default function POSPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
@@ -206,14 +499,23 @@ export default function POSPage() {
 
   // Advanced Payment State
   const [addedPayments, setAddedPayments] = useState<any[]>([]);
-  const [tempPaymentMethod, setTempPaymentMethod] = useState<"CASH" | "CARD" | "TRANSFER" | "PAGO_MOVIL" | "BINANCE" | "ZINLI" | "PAYPAL">("CASH");
+  const [tempPaymentMethod, setTempPaymentMethod] = useState<"CASH" | "CARD" | "TRANSFER" | "PAGO_MOVIL" | "BINANCE" | "ZINLI" | "PAYPAL" | "WALLET" | "CREDIT">("CASH");
   const [saveChangeToWallet, setSaveChangeToWallet] = useState(false);
   const [printReceipt, setPrintReceipt] = useState(true);
   const [tempAmount, setTempAmount] = useState<string>("0");
   const [tempReference, setTempReference] = useState<string>("");
   const [syncingBcv, setSyncingBcv] = useState(false);
   const [settings, setSettings] = useState<any>(null);
+  const { currency, exchangeRate: bcvRate, eurExchangeRate: bcvEurRate, refreshRates } = useCurrency();
   const [baseCurrency, setBaseCurrency] = useState<"USD" | "EUR">("USD");
+  const [useWalletBalance, setUseWalletBalance] = useState(false);
+  const [tempCurrency, setTempCurrency] = useState<"USD" | "VES">("USD");
+
+  // Sync global currency with POS base currency
+  useEffect(() => {
+    if (currency === "EUR") setBaseCurrency("EUR");
+    else setBaseCurrency("USD");
+  }, [currency]);
 
   // Scanner & Waitlist State
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -227,6 +529,140 @@ export default function POSPage() {
   const [view, setView] = useState<'pos' | 'history'>('pos');
   const [salesHistory, setSalesHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Calculator State
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
+
+  // Numpad State
+  const [isNumpadOpen, setIsNumpadOpen] = useState(false);
+
+  // Weighable Product State
+  const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
+
+  // Discount State
+  const [globalDiscount, setGlobalDiscount] = useState<{ type: 'pct' | 'amt', value: number } | null>(null);
+  const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
+  // targetDiscountId === 'GLOBAL' (discount ticket) o targetDiscountId === 'product_id' (discount item)
+  const [targetDiscountId, setTargetDiscountId] = useState<string | null>(null);
+  const [discountType, setDiscountType] = useState<'pct' | 'amt'>('pct');
+  const [discountValueInput, setDiscountValueInput] = useState('');
+
+  // PIN Verification State
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [pinCallback, setPinCallback] = useState<(() => void) | null>(null);
+  const pinInputRef = React.useRef<HTMLInputElement>(null);
+
+  const openPinVerification = (onSuccess: () => void) => {
+    if (!settings?.discountPin) {
+      // No PIN configured, allow directly
+      onSuccess();
+      return;
+    }
+    setPinInput("");
+    setPinError("");
+    setPinCallback(() => onSuccess);
+    setIsPinModalOpen(true);
+    setTimeout(() => pinInputRef.current?.focus(), 100);
+  };
+
+  const handlePinConfirm = () => {
+    if (pinInput === settings?.discountPin) {
+      setIsPinModalOpen(false);
+      setPinInput("");
+      setPinError("");
+      pinCallback?.();
+      setPinCallback(null);
+    } else {
+      setPinError("PIN incorrecto. Inténtelo de nuevo.");
+      setPinInput("");
+    }
+  };
+
+  const handleApplyDiscount = () => {
+    const val = parseFloat(discountValueInput);
+    if (isNaN(val) || val < 0) {
+      toast.error('Ingrese un valor válido');
+      return;
+    }
+    if (discountType === 'pct' && val > 100) {
+      toast.error('El porcentaje no puede ser mayor a 100');
+      return;
+    }
+
+    if (targetDiscountId === 'GLOBAL') {
+      if (val === 0) {
+        setGlobalDiscount(null);
+      } else {
+        setGlobalDiscount({ type: discountType, value: val });
+      }
+    } else if (targetDiscountId) {
+      setCart(prev => prev.map(item => {
+        if (item.product.id === targetDiscountId) {
+          if (val === 0) {
+             const { discount, ...rest } = item;
+             return rest;
+          }
+          return { ...item, discount: { type: discountType, value: val } };
+        }
+        return item;
+      }));
+    }
+    setIsDiscountModalOpen(false);
+    setDiscountValueInput('');
+  };
+  const [weighableProduct, setWeighableProduct] = useState<Product | null>(null);
+  const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
+  const [editingCartItemPrice, setEditingCartItemPrice] = useState<number>(0);
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'ud'>('ud');
+  const [editingCartItemName, setEditingCartItemName] = useState<string>("");
+  const [weightValue, setWeightValue] = useState("");
+  const weightInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isWeightModalOpen) {
+      setTimeout(() => weightInputRef.current?.focus(), 100);
+    }
+  }, [isWeightModalOpen]);
+
+  const handleConfirmWeight = () => {
+    const weight = parseFloat(weightValue);
+    if (isNaN(weight) || weight <= 0) {
+      toast.error("Ingrese un peso o cantidad válida");
+      return;
+    }
+    
+    if (editingCartItemId) {
+      setCart(prev => prev.map(item => {
+        if (item.product.id === editingCartItemId) {
+          return { ...item, quantity: weight };
+        }
+        return item;
+      }));
+      setIsWeightModalOpen(false);
+      setWeightValue("");
+      setEditingCartItemId(null);
+      setEditingCartItemName("");
+    } else if (weighableProduct) {
+      addToCart(weighableProduct, weight);
+      setIsWeightModalOpen(false);
+      setWeightValue("");
+      setWeighableProduct(null);
+    }
+  };
+
+  const handleNumpadEnter = (code: string) => {
+    const product = products.find(p => p.variants?.[0]?.barcode === code || p.variants?.[0]?.sku === code || p.variants?.some(v => v.barcode === code || v.sku === code));
+    if (product) {
+      // addToCart is declared later, we will handle it in a useEffect or ensure it's available. 
+      // Actually addToCart is defined below in the file, we can call it here because of hoisting or closure behavior in React components.
+      addToCart(product);
+      toast.success(`Agregado al carrito: ${product.name}`);
+    } else {
+      toast.error(`Producto no encontrado con el código: ${code}`);
+    }
+  };
 
   const [mounted, setMounted] = useState(false);
   const [token, setToken] = useState<string>("");
@@ -248,6 +684,8 @@ export default function POSPage() {
   // Parked Tickets State
   const [parkedTickets, setParkedTickets] = useState<any[]>([]);
   const [isParkedModalOpen, setIsParkedModalOpen] = useState(false);
+  const [promisedPaymentDate, setPromisedPaymentDate] = useState<Date | undefined>(new Date());
+  const [showOnlyInStock, setShowOnlyInStock] = useState(false);
 
   const scannerInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -265,7 +703,7 @@ export default function POSPage() {
 
   const canAccessDashboard = user?.permissions?.includes("dashboard") || user?.role === "ownerpos" || user?.role === "admin";
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-  const currentExchangeRate = baseCurrency === "USD" ? (settings?.exchangeRate || 1) : (settings?.exchangeRateEur || 1);
+  const currentExchangeRate = baseCurrency === "USD" ? bcvRate : bcvEurRate;
 
   const checkShift = useCallback(async () => {
     try {
@@ -284,6 +722,26 @@ export default function POSPage() {
       setInitialLoading(false);
     }
   }, []);
+
+  // Notification for due payments
+  useEffect(() => {
+    if (clients.length > 0 && activeShift) {
+      const today = new Date().toISOString().split('T')[0];
+      const dueClients = clients.filter((c: any) => {
+        if (!c.nextPaymentDate || (c.currentDebt || 0) <= 0) return false;
+        const dueDate = new Date(c.nextPaymentDate).toISOString().split('T')[0];
+        return dueDate <= today;
+      });
+
+      if (dueClients.length > 0) {
+        toast.info(`Cobranza Pendiente: ${dueClients.length} clientes deben pagar hoy.`, {
+          description: "Revise el módulo de clientes para más detalles.",
+          duration: 10000,
+          icon: <IconAlertCircle className="text-amber-500" />
+        });
+      }
+    }
+  }, [clients, activeShift]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -322,7 +780,7 @@ export default function POSPage() {
         const sRes = await fetch(`${API}/settings`, { headers: h });
         const sData = await sRes.json();
         setSettings(sData);
-        if (sData && sData.taxRate) {
+        if (sData && sData.taxRate !== undefined && sData.taxRate !== null) {
           setTaxRate(Number(sData.taxRate));
         }
       } catch (e) {}
@@ -603,21 +1061,30 @@ export default function POSPage() {
     }
   };
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, customQuantity?: number) => {
+    if (product.isWeighable && customQuantity === undefined) {
+      setWeighableProduct(product);
+      setWeightValue("");
+      setIsWeightModalOpen(true);
+      return;
+    }
+
     const variant = product.variants?.[0]; // Default to first variant for now
-    if (!variant || variant.stock <= 0) {
-      toast.error("Producto sin stock");
+    const qtyToAdd = customQuantity || 1;
+
+    if (!variant || variant.stock < qtyToAdd) {
+      toast.error("Producto sin stock suficiente");
       return;
     }
     setCart(prev => {
       const existing = prev.find(item => item.product.variantId === variant.id);
       if (existing) {
-        if (existing.quantity >= variant.stock) {
+        if (existing.quantity + qtyToAdd > variant.stock) {
           toast.error("No hay más stock disponible");
           return prev;
         }
         return prev.map(item => 
-          item.product.variantId === variant.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.product.variantId === variant.id ? { ...item, quantity: item.quantity + qtyToAdd } : item
         );
       }
       // Store dummy product with variant details for UI
@@ -630,9 +1097,8 @@ export default function POSPage() {
         sku: variant.sku,
         barcode: variant.barcode,
       };
-      return [...prev, { product: uiProduct, quantity: 1 }];
+      return [...prev, { product: uiProduct, quantity: qtyToAdd }];
     });
-
   };
 
   const updateQuantity = (id: string, delta: number) => {
@@ -654,8 +1120,37 @@ export default function POSPage() {
     setCart(prev => prev.filter(item => item.product.id !== id));
   };
 
-  const subtotal = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
-  const updatedTotal = subtotal + (subtotal * (taxRate / 100));
+  const originalSubtotal = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+  const subtotalWithItemDiscounts = cart.reduce((acc, item) => {
+    let itemTotal = item.product.price * item.quantity;
+    if (item.discount) {
+      if (item.discount.type === 'pct') {
+        itemTotal -= itemTotal * (item.discount.value / 100);
+      } else {
+        itemTotal -= item.discount.value;
+      }
+    }
+    return acc + Math.max(0, itemTotal);
+  }, 0);
+
+  let globalDiscountAmt = 0;
+  if (globalDiscount) {
+    if (globalDiscount.type === 'pct') {
+      globalDiscountAmt = subtotalWithItemDiscounts * (globalDiscount.value / 100);
+    } else {
+      globalDiscountAmt = globalDiscount.value;
+    }
+  }
+
+  const subtotalAfterGlobalDiscount = Math.max(0, subtotalWithItemDiscounts - globalDiscountAmt);
+  const totalItemDiscounts = originalSubtotal - subtotalWithItemDiscounts;
+  const totalDiscountAmt = totalItemDiscounts + globalDiscountAmt;
+  
+  // Para propósitos de retrocompatibilidad con referencias a `subtotal`
+  const subtotal = originalSubtotal;
+
+  const updatedTotal = subtotalAfterGlobalDiscount + (subtotalAfterGlobalDiscount * (taxRate / 100));
+  const taxAmount = subtotalAfterGlobalDiscount * (taxRate / 100);
   
   // Calculate IGTF based on CASH payments added
   const cashPaymentsTotal = addedPayments
@@ -664,7 +1159,15 @@ export default function POSPage() {
   
   const igtfRateVal = settings?.igtfRate !== undefined && settings?.igtfRate !== null ? Number(settings.igtfRate) : 3;
   const igtfAmount = cashPaymentsTotal * (igtfRateVal / 100);
-  const finalTotalWithIgtf = updatedTotal + igtfAmount;
+  const totalBeforeWallet = updatedTotal + igtfAmount;
+  
+  // Calculate Wallet Deduction
+  const selectedClient = clients.find(c => (c.id || (c as any)._id) === selectedClientId);
+  const availableWallet = selectedClient?.walletBalance || 0;
+  const availableCredit = (selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0);
+  const walletDeduction = useWalletBalance ? Math.min(availableWallet, totalBeforeWallet) : 0;
+  
+  const finalTotalWithIgtf = totalBeforeWallet - walletDeduction;
   const totalPaid = addedPayments.reduce((acc, p) => acc + p.amount, 0);
   const remainingToPay = Math.max(0, finalTotalWithIgtf - totalPaid);
   const changeDue = Math.max(0, totalPaid - finalTotalWithIgtf);
@@ -681,12 +1184,14 @@ export default function POSPage() {
   const handleSyncBcv = async () => {
     setSyncingBcv(true);
     try {
-      const res = await fetch(`${API}/settings/sync-bcv`, { method: "POST", headers });
+      const res = await fetch(`${API}/settings/sync-bcv`, { 
+          method: "POST", 
+          headers,
+          body: JSON.stringify({ target: "pos" })
+      });
       if (res.ok) {
-        const updated = await res.json();
-        setSettings(updated);
-        toast.success(`Tasas BCV actualizadas exitosamente`);
-        loadData();
+        await refreshRates();
+        toast.success(`Tasas BCV (Punto de Venta) actualizadas`);
       } else {
         toast.error("No se pudo sincronizar la tasa");
       }
@@ -712,9 +1217,14 @@ export default function POSPage() {
     setTempReference("");
   };
 
-  const processSale = async () => {
+  const processSale = async (overriddenPayments?: any[]) => {
     if (cart.length === 0) return toast.error("El carrito está vacío");
-    if (remainingToPay > 0.01) return toast.error("Aún falta saldo por cubrir");
+    
+    const paymentsToEvaluate = overriddenPayments || addedPayments;
+    const totalPaidEval = paymentsToEvaluate.reduce((acc: number, p: any) => acc + p.amount, 0) + (useWalletBalance ? walletDeduction : 0);
+    const remainingToPayEval = Math.max(0, finalTotalWithIgtf - totalPaidEval);
+
+    if (remainingToPayEval > 0.01) return toast.error("Aún falta saldo por cubrir");
     
     setProcessing(true);
     
@@ -728,16 +1238,37 @@ export default function POSPage() {
 
       const saleData = {
         branchId: currentBranchId,
-        items: cart.map(item => ({
-          variantId: (item as any).waitlistId ? null : item.product.variantId,
-          waitlistId: (item as any).waitlistId || null,
-          quantity: item.quantity,
-          price: item.product.price, // Ensure price is sent
-          subtotal: item.product.price * item.quantity
-        })),
-        payments: addedPayments,
+        promisedPaymentDate: promisedPaymentDate ? promisedPaymentDate.toISOString() : null,
+        items: cart.map(item => {
+          let itemTotal = item.product.price * item.quantity;
+          let discountAmt = 0;
+          let discountPct = 0;
+          if (item.discount) {
+            if (item.discount.type === 'pct') {
+              discountPct = item.discount.value;
+              discountAmt = itemTotal * (discountPct / 100);
+            } else {
+              discountAmt = item.discount.value;
+            }
+            itemTotal = Math.max(0, itemTotal - discountAmt);
+          }
+          return {
+            variantId: (item as any).waitlistId ? null : item.product.variantId,
+            waitlistId: (item as any).waitlistId || null,
+            quantity: item.quantity,
+            price: item.product.price, // Ensure price is sent
+            subtotal: itemTotal,
+            discountAmt: discountAmt,
+            discountPct: discountPct
+          };
+        }),
+        discountAmt: globalDiscountAmt,
+        discountPct: globalDiscount?.type === 'pct' ? globalDiscount.value : 0,
+        payments: useWalletBalance && walletDeduction > 0 
+          ? [...paymentsToEvaluate, { method: "WALLET", amount: walletDeduction, amountLocal: 0, exchangeRate: 1 }]
+          : paymentsToEvaluate,
         clientId: selectedClientId === "consumidor-final" ? null : selectedClientId,
-        saveChangeToWallet: saveChangeToWallet ? Math.abs(remainingToPay) : 0,
+        saveChangeToWallet: saveChangeToWallet ? changeDue : 0,
       };
 
       // OFFLINE MODE: If offline, queue the sale
@@ -782,6 +1313,7 @@ export default function POSPage() {
         }
 
         setCart([]);
+        setPromisedPaymentDate(new Date());
         setIsPaymentModalOpen(false);
         loadData(); // Refresh stock
       } else {
@@ -1016,13 +1548,18 @@ export default function POSPage() {
     toast.success("Ticket recuperado");
   };
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.variants?.some(v => 
-      v.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.barcode?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  );
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      p.variants?.some(v => 
+        v.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        v.barcode?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    
+    if (showOnlyInStock) {
+      return matchesSearch && p.totalStock > 0;
+    }
+    return matchesSearch;
+  });
 
   if (!mounted || initialLoading) {
     return (
@@ -1291,7 +1828,27 @@ export default function POSPage() {
                   <IconX size={14} />
                 </Button>
               )}
+              <div className="flex items-center gap-2 mr-2 ml-1">
+                <Switch 
+                  id="stock-filter" 
+                  checked={showOnlyInStock} 
+                  onCheckedChange={setShowOnlyInStock} 
+                  className="scale-75 data-[state=checked]:bg-primary"
+                />
+                <Label htmlFor="stock-filter" className="text-[10px] font-bold text-muted-foreground whitespace-nowrap cursor-pointer uppercase select-none">
+                  Stock
+                </Label>
+              </div>
               <Separator orientation="vertical" className="h-4 mx-1" />
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 text-primary hover:bg-primary/5" 
+                onClick={() => setIsNumpadOpen(true)}
+                title="Teclado numérico"
+              >
+                <IconKeyboard size={18} />
+              </Button>
               <Button 
                 variant="ghost" 
                 size="icon" 
@@ -1329,6 +1886,15 @@ export default function POSPage() {
             >
               <IconHistory size={18} className={view === "history" ? "text-primary" : ""} />
               <span className="font-bold text-xs">Historial</span>
+            </Button>
+
+            <Button 
+              variant="outline"
+              className="h-10 px-4 gap-2 border shadow-sm shrink-0 border-blue-500/30 hover:bg-blue-500/5 text-blue-600"
+              onClick={() => setIsCalculatorOpen(true)}
+            >
+              <IconCalculator size={18} />
+              <span className="text-sm font-medium hidden md:inline">Calculadora</span>
             </Button>
 
             <Button 
@@ -1385,25 +1951,26 @@ export default function POSPage() {
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-8">
                   {filteredProducts.map(p => (
-                    <div 
+                    <Card 
                       key={p.id} 
                       className={cn(
-                        "cursor-pointer border rounded-md hover:border-primary bg-background overflow-hidden flex flex-col group transition-all h-full",
-                        p.totalStock <= 0 && "opacity-50 pointer-events-none"
+                        "group overflow-hidden rounded-xl border-none bg-card hover:ring-2 hover:ring-primary/40 transition-all cursor-pointer shadow-sm relative",
+                        p.totalStock <= 0 && "opacity-60 grayscale-[0.5]"
                       )}
                       onClick={() => addToCart(p)}
                     >
-                      <div className="aspect-square bg-muted/50 overflow-hidden border-b relative">
+                      {/* Badge de Agotado superpuesto */}
+                      {p.totalStock <= 0 && (
+                        <div className="absolute top-2 right-2 z-10">
+                          <Badge variant="destructive" className="text-[8px] font-bold px-1.5 h-4 uppercase">Agotado</Badge>
+                        </div>
+                      )}
+                      <div className="aspect-square relative overflow-hidden bg-muted/30">
                         {p.image ? (
-                          <img src={p.image} alt={p.name} className="size-full object-cover group-hover:scale-105 transition-transform" />
+                          <img src={p.image} alt={p.name} className="object-cover w-full h-full transition-transform group-hover:scale-105" />
                         ) : (
-                          <div className="size-full flex items-center justify-center opacity-20">
-                            <IconBox size={24} />
-                          </div>
-                        )}
-                        {p.totalStock <= 5 && (
-                          <div className="absolute bottom-0 left-0 right-0 bg-red-600/10 text-red-600 text-[8px] font-bold py-0.5 text-center px-1">
-                            STOCK BAJO: {p.totalStock}
+                          <div className="w-full h-full flex items-center justify-center text-muted-foreground/20">
+                            <IconBox size={40} stroke={1} />
                           </div>
                         )}
                       </div>
@@ -1426,7 +1993,7 @@ export default function POSPage() {
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </Card>
                   ))}
                 </div>
               )}
@@ -1600,16 +2167,56 @@ export default function POSPage() {
                 </SelectContent>
               </Select>
               {selectedClientId !== "consumidor-final" && (() => {
-                const client = clients.find(c => (c.id || (c as any)._id) === selectedClientId);
-                if (client && client.walletBalance && client.walletBalance > 0) {
+                const c = clients.find(cl => (cl.id || (cl as any)._id) === selectedClientId) as any;
+                if (c) {
                   return (
-                    <div className="flex items-center justify-between mt-2 px-3 py-2 rounded-md bg-emerald-500/10 border border-emerald-500/20">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 flex items-center gap-1.5">
-                        <IconWallet size={14} /> Saldo a Favor
-                      </span>
-                      <span className="text-sm font-black text-emerald-600 tabular-nums">
-                        ${client.walletBalance.toFixed(2)}
-                      </span>
+                    <div className="space-y-2 mt-2">
+                      {/* Wallet Balance */}
+                      {(c.walletBalance || 0) > 0 && (
+                        <div className="flex items-center justify-between px-3 py-2 rounded-md bg-emerald-500/10 border border-emerald-500/20">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 flex items-center gap-1.5">
+                            <IconWallet size={14} /> Saldo a Favor
+                          </span>
+                          <span className="text-sm font-black text-emerald-600 tabular-nums">
+                            ${(c.walletBalance || 0).toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Credit Status - HIDDEN DURING CONSTRUCTION MODE */}
+                      {/* 
+                      <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-blue-500/5 border border-blue-500/10 font-sans">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-medium uppercase tracking-tight text-blue-400/80 flex items-center gap-1.5">
+                                <IconCreditCard size={14} stroke={1.5} /> Cupo Disponible
+                            </span>
+                            <span className="text-sm font-semibold text-blue-400 tabular-nums">
+                                ${((c.creditLimit || 0) - (c.currentDebt || 0)).toFixed(2)}
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-medium uppercase tracking-tight text-zinc-500 flex items-center gap-1.5">
+                                <IconFingerprint size={14} stroke={1.5} /> Syncro Score
+                            </span>
+                            <Badge className={cn(
+                                "rounded-sm px-1.5 py-0.5 text-[9px] font-bold border-none",
+                                (c.creditScore || 0) >= 85 ? "bg-emerald-500/20 text-emerald-400" :
+                                (c.creditScore || 0) >= 70 ? "bg-blue-500/20 text-blue-400" :
+                                "bg-amber-500/20 text-amber-400"
+                            )}>
+                                {(c.creditScore || 0).toFixed(0)} PTS
+                            </Badge>
+                        </div>
+                        <div className="flex items-center justify-between pt-1.5 border-t border-blue-500/10">
+                             <span className="text-[9px] font-medium text-zinc-500 uppercase tracking-tight">
+                                Inicial Requerida
+                             </span>
+                             <span className="text-[10px] font-semibold text-blue-400">
+                                {(c.downPaymentPercentage || 50)}%
+                             </span>
+                        </div>
+                      </div>
+                      */}
                     </div>
                   );
                 }
@@ -1626,11 +2233,25 @@ export default function POSPage() {
               </div>
             ) : (
               cart.map(item => (
-                <div key={item.product.variantId || item.product.id} className="p-3 rounded-lg border bg-muted/5 flex flex-col gap-2">
+                <div 
+                  key={item.product.variantId || item.product.id} 
+                  className="p-3 rounded-lg border bg-muted/5 flex flex-col gap-2 relative group hover:border-primary/40 transition-colors"
+                >
                   <div className="flex justify-between items-start gap-2">
-                    <p className="font-bold text-[11px] leading-tight flex-1">{item.product.name}</p>
+                    <p className="font-bold text-[11px] leading-tight flex-1 group-hover:text-primary transition-colors">{item.product.name}</p>
                     <div className="flex flex-col items-end gap-0.5 shrink-0">
-                      <p className="font-bold text-xs">${(item.product.price * item.quantity).toFixed(2)}</p>
+                      <div className="flex flex-col items-end">
+                        {item.discount ? (
+                          <>
+                            <p className="font-bold text-xs text-rose-500 line-through opacity-70">${(item.product.price * item.quantity).toFixed(2)}</p>
+                            <p className="font-bold text-[13px] text-emerald-500">
+                              ${(Math.max(0, (item.product.price * item.quantity) - (item.discount.type === 'pct' ? (item.product.price * item.quantity) * (item.discount.value/100) : item.discount.value))).toFixed(2)}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="font-bold text-xs">${(item.product.price * item.quantity).toFixed(2)}</p>
+                        )}
+                      </div>
                       <p className="text-[9px] font-mono text-muted-foreground uppercase leading-none">
                         {item.product.sku || 'S/SKU'}
                       </p>
@@ -1644,18 +2265,55 @@ export default function POSPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center border rounded h-7">
-                      <Button variant="ghost" size="icon" className="h-6 w-6 rounded-none border-r" onClick={() => updateQuantity(item.product.id, -1)}>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 rounded-none border-r" onClick={(e) => { e.stopPropagation(); updateQuantity(item.product.id, -1); }}>
                         <IconMinus size={10} />
                       </Button>
                       <span className="w-8 text-center text-[10px] font-bold">{item.quantity}</span>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 rounded-none border-l" onClick={() => updateQuantity(item.product.id, 1)}>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 rounded-none border-l" onClick={(e) => { e.stopPropagation(); updateQuantity(item.product.id, 1); }}>
                         <IconPlus size={10} />
                       </Button>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeFromCart(item.product.id)}>
-                      <IconTrash size={12} />
-                    </Button>
+                    <div className="flex gap-1 items-center">
+                      <Button variant="ghost" size="icon" title="Editar Cantidad / Peso" className="h-6 w-6 text-blue-500 hover:text-blue-600 hover:bg-blue-500/10" onClick={(e) => { 
+                        e.stopPropagation(); 
+                        setEditingCartItemId(item.product.id);
+                        setEditingCartItemName(item.product.name);
+                        setEditingCartItemPrice(item.product.price);
+                        setWeightValue(String(item.quantity));
+                        setWeightUnit('ud');
+                        setIsWeightModalOpen(true);
+                      }}>
+                        <IconScale size={14} />
+                      </Button>
+                      <Button variant="ghost" size="icon" title="Aplicar Descuento" className="h-6 w-6 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10" onClick={(e) => { 
+                        e.stopPropagation(); 
+                        openPinVerification(() => {
+                          setTargetDiscountId(item.product.id);
+                          setDiscountType('pct');
+                          setDiscountValueInput('');
+                          setIsDiscountModalOpen(true);
+                        });
+                      }}>
+                        <IconDiscount size={12} />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); removeFromCart(item.product.id); }}>
+                        <IconTrash size={12} />
+                      </Button>
+                    </div>
                   </div>
+                  {item.discount && (
+                    <div className="flex justify-start">
+                      <Badge variant="outline" className="text-[9px] h-4 px-1 py-0 border-emerald-500/30 text-emerald-600 bg-emerald-500/10 flex items-center gap-1 cursor-pointer" onClick={(e) => {
+                        e.stopPropagation();
+                        // Remove discount
+                        setCart(prev => prev.map(c => c.product.id === item.product.id ? { ...c, discount: undefined } : c));
+                      }}>
+                        <IconDiscount size={8} /> 
+                        {item.discount.type === 'pct' ? `${item.discount.value}%` : `$${item.discount.value}`} OFF
+                        <IconX size={8} className="ml-1" />
+                      </Badge>
+                    </div>
+                  )}
                 </div>
               ))
             )}
@@ -1663,13 +2321,28 @@ export default function POSPage() {
 
           <div className="p-4 border-t bg-muted/5 shrink-0 space-y-4">
             <div className="space-y-1.5 px-1">
+              <div className="flex justify-between text-xs font-medium text-muted-foreground group relative cursor-pointer" onClick={() => {
+                openPinVerification(() => {
+                  setTargetDiscountId('GLOBAL');
+                  setDiscountType('pct');
+                  setDiscountValueInput('');
+                  setIsDiscountModalOpen(true);
+                });
+              }}>
+                <span className="flex items-center gap-1 border-b border-dashed border-muted-foreground/30 hover:border-emerald-500 hover:text-emerald-500 transition-colors">
+                  <IconDiscount size={12} /> Descuento Global
+                </span>
+                <span className={cn("tabular-nums", totalDiscountAmt > 0 ? "text-emerald-500 font-bold" : "")}>
+                  {totalDiscountAmt > 0 ? `-$${totalDiscountAmt.toFixed(2)}` : '$0.00'}
+                </span>
+              </div>
               <div className="flex justify-between text-xs font-medium text-muted-foreground">
-                <span>Subtotal</span>
-                <span className="tabular-nums">${subtotal.toFixed(2)}</span>
+                <span>Subtotal (Neto)</span>
+                <span className="tabular-nums">${subtotalAfterGlobalDiscount.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-xs font-medium text-muted-foreground">
                 <span>IVA ({taxRate}%)</span>
-                <span className="tabular-nums">${(subtotal * (taxRate / 100)).toFixed(2)}</span>
+                <span className="tabular-nums">${taxAmount.toFixed(2)}</span>
               </div>
             </div>
             <div className="flex justify-between items-center pt-2 border-t">
@@ -1681,331 +2354,425 @@ export default function POSPage() {
             </div>
             <Button 
                 size="lg" 
-                className="w-full h-12 font-black text-xs uppercase tracking-[0.15em] bg-[#10b981] hover:bg-[#059669] text-white shadow-xl shadow-emerald-900/40 relative group overflow-hidden transition-all duration-300" 
+                className="w-full h-12 font-semibold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md relative group overflow-hidden transition-all duration-200 rounded-lg" 
                 onClick={() => openPaymentModal("CASH")} 
                 disabled={cart.length === 0 || processing}
             >
-                <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                <span className="relative flex items-center justify-center gap-3">
+                <span className="relative flex items-center justify-center gap-2">
                     <IconCash className="size-5" /> 
-                    PROCESAR PAGO
+                    Procesar Pago
                 </span>
             </Button>
           </div>
         </div>
       </div>
 
-      {/* DIALOG: PAYMENT CALCULATION */}
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-        <DialogContent className="sm:max-w-[450px]">
-          <DialogHeader>
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-full border ${paymentMethod === 'CASH' ? 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20' : 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/10 dark:border-blue-500/20'}`}>
-                {paymentMethod === 'CASH' ? <IconCash size={20} /> : <IconCreditCard size={20} />}
-              </div>
-              <div className="space-y-1">
-                <DialogTitle>Finalizar Venta</DialogTitle>
-                <DialogDescription>
-                  Revisa los montos y añade los pagos correspondientes.
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-
-          <div className="grid gap-4 py-4">
-            {/* Totals Summary */}
-            <div className="flex justify-between items-center bg-muted/50 p-4 rounded-lg border">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Monto a Pagar (Base + IVA)</p>
-                <p className="text-2xl font-bold">${updatedTotal.toFixed(2)}</p>
-              </div>
-              {igtfAmount > 0 && (
-                <div className="text-right">
-                  <p className="text-sm font-medium text-emerald-600 dark:text-emerald-500 mb-1">Impacto IGTF (3%)</p>
-                  <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                    + ${igtfAmount.toFixed(2)}
-                  </p>
-                </div>
-              )}
-            </div>
+        <DialogContent className="sm:max-w-5xl lg:max-w-6xl gap-0 p-0 overflow-hidden border shadow-2xl rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-12 h-full max-h-[90vh]">
             
-            {/* Show Client Wallet Balance in Payment Modal */}
-            {selectedClientId !== "consumidor-final" && (() => {
-              const client = clients.find(c => (c.id || (c as any)._id) === selectedClientId);
-              if (client && client.walletBalance && client.walletBalance > 0) {
-                return (
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 mb-3 animate-in fade-in">
-                    <div className="flex items-center gap-2">
-                      <div className="size-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                        <IconWallet size={16} className="text-emerald-600" />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">Saldo a Favor</span>
-                        <span className="text-[10px] text-emerald-600/80 font-medium">Disponible en monedero</span>
-                      </div>
-                    </div>
-                    <span className="text-xl font-black text-emerald-600 tabular-nums">
-                      ${client.walletBalance.toFixed(2)}
-                    </span>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-
-            <Separator />
-
-            {/* Payment Entry Form */}
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <h4 className="text-sm font-medium leading-none">Registrar Pago</h4>
-                <Badge variant="secondary" className="font-mono text-xs">
-                  Total Final: ${finalTotalWithIgtf.toFixed(2)}
-                </Badge>
+            {/* LEFT COLUMN: ORDER SUMMARY */}
+            <div className="md:col-span-5 bg-muted/20 border-r flex flex-col overflow-hidden">
+              <div className="p-5 border-b bg-background/50">
+                <DialogTitle className="text-base font-semibold tracking-tight text-foreground flex items-center gap-2">
+                  <IconList className="size-4 text-primary" /> Resumen de Compra
+                </DialogTitle>
+                <p className="text-[11px] text-muted-foreground font-medium mt-0.5">{cart.length} productos en el carrito</p>
               </div>
-
-              <div className="flex gap-2">
-                <Select value={tempPaymentMethod} onValueChange={(v: any) => setTempPaymentMethod(v)}>
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CASH">Efectivo</SelectItem>
-                    <SelectItem value="CARD">Tarjeta</SelectItem>
-                    <SelectItem value="TRANSFER">Transferencia</SelectItem>
-                    {settings?.pagoMovilEnabled && <SelectItem value="PAGO_MOVIL">Pago Móvil</SelectItem>}
-                    {settings?.binanceEnabled && <SelectItem value="BINANCE" className="text-yellow-600 dark:text-yellow-500 font-bold">Binance Pay</SelectItem>}
-                    {settings?.zinliEnabled && <SelectItem value="ZINLI" className="text-purple-600 dark:text-purple-400 font-bold">Zinli</SelectItem>}
-                    {settings?.paypalEnabled && <SelectItem value="PAYPAL" className="text-blue-600 dark:text-blue-500 font-bold">PayPal</SelectItem>}
-                  </SelectContent>
-                </Select>
-                
-                {tempPaymentMethod !== "CASH" && (
-                  <Input 
-                    type="text" 
-                    className="flex-1 font-medium text-xs placeholder:text-[10px] uppercase"
-                    value={tempReference}
-                    onChange={(e) => setTempReference(e.target.value)}
-                    placeholder="Últimos 4 o Ref."
-                    maxLength={20}
-                  />
-                )}
-                
-                <div className="relative w-[110px]">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-                  <Input 
-                    type="number" 
-                    className="pl-7 font-medium"
-                    value={tempAmount}
-                    onChange={(e) => setTempAmount(e.target.value)}
-                    placeholder="0.00"
-                  />
-                </div>
-                <Button variant="secondary" onClick={addPayment}>Añadir</Button>
-              </div>
-
-              {/* PAGO MOVIL DATA DISPLAY */}
-              {tempPaymentMethod === "PAGO_MOVIL" && settings?.pagoMovilEnabled && (
-                <div className="mt-2 p-4 rounded-xl bg-blue-50 border border-blue-100 dark:bg-blue-900/10 dark:border-blue-900/20 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="size-6 rounded-lg bg-blue-600 flex items-center justify-center text-white">
-                      <IconDevices size={14} />
+              
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {cart.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center p-3 rounded-md bg-background border border-border/50 shadow-sm transition-all hover:border-primary/20">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[13px] font-semibold text-foreground truncate max-w-[220px]">{item.product.name}</span>
+                      <span className="text-[11px] text-muted-foreground font-medium">{item.quantity} x ${item.product.price.toFixed(2)}</span>
                     </div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-400">Datos para Pago Móvil</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2 text-xs">
-                    <div className="flex justify-between items-center border-b border-blue-200/30 pb-1.5">
-                      <span className="text-muted-foreground/80">Banco</span>
-                      <span className="font-bold text-blue-900 dark:text-blue-100">{settings.pagoMovilBank || "No configurado"}</span>
-                    </div>
-                    <div className="flex justify-between items-center border-b border-blue-200/30 pb-1.5">
-                      <span className="text-muted-foreground/80">Cédula / RIF</span>
-                      <span className="font-bold text-blue-900 dark:text-blue-100">{settings.pagoMovilId || "No configurado"}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground/80">Teléfono</span>
-                      <span className="font-bold text-blue-900 dark:text-blue-100">{settings.pagoMovilPhone || "No configurado"}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* BINANCE DATA DISPLAY */}
-              {tempPaymentMethod === "BINANCE" && settings?.binanceEnabled && (
-                <div className="mt-2 p-4 rounded-xl bg-yellow-50 border border-yellow-200 dark:bg-yellow-500/10 dark:border-yellow-500/20 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="size-6 rounded-lg bg-yellow-500 flex items-center justify-center text-white">
-                      <IconHexagon size={14} />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-yellow-700 dark:text-yellow-400">Datos para Binance Pay</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2 text-xs">
-                    <div className="flex justify-between items-center border-b border-yellow-200/50 pb-1.5">
-                      <span className="text-muted-foreground/80">Binance ID</span>
-                      <span className="font-bold text-yellow-900 dark:text-yellow-200">{settings.binanceId || "No configurado"}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground/80">Correo</span>
-                      <span className="font-bold text-yellow-900 dark:text-yellow-200">{settings.binanceEmail || "No configurado"}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ZINLI DATA DISPLAY */}
-              {tempPaymentMethod === "ZINLI" && settings?.zinliEnabled && (
-                <div className="mt-2 p-4 rounded-xl bg-purple-50 border border-purple-100 dark:bg-purple-500/10 dark:border-purple-500/20 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="size-6 rounded-lg bg-purple-600 flex items-center justify-center text-white">
-                      <IconWorld size={14} />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-400">Datos para Zinli</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-muted-foreground/80">Correo de cuenta</span>
-                    <span className="font-bold text-purple-900 dark:text-purple-200">{settings.zinliEmail || "No configurado"}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* PAYPAL DATA DISPLAY */}
-              {tempPaymentMethod === "PAYPAL" && settings?.paypalEnabled && (
-                <div className="mt-2 p-4 rounded-xl bg-blue-50 border border-blue-200 dark:bg-blue-800/10 dark:border-blue-800/20 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="size-6 rounded-lg bg-blue-800 flex items-center justify-center text-white">
-                      <IconBuilding size={14} />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-300">Datos para PayPal</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-muted-foreground/80">Correo de cuenta</span>
-                    <span className="font-bold text-blue-900 dark:text-blue-100">{settings.paypalEmail || "No configurado"}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* List of Added Payments */}
-            {addedPayments.length > 0 && (
-              <div className="space-y-2 max-h-[160px] overflow-y-auto pr-2 mt-2">
-                {addedPayments.map((p, i) => (
-                  <div key={i} className="flex justify-between items-center p-3 rounded-md border bg-card animate-in slide-in-from-left-2 duration-200">
-                    <div className="flex items-center gap-3">
-                      <div className="size-8 rounded-full border bg-muted flex items-center justify-center text-muted-foreground">
-                        {p.method === 'CASH' ? <IconCash size={14} /> : p.method === 'CARD' ? <IconCreditCard size={14} /> : <IconRefresh size={14} />}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">
-                          {p.method === 'CASH' ? 'Efectivo' : 
-                           p.method === 'CARD' ? 'Tarjeta' : 
-                           p.method === 'PAGO_MOVIL' ? 'Pago Móvil' : 
-                           p.method === 'BINANCE' ? 'Binance Pay' :
-                           p.method === 'ZINLI' ? 'Zinli' :
-                           p.method === 'PAYPAL' ? 'PayPal' :
-                           'Transferencia'}
-                        </span>
-                        <span className="text-xs text-muted-foreground">Bs {p.amountLocal.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-base font-semibold tabular-nums">${p.amount.toFixed(2)}</span>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setAddedPayments(addedPayments.filter((_, idx) => idx !== i))}>
-                        <IconX size={14} />
-                      </Button>
+                    <div className="text-right flex flex-col">
+                      <span className="text-[13px] font-bold text-foreground">${(item.quantity * item.product.price).toFixed(2)}</span>
+                      <span className="text-[10px] text-muted-foreground font-medium">Bs {((item.quantity * item.product.price) * currentExchangeRate).toLocaleString('es-VE')}</span>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
 
-            {/* Remaining Balance or Change Due */}
-            {remainingToPay > 0.001 ? (
-              <div className="flex justify-between items-center px-5 py-4 rounded-xl bg-destructive/5 border border-destructive/10 animate-in fade-in duration-300">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-destructive/70">Saldo Pendiente</span>
-                    <span className="text-[11px] text-muted-foreground font-mono">Bs {(remainingToPay * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-2xl font-black text-destructive tabular-nums">${remainingToPay.toFixed(2)}</span>
-                  </div>
+              <div className="p-5 bg-background border-t space-y-2">
+                <div className="flex justify-between items-center text-muted-foreground">
+                   <span className="text-xs font-medium">Subtotal</span>
+                   <span className="text-sm font-semibold text-foreground/80">${subtotal.toFixed(2)}</span>
+                </div>
+                {taxAmount > 0 && (
+                   <div className="flex justify-between items-center text-muted-foreground">
+                      <span className="text-xs font-medium">IVA ({taxRate}%)</span>
+                      <span className="text-sm font-semibold text-foreground/80">${taxAmount.toFixed(2)}</span>
+                   </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t">
+                   <span className="text-[13px] font-semibold text-foreground">Total Bruto</span>
+                   <span className="text-lg font-bold text-foreground">${updatedTotal.toFixed(2)}</span>
+                </div>
               </div>
-            ) : changeDue > 0.001 ? (
-              <div className="flex flex-col gap-4 p-5 rounded-2xl bg-muted/20 border border-border/50 animate-in zoom-in-95 duration-300">
-                  <div className="flex justify-between items-center">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <div className="size-2 rounded-full bg-primary animate-pulse" />
-                        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Vuelto al Cliente</span>
-                      </div>
-                      <span className="text-4xl font-black tracking-tighter tabular-nums text-foreground">${changeDue.toFixed(2)}</span>
-                    </div>
-                    <div className="size-12 rounded-2xl bg-background border flex items-center justify-center shadow-sm">
-                      <IconCash size={24} className="text-primary" />
-                    </div>
+            </div>
+
+            {/* RIGHT COLUMN: PAYMENT PROCESSING */}
+            <div className="md:col-span-7 flex flex-col overflow-hidden bg-background">
+              <div className="p-5 border-b flex justify-between items-center h-[69px]">
+                <div>
+                  <DialogTitle className="text-base font-semibold tracking-tight text-foreground">Procesar Pago</DialogTitle>
+                  <p className="text-[11px] text-muted-foreground font-medium">Complete la información de pago</p>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                
+                {/* Total Display */}
+                <div className="p-6 rounded-lg bg-primary/5 border border-primary/20 flex flex-col gap-3">
+                  <p className="text-xs font-semibold text-primary/70 tracking-tight">Monto Total a Pagar</p>
+                  <div className="flex flex-wrap items-baseline gap-x-8 gap-y-1">
+                    <p className="text-4xl font-bold tracking-tight text-primary">${finalTotalWithIgtf.toFixed(2)}</p>
+                    <p className="text-3xl font-bold tracking-tight text-primary/50 tabular-nums">Bs {(finalTotalWithIgtf * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</p>
                   </div>
-                  
-                  <div className="flex items-center gap-4">
-                    <Separator className="flex-1 opacity-50" />
-                    <span className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest whitespace-nowrap">Conversión</span>
-                    <Separator className="flex-1 opacity-50" />
+                  {igtfAmount > 0 && <p className="text-[11px] font-semibold text-emerald-600 bg-emerald-500/10 self-start px-2 py-0.5 rounded">+ IGTF (3%) Incluido</p>}
+                </div>
+
+                {/* Wallet Toggle */}
+                {selectedClientId !== "consumidor-final" && availableWallet > 0 && (
+                  <div className={cn(
+                    "flex items-center justify-between p-4 rounded-lg border transition-all",
+                    useWalletBalance ? "bg-emerald-500/5 border-emerald-500/30" : "bg-muted/30 border-transparent opacity-80"
+                  )}>
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "p-2 rounded-md",
+                        useWalletBalance ? "bg-emerald-500 text-white" : "bg-background text-muted-foreground"
+                      )}>
+                        <IconWallet size={18} stroke={2} />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[13px] font-semibold text-foreground">Saldo a Favor</span>
+                        <span className="text-[11px] text-muted-foreground font-medium">Disponible: ${availableWallet.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <Switch checked={useWalletBalance} onCheckedChange={setUseWalletBalance} />
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground tracking-tight">Métodos de Pago</h4>
                   </div>
 
-                  <div className="flex justify-between items-end">
-                    <span className="text-[11px] font-medium text-muted-foreground">Equivalente en Bolívares</span>
-                    <span className="text-xl font-bold tabular-nums text-primary">Bs {changeDueBs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                  {/* Payment Entry Form: Dynamic Grid based on method */}
+                  <div className="grid grid-cols-12 gap-3 items-start">
+                    <div className={cn(tempPaymentMethod === "CASH" ? "col-span-4" : tempPaymentMethod === "CREDIT" ? "col-span-6" : "col-span-3")}>
+                      <Select value={tempPaymentMethod} onValueChange={(v: any) => setTempPaymentMethod(v)}>
+                        <SelectTrigger className="h-10 rounded-md font-medium text-[13px] border-border/60">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="CASH">Efectivo</SelectItem>
+                          <SelectItem value="CARD">Tarjeta (Punto)</SelectItem>
+                          <SelectItem value="TRANSFER">Transferencia</SelectItem>
+                          {settings?.pagoMovilEnabled && <SelectItem value="PAGO_MOVIL">Pago Móvil</SelectItem>}
+                          {settings?.binanceEnabled && <SelectItem value="BINANCE">Binance Pay</SelectItem>}
+                          {settings?.zinliEnabled && <SelectItem value="ZINLI">Zinli</SelectItem>}
+                          {settings?.paypalEnabled && <SelectItem value="PAYPAL">PayPal</SelectItem>}
+                          <SelectItem value="WALLET">Monedero</SelectItem>
+                          <SelectItem value="CREDIT">Crédito / Fiado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      
+                      {tempPaymentMethod === "CREDIT" && (
+                        <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-500">
+                          <div className="space-y-2 px-1">
+                            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.15em] ml-0.5">
+                              Fecha Promesa de Pago
+                            </label>
+                            <Popover>
+                              <PopoverTrigger asChild disabled={selectedClientId === "consumidor-final"}>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full h-10 justify-start text-left font-bold text-[13px] rounded-lg border-border/40 bg-muted/20 hover:bg-muted/30 hover:border-primary/30 transition-all duration-300 shadow-sm px-3",
+                                    (!promisedPaymentDate || selectedClientId === "consumidor-final") && "text-muted-foreground"
+                                  )}
+                                >
+                                  <div className="size-7 rounded-md bg-primary/10 flex items-center justify-center mr-2.5 text-primary shrink-0">
+                                    <IconCalendarTabler size={16} stroke={2.5} />
+                                  </div>
+                                  <span className="flex-1 whitespace-nowrap overflow-hidden">
+                                    {selectedClientId === "consumidor-final" 
+                                      ? "Seleccione un cliente para fiar" 
+                                      : promisedPaymentDate ? format(promisedPaymentDate, "PPP", { locale: es }) : "Seleccionar fecha"}
+                                  </span>
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-2xl overflow-hidden" align="end">
+                                <div className="bg-gradient-to-br from-card to-muted/50 p-1">
+                                  <Calendar
+                                    mode="single"
+                                    selected={promisedPaymentDate}
+                                    onSelect={setPromisedPaymentDate}
+                                    initialFocus
+                                    locale={es}
+                                    className="rounded-xl border-none"
+                                  />
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                            {selectedClientId !== "consumidor-final" ? (
+                              <p className="text-[10px] text-muted-foreground/60 italic ml-1 flex items-center gap-1">
+                                 <IconAlertCircle size={10} /> El sistema notificará automáticamente este día.
+                              </p>
+                            ) : (
+                              <p className="text-[10px] text-destructive font-bold italic ml-1 flex items-center gap-1">
+                                 <IconAlertCircle size={10} /> No se puede fiar al Consumidor Final.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {tempPaymentMethod === "WALLET" && selectedClientId !== "consumidor-final" && (
+                        <div className="mt-1 flex items-center gap-1.5 px-1 animate-in fade-in slide-in-from-top-1 duration-300">
+                          <div className="size-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                          <span className="text-[9px] font-bold text-blue-600 tracking-tight uppercase">Saldo: ${availableWallet.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {tempPaymentMethod !== "CASH" && tempPaymentMethod !== "CREDIT" && (
+                      <div className="col-span-3">
+                        <Input 
+                          className="h-10 rounded-md text-[13px] font-medium border-border/60"
+                          value={tempReference}
+                          onChange={(e) => setTempReference(e.target.value)}
+                          placeholder="Referencia"
+                        />
+                      </div>
+                    )}
+
+                    {tempPaymentMethod !== "CREDIT" && (
+                      <div className={cn(tempPaymentMethod === "CASH" ? "col-span-6" : "col-span-4", "relative group")}>
+                        <button 
+                          type="button"
+                          onClick={() => setTempCurrency(tempCurrency === "USD" ? "VES" : "USD")}
+                          className={cn(
+                            "absolute left-1.5 top-1.5 size-7 rounded flex items-center justify-center text-[11px] font-bold transition-all z-10 shadow-sm",
+                            tempCurrency === "USD" ? "bg-primary text-primary-foreground" : "bg-emerald-500 text-white"
+                          )}
+                        >
+                          {tempCurrency === "USD" ? "$" : "Bs"}
+                        </button>
+                        <Input 
+                          type="number" 
+                          className="pl-10 h-10 rounded-md text-[13px] font-semibold border-border/60 tracking-tight"
+                          value={tempAmount}
+                          onChange={(e) => setTempAmount(e.target.value)}
+                          placeholder="0.00"
+                          onFocus={(e) => e.target.select()}
+                        />
+                      </div>
+                    )}
+
+                    {tempPaymentMethod !== "CREDIT" && (
+                      <div className="col-span-2">
+                        <Button 
+                          className="w-full h-10 rounded-md text-xs font-semibold" 
+                          onClick={() => {
+                            const amountNum = Number(tempAmount);
+                            if (isNaN(amountNum) || amountNum <= 0) return;
+                            let usdAmount = amountNum;
+                            let vesAmount = amountNum * currentExchangeRate;
+                            if (tempCurrency === "VES") {
+                              usdAmount = amountNum / currentExchangeRate;
+                              vesAmount = amountNum;
+                            }
+                            setAddedPayments([...addedPayments, {
+                              method: tempPaymentMethod,
+                              amount: usdAmount,
+                              amountLocal: vesAmount,
+                              exchangeRate: currentExchangeRate,
+                              reference: tempReference
+                            }]);
+                            setTempAmount("0");
+                            setTempReference("");
+                          }}
+                        >
+                          Añadir
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
-                  {selectedClientId !== "consumidor-final" && (
-                    <div className="mt-2 pt-4 border-t border-border/50 flex items-center justify-between animate-in slide-in-from-bottom-2">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                          <IconWallet size={14} className="text-primary" />
-                          Abonar al Monedero
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">Guardar vuelto como saldo a favor</span>
-                      </div>
-                      <Switch 
-                        checked={saveChangeToWallet} 
-                        onCheckedChange={setSaveChangeToWallet} 
-                      />
+                  {tempPaymentMethod === "PAGO_MOVIL" && (
+                    <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                       <div className="flex items-center gap-2">
+                          <IconDevices className="text-blue-500 size-5" />
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 hidden sm:block">Datos Pago Móvil</span>
+                       </div>
+                       <div className="flex gap-4">
+                          <div className="flex flex-col text-right">
+                             <span className="text-[9px] font-bold text-muted-foreground uppercase">Banco</span>
+                             <span className="text-xs font-semibold">{settings?.pagoMovilBank || "-"}</span>
+                          </div>
+                          <div className="flex flex-col text-right">
+                             <span className="text-[9px] font-bold text-muted-foreground uppercase">Cédula/RIF</span>
+                             <span className="text-xs font-semibold">{settings?.pagoMovilId || "-"}</span>
+                          </div>
+                          <div className="flex flex-col text-right">
+                             <span className="text-[9px] font-bold text-muted-foreground uppercase">Teléfono</span>
+                             <span className="text-xs font-semibold">{settings?.pagoMovilPhone || "-"}</span>
+                          </div>
+                       </div>
                     </div>
                   )}
-              </div>
-            ) : (
-              <div className="flex justify-between items-center px-5 py-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-                  <div className="flex items-center gap-3">
-                    <div className="size-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                      <IconCircleCheckFilled size={18} />
-                    </div>
-                    <span className="text-xs font-bold uppercase tracking-wider">Total Totalmente Cubierto</span>
-                  </div>
-                  <span className="text-2xl font-black tabular-nums">$0.00</span>
-              </div>
-            )}
-          </div>
 
-          <DialogFooter className="flex flex-col sm:flex-row sm:justify-between items-center gap-4 w-full">
-            <div className="flex items-center gap-2 self-start sm:self-center">
-              <Switch 
-                checked={printReceipt} 
-                onCheckedChange={setPrintReceipt} 
-                id="print-receipt" 
-              />
-              <Label htmlFor="print-receipt" className="text-xs cursor-pointer font-medium text-muted-foreground hover:text-foreground transition-colors">
-                Emitir Recibo Automáticamente
-              </Label>
+                  {tempPaymentMethod === "BINANCE" && (
+                    <div className="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                       <div className="flex items-center gap-2">
+                          <IconHexagon className="text-yellow-600 size-5" />
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-yellow-600 hidden sm:block">Datos Binance Pay</span>
+                       </div>
+                       <div className="flex gap-4">
+                          <div className="flex flex-col text-right">
+                             <span className="text-[9px] font-bold text-muted-foreground uppercase">Binance ID</span>
+                             <span className="text-xs font-semibold">{settings?.binanceId || "-"}</span>
+                          </div>
+                          <div className="flex flex-col text-right">
+                             <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo</span>
+                             <span className="text-xs font-semibold">{settings?.binanceEmail || "-"}</span>
+                          </div>
+                       </div>
+                    </div>
+                  )}
+
+                  {tempPaymentMethod === "ZINLI" && (
+                    <div className="p-3 bg-purple-500/5 border border-purple-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                       <div className="flex items-center gap-2">
+                          <IconWorld className="text-purple-600 size-5" />
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-purple-600 hidden sm:block">Datos Zinli</span>
+                       </div>
+                       <div className="flex gap-4">
+                          <div className="flex flex-col text-right">
+                             <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo Zinli</span>
+                             <span className="text-xs font-semibold">{settings?.zinliEmail || "-"}</span>
+                          </div>
+                       </div>
+                    </div>
+                  )}
+
+                  {tempPaymentMethod === "PAYPAL" && (
+                    <div className="p-3 bg-blue-700/5 border border-blue-700/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                       <div className="flex items-center gap-2">
+                          <IconBuilding className="text-blue-800 size-5" />
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-blue-800 hidden sm:block">Datos PayPal</span>
+                       </div>
+                       <div className="flex gap-4">
+                          <div className="flex flex-col text-right">
+                             <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo PayPal</span>
+                             <span className="text-xs font-semibold">{settings?.paypalEmail || "-"}</span>
+                          </div>
+                       </div>
+                    </div>
+                  )}
+
+                  {/* List of Added Payments */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {addedPayments.map((p, i) => (
+                      <div key={i} className="flex justify-between items-center p-2.5 rounded-md border border-border/60 bg-muted/10 text-[12px] shadow-sm">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-muted-foreground">{p.method}</span>
+                          {p.reference && <span className="text-[10px] text-muted-foreground opacity-70">Ref: {p.reference}</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold tabular-nums text-foreground">${p.amount.toFixed(2)}</span>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-muted-foreground hover:text-destructive" onClick={() => setAddedPayments(addedPayments.filter((_, idx) => idx !== i))}>
+                            <IconX size={14} />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Status Display Area */}
+                  <div className="pt-2">
+                    {remainingToPay > 0.001 ? (
+                      <div className="p-8 rounded-lg bg-amber-500/5 border border-amber-500/20 flex flex-col items-center gap-2 shadow-sm">
+                        <span className="text-[12px] font-semibold text-amber-600 tracking-tight">Pendiente por Cobrar</span>
+                        <div className="flex flex-col items-center gap-1 text-center">
+                           <span className="text-5xl font-bold text-amber-500 tabular-nums tracking-tighter leading-none">${remainingToPay.toFixed(2)}</span>
+                           <span className="text-4xl font-bold text-amber-500/70 tabular-nums tracking-tighter leading-none">
+                             Bs {(remainingToPay * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                           </span>
+                        </div>
+                      </div>
+                    ) : changeDue > 0.001 ? (
+                      <div className="space-y-4">
+                        <div className="p-8 rounded-lg bg-blue-500/5 border border-blue-500/20 flex flex-col items-center gap-2 shadow-sm">
+                          <span className="text-[12px] font-semibold text-blue-600 tracking-tight">Cambio para el Cliente</span>
+                          <div className="flex flex-col items-center gap-1 text-center">
+                             <span className="text-5xl font-bold text-blue-600 tabular-nums tracking-tighter leading-none">${changeDue.toFixed(2)}</span>
+                             <span className="text-4xl font-bold text-blue-600/70 tabular-nums tracking-tighter leading-none">
+                               Bs {(changeDue * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                             </span>
+                          </div>
+                        </div>
+                        {selectedClientId !== "consumidor-final" && (
+                          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/40 border">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-foreground/80">Abonar al monedero</span>
+                              <span className="text-[11px] text-muted-foreground font-medium">Guardar el vuelto para futuras compras</span>
+                            </div>
+                            <Switch checked={saveChangeToWallet} onCheckedChange={setSaveChangeToWallet} />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-10 rounded-lg bg-emerald-500/5 border border-emerald-500/20 flex flex-col items-center gap-4 shadow-sm">
+                        <span className="text-[13px] font-semibold text-emerald-600 tracking-tight">Pago Completado</span>
+                        <div className="size-16 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
+                          <IconCircleCheckFilled size={32} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 bg-muted/20 border-t flex gap-3">
+                <Button variant="outline" className="flex-1 h-12 rounded-md text-xs font-semibold" onClick={() => setIsPaymentModalOpen(false)}>Cancelar</Button>
+                <Button 
+                  className="flex-[2] h-12 rounded-md text-xs font-semibold shadow-sm" 
+                  disabled={processing || (tempPaymentMethod !== 'CREDIT' && remainingToPay > 0.01)}
+                  onClick={() => {
+                    if (tempPaymentMethod === 'CREDIT' && selectedClientId === 'consumidor-final') {
+                      toast.error("No se puede fiar al Consumidor Final.");
+                      return;
+                    }
+                    if (tempPaymentMethod === 'CREDIT' && addedPayments.length === 0) {
+                      const creditPayment = {
+                        method: "CREDIT",
+                        amount: remainingToPay,
+                        amountLocal: remainingToPay * currentExchangeRate,
+                        exchangeRate: currentExchangeRate,
+                        reference: "",
+                        promisedPaymentDate
+                      };
+                      processSale([creditPayment]);
+                    } else {
+                      processSale();
+                    }
+                  }}
+                >
+                  {processing ? (
+                    <span className="flex items-center gap-2">
+                      <IconRefresh className="animate-spin size-4" /> Procesando...
+                    </span>
+                  ) : (tempPaymentMethod === 'CREDIT' && addedPayments.length === 0) ? "Confirmar Fiado" : "Finalizar Venta"}
+                </Button>
+              </div>
             </div>
-            <div className="flex w-full sm:w-auto gap-2">
-              <Button variant="ghost" onClick={() => setIsPaymentModalOpen(false)} className="flex-1 sm:flex-none">Cancelar</Button>
-              <Button 
-                  onClick={processSale} 
-                  disabled={processing || remainingToPay > 0.01}
-                  className="flex-1 sm:flex-none"
-              >
-                {processing ? "Procesando..." : "Confirmar Venta"}
-              </Button>
-            </div>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -2585,6 +3352,260 @@ export default function POSPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ─── PIN Authorization Modal ─── */}
+      <Dialog open={isPinModalOpen} onOpenChange={(open) => {
+        if (!open) { setIsPinModalOpen(false); setPinInput(''); setPinError(''); setPinCallback(null); }
+      }}>
+        <DialogContent className="max-w-[340px] w-[calc(100%-2rem)] p-0 overflow-hidden gap-0">
+          <div className="px-6 pt-6 pb-5 border-b bg-muted/20" style={{ paddingRight: '3.5rem' }}>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
+                <IconLock size={18} />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-semibold leading-snug">Verificación Requerida</DialogTitle>
+                <p className="text-xs text-muted-foreground">Ingrese el PIN del propietario para continuar.</p>
+              </div>
+            </div>
+          </div>
+          <div className="px-6 py-6 space-y-5">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">PIN de 4 Dígitos</Label>
+              <Input
+                ref={pinInputRef}
+                type="password"
+                maxLength={4}
+                inputMode="numeric"
+                placeholder="••••"
+                value={pinInput}
+                onChange={e => { setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4)); setPinError(''); }}
+                className={cn("text-center font-mono text-2xl tracking-[0.7em] h-14", pinError ? "border-destructive" : "")}
+                onKeyDown={e => { if (e.key === 'Enter') handlePinConfirm(); }}
+              />
+              {pinError && (
+                <p className="text-[11px] text-destructive flex items-center gap-1">
+                  <IconAlertCircle size={12} /> {pinError}
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map((k, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  disabled={k === ''}
+                  onClick={() => {
+                    if (k === '⌫') { setPinInput(p => p.slice(0,-1)); setPinError(''); }
+                    else if (k !== '') { const next = (pinInput + k).slice(0,4); setPinInput(next); setPinError(''); }
+                  }}
+                  className={cn(
+                    "h-12 rounded-xl font-bold text-lg transition-all",
+                    k === '' ? "invisible" : "bg-muted/40 hover:bg-muted border border-border/40 active:scale-95",
+                    k === '⌫' ? "text-muted-foreground text-base" : ""
+                  )}
+                >{k}</button>
+              ))}
+            </div>
+            <Button
+              className="w-full h-11 font-semibold"
+              disabled={pinInput.length !== 4}
+              onClick={handlePinConfirm}
+            >
+              Verificar PIN
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Discount Modal ─── */}
+      <Dialog open={isDiscountModalOpen} onOpenChange={open => {
+        setIsDiscountModalOpen(open);
+        if (!open) { setDiscountValueInput(''); setTargetDiscountId(null); }
+      }}>
+        <DialogContent className="max-w-[340px] w-[calc(100%-2rem)] p-0 overflow-hidden gap-0">
+          <div className="px-6 pt-6 pb-5 border-b bg-muted/20">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
+                <IconDiscount size={18} />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-semibold leading-snug">Aplicar Descuento</DialogTitle>
+                <p className="text-xs text-muted-foreground">
+                  {targetDiscountId === 'GLOBAL' ? 'A toda la compra' : 'Al producto seleccionado'}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="px-6 py-6 space-y-5">
+            <div className="flex bg-muted p-1 rounded-xl">
+              <button
+                type="button"
+                className={cn("flex-1 h-9 rounded-lg text-sm font-semibold transition-all", discountType === 'pct' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground")}
+                onClick={() => { setDiscountType('pct'); setDiscountValueInput(''); }}
+              >
+                Porcentaje (%)
+              </button>
+              <button
+                type="button"
+                className={cn("flex-1 h-9 rounded-lg text-sm font-semibold transition-all", discountType === 'amt' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground")}
+                onClick={() => { setDiscountType('amt'); setDiscountValueInput(''); }}
+              >
+                Monto Fijo ($)
+              </button>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Valor del Descuento
+              </Label>
+              <div className="relative">
+                {discountType === 'amt' && (
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">$</span>
+                )}
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={discountValueInput}
+                  onChange={e => setDiscountValueInput(e.target.value)}
+                  className={cn("h-14 font-semibold text-lg", discountType === 'amt' ? "pl-8" : "pr-8")}
+                  onKeyDown={e => { if (e.key === 'Enter') handleApplyDiscount(); }}
+                />
+                {discountType === 'pct' && (
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">%</span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground">Deje en 0 para eliminar el descuento actual.</p>
+            </div>
+            <Button
+              className="w-full h-11 font-semibold bg-emerald-500 hover:bg-emerald-600 text-white"
+              onClick={handleApplyDiscount}
+            >
+              Aplicar Descuento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Weight / Quantity Modal — Redesigned */}
+      <Dialog open={isWeightModalOpen} onOpenChange={(open) => {
+        setIsWeightModalOpen(open);
+        if (!open) { setEditingCartItemId(null); setEditingCartItemName(''); setWeighableProduct(null); }
+      }}>
+        <DialogContent className="max-w-[420px] w-[calc(100%-2rem)] p-0 overflow-hidden gap-0">
+          {/* Header */}
+          <div className="px-6 pt-6 pb-5 border-b bg-muted/20" style={{ paddingRight: '3.5rem' }}>
+            <div className="space-y-1.5">
+              <DialogTitle className="text-base font-semibold leading-snug">
+                {editingCartItemId ? 'Editar Cantidad / Peso' : 'Ingresar Peso'}
+              </DialogTitle>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm text-muted-foreground font-medium truncate max-w-[220px]">
+                  {editingCartItemId ? editingCartItemName : weighableProduct?.name}
+                </p>
+                <Badge variant="outline" className="shrink-0 text-[10px] font-bold uppercase tracking-wider border-primary/30 text-primary bg-primary/5 flex items-center gap-1">
+                  {weightUnit === 'kg' ? <><IconScale size={11}/> Por Peso</> : <><IconPackage size={11}/> Por Unidad</>}
+                </Badge>
+              </div>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="px-6 py-6 space-y-5">
+            {/* Unit selector */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tipo de Medida</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setWeightUnit('ud')}
+                  className={cn(
+                    "flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all text-sm font-semibold gap-1.5",
+                    weightUnit === 'ud'
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border bg-muted/10 text-muted-foreground hover:bg-muted/20"
+                  )}
+                >
+                  <IconPackage size={22} stroke={1.5} />
+                  <span>Unidades</span>
+                  <span className="text-[10px] font-normal opacity-70">Piezas, bultos, etc.</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWeightUnit('kg')}
+                  className={cn(
+                    "flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all text-sm font-semibold gap-1.5",
+                    weightUnit === 'kg'
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border bg-muted/10 text-muted-foreground hover:bg-muted/20"
+                  )}
+                >
+                  <IconScale size={22} stroke={1.5} />
+                  <span>Kilogramos</span>
+                  <span className="text-[10px] font-normal opacity-70">Fracciones decimales</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Input */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {weightUnit === 'kg' ? 'Peso (Kg)' : 'Cantidad (Unidades)'}
+              </Label>
+              <div className="relative">
+                <Input
+                  ref={weightInputRef}
+                  type="number"
+                  step={weightUnit === 'kg' ? '0.001' : '1'}
+                  min={0}
+                  value={weightValue}
+                  onChange={(e) => setWeightValue(e.target.value)}
+                  placeholder={weightUnit === 'kg' ? 'Ej: 1.250' : 'Ej: 5'}
+                  className="h-14 text-2xl font-mono font-bold pr-14 text-right tabular-nums"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmWeight(); }}
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">
+                  {weightUnit === 'kg' ? 'Kg' : 'Ud'}
+                </span>
+              </div>
+              {weightUnit === 'kg' && (
+                <p className="text-[11px] text-muted-foreground flex items-start gap-1.5 leading-relaxed">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mt-1 shrink-0"></span>
+                  Ingrese el peso exacto mostrado en la balanza (Ej: 0.750 = 750 gramos)
+                </p>
+              )}
+            </div>
+
+            {/* Preview */}
+            {weightValue && parseFloat(weightValue) > 0 && (
+              <div className="rounded-xl bg-muted/30 border border-border/50 px-4 py-3 space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Vista Previa</p>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">
+                    {parseFloat(weightValue || '0').toFixed(weightUnit === 'kg' ? 3 : 0)} {weightUnit === 'kg' ? 'Kg' : 'Ud'} × ${editingCartItemPrice > 0 ? editingCartItemPrice.toFixed(2) : (weighableProduct?.variants?.[0]?.price || 0).toFixed(2)}
+                  </span>
+                  <span className="text-base font-bold text-foreground tabular-nums">
+                    ${((parseFloat(weightValue || '0')) * (editingCartItemPrice > 0 ? editingCartItemPrice : (weighableProduct?.variants?.[0]?.price || 0))).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 pb-6">
+            <Button
+              onClick={handleConfirmWeight}
+              className="w-full h-11 font-semibold text-sm"
+            >
+              Confirmar {weightUnit === 'kg' ? 'Peso' : 'Cantidad'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {isCalculatorOpen && <PosCalculator onClose={() => setIsCalculatorOpen(false)} />}
+      {isNumpadOpen && <PosNumpad onClose={() => setIsNumpadOpen(false)} onEnter={handleNumpadEnter} />}
     </div>
   );
 }

@@ -22,6 +22,13 @@ import { SupplierPaymentsModule } from './modules/supplier-payments/supplier-pay
 import { SupplierReturnsModule } from './modules/supplier-returns/supplier-returns.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { HistoryModule } from './modules/history/history.module';
+import { TransfersModule } from './modules/transfers/transfers.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { SyncroAdminModule } from './modules/syncro-admin/syncro-admin.module';
+import { ChatModule } from './modules/chat/chat.module';
+import { UploadModule } from './modules/upload/upload.module';
 
 @Module({
   imports: [
@@ -45,6 +52,13 @@ import { ReportsModule } from './modules/reports/reports.module';
     SupplierReturnsModule,
     DashboardModule,
     ReportsModule,
+    HistoryModule,
+    TransfersModule,
+    ExpensesModule,
+    NotificationsModule,
+    SyncroAdminModule,
+    ChatModule,
+    UploadModule,
   ],
   controllers: [AppController],
   providers: [AppService],

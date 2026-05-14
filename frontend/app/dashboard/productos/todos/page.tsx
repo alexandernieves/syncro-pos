@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useCurrency } from "@/context/CurrencyContext";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
 
@@ -96,6 +97,7 @@ export default function ProductosPage() {
   const [loadingWaitlist, setLoadingWaitlist] = useState(false);
 
   const { isOnline, pullRemoteData } = useSync();
+  const { currency, exchangeRate, formatPrice } = useCurrency();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -115,7 +117,7 @@ export default function ProductosPage() {
     // 2. If online, sync with remote
     if (navigator.onLine) {
       try {
-        await pullRemoteData();
+        await pullRemoteData(null);
         const updatedProducts = await db.products.toArray();
         setProducts(updatedProducts as any);
       } catch (e) {
@@ -564,6 +566,24 @@ export default function ProductosPage() {
       },
     },
     {
+      accessorKey: "price",
+      header: "Precio",
+      cell: ({ row }) => {
+        const p = row.original;
+        const price = p.variants?.[0]?.price || 0;
+        return (
+          <div className="flex flex-col">
+            <span className="font-bold text-sm text-foreground">{formatPrice(price)}</span>
+            {currency !== "VES" && (
+              <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tight">
+                Bs {(price * exchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
       accessorKey: "category",
       header: "Categoría",
       cell: ({ row }) => (
@@ -658,7 +678,9 @@ export default function ProductosPage() {
             name: row.Nombre || row.name || row.Producto || "Sin nombre",
             price: Number(row.Precio || row.Precio_Venta || row.price || 0),
             stock: Number(row.Stock || row.Existencia || row.stock || 0),
-            barcodes: row.Codigo_Barras || row.barcode ? [String(row.Codigo_Barras || row.barcode)] : []
+            sku: row.SKU || row.sku || "",
+            barcodes: row.Codigo_Barras || row.barcode ? [String(row.Codigo_Barras || row.barcode)] : [],
+            branchId: localStorage.getItem("currentBranchId") || ""
           };
 
           const res = await fetch(`${API}/products/quick-create`, {

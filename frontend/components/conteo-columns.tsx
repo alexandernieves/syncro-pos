@@ -9,6 +9,7 @@ import {
   IconLoader,
   IconGripVertical,
   IconBox,
+  IconX,
 } from "@tabler/icons-react"
 import { ColumnDef } from "@tanstack/react-table"
 import { useSortable } from "@dnd-kit/sortable"
@@ -128,6 +129,7 @@ export const conteoColumns: ColumnDef<z.infer<typeof conteoSchema>>[] = [
     cell: ({ row }) => {
       const isOk = row.original.status === "En Stock";
       const isLow = row.original.status === "Stock Bajo";
+      const isOut = row.original.status === "Agotado";
       
       return (
         <Badge variant="outline" className={`px-1.5 font-light tracking-tight ${isOk ? 'border-muted-foreground/30 text-muted-foreground' : isLow ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : 'bg-rose-500/10 text-rose-600 border-rose-500/20'}`}>
@@ -136,7 +138,7 @@ export const conteoColumns: ColumnDef<z.infer<typeof conteoSchema>>[] = [
           ) : isLow ? (
             <IconAlertTriangle size={14} className="mr-1" />
           ) : (
-            <IconLoader className="mr-1 animate-spin" size={14} />
+            <IconX size={14} className="mr-1" />
           )}
           {row.original.status}
         </Badge>
@@ -157,29 +159,24 @@ export const conteoColumns: ColumnDef<z.infer<typeof conteoSchema>>[] = [
   {
     accessorKey: "limit",
     header: () => <div className="w-full text-center">Físico Real</div>,
-    cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Guardando conteo de ${row.original.header}`,
-            success: "Conteo actualizado",
-            error: "Error al actualizar",
-          })
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-limit`} className="sr-only">
-          Físico Real
-        </Label>
-        <Input
-          type="number"
-          placeholder="0"
-          className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-24 border-transparent bg-transparent text-center shadow-none focus-visible:border dark:bg-transparent mx-auto font-light"
-          defaultValue={row.original.limit}
-          id={`${row.original.id}-limit`}
-        />
-      </form>
-    ),
+    cell: ({ row, table }) => {
+      const meta = table.options.meta as any;
+      return (
+        <div className="flex items-center justify-center">
+          <Label htmlFor={`${row.original.id}-limit`} className="sr-only">
+            Físico Real
+          </Label>
+          <Input
+            type="number"
+            placeholder="0"
+            className="h-9 w-24 rounded-lg text-center font-bold bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 shadow-sm focus-visible:ring-1 focus-visible:ring-primary/50"
+            value={row.original.limit}
+            onChange={(e) => meta?.updateData(row.original.id, parseInt(e.target.value) || 0)}
+            id={`${row.original.id}-limit`}
+          />
+        </div>
+      );
+    },
   },
   {
     accessorKey: "reviewer",

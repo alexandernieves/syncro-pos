@@ -249,80 +249,96 @@ export default function AccountingPage() {
     <div className="flex flex-col gap-6 py-4 md:gap-8 md:py-6 font-sans text-secondary-foreground">
       
       {/* 💰 MÉTRICAS CLAVE (Modo CEO) */}
-      <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
           
           {/* 1. VENTAS TOTALES */}
-          <Card className="shadow-sm border-none bg-gradient-to-br from-emerald-500/5 to-transparent">
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <IconCash className="text-emerald-500" size={20} />
-                <Badge variant="outline" className="border-emerald-500/20 text-emerald-600 bg-emerald-500/5">Ventas</Badge>
-              </div>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest mt-2">Ventas Brutas</CardDescription>
-              <CardTitle className="text-3xl font-bold tabular-nums text-emerald-600">
+          <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
+            <CardHeader>
+              <CardDescription>Ventas Brutas</CardDescription>
+              <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-emerald-600">
                 ${(stats?.revenue.totalSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </CardTitle>
+              <CardAction>
+                <Badge variant="outline" className="gap-1 border-emerald-500/20 text-emerald-600 bg-emerald-500/5">
+                  <IconCash size={12} /> Ventas
+                </Badge>
+              </CardAction>
             </CardHeader>
-            <CardFooter className="pb-4 pt-0">
-               <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground uppercase italic px-1">
-                 Total de {stats?.revenue.totalTickets || 0} transacciones realizadas
+            <CardFooter className="flex-col items-start gap-1.5 text-sm">
+               <div className="line-clamp-1 flex gap-2 font-medium">
+                 Total de {stats?.revenue.totalTickets || 0} transacciones
+               </div>
+               <div className="text-muted-foreground">
+                 Registradas exitosamente
                </div>
             </CardFooter>
           </Card>
 
           {/* 2. MARGEN BRUTO */}
-          <Card className="shadow-sm border-none bg-gradient-to-br from-blue-500/5 to-transparent">
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <IconTrendingUp className="text-blue-500" size={20} />
-                <Badge variant="outline" className="border-blue-500/20 text-blue-600 bg-blue-500/5">Rentabilidad</Badge>
-              </div>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest mt-2">Margen Bruto (Utilidad)</CardDescription>
-              <CardTitle className="text-3xl font-bold tabular-nums text-blue-600">
+          <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
+            <CardHeader>
+              <CardDescription>Margen Bruto (Utilidad)</CardDescription>
+              <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-blue-600">
                 ${(stats?.profitability.grossMargin || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </CardTitle>
+              <CardAction>
+                <Badge variant="outline" className="gap-1 border-blue-500/20 text-blue-600 bg-blue-500/5">
+                  <IconTrendingUp size={12} /> Rentabilidad
+                </Badge>
+              </CardAction>
             </CardHeader>
-            <CardFooter className="pb-4 pt-0">
-               <div className="flex items-center gap-1.5 text-[10px] font-bold text-blue-600/80 uppercase">
-                 <IconCheck size={12} /> {(stats?.profitability.grossMarginPercentage || 0).toFixed(1)}% de rendimiento por producto
+            <CardFooter className="flex-col items-start gap-1.5 text-sm">
+               <div className="line-clamp-1 flex gap-2 font-medium text-blue-600">
+                 {(stats?.profitability.grossMarginPercentage || 0).toFixed(1)}% de rendimiento
+               </div>
+               <div className="text-muted-foreground">
+                 Beneficio por producto
                </div>
             </CardFooter>
           </Card>
 
           {/* 3. TICKET PROMEDIO / UPT */}
-          <Card className="shadow-sm border-none bg-gradient-to-br from-purple-500/5 to-transparent">
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <IconTicket className="text-purple-500" size={20} />
-                <Badge variant="outline" className="border-purple-500/20 text-purple-600 bg-purple-500/5">Eficacia</Badge>
-              </div>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest mt-2">Ticket Promedio</CardDescription>
-              <CardTitle className="text-3xl font-bold tabular-nums text-purple-600">
+          <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
+            <CardHeader>
+              <CardDescription>Ticket Promedio</CardDescription>
+              <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-purple-600">
                 ${(stats?.revenue.ticketPromedio || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </CardTitle>
+              <CardAction>
+                <Badge variant="outline" className="gap-1 border-purple-500/20 text-purple-600 bg-purple-500/5">
+                  <IconTicket size={12} /> Eficacia
+                </Badge>
+              </CardAction>
             </CardHeader>
-            <CardFooter className="pb-4 pt-0">
-               <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground uppercase">
-                 <IconShoppingCart size={12} /> {(stats?.revenue.upt || 0).toFixed(1)} productos por compra (UPT)
+            <CardFooter className="flex-col items-start gap-1.5 text-sm">
+               <div className="line-clamp-1 flex gap-2 font-medium">
+                 {(stats?.revenue.upt || 0).toFixed(1)} productos por compra
+               </div>
+               <div className="text-muted-foreground">
+                 Métrica UPT actual
                </div>
             </CardFooter>
           </Card>
 
           {/* 4. INVENTARIO VALORIZADO */}
-          <Card className="shadow-sm border-none bg-gradient-to-br from-amber-500/5 to-transparent">
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <IconStack2 className="text-amber-500" size={20} />
-                <Badge variant="outline" className="border-amber-500/20 text-amber-600 bg-amber-500/5">Patrimonio</Badge>
-              </div>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest mt-2">Valor de Inventario (Costo)</CardDescription>
-              <CardTitle className="text-3xl font-bold tabular-nums text-amber-600">
+          <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
+            <CardHeader>
+              <CardDescription>Valor de Inventario (Costo)</CardDescription>
+              <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-amber-600">
                 ${(stats?.inventory.totalValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </CardTitle>
+              <CardAction>
+                <Badge variant="outline" className="gap-1 border-amber-500/20 text-amber-600 bg-amber-500/5">
+                  <IconStack2 size={12} /> Patrimonio
+                </Badge>
+              </CardAction>
             </CardHeader>
-            <CardFooter className="pb-4 pt-0">
-               <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground uppercase">
-                 Inversión total en mercancía actual
+            <CardFooter className="flex-col items-start gap-1.5 text-sm">
+               <div className="line-clamp-1 flex gap-2 font-medium">
+                 Inversión en mercancía
+               </div>
+               <div className="text-muted-foreground">
+                 Costo total acumulado
                </div>
             </CardFooter>
           </Card>

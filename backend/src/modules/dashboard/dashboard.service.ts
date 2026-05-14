@@ -5,14 +5,30 @@ import { PrismaService } from '../prisma/prisma.service';
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
-  async getStats() {
-    const [totalRevenue, totalSales, totalClients, totalProducts] = await Promise.all([
+  async getStats(branchId?: string) {
+    const whereClause = branchId ? { branchId } : {};
+
+    const [totalRevenue, totalSales, totalClients, productsCount, settings] = await Promise.all([
       this.prisma.sale.aggregate({
+        where: whereClause,
         _sum: { total: true }
       }),
-      this.prisma.sale.count(),
-      this.prisma.client.count(),
-      this.prisma.product.count()
+      this.prisma.sale.count({ where: whereClause }),
+      this.prisma.client.count(), // Clients are usually global
+      branchId 
+        ? this.prisma.product.count({
+            where: {
+              variants: {
+                some: {
+                  inventory: {
+                    some: { branchId }
+                  }
+                }
+              }
+            }
+          })
+        : this.prisma.product.count(),
+      this.prisma.setting.findFirst()
     ]);
 
     const revenueValue = totalRevenue._sum.total || 0;
@@ -22,7 +38,10 @@ export class DashboardService {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const salesInPeriod = await this.prisma.sale.findMany({
-      where: { createdAt: { gte: thirtyDaysAgo } },
+      where: { 
+        ...whereClause,
+        createdAt: { gte: thirtyDaysAgo } 
+      },
       select: { createdAt: true, total: true },
       orderBy: { createdAt: 'asc' }
     });
@@ -50,23 +69,25 @@ export class DashboardService {
 
     // Get recent activity (last 10 sales)
     const recentSales = await this.prisma.sale.findMany({
+      where: whereClause,
       take: 10,
       orderBy: { createdAt: 'desc' },
-      include: { client: true, user: true }
+      include: { client: true, user: true, branch: true }
     });
 
     return {
       revenue: revenueValue,
       salesCount: totalSales,
       clientsCount: totalClients, 
-      productsCount: totalProducts,
+      productsCount,
+      settings: settings || { salesGoal: 10000, showSalesGoal: true },
       chartData,
       recentSales: recentSales.map(s => ({
         id: s.id,
         client: s.client?.name || "Consumidor Final",
         total: s.total,
         status: "COMPLETED",
-        branch: "Principal",
+        branch: s.branch?.name || "N/A",
         date: s.createdAt
       }))
     };

@@ -34,7 +34,8 @@ import {
   IconPlus,
   IconTrendingUp,
   IconAlertTriangle,
-  IconBox
+  IconBox,
+  IconX
 } from "@tabler/icons-react"
 import {
   flexRender,
@@ -204,7 +205,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
                 ) : isLow ? (
                 <IconAlertTriangle size={14} className="mr-1" />
                 ) : (
-                <IconLoader className="mr-1 animate-spin" size={14} />
+                <IconX className="mr-1" size={14} />
                 )}
                 {row.original.status}
             </Badge>

@@ -7,16 +7,19 @@ import { cn } from "@/lib/utils";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { ActiveThemeProvider } from "@/components/active-theme";
 import { Toaster } from "sonner";
+import { CurrencyProvider } from "@/context/CurrencyContext";
 
 export const metadata: Metadata = {
   title: "SYNCRO POS",
-  description:
-    "A fully responsive analytics dashboard featuring dynamic charts, interactive tables, a collapsible sidebar, and a light/dark mode theme switcher. Built with modern web technologies, it ensures seamless performance across devices, offering an intuitive user interface for data visualization and exploration.",
+  description: "Sistema de gestión y auditoría comercial premium.",
+  manifest: "/manifest.json",
+  themeColor: "#10b981",
   icons: {
     icon: "/syncro.png",
   },
 };
 
+import { NotificationsProvider } from "@/context/NotificationsContext";
 import { SessionMonitor } from "@/components/session-monitor";
 
 export default function RootLayout({
@@ -39,11 +42,15 @@ export default function RootLayout({
           disableTransitionOnChange
           enableColorScheme
         >
-          <ActiveThemeProvider>
-            {children}
-            <SessionMonitor timeoutMinutes={15} />
-            <Toaster position="top-right" />
-          </ActiveThemeProvider>
+          <NotificationsProvider>
+            <CurrencyProvider>
+              <ActiveThemeProvider>
+                {children}
+                <SessionMonitor timeoutMinutes={15} />
+                < Toaster position="top-right" />
+              </ActiveThemeProvider>
+            </CurrencyProvider>
+          </NotificationsProvider>
         </ThemeProvider>
       </body>
     </html>

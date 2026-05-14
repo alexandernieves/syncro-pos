@@ -7,16 +7,23 @@ import {
   useEffect,
   useState,
 } from "react";
+import { usePathname } from "next/navigation";
 
-const COOKIE_NAME = "active_theme";
 const DEFAULT_THEME = "default";
 
-function setThemeCookie(theme: string) {
+function setThemeCookie(cookieName: string, theme: string) {
   if (typeof window === "undefined") return;
 
-  document.cookie = `${COOKIE_NAME}=${theme}; path=/; max-age=31536000; SameSite=Lax; ${
+  document.cookie = `${cookieName}=${theme}; path=/; max-age=31536000; SameSite=Lax; ${
     window.location.protocol === "https:" ? "Secure;" : ""
   }`;
+}
+
+function getThemeCookie(cookieName: string) {
+  if (typeof window === "undefined") return null;
+  const match = document.cookie.match(new RegExp('(^| )' + cookieName + '=([^;]+)'));
+  if (match) return match[2];
+  return null;
 }
 
 type ThemeContextType = {
@@ -33,12 +40,31 @@ export function ActiveThemeProvider({
   children: ReactNode;
   initialTheme?: string;
 }) {
+  const pathname = usePathname();
+  
+  let cookieName = "active_theme";
+  if (pathname?.startsWith("/pos")) cookieName = "active_theme_pos";
+  else if (pathname?.startsWith("/dashboard")) cookieName = "active_theme_dashboard";
+  else if (pathname?.startsWith("/portal")) cookieName = "active_theme_portal";
+
   const [activeTheme, setActiveTheme] = useState<string>(
-    () => initialTheme || DEFAULT_THEME
+    () => {
+      const savedTheme = getThemeCookie(cookieName);
+      return savedTheme || initialTheme || DEFAULT_THEME;
+    }
   );
 
   useEffect(() => {
-    setThemeCookie(activeTheme);
+    const savedTheme = getThemeCookie(cookieName);
+    if (savedTheme && savedTheme !== activeTheme) {
+      setActiveTheme(savedTheme);
+    } else if (!savedTheme && activeTheme !== DEFAULT_THEME && activeTheme !== initialTheme) {
+      setActiveTheme(initialTheme || DEFAULT_THEME);
+    }
+  }, [cookieName]);
+
+  useEffect(() => {
+    setThemeCookie(cookieName, activeTheme);
 
     Array.from(document.body.classList)
       .filter((className) => className.startsWith("theme-"))
@@ -49,7 +75,7 @@ export function ActiveThemeProvider({
     if (activeTheme.endsWith("-scaled")) {
       document.body.classList.add("theme-scaled");
     }
-  }, [activeTheme]);
+  }, [activeTheme, cookieName]);
 
   return (
     <ThemeContext.Provider value={{ activeTheme, setActiveTheme }}>

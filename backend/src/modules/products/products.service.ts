@@ -1,14 +1,18 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { HistoryService } from '../history/history.service';
 
 @Injectable()
 export class ProductsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private historyService: HistoryService,
+  ) {}
 
-  async create(data: any) {
+  async create(data: any, userId?: string) {
     const { variants, ...productData } = data;
     
-    return this.prisma.product.create({
+    const product = await this.prisma.product.create({
       data: {
         ...productData,
         variants: {
@@ -36,11 +40,23 @@ export class ProductsService {
         variants: true
       }
     });
+
+    if (userId) {
+      await this.historyService.logAction({
+        userId,
+        action: 'CREATE_PRODUCT',
+        entity: 'PRODUCT',
+        entityId: product.id,
+        details: { name: product.name, sku: variants[0]?.sku }
+      });
+    }
+
+    return product;
   }
 
-  async quickCreate(data: { name: string, price: number, stock: number, barcodes: string[], branchId?: string }) {
+  async quickCreate(data: { name: string, price: number, stock: number, barcodes: string[], branchId?: string, sku?: string }) {
     console.log('[QuickCreate] Incoming Data:', data);
-    const sku = `QC-${Date.now()}`;
+    const sku = data.sku || `QC-${Date.now()}`;
     const barcodes = data.barcodes || [];
     const primary = barcodes[0] || null;
     const secondary = barcodes.slice(1);
@@ -73,28 +89,53 @@ export class ProductsService {
     });
   }
 
-  async findAll() {
+  async findAll(branchId?: string) {
     const products = await this.prisma.product.findMany({
+      where: {},
       include: {
         category: true,
         variants: {
           include: {
-            inventory: true
+            inventory: branchId ? {
+              where: { branchId }
+            } : true
           }
         }
-      }
+      },
+      orderBy: { createdAt: 'desc' }
     });
 
     return products.map(p => {
-      const totalStock = p.variants.reduce((acc, v) => acc + v.stock, 0);
+      // Calculate total stock across variants (filtered by branch if provided)
+      const totalStock = p.variants.reduce((acc, v) => {
+        const vStock = branchId 
+          ? v.inventory.reduce((vacc, inv) => vacc + inv.quantity, 0)
+          : v.stock;
+        return acc + vStock;
+      }, 0);
+
+      // Check for low stock alerts
       const alerts = p.variants.map(v => {
-        if (v.stock === 0) return 'CRITICAL';
-        if (v.stock < v.minStock) return 'LOW';
+        const vStock = branchId 
+          ? v.inventory.reduce((vacc, inv) => vacc + inv.quantity, 0)
+          : v.stock;
+        
+        if (vStock === 0) return 'CRITICAL';
+        if (vStock < v.minStock) return 'LOW';
         return 'OK';
       });
 
+      // Map variants to include branch-specific stock
+      const mappedVariants = p.variants.map(v => ({
+        ...v,
+        stock: branchId 
+          ? v.inventory.reduce((vacc, inv) => vacc + inv.quantity, 0)
+          : v.stock
+      }));
+
       return {
         ...p,
+        variants: mappedVariants,
         totalStock,
         status: alerts.includes('CRITICAL') ? 'CRITICAL' : alerts.includes('LOW') ? 'LOW' : 'NORMAL'
       };
@@ -122,7 +163,7 @@ export class ProductsService {
     return product;
   }
 
-  async update(id: string, data: any) {
+  async update(id: string, data: any, userId?: string) {
     const { variants, ...productData } = data;
 
     return this.prisma.$transaction(async (tx) => {
@@ -159,15 +200,37 @@ export class ProductsService {
           }
         }
       }
+
+      if (userId) {
+        await this.historyService.logAction({
+          userId,
+          action: 'UPDATE_PRODUCT',
+          entity: 'PRODUCT',
+          entityId: id,
+          details: { name: updatedProduct.name }
+        });
+      }
+
       return updatedProduct;
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, userId?: string) {
     console.log('[ProductsService] Attempting to remove product ID:', id);
     try {
       const result = await this.prisma.product.delete({ where: { id } });
       console.log('[ProductsService] Successfully removed product:', result.name);
+
+      if (userId) {
+        await this.historyService.logAction({
+          userId,
+          action: 'DELETE_PRODUCT',
+          entity: 'PRODUCT',
+          entityId: id,
+          details: { name: result.name }
+        });
+      }
+
       return result;
     } catch (error) {
       console.error('[ProductsService] Error deleting product:', error.message);

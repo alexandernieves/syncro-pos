@@ -26,9 +26,9 @@ export class SuppliersService {
       orderBy: { name: 'asc' }
     });
 
-    return suppliers.map(s => ({
+    return suppliers.map((s: any) => ({
       ...s,
-      outstandingBalance: s.supplierInvoices.reduce((acc, inv) => acc + inv.balance, 0),
+      outstandingBalance: s.supplierInvoices.reduce((acc: number, inv: any) => acc + inv.balance, 0),
       productsCount: s._count.products
     }));
   }
@@ -72,15 +72,15 @@ export class SuppliersService {
     });
 
     // Calculate total purchased
-    const totalPurchased = purchaseOrders.reduce((sum, po) => sum + po.total, 0);
+    const totalPurchased = purchaseOrders.reduce((sum: number, po: any) => sum + po.total, 0);
     const lastPurchase = purchaseOrders[0]?.createdAt || null;
 
     // Calculate average delivery time (from SENT to RECEIVED)
-    const completedOrders = purchaseOrders.filter(po => po.status === 'RECEIVED');
+    const completedOrders = purchaseOrders.filter((po: any) => po.status === 'RECEIVED');
     let avgDeliveryDays = 0;
     
     if (completedOrders.length > 0) {
-      const totalDays = completedOrders.reduce((sum, po) => {
+      const totalDays = completedOrders.reduce((sum: number, po: any) => {
         // This is a simplified calculation - in real scenario, you'd track sent date separately
         return sum + 7; // Assuming 7 days average for now
       }, 0);
@@ -96,8 +96,8 @@ export class SuppliersService {
     });
 
     const priceVariations = supplierProducts
-      .filter(sp => sp.variant)
-      .map(sp => {
+      .filter((sp: any) => sp.variant)
+      .map((sp: any) => {
         const variant = sp.variant!;
         const currentCost = variant.cost || 0;
         const supplierPrice = sp.purchasePrice;
@@ -124,8 +124,8 @@ export class SuppliersService {
       }
     });
 
-    const totalInvoiced = invoices.reduce((sum, inv) => sum + inv.total, 0);
-    const totalPaid = invoices.reduce((sum, inv) => 
+    const totalInvoiced = invoices.reduce((sum: number, inv: any) => sum + inv.total, 0);
+    const totalPaid = invoices.reduce((sum: number, inv: any) => 
       sum + inv.invoicePayments.reduce((paySum: number, pay: any) => paySum + pay.amount, 0), 0
     );
     const outstandingBalance = totalInvoiced - totalPaid;
@@ -139,8 +139,8 @@ export class SuppliersService {
     });
 
     const totalReturns = returns.length;
-    const totalReturnedQuantity = returns.reduce((sum, ret) => sum + ret.quantity, 0);
-    const totalReturnValue = returns.reduce((sum, ret) => {
+    const totalReturnedQuantity = returns.reduce((sum: number, ret: any) => sum + ret.quantity, 0);
+    const totalReturnValue = returns.reduce((sum: number, ret: any) => {
       const cost = ret.variant.cost || 0;
       return sum + (cost * ret.quantity);
     }, 0);
@@ -153,7 +153,7 @@ export class SuppliersService {
         lastPurchase,
         avgDeliveryDays,
         completedOrders: completedOrders.length,
-        pendingOrders: purchaseOrders.filter(po => po.status === 'SENT').length
+        pendingOrders: purchaseOrders.filter((po: any) => po.status === 'SENT').length
       },
       financialStats: {
         totalInvoiced,
@@ -165,7 +165,7 @@ export class SuppliersService {
         productsTracked: supplierProducts.length,
         priceVariations,
         averageVariation: priceVariations.length > 0 
-          ? priceVariations.reduce((sum, pv) => sum + pv.variationPercentage, 0) / priceVariations.length 
+          ? priceVariations.reduce((sum: number, pv: any) => sum + pv.variationPercentage, 0) / priceVariations.length 
           : 0
       },
       returnStats: {
@@ -211,8 +211,8 @@ export class SuppliersService {
     });
 
     return products
-      .filter(sp => sp.variant && sp.variant.stock < sp.variant.minStock)
-      .map(sp => ({
+      .filter((sp: any) => sp.variant && sp.variant.stock < sp.variant.minStock)
+      .map((sp: any) => ({
         variantId: sp.variantId,
         productName: sp.variant?.product.name,
         variantName: sp.variant?.name,

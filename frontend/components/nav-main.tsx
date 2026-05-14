@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { IconCirclePlusFilled, IconMail, type Icon } from "@tabler/icons-react"
+import { IconCirclePlusFilled, IconMail, IconCornerDownRight, type Icon } from "@tabler/icons-react"
 import { ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -56,15 +56,16 @@ export function NavMain({
         <SidebarMenu>
           {items.map((item) => {
             const parentActive = isParentActive(item)
-            const anySubActive = item.items?.some(s => pathname === s.url)
-            const activeIndex = item.items?.findIndex(s => pathname === s.url) ?? -1
+            const normalizedPathname = pathname.replace(/\/$/, "")
+            const anySubActive = item.items?.some(s => s.url === normalizedPathname || s.url === pathname)
+            const activeIndex = item.items?.findIndex(s => s.url === normalizedPathname || s.url === pathname) ?? -1
 
             return (
               <Collapsible
                 key={item.title}
                 asChild
                 // Keep open if any child matches current route
-                open={item.items && item.items.length > 0 ? parentActive || undefined : undefined}
+                open={item.items && item.items.length > 0 ? anySubActive || parentActive || undefined : undefined}
                 defaultOpen={parentActive}
                 className="group/collapsible"
               >
@@ -74,33 +75,31 @@ export function NavMain({
                       <CollapsibleTrigger asChild>
                         <SidebarMenuButton
                           tooltip={item.title}
-                          isActive={pathname === item.url}
+                          isActive={pathname === item.url || normalizedPathname === item.url}
                         >
                           {item.icon && <item.icon />}
                           <span>{item.title}</span>
                         </SidebarMenuButton>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
-                        <SidebarMenuSub className="relative border-l-0">
-                          {anySubActive && (
-                            <div className="absolute inset-0 pointer-events-none z-20">
-                              <svg 
-                                className="w-[20px] h-full text-primary overflow-visible" 
-                                fill="none"
-                              >
+                        <SidebarMenuSub className="relative border-l-0 pt-2 pb-2 ml-0">
+                          {/* Unified SVG Tree Line */}
+                          {anySubActive && activeIndex !== -1 && (
+                            <div className="absolute left-[21px] top-[-14px] bottom-0 pointer-events-none z-10">
+                              <svg className="w-[20px] h-full text-primary overflow-visible" fill="none">
                                 <path 
-                                  className="transition-all duration-300 ease-in-out"
+                                  className="transition-all duration-500 ease-in-out"
                                   d={`
-                                    M 1 0 
-                                    L 1 ${activeIndex * 32 + 16 - 8}
-                                    C 1 ${activeIndex * 32 + 16 - 3.58} 4.58 ${activeIndex * 32 + 16} 9 ${activeIndex * 32 + 16}
-                                    H 12.5
-                                    M 9.5 ${activeIndex * 32 + 16 - 3}
-                                    L 12.5 ${activeIndex * 32 + 16}
-                                    L 9.5 ${activeIndex * 32 + 16 + 3}
+                                    M 0 0
+                                    V ${activeIndex * 36 + 36 - 6}
+                                    Q 0 ${activeIndex * 36 + 36} 8 ${activeIndex * 36 + 36}
+                                    H 14
+                                    M 11 ${activeIndex * 36 + 36 - 3}
+                                    L 14 ${activeIndex * 36 + 36}
+                                    L 11 ${activeIndex * 36 + 36 + 3}
                                   `}
                                   stroke="currentColor" 
-                                  strokeWidth="2" 
+                                  strokeWidth="1.8" 
                                   strokeLinecap="round" 
                                   strokeLinejoin="round"
                                 />
@@ -109,21 +108,31 @@ export function NavMain({
                           )}
 
                           {item.items?.map((subItem) => {
-                            const subActive = pathname === subItem.url
+                            const subActive = normalizedPathname === subItem.url || pathname === subItem.url
                             
                             return (
-                              <SidebarMenuSubItem key={subItem.title} className="relative">
+                              <SidebarMenuSubItem key={subItem.title} className="relative group/subitem">
                                 <SidebarMenuSubButton
                                   asChild
                                   isActive={false}
                                   className={cn(
-                                    "transition-all duration-200",
+                                    "transition-all duration-200 pl-9 relative h-8",
                                     subActive 
-                                      ? "font-bold !text-primary !bg-primary/10 hover:!bg-primary/10" 
+                                      ? "font-bold !text-primary !bg-primary/10 shadow-sm" 
                                       : "text-muted-foreground hover:!text-primary hover:!bg-primary/5"
                                   )}
                                 >
-                                  <Link href={subItem.url}>
+                                  <Link href={subItem.url} className="flex items-center">
+                                    <IconCornerDownRight 
+                                      size={14} 
+                                      stroke={2.5}
+                                      className={cn(
+                                        "absolute left-2 transition-all duration-300",
+                                        subActive 
+                                          ? "opacity-0" // Hide standard icon when active to show SVG instead
+                                          : "opacity-0 -translate-x-4 group-hover/subitem:opacity-100 group-hover/subitem:translate-x-0 text-primary/70"
+                                      )}
+                                    />
                                     <span>{subItem.title}</span>
                                   </Link>
                                 </SidebarMenuSubButton>

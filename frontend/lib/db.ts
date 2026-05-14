@@ -15,6 +15,8 @@ export interface LocalClient {
   name: string;
   documentId?: string;
   walletBalance?: number;
+  creditLimit?: number;
+  currentDebt?: number;
 }
 
 export interface PendingSale {

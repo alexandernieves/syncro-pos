@@ -49,7 +49,8 @@ export default function MovimientosPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/inventory`);
+      const branchId = localStorage.getItem("currentBranchId") || "";
+      const res = await fetch(`${API}/inventory/movements${branchId ? `?branchId=${branchId}` : ""}`);
       const data = await res.json();
       setMovements(Array.isArray(data) ? data : []);
     } catch {

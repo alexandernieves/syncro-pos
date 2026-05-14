@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { SettingsService } from '../settings/settings.service';
 import { BranchesService } from '../branches/branches.service';
+import { HistoryService } from '../history/history.service';
 
 @Injectable()
 export class AuthService {
@@ -12,6 +13,7 @@ export class AuthService {
     private jwtService: JwtService,
     private settingsService: SettingsService,
     private branchesService: BranchesService,
+    private historyService: HistoryService,
   ) {}
 
   async validateUser(email: string, pass: string): Promise<any> {
@@ -30,6 +32,16 @@ export class AuthService {
 
   async login(user: any) {
     const payload = { email: user.email, sub: user.id, role: user.role, name: user.name, country: user.country };
+    
+    // Log login action
+    await this.historyService.logAction({
+      userId: user.id,
+      action: 'LOGIN',
+      entity: 'USER',
+      entityId: user.id,
+      details: { email: user.email }
+    });
+
     return {
       access_token: this.jwtService.sign(payload),
       user: {

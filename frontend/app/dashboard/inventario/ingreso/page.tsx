@@ -38,8 +38,11 @@ export default function IngresoPage() {
 
   const fetchInitialData = async () => {
     try {
+      const branchId = localStorage.getItem("currentBranchId") || "";
+      if (branchId) setSelectedBranch(branchId);
+
       const [pRes, bRes] = await Promise.all([
-        fetch(`${API}/products`),
+        fetch(`${API}/products${branchId ? `?branchId=${branchId}` : ""}`),
         fetch(`${API}/branches`)
       ]);
       if(pRes.ok && bRes.ok) {

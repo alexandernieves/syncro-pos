@@ -13,6 +13,7 @@ import {
   IconPlus, IconBarcode, IconDeviceFloppy, IconX, IconArrowLeft, IconTrash, IconSettings
 } from "@tabler/icons-react";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
 
@@ -47,6 +48,7 @@ export function ProductForm({ productId }: { productId?: string }) {
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [supplierId, setSupplierId] = useState("");
+  const [isWeighable, setIsWeighable] = useState(false);
   const [variants, setVariants] = useState<VariantForm[]>([emptyVariant(0)]);
   const [categories, setCategories] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -76,6 +78,7 @@ export function ProductForm({ productId }: { productId?: string }) {
             setDescription(p.description || "");
             setCategoryId(p.categoryId || "");
             setSupplierId(p.supplierId || "");
+            setIsWeighable(p.isWeighable || false);
             setImage(p.image || "");
             setVariants(p.variants.map((v: any) => ({
               ...v,
@@ -142,6 +145,7 @@ export function ProductForm({ productId }: { productId?: string }) {
         description,
         categoryId,
         supplierId,
+        isWeighable,
         image,
         variants: variants.map(v => ({
           ...v,
@@ -219,6 +223,22 @@ export function ProductForm({ productId }: { productId?: string }) {
                   <SelectContent>{suppliers.map((s, idx) => <SelectItem key={s.id || s._id || idx} value={s.id || s._id}>{s.name}</SelectItem>)}</SelectContent>
                 </Select>
                 </div>
+              </div>
+              <div className="flex items-center justify-between p-4 border border-border/50 rounded-xl bg-muted/10 mt-2">
+                <div className="space-y-1">
+                  <Label htmlFor="weighable-switch" className="font-bold text-sm cursor-pointer block">
+                    Producto Pesable
+                  </Label>
+                  <p className="text-xs text-muted-foreground font-normal leading-relaxed max-w-[90%]">
+                    Activa esta opción si este producto se vende por peso fraccionado (Ej: 1.250 Kg). El cajero deberá ingresar el peso manualmente al facturar.
+                  </p>
+                </div>
+                <Switch 
+                  id="weighable-switch" 
+                  checked={isWeighable} 
+                  onCheckedChange={setIsWeighable} 
+                  className="data-[state=checked]:bg-emerald-500 shrink-0"
+                />
               </div>
             </div>
           </div>

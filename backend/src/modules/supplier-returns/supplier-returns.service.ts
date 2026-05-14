@@ -191,19 +191,19 @@ export class SupplierReturnsService {
     // Calculate summary
     const totalReturns = returns.length;
     const totalQuantity = returns.reduce((sum, ret) => sum + ret.quantity, 0);
-    const totalValue = returns.reduce((sum, ret) => {
+    const totalValue = returns.reduce((sum: number, ret: any) => {
       const cost = ret.variant.cost || 0;
       return sum + (cost * ret.quantity);
     }, 0);
 
     // Group by reason
-    const returnsByReason = returns.reduce((acc: Record<string, number>, ret) => {
+    const returnsByReason = returns.reduce((acc: Record<string, number>, ret: any) => {
       acc[ret.reason] = (acc[ret.reason] || 0) + ret.quantity;
       return acc;
     }, {});
 
     // Group by product
-    const returnsByProduct = returns.reduce((acc: Record<string, any>, ret) => {
+    const returnsByProduct = returns.reduce((acc: Record<string, any>, ret: any) => {
       const productName = ret.variant.product.name;
       if (!acc[productName]) {
         acc[productName] = {

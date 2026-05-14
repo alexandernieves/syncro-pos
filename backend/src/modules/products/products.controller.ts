@@ -23,16 +23,18 @@ export class ProductsController {
       const email = req.user.email;
       body.image = await this.uploadsService.uploadFile(file, email);
     }
-    return this.productsService.create(body);
+    const userId = req.user?.id || req.user?.sub;
+    return this.productsService.create(body, userId);
   }
 
   @Post('quick-create')
-  async quickCreate(@Body() data: { name: string, price: number, stock: number, barcodes: string[], branchId?: string }) {
+  async quickCreate(@Body() data: { name: string, price: number, stock: number, barcodes: string[], branchId?: string, sku?: string }) {
     return this.productsService.quickCreate(data);
   }
 
-  @Get() findAll() { 
-    return this.productsService.findAll(); 
+  @Get() 
+  findAll(@Query('branchId') branchId?: string) { 
+    return this.productsService.findAll(branchId); 
   }
 
   @Get(':id') findOne(@Param('id') id: string) { 
@@ -56,12 +58,15 @@ export class ProductsController {
       const email = req.user.email;
       body.image = await this.uploadsService.uploadFile(file, email);
     }
-    return this.productsService.update(id, body);
+    const userId = req.user?.id || req.user?.sub;
+    return this.productsService.update(id, body, userId);
   }
 
-  @Delete(':id') async remove(@Param('id') id: string) { 
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id') async remove(@Param('id') id: string, @Request() req: any) { 
     console.log('[ProductsController] DELETE request received for ID:', id);
-    const result = await this.productsService.remove(id);
+    const userId = req.user?.id || req.user?.sub;
+    const result = await this.productsService.remove(id, userId);
     return { 
       message: 'Product deletion processed', 
       id, 

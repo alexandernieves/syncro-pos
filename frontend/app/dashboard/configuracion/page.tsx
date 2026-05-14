@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,6 +45,10 @@ import {
   IconBuildingStore,
   IconHexagon,
   IconChevronDown,
+  IconAlertTriangle,
+  IconLock,
+  IconEye,
+  IconEyeOff,
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -60,9 +65,7 @@ const SECTIONS = [
   { id: "pagos", label: "Métodos de Pago", icon: IconCreditCard },
   { id: "pos", label: "Punto de Venta", icon: IconCash },
   { id: "usuarios", label: "Usuarios y Roles", icon: IconShieldLock },
-  { id: "impresion", label: "Impresión", icon: IconPrinter },
   { id: "sucursales", label: "Sucursales", icon: IconMapPin },
-  { id: "notificaciones", label: "Notificaciones", icon: IconBell },
   { id: "sesiones", label: "Sesión y Seguridad", icon: IconFingerprint },
 ];
 
@@ -132,6 +135,11 @@ export default function ConfiguracionPage() {
     allowNegativeStock: false,
   });
 
+  const [dashboardConfig, setDashboardConfig] = useState({
+    salesGoal: "10000",
+    showSalesGoal: true,
+  });
+
   const [printConfig, setPrintConfig] = useState({
     defaultPrinter: "",
     paperWidth: "80",
@@ -148,6 +156,29 @@ export default function ConfiguracionPage() {
   const [mainBranchPassword, setMainBranchPassword] = useState("");
 
   const [sessionInfo, setSessionInfo] = useState<any>(null);
+
+  // States for Wipe Branch Feature
+  const [wipeBranchId, setWipeBranchId] = useState("");
+  const [wipeConfirmText, setWipeConfirmText] = useState("");
+  const [wipePassword, setWipePassword] = useState("");
+  const [isWipeAlertOpen, setIsWipeAlertOpen] = useState(false);
+  const [isWipeAuthOpen, setIsWipeAuthOpen] = useState(false);
+  const [isWiping, setIsWiping] = useState(false);
+
+  // PIN de autorización de descuentos
+  const [discountPin, setDiscountPin] = useState("");
+  const [discountPinConfirm, setDiscountPinConfirm] = useState("");
+  const [showPin, setShowPin] = useState(false);
+  const [savingPin, setSavingPin] = useState(false);
+  const [pinPermissions, setPinPermissions] = useState<any>({
+    applyDiscount: true,
+    deleteCartItem: false,
+    cancelSale: false,
+    processReturn: true,
+    closeShift: false,
+    inventoryAdjustments: true,
+  });
+  const [isPinPermissionsModalOpen, setIsPinPermissionsModalOpen] = useState(false);
 
   const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
 
@@ -257,6 +288,14 @@ export default function ConfiguracionPage() {
               email: data.paypalEmail || "",
               enabled: data.paypalEnabled || false,
             });
+            setDiscountPin(data.discountPin || "");
+            if (data.pinPermissions) {
+              setPinPermissions(typeof data.pinPermissions === 'string' ? JSON.parse(data.pinPermissions) : data.pinPermissions);
+            }
+            setDashboardConfig({
+              salesGoal: String(data.salesGoal || "10000"),
+              showSalesGoal: data.showSalesGoal !== undefined ? data.showSalesGoal : true,
+            });
           }
         }
       } catch (err) {
@@ -291,17 +330,24 @@ export default function ConfiguracionPage() {
   const handleSave = async (section: string) => {
     try {
       const payload = {
-        ...negocio,
+        businessName: negocio.businessName,
+        businessIcon: negocio.businessIcon,
+        ruc: negocio.ruc,
+        address: negocio.address,
+        phone: negocio.phone,
+        email: negocio.email,
+        website: negocio.website,
+        currency: negocio.currency,
+        country: negocio.country,
         taxRate: Number(iva.rate),
         taxEnabled: iva.enabled,
         igtfRate: Number(iva.igtfRate),
         receiptFooter,
         paymentMethods: paymentMethods.map(({ name, enabled }) => ({ name, enabled })),
-        ...posConfig,
-        lowStockAlert: Number(posConfig.lowStockAlert),
-        ...printConfig,
-        paperWidth: Number(printConfig.paperWidth),
-        copiesPerSale: Number(printConfig.copiesPerSale),
+        requireClient: posConfig.requireClient,
+        printOnSale: posConfig.printOnSale,
+        lowStockAlert: Number(posConfig.lowStockAlert) || 5,
+        allowNegativeStock: posConfig.allowNegativeStock,
         pagoMovilBank: pagoMovil.bank,
         pagoMovilId: pagoMovil.id,
         pagoMovilPhone: pagoMovil.phone,
@@ -313,6 +359,10 @@ export default function ConfiguracionPage() {
         zinliEnabled: zinli.enabled,
         paypalEmail: paypal.email,
         paypalEnabled: paypal.enabled,
+        discountPin: discountPin || null,
+        pinPermissions: pinPermissions, 
+        salesGoal: Number(dashboardConfig.salesGoal) || 10000,
+        showSalesGoal: !!dashboardConfig.showSalesGoal,
       };
 
       const res = await fetch(`${API}/settings`, {
@@ -563,9 +613,9 @@ export default function ConfiguracionPage() {
                   </div>
                   <button
                     onClick={() => setPagoMovil(p => ({ ...p, enabled: !p.enabled }))}
-                    className={["w-11 h-6 rounded-full transition-colors relative", pagoMovil.enabled ? "bg-primary" : "bg-muted"].join(" ")}
+                    className={cn("w-11 h-6 rounded-full transition-colors relative", pagoMovil.enabled ? "bg-primary" : "bg-muted")}
                   >
-                    <div className={["absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all", pagoMovil.enabled ? "left-5" : "left-0.5"].join(" ")} />
+                    <div className={cn("absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all", pagoMovil.enabled ? "left-5" : "left-0.5")} />
                   </button>
                 </div>
 
@@ -736,6 +786,37 @@ export default function ConfiguracionPage() {
                 <div className="flex justify-between items-center py-4">
                   <div><p className="font-medium text-sm">Alerta de stock mínimo</p><p className="text-xs text-muted-foreground">Avisa cuando el stock baje de este número</p></div>
                   <Input type="number" value={posConfig.lowStockAlert} onChange={e => setPosConfig(p => ({ ...p, lowStockAlert: e.target.value }))} className="w-20 text-center" />
+                </div>
+                
+                <Separator className="my-2" />
+                
+                <div>
+                  <h3 className="text-sm font-bold text-primary mb-2">Configuración del Dashboard</h3>
+                </div>
+
+                <div className="flex justify-between items-center py-4">
+                  <div>
+                    <p className="font-medium text-sm">Mostrar Meta de Ventas</p>
+                    <p className="text-xs text-muted-foreground">Activa el módulo de seguimiento de metas en el inicio</p>
+                  </div>
+                  <Switch 
+                    checked={dashboardConfig.showSalesGoal} 
+                    onCheckedChange={(val) => setDashboardConfig(d => ({ ...d, showSalesGoal: val }))}
+                  />
+                </div>
+
+                <div className="flex justify-between items-center py-4">
+                  <div>
+                    <p className="font-medium text-sm">Meta de Ventas Mensual ($)</p>
+                    <p className="text-xs text-muted-foreground">Monto objetivo para el indicador del Dashboard</p>
+                  </div>
+                  <Input 
+                    type="number" 
+                    value={dashboardConfig.salesGoal} 
+                    onChange={e => setDashboardConfig(d => ({ ...d, salesGoal: e.target.value }))} 
+                    className="w-32 text-right font-mono" 
+                    placeholder="10000"
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -1009,36 +1090,6 @@ export default function ConfiguracionPage() {
           </div>
         )}
 
-        {/* ─── IMPRESION ─── */}
-        {activeSection === "impresion" && (
-          <div className="max-w-2xl flex flex-col gap-6">
-            <div><h2 className="text-xl font-bold">Configuración de Impresión</h2><p className="text-sm text-muted-foreground">Ajusta el formato del comprobante de venta.</p></div>
-            <Card>
-              <CardContent className="p-6 flex flex-col gap-4">
-                {[
-                  { field: "defaultPrinter", label: "Impresora predeterminada", placeholder: "Seleccionar impresora..." },
-                  { field: "paperWidth", label: "Ancho del papel (mm)", placeholder: "80" },
-                  { field: "copiesPerSale", label: "Copias por venta", placeholder: "1" },
-                ].map(({ field, label, placeholder }) => (
-                  <div key={field} className="flex flex-col gap-1.5">
-                    <Label>{label}</Label>
-                    <Input 
-                      placeholder={placeholder} 
-                      value={(printConfig as any)[field]} 
-                      onChange={e => setPrintConfig(prev => ({ ...prev, [field]: e.target.value }))}
-                    />
-                  </div>
-                ))}
-                <div className="flex justify-between items-center py-2">
-                  <div><p className="font-medium text-sm">Incluir logo en el comprobante</p><p className="text-xs text-muted-foreground">Sube el logo del negocio para mostrarlo al imprimir</p></div>
-                  <Button variant="outline" size="sm">Subir Logo</Button>
-                </div>
-              </CardContent>
-            </Card>
-            <Button className="self-start gap-2" onClick={() => handleSave("Impresión")}><IconDeviceFloppy size={16}/>Guardar</Button>
-          </div>
-        )}
-
         {/* ─── SESIONES ─── */}
         {activeSection === "sesiones" && (
           <div className="max-w-2xl flex flex-col gap-6">
@@ -1136,6 +1187,249 @@ export default function ConfiguracionPage() {
                 </Button>
               </CardContent>
             </Card>
+
+            {/* PIN de Autorización */}
+            <Card className="border-amber-500/20">
+              <CardHeader className="border-b border-amber-500/10 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
+                    <IconLock size={18} />
+                  </div>
+                  <div>
+                    <CardTitle className="text-sm">PIN de Autorización</CardTitle>
+                    <CardDescription className="text-xs">PIN de 4 dígitos para autorizar acciones sensibles en el POS (descuentos, etc.)</CardDescription>
+                  </div>
+                  {discountPin && <Badge className="ml-auto bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border text-[10px]">Configurado</Badge>}
+                </div>
+              </CardHeader>
+              <CardContent className="p-6 flex flex-col gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nuevo PIN (4 dígitos)</Label>
+                    <div className="relative">
+                      <Input
+                        type={showPin ? 'text' : 'password'}
+                        maxLength={4}
+                        placeholder="••••"
+                        value={discountPin}
+                        onChange={e => setDiscountPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        className="pr-10 text-center font-mono text-lg tracking-[0.5em]"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowPin(v => !v)}
+                      >
+                        {showPin ? <IconEyeOff size={16} /> : <IconEye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Confirmar PIN</Label>
+                    <div className="relative">
+                      <Input
+                        type={showPin ? 'text' : 'password'}
+                        maxLength={4}
+                        placeholder="••••"
+                        value={discountPinConfirm}
+                        onChange={e => setDiscountPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        className={cn(
+                          "pr-10 text-center font-mono text-lg tracking-[0.5em]",
+                          discountPinConfirm && discountPin !== discountPinConfirm ? "border-destructive" : ""
+                        )}
+                      />
+                      {discountPinConfirm.length === 4 && discountPin === discountPinConfirm && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500">
+                          <IconCheck size={16} />
+                        </span>
+                      )}
+                    </div>
+                    {discountPinConfirm && discountPin !== discountPinConfirm && (
+                      <p className="text-[11px] text-destructive">Los PINs no coinciden</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 mt-2">
+                  <Button
+                    className="flex-1 bg-amber-500 hover:bg-amber-600 text-white"
+                    disabled={discountPin.length !== 4 || discountPin !== discountPinConfirm || savingPin}
+                    onClick={async () => {
+                      setSavingPin(true);
+                      try {
+                        const token = localStorage.getItem("token");
+                        const res = await fetch(`${API}/settings`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                          body: JSON.stringify({ discountPin, pinPermissions })
+                        });
+                        if (res.ok) {
+                          toast.success("PIN de seguridad guardado");
+                          setDiscountPinConfirm("");
+                        } else throw new Error();
+                      } catch {
+                        toast.error("Error al guardar el PIN");
+                      } finally {
+                        setSavingPin(false);
+                      }
+                    }}
+                  >
+                    {savingPin ? "Guardando..." : "Guardar PIN"}
+                  </Button>
+                  <Button variant="outline" className="flex-1 border-amber-500/20 text-amber-500 hover:bg-amber-500/10" onClick={() => setIsPinPermissionsModalOpen(true)}>
+                    <IconLock size={16} className="mr-2" />
+                    Configurar Permisos
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ZONA DE PELIGRO - WIPE BRANCH */}
+            <Card className="border-destructive/30">
+              <CardHeader>
+                <CardTitle className="text-sm text-destructive flex items-center gap-2">
+                  <IconAlertTriangle size={18} /> Zona de Peligro
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Acciones destructivas e irreversibles para la gestión de datos.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6 pt-0">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start gap-2 border-destructive/20 bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-colors font-bold"
+                  onClick={() => {
+                    setWipeBranchId("");
+                    setWipeConfirmText("");
+                    setIsWipeAlertOpen(true);
+                  }}
+                >
+                  <IconTrash size={16} />
+                  Eliminar Data de Sucursal
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* MODAL 1: ADVERTENCIA Y SELECCION */}
+            <Dialog open={isWipeAlertOpen} onOpenChange={setIsWipeAlertOpen}>
+              <DialogContent className="sm:max-w-md border-destructive">
+                <DialogHeader>
+                  <DialogTitle className="text-destructive flex items-center gap-2">
+                    <IconAlertTriangle size={20} /> ¡Advertencia de Eliminación!
+                  </DialogTitle>
+                  <DialogDescription className="font-medium text-foreground">
+                    Estás a punto de borrar TODOS los datos de una sucursal (Ventas, Gastos, Turnos, Inventario). Esta acción es <strong className="text-destructive">IRREVERSIBLE</strong>.
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label className="font-bold">Selecciona la Sucursal a limpiar</Label>
+                    <Select value={wipeBranchId} onValueChange={setWipeBranchId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar sucursal..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sucursales.map(b => (
+                          <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Para confirmar, escribe la palabra <strong className="select-none">Eliminar</strong></Label>
+                    <Input 
+                      placeholder="Escribe Eliminar..." 
+                      value={wipeConfirmText} 
+                      onChange={e => setWipeConfirmText(e.target.value)} 
+                    />
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsWipeAlertOpen(false)}>Cancelar</Button>
+                  <Button 
+                    variant="destructive" 
+                    disabled={wipeConfirmText !== "Eliminar" || !wipeBranchId}
+                    onClick={() => {
+                      setIsWipeAlertOpen(false);
+                      setWipePassword("");
+                      setTimeout(() => setIsWipeAuthOpen(true), 150); // Small delay to avoid modal overlap issues
+                    }}
+                  >
+                    Proceder a Autenticación
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* MODAL 2: AUTENTICACION FINAL */}
+            <Dialog open={isWipeAuthOpen} onOpenChange={setIsWipeAuthOpen}>
+              <DialogContent className="sm:max-w-md border-destructive">
+                <DialogHeader>
+                  <DialogTitle className="text-destructive flex items-center gap-2">
+                    <IconShieldLock size={20} /> Autenticación Requerida
+                  </DialogTitle>
+                  <DialogDescription>
+                    Por seguridad, ingresa tu contraseña para confirmar el borrado de la sucursal seleccionada.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Contraseña</Label>
+                    <Input 
+                      type="password"
+                      placeholder="••••••••" 
+                      value={wipePassword} 
+                      onChange={e => setWipePassword(e.target.value)} 
+                    />
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsWipeAuthOpen(false)} disabled={isWiping}>Cancelar</Button>
+                  <Button 
+                    variant="destructive" 
+                    disabled={!wipePassword || isWiping}
+                    onClick={async () => {
+                      setIsWiping(true);
+                      try {
+                        const token = localStorage.getItem("token");
+                        const res = await fetch(`${API}/branches/${wipeBranchId}/wipe`, {
+                          method: "POST",
+                          headers: { 
+                            "Content-Type": "application/json",
+                            "Authorization": `Bearer ${token}` 
+                          },
+                          body: JSON.stringify({ password: wipePassword })
+                        });
+                        
+                        if (res.ok) {
+                          toast.success("Sucursal limpiada exitosamente. Como desde cero.");
+                          setIsWipeAuthOpen(false);
+                          setWipeBranchId("");
+                          setWipeConfirmText("");
+                          setWipePassword("");
+                          // Refresh data globally or reload to ensure clean state
+                          setTimeout(() => window.location.reload(), 1500);
+                        } else {
+                          const errorData = await res.json();
+                          toast.error(errorData.message || "Contraseña incorrecta o error de servidor");
+                        }
+                      } catch (e) {
+                        toast.error("Error de red al intentar limpiar sucursal");
+                      } finally {
+                        setIsWiping(false);
+                      }
+                    }}
+                  >
+                    {isWiping ? "Borrando..." : "Confirmar Eliminación"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
           </div>
         )}
         {/* ─── SUCURSALES ─── */}
@@ -1420,6 +1714,64 @@ export default function ConfiguracionPage() {
         )}
 
       </main>
+      {/* Modal Permisos de PIN */}
+      <Dialog open={isPinPermissionsModalOpen} onOpenChange={setIsPinPermissionsModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-500">
+              <IconLock size={20} /> Permisos de Autorización (PIN)
+            </DialogTitle>
+            <DialogDescription>
+              Selecciona qué acciones dentro del sistema solicitarán el ingreso del PIN de autorización de 4 dígitos.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
+            {[
+              { key: 'applyDiscount', label: 'Aplicar Descuentos (Porcentaje o Monto)', desc: 'Solicitará el PIN antes de abrir el modal de descuentos en el punto de venta.' },
+              { key: 'deleteCartItem', label: 'Eliminar Producto del Carrito', desc: 'Evita que los cajeros borren productos que ya habían sido marcados o registrados.' },
+              { key: 'cancelSale', label: 'Cancelar Venta (Limpiar Carrito)', desc: 'Evita la anulación completa de un carrito de compras que estaba en proceso.' },
+              { key: 'processReturn', label: 'Procesar Devoluciones de Venta', desc: 'Evita que se realicen retornos de mercancía y entregas de dinero sin supervisión.' },
+              { key: 'closeShift', label: 'Cerrar Caja (Turno)', desc: 'Protege el proceso de cuadre de caja al final del día.' },
+              { key: 'inventoryAdjustments', label: 'Ajustes de Inventario y Conteo Físico', desc: 'Aplica a finalizaciones de auditorías y ajustes manuales en el módulo de inventario.' }
+            ].map(perm => (
+              <div key={perm.key} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
+                <div className="space-y-0.5 pr-4">
+                  <Label className="text-sm font-bold leading-tight">{perm.label}</Label>
+                  <p className="text-[11px] text-muted-foreground leading-snug">{perm.desc}</p>
+                </div>
+                <Switch 
+                  checked={!!pinPermissions[perm.key]}
+                  onCheckedChange={(val) => setPinPermissions({ ...pinPermissions, [perm.key]: val })}
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPinPermissionsModalOpen(false)}>Cancelar</Button>
+            <Button 
+              className="bg-amber-500 hover:bg-amber-600 text-white" 
+              onClick={async () => {
+                try {
+                  const token = localStorage.getItem("token");
+                  const res = await fetch(`${API}/settings`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                    body: JSON.stringify({ pinPermissions })
+                  });
+                  if (res.ok) {
+                    toast.success("Permisos de autorización guardados");
+                    setIsPinPermissionsModalOpen(false);
+                  } else throw new Error();
+                } catch {
+                  toast.error("Error al guardar los permisos");
+                }
+              }}
+            >
+              Guardar Permisos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

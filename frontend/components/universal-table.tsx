@@ -139,7 +139,7 @@ function DragHandle({ id }: { id: number | string }) {
 }
 
 // Columnas base - se pueden personalizar pasando columnas personalizadas
-export const baseColumns: ColumnDef<z.infer<typeof baseSchema>>[] = [
+export const baseColumns: ColumnDef<any>[] = [
   {
     id: "drag",
     header: () => null,
@@ -314,7 +314,7 @@ export const baseColumns: ColumnDef<z.infer<typeof baseSchema>>[] = [
   },
 ]
 
-function DraggableRow({ row }: { row: Row<z.infer<typeof baseSchema>> }) {
+function DraggableRow<TData extends { id: string | number }>({ row }: { row: Row<TData> }) {
   const { transform, transition, setNodeRef, isDragging } = useSortable({
     id: row.original.id,
   })
@@ -339,9 +339,10 @@ function DraggableRow({ row }: { row: Row<z.infer<typeof baseSchema>> }) {
   )
 }
 
-interface UniversalTableProps {
-  data: z.infer<typeof baseSchema>[]
-  columns?: ColumnDef<z.infer<typeof baseSchema>>[]
+interface UniversalTableProps<TData> {
+  data: TData[]
+  columns?: ColumnDef<TData>[]
+  updateData?: (id: string, value: any) => void
   tabs?: {
     outline?: string
     pastPerformance?: string
@@ -354,15 +355,18 @@ interface UniversalTableProps {
     focusDocuments?: React.ReactNode
   }
   hideHeader?: boolean
+  hideAddButton?: boolean
 }
 
-export function UniversalTable({
+export function UniversalTable<TData extends { id: string | number }>({
   data: initialData,
-  columns = baseColumns,
+  columns = baseColumns as any[],
+  updateData,
   tabs = {},
   customTabsContent = {},
   hideHeader = false,
-}: UniversalTableProps) {
+  hideAddButton = false,
+}: UniversalTableProps<TData>) {
   const [data, setData] = React.useState(() => initialData)
   
   React.useEffect(() => {
@@ -401,6 +405,9 @@ export function UniversalTable({
       rowSelection,
       columnFilters,
       pagination,
+    },
+    meta: {
+      updateData,
     },
     getRowId: (row) => row.id.toString(),
     enableRowSelection: true,
@@ -497,10 +504,12 @@ export function UniversalTable({
                   })}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="outline" size="sm">
-              <IconPlus />
-              <span className="hidden lg:inline">Agregar Sección</span>
-            </Button>
+            {!hideAddButton && (
+              <Button variant="outline" size="sm">
+                <IconPlus />
+                <span className="hidden lg:inline">Agregar Sección</span>
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -682,7 +691,7 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-function TableCellViewer({ item }: { item: z.infer<typeof baseSchema> }) {
+function TableCellViewer({ item }: { item: any }) {
   const isMobile = useIsMobile()
 
   return (

@@ -19,6 +19,7 @@ import {
   IconCheck,
   IconChevronDown,
   IconCirclePlusFilled,
+  IconMessageCircle,
 } from "@tabler/icons-react";
 
 import {
@@ -78,6 +79,8 @@ const data = {
       items: [
         { title: "Almacén", url: "/dashboard/inventario/almacen" },
         { title: "Compras (OC)", url: "/dashboard/inventario/compras" },
+        { title: "Traslados", url: "/dashboard/inventario/traslados" },
+        { title: "Alertas de Stock", url: "/dashboard/inventario/alertas" },
         { title: "Conteo", url: "/dashboard/inventario/conteo" },
         { title: "Movimientos", url: "/dashboard/inventario/movimientos" },
       ],
@@ -96,11 +99,19 @@ const data = {
       title: "Clientes",
       url: "/dashboard/clientes",
       icon: IconUsers,
+      items: [
+        { title: "Directorio", url: "/dashboard/clientes" },
+        { title: "Cuentas por Cobrar (Fiado)", url: "/dashboard/clientes/creditos" },
+      ],
     },
     {
       title: "Contabilidad",
       url: "/dashboard/contabilidad",
       icon: IconCash,
+      items: [
+        { title: "Resumen", url: "/dashboard/contabilidad" },
+        { title: "Gastos (Caja Chica)", url: "/dashboard/contabilidad/gastos" },
+      ],
     },
     {
       title: "Historial",
@@ -109,6 +120,11 @@ const data = {
     },
   ],
   navSecondary: [
+    {
+      title: "Soporte",
+      url: "/dashboard/soporte",
+      icon: IconMessageCircle,
+    },
     {
       title: "Configuración",
       url: "/dashboard/configuracion",
@@ -123,6 +139,20 @@ const data = {
       title: "Buscar",
       url: "#",
       icon: IconSearch,
+    },
+  ],
+  navSyncro: [
+    {
+      title: "Syncro Central",
+      url: "/dashboard/syncro",
+      icon: IconHexagon,
+      items: [
+        { title: "Gestión de Negocios", url: "/dashboard/syncro/owners" },
+        { title: "Mensajería", url: "/dashboard/syncro/chat" },
+        { title: "Suscripciones", url: "/dashboard/syncro/subscriptions" },
+        { title: "Métricas Globales", url: "/dashboard/syncro/stats" },
+        { title: "Auditoría Global", url: "/dashboard/syncro/audit" },
+      ],
     },
   ],
 };
@@ -169,6 +199,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, []);
 
   const filteredNavMain = React.useMemo(() => {
+    const isSyncro = user.role === "syncropos";
+    if (isSyncro) return data.navSyncro;
+
     const isAdmin = user.role === "ownerpos" || user.role === "admin";
     if (isAdmin) return data.navMain;
     if (!user.permissions || user.permissions.length === 0) return [];
@@ -192,6 +225,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, [user]);
 
   const filteredNavSecondary = React.useMemo(() => {
+    const isSyncro = user.role === "syncropos";
+    // Support team uses Mensajería from navSyncro — hide Soporte + Configuración
+    if (isSyncro) return data.navSecondary.filter(
+      i => i.title !== "Configuración" && i.title !== "Soporte"
+    );
+
     const isAdmin = user.role === "ownerpos" || user.role === "admin";
     if (isAdmin) return data.navSecondary;
     if (!user.permissions || user.permissions.length === 0) return [];
@@ -199,7 +238,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return data.navSecondary.filter(item => {
       const urlStr = item.url.toLowerCase();
       if ((user.permissions as string[]).includes("configuracion") && urlStr.includes("/configuracion")) return true;
-      if (urlStr.includes("/ayuda") || urlStr === "#") return true; 
+      if (urlStr.includes("/ayuda") || urlStr === "#") return true;
+      // Only ownerpos see Soporte link
+      if (urlStr.includes("/soporte") && (user.role === "ownerpos" || user.role === "admin")) return true;
       return false;
     });
   }, [user]);
@@ -222,7 +263,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold text-base">{businessName}</span>
-                    <span className="truncate text-xs text-muted-foreground">Panel de Control</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {user.role === "syncropos" ? "Centro de Soporte" : "Panel de Control"}
+                    </span>
                   </div>
                 </SidebarMenuButton>
           </SidebarMenuItem>
