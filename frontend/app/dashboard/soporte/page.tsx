@@ -76,12 +76,17 @@ export default function SupportChatPage() {
   };
 
   const initSocket = (convId: string) => {
-    const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-    if (!storedUser.id) return;
+    const storedUserStr = localStorage.getItem("user");
+    console.log("[DEBUG] Raw user from localStorage:", storedUserStr);
+    const storedUser = JSON.parse(storedUserStr || "{}");
+    
+    if (!storedUser.id) {
+      console.error("[DEBUG] No user ID found in localStorage. Cannot init socket.");
+      return;
+    }
 
     const socketUrl = API;
-    console.log("[DEBUG] Initializing socket with URL:", socketUrl);
-    console.log("[DEBUG] User ID for socket:", storedUser.id);
+    console.log("[DEBUG] Initializing socket. URL:", socketUrl + "/chat", "User ID:", storedUser.id);
     
     if (socketRef.current) {
       console.log("[DEBUG] Cleaning up existing socket connection");
