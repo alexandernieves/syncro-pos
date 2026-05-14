@@ -12,6 +12,9 @@ export class UploadController {
     @UploadedFile() file: Express.Multer.File,
     @Body('folder') folder: string
   ) {
+    if (!file) {
+      throw new Error('No se recibió ningún archivo');
+    }
     const url = await this.uploadService.uploadFile(file, folder);
     return { url };
   }

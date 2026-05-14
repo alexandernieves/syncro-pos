@@ -14,7 +14,6 @@ import { PushService } from './push.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @WebSocketGateway({
-  namespace: '/chat',
   cors: {
     origin: '*',
   }
@@ -33,35 +32,70 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log('ChatGateway initialized');
   }
 
-  handleConnection(client: Socket) {
-    console.log(`[CHAT_GATEWAY] Attempting connection. Client ID: ${client.id}`);
+  async handleConnection(client: Socket) {
     const userId = client.handshake.query.userId as string;
-    console.log(`[CHAT_GATEWAY] Handshake query userId: ${userId}`);
-    
     if (userId) {
       client.join(`user_${userId}`);
-      console.log(`[CHAT_GATEWAY] User ${userId} joined room: user_${userId}`);
-    } else {
-      console.warn(`[CHAT_GATEWAY] Connection attempt without userId!`);
+      // Update last seen and broadcast online status
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { lastSeen: new Date() }
+      });
+      this.logger.log(`User connected: ${userId}`);
     }
   }
 
-  handleDisconnect(client: Socket) {
+  async handleDisconnect(client: Socket) {
     const userId = client.handshake.query.userId as string;
-    console.log(`[CHAT_GATEWAY] Client disconnected: ${client.id} (User: ${userId})`);
     if (userId) {
       client.leave(`user_${userId}`);
+      // Final update of last seen
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { lastSeen: new Date() }
+      });
+      
+      // Notify all conversations this user was in
+      // For simplicity, we can broadcast to all rooms the client was part of
+      // or just a general presence update if needed.
+      this.server.emit('userPresence', {
+        userId,
+        status: 'offline',
+        lastSeen: new Date()
+      });
+
+      this.logger.log(`User disconnected: ${userId}`);
     }
   }
 
   @SubscribeMessage('joinConversation')
-  handleJoinConversation(
+  async handleJoinConversation(
     @ConnectedSocket() client: Socket,
     @MessageBody() conversationId: string,
   ) {
-    console.log(`[DEBUG] Received joinConversation for: ${conversationId} from client ${client.id}`);
     client.join(`conv_${conversationId}`);
+    
+    // Notify others that this user is online in the conversation
+    const userId = client.handshake.query.userId as string;
+    this.server.to(`conv_${conversationId}`).emit('userPresence', {
+      userId,
+      status: 'online'
+    });
+
     return { event: 'joined', conversationId };
+  }
+
+  @SubscribeMessage('typing')
+  handleTyping(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { conversationId: string; isTyping: boolean },
+  ) {
+    const userId = client.handshake.query.userId as string;
+    // Broadcast "Escribiendo..." to everyone in the room EXCEPT the sender
+    client.to(`conv_${data.conversationId}`).emit('userTyping', {
+      userId,
+      isTyping: data.isTyping
+    });
   }
 
   @SubscribeMessage('sendMessage')
@@ -74,7 +108,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       fileUrl?: string;
     },
   ) {
-    console.log(`[DEBUG] Handling sendMessage:`, data);
     const message = await this.chatService.saveMessage(data);
 
     // Broadcast to the conversation room
@@ -87,7 +120,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       updatedAt: new Date()
     });
 
-    // Send push notification to the OTHER participant
+    // Send push notification to the participant
     try {
       const conv = await this.prisma.conversation.findUnique({
         where: { id: data.conversationId },
@@ -97,7 +130,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const isSupportSender = sender?.role === 'syncropos';
 
       if (isSupportSender && conv?.businessId) {
-        // Notify all users belonging to that business
         const businessUsers = await this.prisma.user.findMany({
           where: { businessId: conv.businessId, role: { not: 'syncropos' } },
         });
@@ -109,7 +141,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           });
         }
       } else {
-        // Notify support team
         const supportUsers = await this.prisma.user.findMany({
           where: { role: 'syncropos' },
         });
@@ -121,21 +152,25 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           });
         }
       }
-    } catch (e) {
-      // Non-critical: don't break message flow
-    }
+    } catch (e) {}
 
     return message;
   }
 
-  @SubscribeMessage('markRead')
+  @SubscribeMessage('markAsRead')
   async handleMarkRead(
     @MessageBody() data: { conversationId: string; userId: string },
   ) {
-    await this.chatService.markAsRead(data.conversationId, data.userId);
-    this.server.to(`conv_${data.conversationId}`).emit('messagesRead', {
-      conversationId: data.conversationId,
-      readBy: data.userId
-    });
+    try {
+      await this.chatService.markAsRead(data.conversationId, data.userId);
+      // Emit to the conversation room so the sender sees the double check turn blue
+      this.server.to(`conv_${data.conversationId}`).emit('messagesRead', {
+        conversationId: data.conversationId,
+        readBy: data.userId
+      });
+      this.logger.log(`Messages marked as read in conv: ${data.conversationId} by ${data.userId}`);
+    } catch (e) {
+      this.logger.error(`Error marking messages as read: ${e.message}`);
+    }
   }
 }

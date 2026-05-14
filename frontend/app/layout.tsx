@@ -50,7 +50,22 @@ export default function RootLayout({
               <ActiveThemeProvider>
                 {children}
                 <SessionMonitor timeoutMinutes={15} />
-                < Toaster position="top-right" />
+                <Toaster position="top-right" />
+                <script
+                  dangerouslySetInnerHTML={{
+                    __html: `
+                      if ('serviceWorker' in navigator) {
+                        window.addEventListener('load', function() {
+                          navigator.serviceWorker.register('/sw.js').then(function(registration) {
+                            console.log('ServiceWorker registration successful');
+                          }, function(err) {
+                            console.log('ServiceWorker registration failed: ', err);
+                          });
+                        });
+                      }
+                    `,
+                  }}
+                />
               </ActiveThemeProvider>
             </CurrencyProvider>
           </NotificationsProvider>

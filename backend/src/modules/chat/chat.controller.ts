@@ -27,4 +27,5 @@ export class ChatController {
   ) {
     return this.chatService.markAsRead(conversationId, userId);
   }
+
 }

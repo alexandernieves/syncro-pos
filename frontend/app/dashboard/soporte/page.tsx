@@ -23,8 +23,24 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { io, Socket } from "socket.io-client";
+import { format, formatDistanceToNow } from "date-fns";
+import { es } from "date-fns/locale";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { PWAInstallButton } from "@/components/pwa-install-button";
+import { VoiceButton, VoiceButtonState } from "@/components/ui/voice-button";
+import { AudioBubble } from "@/components/ui/audio-bubble";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  Popover, 
+  PopoverContent, 
+  PopoverTrigger 
+} from "@/components/ui/popover";
+
+const EMOJI_CATEGORIES = [
+  { label: "Caras", emojis: ["😀", "😃", "😄", "😁", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕"] },
+  { label: "Gestos", emojis: ["👋", "🤚", "🖐", "✋", "🖖", "👌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️", "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌", "👐", "🤲", "🤝", "🙏", "✍️", "💅", "🤳", "💪", "🦾"] },
+  { label: "Corazones", emojis: ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❤️‍🔥", "❤️‍🩹", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟"] },
+];
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
 
@@ -34,17 +50,26 @@ export default function SupportChatPage() {
   const [inputText, setInputText] = useState("");
   const [conversation, setConversation] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
-  const [isRecording, setIsRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  usePushNotifications(user?.id ?? null);
+  const [voiceState, setVoiceState] = useState<VoiceButtonState>("idle");
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [otherLastSeen, setOtherLastSeen] = useState<string | null>(null);
+  const [isOtherOnline, setIsOtherOnline] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [mounted, setMounted] = useState(false);
   
   useEffect(() => {
-    console.log("[DEBUG] SupportChatPage component mounted. API:", API);
+    setMounted(true);
   }, []);
+
+  usePushNotifications(user?.id ?? null);
+  
 
   // Role guard: support team has their own chat panel
   useEffect(() => {
@@ -67,6 +92,13 @@ export default function SupportChatPage() {
         const data = await res.json();
         setConversation(data);
         setMessages(data.messages || []);
+        
+        // Find other participant for status/lastSeen
+        const other = data.participants?.find((p: any) => p.userId !== user?.id);
+        if (other?.user) {
+          setOtherLastSeen(other.user.lastSeen);
+        }
+
         initSocket(data.id);
         setTimeout(scrollToBottom, 200);
       }
@@ -76,24 +108,13 @@ export default function SupportChatPage() {
   };
 
   const initSocket = (convId: string) => {
-    const storedUserStr = localStorage.getItem("user");
-    console.log("[DEBUG] Raw user from localStorage:", storedUserStr);
-    const storedUser = JSON.parse(storedUserStr || "{}");
-    
-    if (!storedUser.id) {
-      console.error("[DEBUG] No user ID found in localStorage. Cannot init socket.");
-      return;
-    }
+    const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+    if (!storedUser.id) return;
 
     const socketUrl = API;
-    console.log("[DEBUG] Initializing socket. URL:", socketUrl + "/chat", "User ID:", storedUser.id);
-    
-    if (socketRef.current) {
-      console.log("[DEBUG] Cleaning up existing socket connection");
-      socketRef.current.disconnect();
-    }
+    if (socketRef.current) socketRef.current.disconnect();
 
-    socketRef.current = io(socketUrl + "/chat", {
+    socketRef.current = io(socketUrl, {
       transports: ["websocket", "polling"],
       query: { userId: storedUser.id },
       reconnection: true,
@@ -102,25 +123,20 @@ export default function SupportChatPage() {
     });
     
     socketRef.current.on("connect", () => {
-      console.log("[DEBUG] Socket CONNECTED successfully. ID:", socketRef.current?.id);
       setIsConnected(true);
       socketRef.current?.emit("joinConversation", convId);
+      // Mark as read when entering
+      socketRef.current?.emit("markAsRead", { 
+        conversationId: convId, 
+        userId: storedUser.id 
+      });
     });
 
-    socketRef.current.on("disconnect", (reason) => {
-      console.log("[DEBUG] Socket DISCONNECTED. Reason:", reason);
+    socketRef.current.on("disconnect", () => {
       setIsConnected(false);
     });
 
-    socketRef.current.on("connect_error", (err) => {
-      console.error("[DEBUG] Socket CONNECTION ERROR:", err.message);
-      console.error("[DEBUG] Full error details:", {
-        message: err.message,
-        name: err.name,
-        stack: err.stack,
-        socketId: socketRef.current?.id,
-        url: socketUrl
-      });
+    socketRef.current.on("connect_error", () => {
       setIsConnected(false);
     });
 
@@ -129,12 +145,61 @@ export default function SupportChatPage() {
         if (prev.some(m => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
+      
+      // If we are the receiver and the chat is open, mark as read immediately
+      if (msg.senderId !== storedUser.id) {
+        socketRef.current?.emit("markAsRead", { 
+          conversationId: convId, 
+          userId: storedUser.id 
+        });
+      }
       setTimeout(scrollToBottom, 100);
+    });
+
+    socketRef.current.on("messagesRead", ({ conversationId }: { conversationId: string }) => {
+      setMessages((prev) => 
+        prev.map(m => ({ ...m, isRead: true }))
+      );
+    });
+
+    socketRef.current.on("userTyping", ({ userId, isTyping }: { userId: string, isTyping: boolean }) => {
+      if (userId !== storedUser.id) {
+        setIsOtherTyping(isTyping);
+      }
+    });
+
+    socketRef.current.on("userPresence", ({ userId, status }: { userId: string, status: string }) => {
+      if (userId !== storedUser.id) {
+        setIsOtherOnline(status === 'online');
+      }
     });
   };
 
   const scrollToBottom = () => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleInputChange = (val: string) => {
+    setInputText(val);
+    
+    if (!socketRef.current || !conversation) return;
+
+    // Emit typing: true
+    socketRef.current.emit('typing', { 
+      conversationId: conversation.id, 
+      isTyping: true 
+    });
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+    // Set timeout to emit typing: false
+    typingTimeoutRef.current = setTimeout(() => {
+      socketRef.current?.emit('typing', { 
+        conversationId: conversation.id, 
+        isTyping: false 
+      });
+    }, 2000);
   };
 
   const handleSend = () => {
@@ -153,7 +218,6 @@ export default function SupportChatPage() {
       type: "TEXT",
     };
 
-    console.log("Emitting sendMessage:", msgData);
     socketRef.current.emit("sendMessage", msgData);
     setInputText("");
   };
@@ -185,45 +249,100 @@ export default function SupportChatPage() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
-      recorder.ondataavailable = (e) => audioChunksRef.current.push(e.data);
-      recorder.onstop = async () => {
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const file = new File([blob], "voice.webm", { type: "audio/webm" });
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("folder", "chat/voice");
-        const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
-        const { url } = await res.json();
-        socketRef.current?.emit("sendMessage", {
-          conversationId: conversation.id,
-          senderId: user.id,
-          type: "AUDIO",
-          fileUrl: url,
-        });
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+          // Update preview whenever we get data
+          const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          setAudioBlob(blob);
+          setAudioPreviewUrl(URL.createObjectURL(blob));
+        }
       };
-      recorder.start();
-      setIsRecording(true);
+
+      recorder.start(1000); // Collect data every second to keep preview updated
+      setVoiceState("recording");
     } catch {
       toast.error("No se pudo acceder al micrófono");
     }
   };
 
-  const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    setIsRecording(false);
+  const pauseRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.pause();
+      setVoiceState("preview");
+    }
+  };
+
+  const resumeRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "paused") {
+      mediaRecorderRef.current.resume();
+      setVoiceState("recording");
+    }
+  };
+
+  const stopAndSendRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.onstop = () => {
+        sendVoiceNote(); // Send once stopped
+      };
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const sendVoiceNote = async () => {
+    if (!audioBlob || !conversation) return;
+    setVoiceState("processing");
+    const file = new File([audioBlob], "voice.webm", { type: "audio/webm" });
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("folder", "chat/voice");
+    try {
+      const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
+      const { url } = await res.json();
+      socketRef.current?.emit("sendMessage", {
+        conversationId: conversation.id,
+        senderId: user.id,
+        type: "AUDIO",
+        fileUrl: url,
+      });
+      setVoiceState("success");
+      setTimeout(() => {
+        setVoiceState("idle");
+        setAudioPreviewUrl(null);
+        setAudioBlob(null);
+      }, 1000);
+    } catch {
+      toast.error("Error al enviar audio");
+      setVoiceState("error");
+    }
+  };
+
+  const discardRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    setAudioPreviewUrl(null);
+    setAudioBlob(null);
+    setVoiceState("idle");
   };
 
   const renderContent = (msg: any) => {
     if (msg.type === "IMAGE") return <img src={msg.fileUrl} alt="" className="rounded-xl max-w-xs" />;
     if (msg.type === "VIDEO") return <video src={msg.fileUrl} controls className="rounded-xl max-w-xs" />;
-    if (msg.type === "AUDIO") return <audio src={msg.fileUrl} controls className="w-56" />;
+    if (msg.type === "AUDIO") return <AudioBubble url={msg.fileUrl} isMe={msg.senderId === user?.id} />;
     return <span className="leading-relaxed">{msg.text}</span>;
   };
 
+  const addEmoji = (emoji: string) => {
+    handleInputChange(inputText + emoji);
+  };
+
   return (
+    <>
     <div className="flex h-[calc(100vh-var(--header-height,60px))] overflow-hidden bg-background">
 
       {/* ── LEFT SIDEBAR ─────────────────────────────── */}
@@ -250,7 +369,10 @@ export default function SupportChatPage() {
                 <AvatarImage src="/syncro.png" />
                 <AvatarFallback className="bg-primary text-primary-foreground font-bold text-sm">SP</AvatarFallback>
               </Avatar>
-              <span className="absolute bottom-0 right-0 size-3 rounded-full bg-emerald-500 border-2 border-background" />
+              <span className={cn(
+                "absolute bottom-0 right-0 size-3 rounded-full border-2 border-background transition-colors duration-300",
+                isOtherOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-muted-foreground/30"
+              )} />
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm truncate">Soporte Syncro POS</p>
@@ -286,17 +408,33 @@ export default function SupportChatPage() {
               <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">SP</AvatarFallback>
             </Avatar>
             <div>
-              <p className="font-semibold text-sm">Soporte Syncro POS</p>
-              <p className={cn(
-                "text-[11px] font-medium flex items-center gap-1",
-                isConnected ? "text-emerald-500" : "text-amber-500"
-              )}>
-                <span className={cn(
-                  "size-1.5 rounded-full inline-block",
-                  isConnected ? "bg-emerald-500" : "bg-amber-500 animate-pulse"
-                )} />
-                {isConnected ? "En línea" : "Conectando..."}
+              <p className="font-semibold text-sm">
+                {conversation?.business?.name || "Soporte Syncro POS"}
               </p>
+              <div className="flex items-center gap-1.5 h-4">
+                {mounted && (
+                  isOtherTyping ? (
+                    <span className="text-[11px] text-primary font-medium animate-pulse">
+                      Escribiendo...
+                    </span>
+                  ) : (
+                    <>
+                      <span className={cn(
+                        "size-2 rounded-full",
+                        isOtherOnline ? "bg-emerald-500" : "bg-muted-foreground/30"
+                      )} />
+                      <span className="text-[11px] text-muted-foreground font-medium">
+                        {isOtherOnline 
+                          ? "En línea" 
+                          : otherLastSeen 
+                            ? `Últ. vez ${formatDistanceToNow(new Date(otherLastSeen), { addSuffix: true, locale: es })}`
+                            : "Desconectado"
+                        }
+                      </span>
+                    </>
+                  )
+                )}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -319,50 +457,55 @@ export default function SupportChatPage() {
               </defs>
               <rect width="100%" height="100%" fill="url(#dot-grid)" />
             </svg>
-            {/* Decorative blobs */}
-            <div className="absolute top-1/4 left-1/3 size-64 rounded-full bg-primary/5 blur-3xl" />
-            <div className="absolute bottom-1/4 right-1/4 size-48 rounded-full bg-secondary/8 blur-3xl" />
           </div>
 
           <ScrollArea className="h-full">
-            <div className="px-5 py-4 flex flex-col gap-2 relative">
+            <div className="px-5 py-4 flex flex-col gap-3 relative" style={{ filter: 'url(#gooey-effect)' }}>
               {/* Date chip */}
-              <div className="self-center">
+              <div className="self-center mb-4">
                 <span className="text-[10px] font-medium px-3 py-1 rounded-full bg-muted/80 backdrop-blur-sm text-muted-foreground border">
                   Hoy
                 </span>
               </div>
 
-              {/* Welcome message when empty */}
+              {/* Welcome message */}
               {messages.length === 0 && (
                 <div className="self-center mt-8 flex flex-col items-center gap-3 text-center max-w-xs">
                   <div className="size-16 rounded-2xl bg-primary/10 flex items-center justify-center">
                     <IconMessageCircle size={32} className="text-primary/60" />
                   </div>
                   <p className="text-sm font-semibold">¡Hola! ¿En qué te ayudamos?</p>
-                  <p className="text-xs text-muted-foreground">Nuestro equipo de soporte está disponible para resolver cualquier duda sobre Syncro POS.</p>
                 </div>
               )}
 
-              {messages.map((msg, i) => {
-                const isMe = msg.senderId === user?.id;
-                return (
-                  <div key={msg.id || i} className={cn("flex flex-col max-w-[72%]", isMe ? "self-end items-end" : "self-start items-start")}>
-                    <div className={cn(
-                      "px-4 py-2.5 rounded-2xl shadow-sm text-sm",
-                      isMe
-                        ? "bg-primary text-primary-foreground rounded-br-sm"
-                        : "bg-card border rounded-bl-sm"
-                    )}>
-                      {renderContent(msg)}
-                      <div className={cn("flex items-center gap-1 mt-1 text-[10px]", isMe ? "text-primary-foreground/60 justify-end" : "text-muted-foreground")}>
-                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        {isMe && (msg.isRead ? <IconChecks size={12} className="text-blue-300" /> : <IconCheck size={12} />)}
+              <AnimatePresence initial={false}>
+                {messages.map((msg, i) => {
+                  const isMe = msg.senderId === user?.id;
+                  return (
+                    <motion.div 
+                      key={msg.id || i} 
+                      initial={{ scale: 0.5, opacity: 0, y: 20 }}
+                      animate={{ scale: 1, opacity: 1, y: 0 }}
+                      exit={{ scale: 0.8, opacity: 0 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                      className={cn("flex flex-col max-w-[80%]", isMe ? "self-end items-end" : "self-start items-start")}
+                    >
+                      <div className={cn(
+                        "px-4 py-2.5 rounded-2xl shadow-sm text-sm relative",
+                        isMe
+                          ? "bg-primary text-white rounded-tr-none"
+                          : "bg-card border rounded-tl-none"
+                      )}>
+                        {renderContent(msg)}
+                        <div className={cn("flex items-center gap-1 mt-1 text-[10px]", isMe ? "text-white/60 justify-end" : "text-muted-foreground")}>
+                          {format(new Date(msg.createdAt), 'hh:mm a')}
+                          {isMe && <IconChecks size={12} className={msg.isRead ? "text-sky-400" : "text-white/40"} />}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
               <div ref={scrollRef} />
             </div>
           </ScrollArea>
@@ -370,9 +513,40 @@ export default function SupportChatPage() {
 
         {/* Input bar */}
         <div className="px-4 py-3 border-t bg-background/80 backdrop-blur-sm shrink-0 flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground size-9">
-            <IconMoodSmile size={20} />
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground size-9 hover:bg-primary/10 hover:text-primary transition-colors">
+                <IconMoodSmile size={20} />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="top" align="start" className="w-[320px] p-0 border-none shadow-2xl rounded-2xl bg-popover/95 backdrop-blur-md overflow-hidden">
+              <div className="flex flex-col h-[350px]">
+                <div className="px-4 py-3 border-b bg-muted/30">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Emojis</p>
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="p-3 space-y-4">
+                    {EMOJI_CATEGORIES.map((cat) => (
+                      <div key={cat.label} className="space-y-2">
+                        <p className="text-[10px] font-bold text-muted-foreground px-1 uppercase">{cat.label}</p>
+                        <div className="grid grid-cols-8 gap-1">
+                          {cat.emojis.map((emoji) => (
+                            <button
+                              key={emoji}
+                              onClick={() => addEmoji(emoji)}
+                              className="size-8 flex items-center justify-center rounded-lg hover:bg-muted text-lg transition-all active:scale-90"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            </PopoverContent>
+          </Popover>
           <div className="relative shrink-0">
             <Button variant="ghost" size="icon" className="text-muted-foreground size-9">
               <IconPaperclip size={20} />
@@ -380,32 +554,50 @@ export default function SupportChatPage() {
             <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleFileUpload} accept="image/*,video/*" />
           </div>
 
-          {isRecording ? (
-            <div className="flex-1 flex items-center gap-3 px-4 h-10 bg-red-500/10 rounded-full border border-red-500/20">
-              <span className="size-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-xs font-semibold text-red-500 flex-1">Grabando nota de voz...</span>
-              <Button variant="ghost" size="sm" className="text-red-500 text-xs h-6 px-2" onClick={stopRecording}>Cancelar</Button>
-            </div>
-          ) : (
+          {voiceState === "idle" ? (
             <Input
               className="flex-1 h-10 rounded-full bg-muted/50 border-none focus-visible:ring-1 focus-visible:ring-primary/30 px-4 text-sm"
               placeholder={uploading ? "Subiendo archivo..." : "Escribe un mensaje..."}
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
               disabled={uploading}
             />
-          )}
+          ) : null}
 
-          <Button
-            size="icon"
-            className={cn("shrink-0 size-10 rounded-full transition-all", inputText.trim() ? "bg-primary shadow-lg shadow-primary/20" : "bg-muted text-muted-foreground")}
-            onClick={inputText.trim() ? handleSend : (isRecording ? stopRecording : startRecording)}
-          >
-            {inputText.trim() ? <IconSend size={18} /> : (isRecording ? <IconSend size={18} /> : <IconMicrophone size={18} />)}
-          </Button>
+          {inputText.trim() && voiceState === "idle" ? (
+            <Button
+              size="icon"
+              className="shrink-0 size-10 rounded-full bg-primary shadow-lg shadow-primary/20 transition-all"
+              onClick={handleSend}
+            >
+              <IconSend size={18} />
+            </Button>
+          ) : (
+            <VoiceButton
+              state={voiceState}
+              onStart={startRecording}
+              onStop={pauseRecording}
+              onResume={resumeRecording}
+              onSend={stopAndSendRecording}
+              onDiscard={discardRecording}
+              audioPreviewUrl={audioPreviewUrl}
+              className={cn("shrink-0 transition-all duration-300", voiceState !== "idle" && "flex-1")}
+            />
+          )}
         </div>
       </div>
     </div>
+      {/* Gooey Filter Definition - Refined for sharp edges */}
+      <svg className="absolute h-0 w-0" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="gooey-effect" colorInterpolationFilters="sRGB">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+            <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo" />
+            <feComposite in="SourceGraphic" in2="goo" operator="atop" />
+          </filter>
+        </defs>
+      </svg>
+    </>
   );
 }

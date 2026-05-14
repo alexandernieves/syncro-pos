@@ -63,7 +63,7 @@ export default function SyncroAdminChatPage() {
 
   const initSocket = (userId: string) => {
     const socketUrl = API;
-    socketRef.current = io(socketUrl + "/chat", { query: { userId } });
+    socketRef.current = io(socketUrl, { query: { userId } });
     socketRef.current.on("newMessage", (msg: any) => {
       setMessages((prev) => {
         if (prev.length && prev[0].conversationId === msg.conversationId) {

@@ -54,6 +54,7 @@ export class AuthService {
         country: user.country,
         city: user.city,
         avatar: user.avatar,
+        businessId: user.businessId,
       }
     };
   }
