@@ -13,7 +13,7 @@ import { ChatService } from './chat.service';
 import { PushService } from './push.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-@WebSocketGateway(9001, {
+@WebSocketGateway({
   cors: {
     origin: '*',
   }

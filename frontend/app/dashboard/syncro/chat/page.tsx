@@ -62,7 +62,7 @@ export default function SyncroAdminChatPage() {
   };
 
   const initSocket = (userId: string) => {
-    const socketUrl = API.split(":")[0] + ":" + API.split(":")[1] + ":9001";
+    const socketUrl = API;
     socketRef.current = io(socketUrl, { query: { userId } });
     socketRef.current.on("newMessage", (msg: any) => {
       setMessages((prev) => {

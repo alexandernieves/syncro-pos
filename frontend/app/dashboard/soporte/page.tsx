@@ -79,7 +79,7 @@ export default function SupportChatPage() {
     const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
     if (!storedUser.id) return;
 
-    const socketUrl = API.split(":")[0] + ":" + API.split(":")[1] + ":9001";
+    const socketUrl = API;
     console.log("[DEBUG] Initializing socket with URL:", socketUrl);
     console.log("[DEBUG] User ID for socket:", storedUser.id);
     
