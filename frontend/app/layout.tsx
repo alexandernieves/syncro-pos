@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import "./globals.css";
 
@@ -13,10 +13,13 @@ export const metadata: Metadata = {
   title: "SYNCRO POS",
   description: "Sistema de gestión y auditoría comercial premium.",
   manifest: "/manifest.json",
-  themeColor: "#10b981",
   icons: {
     icon: "/syncro.png",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#10b981",
 };
 
 import { NotificationsProvider } from "@/context/NotificationsContext";

@@ -14,6 +14,7 @@ import { PushService } from './push.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @WebSocketGateway({
+  namespace: '/chat',
   cors: {
     origin: '*',
   }
@@ -33,22 +34,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleConnection(client: Socket) {
+    console.log(`[CHAT_GATEWAY] Attempting connection. Client ID: ${client.id}`);
     const userId = client.handshake.query.userId as string;
-    this.logger.log(`[DEBUG] Client trying to connect: ${client.id}`);
-    this.logger.log(`[DEBUG] Handshake query userId: ${userId}`);
+    console.log(`[CHAT_GATEWAY] Handshake query userId: ${userId}`);
+    
     if (userId) {
       client.join(`user_${userId}`);
-      this.logger.log(`[DEBUG] User ${userId} joined room: user_${userId}`);
+      console.log(`[CHAT_GATEWAY] User ${userId} joined room: user_${userId}`);
     } else {
-      this.logger.warn(`[DEBUG] Connection attempt without userId`);
+      console.warn(`[CHAT_GATEWAY] Connection attempt without userId!`);
     }
   }
 
   handleDisconnect(client: Socket) {
     const userId = client.handshake.query.userId as string;
+    console.log(`[CHAT_GATEWAY] Client disconnected: ${client.id} (User: ${userId})`);
     if (userId) {
       client.leave(`user_${userId}`);
-      console.log(`User disconnected: ${userId}`);
     }
   }
 

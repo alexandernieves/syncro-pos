@@ -88,7 +88,7 @@ export default function SupportChatPage() {
       socketRef.current.disconnect();
     }
 
-    socketRef.current = io(socketUrl, {
+    socketRef.current = io(socketUrl + "/chat", {
       transports: ["websocket", "polling"],
       query: { userId: storedUser.id },
       reconnection: true,
@@ -109,7 +109,13 @@ export default function SupportChatPage() {
 
     socketRef.current.on("connect_error", (err) => {
       console.error("[DEBUG] Socket CONNECTION ERROR:", err.message);
-      console.error("[DEBUG] Full error object:", err);
+      console.error("[DEBUG] Full error details:", {
+        message: err.message,
+        name: err.name,
+        stack: err.stack,
+        socketId: socketRef.current?.id,
+        url: socketUrl
+      });
       setIsConnected(false);
     });
 

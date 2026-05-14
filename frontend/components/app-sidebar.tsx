@@ -48,7 +48,7 @@ const data = {
   user: {
     name: "Administrador",
     email: "admin@mipos.com",
-    avatar: "/avatars/shadcn.jpg",
+    avatar: "",
     role: "admin",
     permissions: [] as string[],
   },
