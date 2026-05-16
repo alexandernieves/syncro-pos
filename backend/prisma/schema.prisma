@@ -119,18 +119,20 @@ model Inventory {
 
 model Category {
   id        String    @id @default(uuid())
-  name      String    @unique
+  name      String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   products  Product[]
   
   businessId String?
   business   Business? @relation(fields: [businessId], references: [id])
+
+  @@unique([businessId, name])
 }
 
 model Supplier {
   id        String            @id @default(uuid())
-  name      String            @unique
+  name      String
   taxId     String?           @unique
   phone     String?
   email     String?
@@ -160,6 +162,8 @@ model Supplier {
   supplierInvoices  SupplierInvoice[]
   supplierPayments  SupplierPayment[]
   supplierReturns   SupplierReturn[]
+
+  @@unique([businessId, name])
 }
 
 enum SupplierStatus {
@@ -169,7 +173,7 @@ enum SupplierStatus {
 
 model Branch {
   id               String              @id @default(uuid())
-  name             String              @unique
+  name             String
   location         String?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
@@ -191,6 +195,8 @@ model Branch {
   transfersDest     InventoryTransfer[] @relation("DestinationBranch")
   expenses          Expense[]
   notifications     Notification[] @relation("BranchNotifications")
+
+  @@unique([businessId, name])
 }
 
 model User {

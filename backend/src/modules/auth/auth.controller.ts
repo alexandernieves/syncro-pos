@@ -20,8 +20,8 @@ export class AuthController {
     try {
       return await this.authService.register(body);
     } catch (err: any) {
-      if (err?.code === 11000 || (err?.message && err.message.includes('E11000'))) {
-        throw new ConflictException('Esta cuenta ya existe. El correo electrónico ya está registrado.');
+      if (err?.code === 'P2002' || err?.code === 11000 || (err?.message && err.message.includes('E11000'))) {
+        throw new ConflictException('Esta cuenta ya existe. El correo electrónico o nombre de negocio ya está registrado.');
       }
       throw err;
     }
