@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { SettingsService } from '../settings/settings.service';
 import { BranchesService } from '../branches/branches.service';
 import { HistoryService } from '../history/history.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
@@ -14,6 +15,7 @@ export class AuthService {
     private settingsService: SettingsService,
     private branchesService: BranchesService,
     private historyService: HistoryService,
+    private prisma: PrismaService,
   ) {}
 
   async validateUser(email: string, pass: string): Promise<any> {
@@ -23,7 +25,6 @@ export class AuthService {
     }
     const isMatch = await bcrypt.compare(pass, user.password);
     if (isMatch) {
-      // Prisma devuelve objetos planos, no necesitamos toObject()
       const { password, ...result } = user;
       return result;
     }
@@ -33,7 +34,6 @@ export class AuthService {
   async login(user: any) {
     const payload = { email: user.email, sub: user.id, role: user.role, name: user.name, country: user.country };
     
-    // Log login action
     await this.historyService.logAction({
       userId: user.id,
       action: 'LOGIN',
@@ -60,24 +60,40 @@ export class AuthService {
   }
 
   async register(userData: any) {
-    if (userData.country) {
-      await this.settingsService.updateSettings({ country: userData.country } as any);
-    }
-    // Create/update the main branch with country and city
-    const mainBranch = await this.branchesService.findMain();
-    const branchData = {
-      name: 'Sucursal Principal',
-      location: userData.city || 'Sede Central',
-      isMain: true,
-      country: userData.country || 'Venezuela',
-      city: userData.city || '',
-      state: '',
-    };
-    if (mainBranch) {
-      await this.branchesService.update(mainBranch.id, branchData);
-    } else {
-      await this.branchesService.create(branchData);
-    }
-    return await this.usersService.create(userData);
+    // 1. Create the business
+    const business = await this.prisma.business.create({
+      data: {
+        name: userData.name || 'Mi Negocio',
+        email: userData.email,
+        status: 'ACTIVE',
+        subscription: 'BASIC',
+      }
+    });
+
+    // 2. Create the settings for this business
+    await this.prisma.setting.create({
+      data: {
+        businessId: business.id,
+        country: userData.country || 'Venezuela',
+      }
+    });
+
+    // 3. Create the main branch for this business
+    await this.prisma.branch.create({
+      data: {
+        businessId: business.id,
+        name: 'Sucursal Principal',
+        location: userData.city || 'Sede Central',
+        isMain: true,
+        country: userData.country || 'Venezuela',
+        city: userData.city || '',
+      }
+    });
+
+    // 4. Create the user associated with the business
+    return await this.usersService.create({
+      ...userData,
+      businessId: business.id,
+    });
   }
 }
