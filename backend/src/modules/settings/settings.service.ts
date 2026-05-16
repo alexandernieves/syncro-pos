@@ -32,7 +32,9 @@ export class SettingsService implements OnModuleInit {
       'requireClient', 'printOnSale', 'lowStockAlert', 'allowNegativeStock',
       'defaultPrinter', 'paperWidth', 'copiesPerSale',
       'paymentMethods', 'discountPin', 'pinPermissions',
-      'salesGoal', 'showSalesGoal'
+      'salesGoal', 'showSalesGoal',
+      'exchangeRate', 'exchangeRateEur', 'bcvUpdateDate',
+      'exchangeRateDashboard', 'exchangeRateDashboardEur', 'bcvUpdateDateDashboard'
     ];
 
     const filteredData: any = {};
