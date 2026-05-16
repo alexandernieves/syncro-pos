@@ -79,7 +79,7 @@ export function RegisterForm({
     setLoading(true)
 
     const registerPromise = async () => {
-      const response = await fetch(``${API_URL}/auth/register`, {
+      const response = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password, country, city: city.trim(), role: "ownerpos" }),
