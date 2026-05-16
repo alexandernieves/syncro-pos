@@ -250,9 +250,9 @@ export default function SuppliersPage() {
             ${(alertsSummary?.summary?.totalBalance || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline" className="gap-1">
+            <Badge variant="outline" className="gap-1 opacity-0">
               <IconTrendingDown className="size-3 text-red-500" />
-              Creditos
+              0%
             </Badge>
           </CardAction>
         </CardHeader>
@@ -297,9 +297,9 @@ export default function SuppliersPage() {
             {suppliers.length}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline" className="gap-1">
+            <Badge variant="outline" className="gap-1 opacity-0">
               <IconTrendingUp className="size-3 text-emerald-500" />
-              Estable
+              +0%
             </Badge>
           </CardAction>
         </CardHeader>
@@ -316,20 +316,20 @@ export default function SuppliersPage() {
         <CardHeader>
           <CardDescription>Tasa de Cumplimiento</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-emerald-600">
-            98.5%
+            {suppliers.length > 0 ? "100%" : "0%"}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline" className="gap-1">
+            <Badge variant="outline" className="gap-1 opacity-0">
               <IconTrendingUp className="size-3 text-emerald-500" />
-              +2.1%
+              +0%
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Rendimiento superior al promedio
+            Rendimiento del proveedor
           </div>
-          <div className="text-muted-foreground">Basado en entregas a tiempo</div>
+          <div className="text-muted-foreground">Basado en el historial de entregas</div>
         </CardFooter>
       </Card>
     </div>
