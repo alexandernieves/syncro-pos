@@ -5,36 +5,25 @@ import { PrismaService } from '../prisma/prisma.service';
 export class BranchesService implements OnModuleInit {
   constructor(private prisma: PrismaService) {}
 
-  async onModuleInit() {
-    // This is global, should ideally be per business, but we keep it for now
-    // to ensure at least one branch exists globally if needed for legacy tests.
-    const count = await this.prisma.branch.count();
-    if (count === 0) {
-      await this.prisma.branch.create({
-        data: {
-          name: 'Sucursal Principal',
-          location: 'Sede Central',
-          isMain: true,
-          country: 'Venezuela',
-          state: 'Distrito Capital',
-        }
-      });
-      console.log('Default global branch created');
-    }
-  }
+  // Removed onModuleInit legacy global branch creation
 
   async create(data: any) {
     if (!data.businessId) {
       throw new BadRequestException('El ID del negocio es requerido para crear una sucursal');
     }
-    // If setting as main, unset others for the same business
-    if (data.isMain && data.businessId) {
-      await this.prisma.branch.updateMany({
-        where: { businessId: data.businessId },
-        data: { isMain: false }
-      });
+    try {
+      // If setting as main, unset others for the same business
+      if (data.isMain && data.businessId) {
+        await this.prisma.branch.updateMany({
+          where: { businessId: data.businessId },
+          data: { isMain: false }
+        });
+      }
+      return await this.prisma.branch.create({ data });
+    } catch (error) {
+      console.error('Error creating branch:', error);
+      throw new BadRequestException('Error al crear la sucursal: ' + (error.message || 'Error desconocido'));
     }
-    return this.prisma.branch.create({ data });
   }
 
   async findAll(businessId: string) {

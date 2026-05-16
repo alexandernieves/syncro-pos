@@ -9,6 +9,9 @@ export class BranchesController {
 
   @Post() 
   create(@Body() data: any, @Request() req: any) { 
+    if (!req.user) {
+      throw new UnauthorizedException('No se encontró información de usuario en la petición');
+    }
     const businessId = req.user.businessId;
     return this.branchesService.create({ ...data, businessId }); 
   }
