@@ -33,15 +33,30 @@ export class BranchesService {
   }
 
   async findOne(id: string, businessId: string) {
-    const branch = await this.prisma.branch.findFirst({ 
+    let branch = await this.prisma.branch.findFirst({ 
       where: { id, businessId } 
     });
-    if (!branch) throw new NotFoundException('Branch not found');
+
+    // Auto-fix for legacy branches (migration)
+    if (!branch && businessId) {
+      const legacyBranch = await this.prisma.branch.findFirst({ 
+        where: { id, businessId: null } 
+      });
+      if (legacyBranch) {
+        console.log(`Auto-migrating branch ${id} to business ${businessId}`);
+        branch = await this.prisma.branch.update({
+          where: { id },
+          data: { businessId }
+        });
+      }
+    }
+
+    if (!branch) throw new NotFoundException('Sucursal no encontrada o no tienes acceso');
     return branch;
   }
 
   async update(id: string, data: any, businessId: string) {
-    // Security check
+    // Security check & Auto-migration
     await this.findOne(id, businessId);
 
     // If setting as main, unset others
@@ -55,10 +70,15 @@ export class BranchesService {
     // Clean the data to avoid Prisma errors with read-only fields
     const { id: _id, businessId: _bid, createdAt, updatedAt, ...cleanData } = data;
 
-    return this.prisma.branch.update({
-      where: { id },
-      data: cleanData
-    });
+    try {
+      return await this.prisma.branch.update({
+        where: { id },
+        data: cleanData
+      });
+    } catch (error) {
+      console.error('Error updating branch:', error);
+      throw new BadRequestException('Error al actualizar la sucursal: ' + (error.message || 'Error desconocido'));
+    }
   }
 
   async setMain(id: string, businessId: string) {
@@ -98,7 +118,7 @@ export class BranchesService {
   }
 
   async wipeData(id: string, userId: string, password: string, businessId: string) {
-    // Security check
+    // Security check & Auto-migration
     await this.findOne(id, businessId);
 
     const user = await this.prisma.user.findFirst({ 
@@ -111,10 +131,6 @@ export class BranchesService {
     if (!isPasswordValid) throw new UnauthorizedException('Contraseña incorrecta');
 
     return this.prisma.$transaction(async (tx) => {
-      // Logic for wiping data... (reusing existing logic but ensured businessId scoping where possible)
-      // Since wipeData is very aggressive, we keep the existing logic but the branch check above handles the scoping.
-      
-      // ... (existing code from lines 72-148)
       await tx.notification.deleteMany({ where: { branchId: id } });
       await tx.expense.deleteMany({ where: { branchId: id } });
       await tx.accountingEntry.deleteMany({ where: { branchId: id } });
@@ -158,8 +174,6 @@ export class BranchesService {
       }
 
       await tx.shift.deleteMany({ where: { branchId: id } });
-      // We don't delete global things like all users or audit logs here as it might affect other branches
-      // but the user asked for a "clean" deletion. Usually "wipe" means all data for THAT branch.
       
       return { success: true, message: 'Sucursal formateada exitosamente' };
     });
