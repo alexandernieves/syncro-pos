@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 
-const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
+const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
 
 export default function IngresoPage() {
   const [products, setProducts] = useState<any[]>([]);

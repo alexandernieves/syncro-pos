@@ -20,7 +20,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/components/ui/select";
 
-const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
+const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
 
 const VENEZUELA_STATES = [
   "Amazonas", "Anzoátegui", "Apure", "Aragua", "Barinas", "Bolívar", "Carabobo", 

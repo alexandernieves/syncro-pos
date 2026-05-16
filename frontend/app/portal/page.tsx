@@ -16,7 +16,7 @@ import { ModeSwitcher } from "@/components/mode-switcher";
 import { ThemeSelector } from "@/components/theme-selector";
 import { Label } from "@/components/ui/label";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "${process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`}";
+const API = process.env.NEXT_PUBLIC_API_URL || "${process.env.NEXT_PUBLIC_API_URL || `${API_URL}`}`;
 
 const CATEGORIES = [
     { name: "Tecnología", icon: <IconDeviceMobile size={18} /> },

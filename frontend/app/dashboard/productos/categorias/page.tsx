@@ -23,7 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { IconX, IconDownload } from "@tabler/icons-react";
 import * as XLSX from "xlsx";
 
-const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
+const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
 
 type Category = {
   _id: string;

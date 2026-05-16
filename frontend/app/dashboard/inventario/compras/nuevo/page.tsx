@@ -105,7 +105,7 @@ import {
 } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 
-const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
+const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
 
 // --- Types & Schema ---
 

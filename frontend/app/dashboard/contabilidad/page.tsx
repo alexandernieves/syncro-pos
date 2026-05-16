@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChartAreaInteractive } from "@/components/chart-area-interactive";
 
-const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
+const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
 
 type AdvancedStats = {
   revenue: {

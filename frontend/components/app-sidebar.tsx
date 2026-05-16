@@ -179,7 +179,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       
       const fetchConfig = async () => {
         try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`}/settings`);
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || `${API_URL}`}/settings`);
           if(res.ok) {
             const config = await res.json();
             if(config) {

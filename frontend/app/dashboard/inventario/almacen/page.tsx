@@ -18,7 +18,7 @@ import { inventoryColumns } from "@/components/inventory-columns";
 import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
 
-const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
+const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
 
 export default function AlmacenPage() {
   const [products, setProducts] = useState<any[]>([]);

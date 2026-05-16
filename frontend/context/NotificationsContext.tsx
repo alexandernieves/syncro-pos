@@ -5,7 +5,7 @@ import { API_URL } from "@/lib/constants"
 import { io, Socket } from "socket.io-client";
 import { toast } from "sonner";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "${process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`}";
+const API = process.env.NEXT_PUBLIC_API_URL || "${process.env.NEXT_PUBLIC_API_URL || `${API_URL}`}`;
 
 interface NotificationsContextType {
   notifications: any[];

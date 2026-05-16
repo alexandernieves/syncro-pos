@@ -15,7 +15,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { useSortable } from "@dnd-kit/sortable"
 import { useRouter } from "next/navigation"
 
-const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
+const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"

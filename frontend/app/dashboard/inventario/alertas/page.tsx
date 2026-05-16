@@ -14,7 +14,7 @@ import { UniversalTable } from "@/components/universal-table";
 import { alertsColumns, AlertData } from "@/components/alerts-columns";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
+const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
 
 export default function AlertasPage() {
   const [alerts, setAlerts] = useState<any[]>([]);

@@ -33,7 +33,7 @@ import { useSync } from "@/hooks/useSync";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCurrency } from "@/context/CurrencyContext";
 
-const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
+const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
 
 type Variant = {
   id: string;

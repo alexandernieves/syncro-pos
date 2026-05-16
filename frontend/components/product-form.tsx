@@ -16,7 +16,7 @@ import {
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 
-const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
+const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
 
 type VariantForm = {
   id?: string;

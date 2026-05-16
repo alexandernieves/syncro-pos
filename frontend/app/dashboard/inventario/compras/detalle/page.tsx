@@ -25,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
+const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
 
 function PurchaseOrderDetailContent() {
   const searchParams = useSearchParams();
