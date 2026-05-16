@@ -1626,11 +1626,12 @@ export default function ConfiguracionPage() {
                   <Button onClick={async () => {
                     try {
                       console.log("Branches: Invoking update for:", editingBranch.name);
-                      const { _id, ...updatePayload } = editingBranch;
+                      const { id, _id, ...updatePayload } = editingBranch;
+                      const branchId = id || _id;
                       // Ensure everything is a string
                       updatePayload.state = String(updatePayload.state || "Distrito Capital");
                       
-                      const res = await fetch(`${API}/branches/${_id}`, {
+                      const res = await fetch(`${API}/branches/${branchId}`, {
                         method: "PUT",
                         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("token")}` },
                         body: JSON.stringify(updatePayload)
@@ -1692,7 +1693,7 @@ export default function ConfiguracionPage() {
                       }
 
                       // Proceed to set main
-                      const setMainRes = await fetch(`${API}/branches/${mainBranchCandidate._id}/set-main`, {
+                      const setMainRes = await fetch(`${API}/branches/${mainBranchCandidate.id || mainBranchCandidate._id}/set-main`, {
                         method: "PUT",
                         headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
                       });
