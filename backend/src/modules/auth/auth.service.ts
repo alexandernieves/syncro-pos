@@ -74,7 +74,7 @@ export class AuthService {
       state: '',
     };
     if (mainBranch) {
-      await this.branchesService.update(String((mainBranch as any)._id), branchData);
+      await this.branchesService.update(mainBranch.id, branchData);
     } else {
       await this.branchesService.create(branchData);
     }
