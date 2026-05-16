@@ -1,24 +1,31 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
-export class SettingsService implements OnModuleInit {
+export class SettingsService {
   constructor(private prisma: PrismaService) {}
 
-  async onModuleInit() {
-    const count = await this.prisma.setting.count();
-    if (count === 0) {
-      await this.prisma.setting.create({ data: {} });
-      console.log('Settings: Initialized default settings document.');
+  async getSettings(businessId: string) {
+    if (!businessId) return null;
+    
+    let settings = await this.prisma.setting.findFirst({
+      where: { businessId }
+    });
+
+    if (!settings) {
+      console.log(`Settings: Initializing default settings for business ${businessId}`);
+      settings = await this.prisma.setting.create({
+        data: { businessId }
+      });
     }
+
+    return settings;
   }
 
-  async getSettings() {
-    return this.prisma.setting.findFirst();
-  }
+  async updateSettings(updateData: any, businessId: string) {
+    if (!businessId) throw new Error('Business ID is required');
 
-  async updateSettings(updateData: any) {
-    const settings = await this.prisma.setting.findFirst();
+    const settings = await this.getSettings(businessId);
     
     // Lista de campos permitidos en el modelo Setting para evitar errores de Prisma
     const allowedFields = [
@@ -45,14 +52,10 @@ export class SettingsService implements OnModuleInit {
     }
 
     try {
-      if (settings) {
-        return await this.prisma.setting.update({
-          where: { id: settings.id },
-          data: filteredData
-        });
-      } else {
-        return await this.prisma.setting.create({ data: filteredData });
-      }
+      return await this.prisma.setting.update({
+        where: { id: settings.id },
+        data: filteredData
+      });
     } catch (error) {
       console.error("ERROR AL ACTUALIZAR CONFIGURACIÓN:", error);
       throw error;

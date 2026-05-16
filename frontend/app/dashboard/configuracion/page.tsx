@@ -252,7 +252,9 @@ export default function ConfiguracionPage() {
     const fetchData = async () => {
       // Fetch settings
       try {
-        const settingsRes = await fetch(`${API}/settings`);
+        const settingsRes = await fetch(`${API}/settings`, {
+          headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+        });
         if (settingsRes.ok) {
           const data = await settingsRes.json();
           if (data) {
@@ -381,12 +383,15 @@ export default function ConfiguracionPage() {
 
       const res = await fetch(`${API}/settings`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
         body: JSON.stringify(payload),
       });
 
       if (res.ok) {
-        toast.success(`Configuración de "${section}" guardada en la base de datos.`);
+        toast.success("Configuración guardada correctamente");
         window.dispatchEvent(new Event("settingsUpdated"));
       } else {
         toast.error("Error al guardar la configuración");
