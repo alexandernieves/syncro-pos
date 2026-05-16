@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
+import { API_URL } from "@/lib/constants"
 import { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -22,7 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { IconX, IconDownload } from "@tabler/icons-react";
 import * as XLSX from "xlsx";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
 type Category = {
   _id: string;

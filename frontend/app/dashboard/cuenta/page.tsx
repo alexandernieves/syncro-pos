@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { API_URL } from "@/lib/constants"
 import { 
   Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter 
 } from "@/components/ui/card";
@@ -19,7 +20,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/components/ui/select";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
 const VENEZUELA_STATES = [
   "Amazonas", "Anzoátegui", "Apure", "Aragua", "Barinas", "Bolívar", "Carabobo", 

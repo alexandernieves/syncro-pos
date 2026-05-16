@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
+import { API_URL } from "@/lib/constants"
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,7 @@ import { useSync } from "@/hooks/useSync";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCurrency } from "@/context/CurrencyContext";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
 type Variant = {
   id: string;

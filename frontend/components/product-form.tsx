@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { API_URL } from "@/lib/constants"
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,7 @@ import {
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
 type VariantForm = {
   id?: string;

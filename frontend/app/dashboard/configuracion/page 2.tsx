@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { API_URL } from "@/lib/constants"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -125,7 +126,7 @@ export default function ConfiguracionPage() {
 
   const [sessionInfo, setSessionInfo] = useState<any>(null);
 
-  const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+  const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
   const fetchBranches = async () => {
     try {

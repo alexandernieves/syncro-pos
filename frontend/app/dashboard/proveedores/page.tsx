@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { API_URL } from "@/lib/constants"
 import { 
   Card, CardContent, CardHeader, CardTitle, CardDescription, CardAction, CardFooter
 } from "@/components/ui/card";
@@ -32,7 +33,7 @@ import { useRouter } from "next/navigation";
 import { UniversalTable } from "@/components/universal-table";
 import { getSuppliersColumns } from "@/components/suppliers-columns";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
 const FORM_INITIAL_STATE = {
   name: "",

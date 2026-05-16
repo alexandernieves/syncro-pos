@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { API_URL } from "@/lib/constants"
 import { 
   Card, CardContent, CardHeader, CardTitle, CardDescription 
 } from "@/components/ui/card";
@@ -18,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
 export default function CreditosPage() {
   const [clients, setClients] = useState<any[]>([]);

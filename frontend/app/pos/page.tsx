@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { API_URL } from "@/lib/constants"
 import { useRouter } from "next/navigation";
 import { 
   Card, CardContent, CardHeader, CardTitle, CardDescription 
@@ -45,7 +46,7 @@ import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
 import { useCurrency } from "@/context/CurrencyContext";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
 
 type Product = {
   id: string;

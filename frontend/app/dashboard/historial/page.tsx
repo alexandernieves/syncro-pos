@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { API_URL } from "@/lib/constants"
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,7 +44,7 @@ import { DatePickerWithRange } from "./date-range-picker";
 import { DateRange } from "react-day-picker";
 import { subDays } from "date-fns";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || "${process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`}";
 
 type AuditLog = {
   id: string;

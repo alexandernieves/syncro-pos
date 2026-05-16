@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { API_URL } from "@/lib/constants"
 import { db } from "@/lib/db";
 import { toast } from "sonner";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
 
 export function useSync() {
   const [isOnline, setIsOnline] = useState(true);

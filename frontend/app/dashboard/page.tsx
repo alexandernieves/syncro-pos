@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { API_URL } from "@/lib/constants"
 import { useRouter } from "next/navigation";
 import { ChartAreaInteractive } from "@/components/chart-area-interactive";
 import { 
@@ -21,7 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
 const RecentSalesTable = ({ sales }: { sales: any[] }) => {
   const { formatPrice } = useCurrency();

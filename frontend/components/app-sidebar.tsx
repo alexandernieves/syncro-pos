@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { API_URL } from "@/lib/constants"
 import {
   IconPackage,
   IconBox,
@@ -178,7 +179,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       
       const fetchConfig = async () => {
         try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000"}/settings`);
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`}/settings`);
           if(res.ok) {
             const config = await res.json();
             if(config) {

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { API_URL } from "@/lib/constants"
 import { 
   Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription, CardAction 
 } from "@/components/ui/card";
@@ -40,7 +41,7 @@ import { cn } from "@/lib/utils";
 import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
 type Client = {
   id: string;

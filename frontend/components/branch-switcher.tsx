@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { API_URL } from "@/lib/constants"
 import {
   Select,
   SelectContent,
@@ -13,7 +14,7 @@ export function BranchSwitcher({ disabled }: { disabled?: boolean }) {
   const [mounted, setMounted] = React.useState(false);
   const [branches, setBranches] = React.useState<any[]>([]);
   const [selectedBranch, setSelectedBranch] = React.useState<string>("");
-  const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+  const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
   React.useEffect(() => {
     setMounted(true);

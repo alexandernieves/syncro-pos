@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { API_URL } from "@/lib/constants"
 import { 
   Card, CardContent, CardHeader, CardTitle, CardDescription 
 } from "@/components/ui/card";
@@ -26,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { movementsColumns } from "@/components/movements-columns";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
 export default function ConteoPage() {
   const [products, setProducts] = useState<any[]>([]);

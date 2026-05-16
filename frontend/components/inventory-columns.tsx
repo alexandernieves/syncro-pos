@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { API_URL } from "@/lib/constants"
 import { z } from "zod"
 import {
   IconCircleCheckFilled,
@@ -14,7 +15,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { useSortable } from "@dnd-kit/sortable"
 import { useRouter } from "next/navigation"
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"

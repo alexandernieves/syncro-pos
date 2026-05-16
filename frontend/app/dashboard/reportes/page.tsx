@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { API_URL } from "@/lib/constants"
 import { 
   Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription, CardAction 
 } from "@/components/ui/card";
@@ -18,7 +19,7 @@ import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || "${process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`}";
 
 export default function ReportsPage() {
   const [sales, setSales] = useState<any[]>([]);

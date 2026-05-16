@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { API_URL } from "@/lib/constants"
 import {
   IconSend,
   IconMicrophone,
@@ -42,7 +43,7 @@ const EMOJI_CATEGORIES = [
   { label: "Corazones", emojis: ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❤️‍🔥", "❤️‍🩹", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟"] },
 ];
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || "${process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`}";
 
 export default function SupportChatPage() {
   const [messages, setMessages] = useState<any[]>([]);

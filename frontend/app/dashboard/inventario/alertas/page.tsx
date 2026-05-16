@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { API_URL } from "@/lib/constants"
 import { 
   Card, CardContent, CardHeader, CardTitle, CardDescription 
 } from "@/components/ui/card";
@@ -13,7 +14,7 @@ import { UniversalTable } from "@/components/universal-table";
 import { alertsColumns, AlertData } from "@/components/alerts-columns";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
 export default function AlertasPage() {
   const [alerts, setAlerts] = useState<any[]>([]);

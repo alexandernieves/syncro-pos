@@ -4,6 +4,7 @@ import * as React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { API_URL } from "@/lib/constants"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -38,7 +39,7 @@ export function LoginForm({
     setLoading(true)
 
     const loginPromise = async () => {
-      const response = await fetch("http://localhost:9000/auth/login", {
+      const response = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

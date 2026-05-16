@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { API_URL } from "@/lib/constants"
 import {
   closestCenter,
   DndContext,
@@ -104,7 +105,7 @@ import {
 } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
 // --- Types & Schema ---
 

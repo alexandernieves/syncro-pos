@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
+import { API_URL } from "@/lib/constants"
 import { 
   Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter 
 } from "@/components/ui/card";
@@ -24,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
 function PurchaseOrderDetailContent() {
   const searchParams = useSearchParams();

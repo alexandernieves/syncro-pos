@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import { API_URL } from "@/lib/constants"
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
+const API = process.env.NEXT_PUBLIC_API_URL || ``${API_URL}`;
 
 function urlBase64ToUint8Array(base64String: string) {
   if (!base64String || typeof base64String !== "string") {
