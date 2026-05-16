@@ -1,8 +1,8 @@
-import { Injectable, NotFoundException, UnauthorizedException, OnModuleInit, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
-export class BranchesService implements OnModuleInit {
+export class BranchesService {
   constructor(private prisma: PrismaService) {}
 
   // Removed onModuleInit legacy global branch creation
