@@ -166,6 +166,8 @@ model Branch {
   country            String?
   isMain             Boolean             @default(false)
   state              String?
+  phone              String?
+  email              String?
   businessId         String?
   accountingEntries  AccountingEntry[]
   business           Business?           @relation(fields: [businessId], references: [id])
