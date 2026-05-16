@@ -191,11 +191,17 @@ export class SuppliersService {
       { name: 'Secretlab SG' },
     ];
 
-    return Promise.all(testProviders.map(p => this.prisma.supplier.upsert({
-      where: { name: p.name },
-      update: {},
-      create: p,
-    })));
+    for (const p of testProviders) {
+      const existing = await this.prisma.supplier.findFirst({
+        where: { name: p.name, businessId: null }
+      });
+      if (!existing) {
+        await this.prisma.supplier.create({
+          data: { ...p, businessId: null }
+        });
+      }
+    }
+    return { message: 'Seeded successfully' } as any;
   }
 
   async getSuggestions(supplierId: string) {

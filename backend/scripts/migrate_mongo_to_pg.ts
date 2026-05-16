@@ -23,35 +23,43 @@ async function migrate() {
   // 2. Branches
   const branches = await db.collection('branches').find({}).toArray();
   for (const b of branches) {
-    await prisma.branch.upsert({
-      where: { name: b.name },
-      update: { location: b.location || b.address, isMain: b.isMain || false },
-      create: { name: b.name, location: b.location || b.address, isMain: b.isMain || false }
-    });
+    const existing = await prisma.branch.findFirst({ where: { name: b.name } });
+    if (existing) {
+      await prisma.branch.update({
+        where: { id: existing.id },
+        data: { location: b.location || b.address, isMain: b.isMain || false }
+      });
+    } else {
+      await prisma.branch.create({
+        data: { name: b.name, location: b.location || b.address, isMain: b.isMain || false }
+      });
+    }
   }
 
   // 3. Categories
   const categories = await db.collection('categories').find({}).toArray();
   const catMap: any = {};
   for (const c of categories) {
-    const created = await prisma.category.upsert({
-      where: { name: c.name },
-      update: {},
-      create: { name: c.name }
-    });
-    catMap[String(c._id)] = created.id;
+    let existing = await prisma.category.findFirst({ where: { name: c.name } });
+    if (!existing) {
+      existing = await prisma.category.create({
+        data: { name: c.name }
+      });
+    }
+    catMap[String(c._id)] = existing.id;
   }
 
   // 4. Suppliers
   const suppliers = await db.collection('suppliers').find({}).toArray();
   const supMap: any = {};
   for (const s of suppliers) {
-    const created = await prisma.supplier.upsert({
-      where: { name: s.name },
-      update: {},
-      create: { name: s.name }
-    });
-    supMap[String(s._id)] = created.id;
+    let existing = await prisma.supplier.findFirst({ where: { name: s.name } });
+    if (!existing) {
+      existing = await prisma.supplier.create({
+        data: { name: s.name }
+      });
+    }
+    supMap[String(s._id)] = existing.id;
   }
 
   // 5. Products
