@@ -2,6 +2,17 @@
 import React, { useEffect, useState } from "react";
 import { API_URL } from "@/lib/constants"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle, 
+  AlertDialogTrigger 
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -165,6 +176,8 @@ export default function ConfiguracionPage() {
   const [isWipeAlertOpen, setIsWipeAlertOpen] = useState(false);
   const [isWipeAuthOpen, setIsWipeAuthOpen] = useState(false);
   const [isWiping, setIsWiping] = useState(false);
+  const [branchToDelete, setBranchToDelete] = useState<any>(null);
+  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
 
   // PIN de autorización de descuentos
   const [discountPin, setDiscountPin] = useState("");
@@ -1489,20 +1502,9 @@ export default function ConfiguracionPage() {
                         )}
                         {!b.isMain && (
                           <Button variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={async () => {
-                              try {
-                                const res = await fetch(`${API}/branches/${b.id}`, {
-                                  method: "DELETE",
-                                  headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
-                                });
-                                if(res.ok) {
-                                  setSucursales(sucursales.filter(s => s.id !== b.id));
-                                  toast.success("Sucursal eliminada");
-                                  window.dispatchEvent(new Event("branchUpdated"));
-                                } else {
-                                  toast.error("Error al eliminar");
-                                }
-                              } catch { toast.error("Error de conexión"); }
+                            onClick={() => {
+                              setBranchToDelete(b);
+                              setIsDeleteAlertOpen(true);
                             }}
                           >
                             <IconTrash size={16} />
@@ -1715,6 +1717,47 @@ export default function ConfiguracionPage() {
         )}
 
       </main>
+
+      {/* ALERT DIALOG DE ELIMINACION DE SUCURSAL */}
+      <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <IconAlertTriangle size={20} /> ¿Estás completamente seguro?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará permanentemente la sucursal <strong>{branchToDelete?.name}</strong> de la base de datos.
+              Esta acción no se puede deshacer y podría afectar los registros asociados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setBranchToDelete(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={async () => {
+                if (!branchToDelete) return;
+                try {
+                  const res = await fetch(`${API}/branches/${branchToDelete.id || branchToDelete._id}`, {
+                    method: "DELETE",
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                  });
+                  if(res.ok) {
+                    setSucursales(sucursales.filter(s => (s.id || s._id) !== (branchToDelete.id || branchToDelete._id)));
+                    toast.success("Sucursal eliminada definitivamente");
+                    window.dispatchEvent(new Event("branchUpdated"));
+                  } else {
+                    const err = await res.json();
+                    toast.error(err.message || "Error al eliminar la sucursal");
+                  }
+                } catch { toast.error("Error de conexión al servidor"); }
+                finally { setBranchToDelete(null); }
+              }}
+            >
+              Sí, eliminar sucursal
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {/* Modal Permisos de PIN */}
       <Dialog open={isPinPermissionsModalOpen} onOpenChange={setIsPinPermissionsModalOpen}>
         <DialogContent className="max-w-md">
