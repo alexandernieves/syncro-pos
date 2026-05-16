@@ -15,6 +15,14 @@ export class BcvService {
       let rateEur: number | null = null;
       let updateDate: string | null = null;
 
+      // Helper to format current date as fallback
+      const getCurrentFormattedDate = () => {
+        const d = new Date();
+        const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+        const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+      };
+
       // 1. Intentar scraping oficial del BCV (Prioridad)
       try {
         const originalTlsReject = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
@@ -32,15 +40,16 @@ export class BcvService {
           const usdRegex = /id="dolar"[\s\S]*?<strong>\s*([\d,.]+)\s*<\/strong>/i;
           const eurRegex = /id="euro"[\s\S]*?<strong>\s*([\d,.]+)\s*<\/strong>/i;
           const dateRegex = /id="fecha"[\s\S]*?<span>\s*([^<]+)\s*<\/span/i;
+          const alternateDateRegex = /Fecha Valor:\s*<strong>\s*([^<]+)\s*<\/strong>/i;
 
           const matchUsd = html.match(usdRegex);
           const matchEur = html.match(eurRegex);
-          const matchDate = html.match(dateRegex);
+          const matchDate = html.match(dateRegex) || html.match(alternateDateRegex);
 
           if (matchUsd) {
             rateUsd = parseFloat(matchUsd[1].trim().replace(/\./g, '').replace(',', '.'));
             rateEur = matchEur ? parseFloat(matchEur[1].trim().replace(/\./g, '').replace(',', '.')) : null;
-            updateDate = matchDate ? matchDate[1].trim().replace(/\s+/g, ' ') : "Reciente";
+            updateDate = matchDate ? matchDate[1].trim().replace(/\s+/g, ' ') : getCurrentFormattedDate();
           }
         }
 
@@ -57,7 +66,7 @@ export class BcvService {
           if (usdRes.ok) {
             const bcvUsd = await usdRes.json();
             rateUsd = bcvUsd.promedio;
-            updateDate = "Vía API";
+            updateDate = getCurrentFormattedDate();
           }
           const eurRes = await fetch('https://ve.dolarapi.com/v1/euros/oficial', { signal: AbortSignal.timeout(8000) });
           if (eurRes.ok) {
