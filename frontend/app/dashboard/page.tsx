@@ -22,7 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
+const API = API_URL;
 
 const RecentSalesTable = ({ sales }: { sales: any[] }) => {
   const { formatPrice } = useCurrency();

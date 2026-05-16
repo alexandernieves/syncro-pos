@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
+const API = API_URL;
 
 interface Supplier {
   id: string;

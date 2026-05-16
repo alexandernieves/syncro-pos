@@ -32,7 +32,7 @@ import {
 import { UniversalTable } from "@/components/universal-table";
 import { getPurchaseOrdersColumns } from "@/components/purchase-orders-columns";
 
-const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
+const API = API_URL;
 
 export default function PurchaseOrdersPage() {
   const router = useRouter();

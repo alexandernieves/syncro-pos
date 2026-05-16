@@ -43,7 +43,7 @@ const EMOJI_CATEGORIES = [
   { label: "Corazones", emojis: ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❤️‍🔥", "❤️‍🩹", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟"] },
 ];
 
-const API = process.env.NEXT_PUBLIC_API_URL || "${process.env.NEXT_PUBLIC_API_URL || `${API_URL}`}`;
+const API = API_URL;
 
 export default function SupportChatPage() {
   const [messages, setMessages] = useState<any[]>([]);

@@ -46,7 +46,7 @@ import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
 import { useCurrency } from "@/context/CurrencyContext";
 
-const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
+const API = API_URL;
 
 type Product = {
   id: string;

@@ -126,7 +126,7 @@ export default function ConfiguracionPage() {
 
   const [sessionInfo, setSessionInfo] = useState<any>(null);
 
-  const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
+  const API = API_URL;
 
   const fetchBranches = async () => {
     try {

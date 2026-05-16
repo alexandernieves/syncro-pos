@@ -34,7 +34,7 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const fetchRates = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "${process.env.NEXT_PUBLIC_API_URL || `${API_URL}`}`}/settings?t=${Date.now()}`);
+      const res = await fetch(`${API_URL}/settings?t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         const isPos = pathname?.includes("/pos");
@@ -76,7 +76,7 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const syncBcvDashboard = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "${process.env.NEXT_PUBLIC_API_URL || `${API_URL}`}`}/settings/sync-bcv`, {
+      const res = await fetch(`${API_URL}/settings/sync-bcv`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",

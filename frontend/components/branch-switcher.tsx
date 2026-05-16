@@ -14,7 +14,7 @@ export function BranchSwitcher({ disabled }: { disabled?: boolean }) {
   const [mounted, setMounted] = React.useState(false);
   const [branches, setBranches] = React.useState<any[]>([]);
   const [selectedBranch, setSelectedBranch] = React.useState<string>("");
-  const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
+  const API = API_URL;
 
   React.useEffect(() => {
     setMounted(true);

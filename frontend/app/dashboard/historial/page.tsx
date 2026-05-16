@@ -44,7 +44,7 @@ import { DatePickerWithRange } from "./date-range-picker";
 import { DateRange } from "react-day-picker";
 import { subDays } from "date-fns";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "${process.env.NEXT_PUBLIC_API_URL || `${API_URL}`}`;
+const API = API_URL;
 
 type AuditLog = {
   id: string;

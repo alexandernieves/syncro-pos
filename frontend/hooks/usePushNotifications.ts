@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { API_URL } from "@/lib/constants"
 
-const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
+const API = API_URL;
 
 function urlBase64ToUint8Array(base64String: string) {
   if (!base64String || typeof base64String !== "string") {

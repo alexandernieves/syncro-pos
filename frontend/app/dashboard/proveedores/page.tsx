@@ -33,7 +33,7 @@ import { useRouter } from "next/navigation";
 import { UniversalTable } from "@/components/universal-table";
 import { getSuppliersColumns } from "@/components/suppliers-columns";
 
-const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
+const API = API_URL;
 
 const FORM_INITIAL_STATE = {
   name: "",

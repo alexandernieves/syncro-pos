@@ -5,7 +5,7 @@ import { API_URL } from "@/lib/constants"
 import { db } from "@/lib/db";
 import { toast } from "sonner";
 
-const API = process.env.NEXT_PUBLIC_API_URL || `${API_URL}`;
+const API = API_URL;
 
 export function useSync() {
   const [isOnline, setIsOnline] = useState(true);
