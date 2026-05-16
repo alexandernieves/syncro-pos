@@ -107,6 +107,14 @@ export default function ClientsPage() {
     load();
   }, [load]);
 
+  const totalSalesValue = clients.reduce((acc, c) => acc + (c.sales?.reduce((sum: number, s: any) => sum + (s.total || 0), 0) || 0), 0);
+  const totalSalesCount = clients.reduce((acc, c) => acc + (c.sales?.length || 0), 0);
+  const ticketPromedio = totalSalesCount > 0 ? totalSalesValue / totalSalesCount : 0;
+
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+  };
+
   const handleUpdateCredit = async () => {
     if (!selectedClient) return;
     setIsSaving(true);
@@ -367,18 +375,18 @@ export default function ClientsPage() {
                 {clients.length}
               </CardTitle>
               <CardAction>
-                <Badge variant="outline" className="gap-1">
+                <Badge variant="outline" className="gap-1 opacity-0">
                   <IconTrendingUp className="size-3 text-primary" />
-                  +12.5%
+                  +0%
                 </Badge>
               </CardAction>
             </CardHeader>
             <CardFooter className="flex-col items-start gap-1.5 text-sm">
               <div className="line-clamp-1 flex gap-2 font-medium">
-                Cartera comercial en expansión
+                Cartera de clientes registrados
               </div>
               <div className="text-muted-foreground">
-                Crecimiento orgánico registrado este trimestre
+                Base de datos de clientes vinculados al negocio
               </div>
             </CardFooter>
           </Card>
@@ -390,18 +398,18 @@ export default function ClientsPage() {
                 {clients.filter(c => c.isActive).length}
               </CardTitle>
               <CardAction>
-                <Badge variant="outline" className="gap-1">
+                <Badge variant="outline" className="gap-1 opacity-0">
                   <IconTrendingUp className="size-3 text-emerald-500" />
-                  98%
+                  100%
                 </Badge>
               </CardAction>
             </CardHeader>
             <CardFooter className="flex-col items-start gap-1.5 text-sm">
               <div className="line-clamp-1 flex gap-2 font-medium text-emerald-600">
-                Alta retención de cartera
+                Retención de clientes
               </div>
               <div className="text-muted-foreground">
-                Clientes con actividad en los últimos 30 días
+                Clientes que mantienen una relación activa
               </div>
             </CardFooter>
           </Card>
@@ -410,21 +418,21 @@ export default function ClientsPage() {
             <CardHeader>
               <CardDescription>Ticket Promedio</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-amber-600">
-                $245.00
+                {formatCurrency(ticketPromedio)}
               </CardTitle>
               <CardAction>
-                <Badge variant="outline" className="gap-1">
+                <Badge variant="outline" className="gap-1 opacity-0">
                   <IconTrendingUp className="size-3 text-amber-500" />
-                  +4.5%
+                  +0%
                 </Badge>
               </CardAction>
             </CardHeader>
             <CardFooter className="flex-col items-start gap-1.5 text-sm">
               <div className="line-clamp-1 flex gap-2 font-medium text-amber-600">
-                Incremento en valor de compra
+                Valor promedio por venta
               </div>
               <div className="text-muted-foreground">
-                Optimización de estrategias de up-selling
+                Basado en el historial real de operaciones
               </div>
             </CardFooter>
           </Card>
