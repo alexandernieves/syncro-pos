@@ -52,9 +52,12 @@ export class BranchesService {
       });
     }
 
+    // Clean the data to avoid Prisma errors with read-only fields
+    const { id: _id, businessId: _bid, createdAt, updatedAt, ...cleanData } = data;
+
     return this.prisma.branch.update({
       where: { id },
-      data
+      data: cleanData
     });
   }
 

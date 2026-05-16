@@ -1626,7 +1626,7 @@ export default function ConfiguracionPage() {
                   <Button onClick={async () => {
                     try {
                       console.log("Branches: Invoking update for:", editingBranch.name);
-                      const { id, _id, ...updatePayload } = editingBranch;
+                      const { id, _id, createdAt, updatedAt, businessId, ...updatePayload } = editingBranch;
                       const branchId = id || _id;
                       // Ensure everything is a string
                       updatePayload.state = String(updatePayload.state || "Distrito Capital");
