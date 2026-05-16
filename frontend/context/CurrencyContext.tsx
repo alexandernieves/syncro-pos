@@ -34,7 +34,12 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const fetchRates = async () => {
     try {
-      const res = await fetch(`${API_URL}/settings?t=${Date.now()}`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_URL}/settings?t=${Date.now()}`, {
+        headers: { 
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         const isPos = pathname?.includes("/pos");

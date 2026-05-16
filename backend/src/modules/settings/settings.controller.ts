@@ -26,8 +26,9 @@ export class SettingsController {
   }
 
   @Post('sync-bcv')
-  async syncBcv(@Body('target') target?: 'pos' | 'dashboard') {
-    // BCV sync is usually global or we could scope it, but for now let's keep it
-    return this.bcvService.syncRate(target || 'pos');
+  async syncBcv(@Body('target') target: 'pos' | 'dashboard', @Request() req: any) {
+    if (!req.user) throw new UnauthorizedException('No user context');
+    const businessId = req.user.businessId;
+    return this.bcvService.syncRate(businessId, target || 'pos');
   }
 }

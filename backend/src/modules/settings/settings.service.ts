@@ -26,6 +26,7 @@ export class SettingsService {
     if (!businessId) throw new Error('Business ID is required');
 
     const settings = await this.getSettings(businessId);
+    if (!settings) throw new Error('Could not find or create settings');
     
     // Lista de campos permitidos en el modelo Setting para evitar errores de Prisma
     const allowedFields = [
