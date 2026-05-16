@@ -298,7 +298,7 @@ export default function SuppliersPage() {
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="gap-1 opacity-0">
-              <IconTrendingUp className="size-3 text-emerald-500" />
+              <IconTrendingUp className="size-3 text-muted-foreground" />
               +0%
             </Badge>
           </CardAction>
@@ -315,12 +315,12 @@ export default function SuppliersPage() {
       <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
         <CardHeader>
           <CardDescription>Tasa de Cumplimiento</CardDescription>
-          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-emerald-600">
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {suppliers.length > 0 ? "100%" : "0%"}
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="gap-1 opacity-0">
-              <IconTrendingUp className="size-3 text-emerald-500" />
+              <IconTrendingUp className="size-3 text-muted-foreground" />
               +0%
             </Badge>
           </CardAction>

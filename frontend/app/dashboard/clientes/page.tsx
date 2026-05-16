@@ -394,18 +394,18 @@ export default function ClientsPage() {
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
               <CardDescription>Clientes Activos</CardDescription>
-              <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-emerald-600">
+              <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
                 {clients.filter(c => c.isActive).length}
               </CardTitle>
               <CardAction>
                 <Badge variant="outline" className="gap-1 opacity-0">
-                  <IconTrendingUp className="size-3 text-emerald-500" />
+                  <IconTrendingUp className="size-3 text-muted-foreground" />
                   100%
                 </Badge>
               </CardAction>
             </CardHeader>
             <CardFooter className="flex-col items-start gap-1.5 text-sm">
-              <div className="line-clamp-1 flex gap-2 font-medium text-emerald-600">
+              <div className="line-clamp-1 flex gap-2 font-medium">
                 Retención de clientes
               </div>
               <div className="text-muted-foreground">

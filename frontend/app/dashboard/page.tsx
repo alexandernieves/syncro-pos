@@ -134,7 +134,7 @@ export default function Page() {
             </CardTitle>
             <CardAction>
               <Badge variant="outline" className="gap-1 opacity-0">
-                <IconTrendingUp className="size-3 text-emerald-500" />
+                <IconTrendingUp className="size-3 text-muted-foreground" />
                 +0%
               </Badge>
             </CardAction>
@@ -152,11 +152,11 @@ export default function Page() {
         <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
           <CardHeader>
             <CardDescription>Ventas (Órdenes)</CardDescription>
-            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-emerald-600">
+            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
               {stats?.salesCount}
             </CardTitle>
             <CardAction>
-              <IconShoppingCart size={20} className="text-emerald-500/30" />
+              <IconShoppingCart size={20} className="text-foreground/30" />
             </CardAction>
           </CardHeader>
           <CardFooter className="flex-col items-start gap-1.5 text-sm">

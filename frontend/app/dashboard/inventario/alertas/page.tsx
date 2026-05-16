@@ -60,7 +60,7 @@ export default function AlertasPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 uppercase">
-            <IconBell className="text-primary" /> Alertas de Reabastecimiento
+            <IconBell className="text-foreground/80" /> Alertas de Reabastecimiento
           </h1>
           <p className="text-sm text-muted-foreground font-medium">Productos que requieren atención inmediata en esta sucursal.</p>
         </div>
@@ -77,13 +77,15 @@ export default function AlertasPage() {
                 <Skeleton className="h-[400px] w-full rounded-2xl" />
             </div>
         ) : tableData.length === 0 ? (
-          <Card className="border-none bg-emerald-500/5 shadow-none rounded-3xl">
-            <CardContent className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="bg-emerald-500 p-6 rounded-3xl mb-6 text-white shadow-lg shadow-emerald-500/20">
-                <IconShoppingCart size={40} />
+          <Card className="border border-dashed bg-muted/30 shadow-none rounded-[2rem] transition-all">
+            <CardContent className="flex flex-col items-center justify-center py-24 text-center">
+              <div className="bg-background border shadow-sm p-5 rounded-2xl mb-6 text-muted-foreground/60">
+                <IconShoppingCart size={32} />
               </div>
-              <h3 className="text-xl font-bold text-emerald-700">¡Inventario Saludable!</h3>
-              <p className="text-emerald-600/80 max-w-xs mt-2">Todos los productos en esta sucursal están por encima del stock mínimo.</p>
+              <h3 className="text-lg font-bold tracking-tight">Inventario Saludable</h3>
+              <p className="text-sm text-muted-foreground max-w-xs mt-1.5 font-medium leading-relaxed opacity-70">
+                No hay alertas de reabastecimiento pendientes. Todos los productos superan el stock mínimo.
+              </p>
             </CardContent>
           </Card>
         ) : (
