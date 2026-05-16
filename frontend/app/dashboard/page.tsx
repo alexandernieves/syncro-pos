@@ -47,8 +47,8 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
           ) : (
             sales.map((sale) => (
               <TableRow key={sale.id} className="hover:bg-muted/30 border-[#79716b]/5 transition-colors group">
-                <TableCell className="px-4 py-3 font-mono text-[10px] text-primary">{sale.id.substring(0, 8)}</TableCell>
-                <TableCell className="px-4 py-3 text-xs font-bold text-white uppercase tracking-tight">{sale.client}</TableCell>
+                <TableCell className="px-4 py-3 font-mono text-[10px] text-primary">{sale.id?.substring(0, 8) || 'N/A'}</TableCell>
+                <TableCell className="px-4 py-3 text-xs font-bold text-white uppercase tracking-tight">{sale.client || 'Consumidor Final'}</TableCell>
                 <TableCell className="px-4 py-3">
                     <Badge variant="outline" className="text-[10px] gap-1.5 border-[#79716b]/20 text-[#79716b] font-semibold uppercase">
                      <IconCash size={10} /> POS

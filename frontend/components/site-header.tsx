@@ -22,7 +22,12 @@ export function SiteHeader() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const userStr = typeof window !== 'undefined' ? localStorage.getItem("user") : null;
-  const user = userStr ? JSON.parse(userStr) : null;
+  let user = null;
+  try {
+    user = userStr ? JSON.parse(userStr) : null;
+  } catch (e) {
+    console.error("Error parsing user from localStorage", e);
+  }
   const isSyncro = user?.role === "syncropos";
 
   const handleSync = async () => {
