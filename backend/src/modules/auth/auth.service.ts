@@ -78,7 +78,6 @@ export class AuthService {
       }
     });
 
-    // 3. Create the main branch for this business
     await this.prisma.branch.create({
       data: {
         businessId: business.id,
@@ -86,7 +85,6 @@ export class AuthService {
         location: userData.city || 'Sede Central',
         isMain: true,
         country: userData.country || 'Venezuela',
-        city: userData.city || '',
       }
     });
 
