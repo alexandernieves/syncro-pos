@@ -32,7 +32,14 @@ export class AuthService {
   }
 
   async login(user: any) {
-    const payload = { email: user.email, sub: user.id, role: user.role, name: user.name, country: user.country };
+    const payload = { 
+      email: user.email, 
+      sub: user.id, 
+      role: user.role, 
+      name: user.name, 
+      country: user.country,
+      businessId: user.businessId 
+    };
     
     await this.historyService.logAction({
       userId: user.id,

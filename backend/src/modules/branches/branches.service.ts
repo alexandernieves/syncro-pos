@@ -24,6 +24,9 @@ export class BranchesService implements OnModuleInit {
   }
 
   async create(data: any) {
+    if (!data.businessId) {
+      throw new BadRequestException('El ID del negocio es requerido para crear una sucursal');
+    }
     // If setting as main, unset others for the same business
     if (data.isMain && data.businessId) {
       await this.prisma.branch.updateMany({
