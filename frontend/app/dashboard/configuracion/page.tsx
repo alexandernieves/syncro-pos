@@ -876,7 +876,10 @@ export default function ConfiguracionPage() {
                     <Button size="icon" variant="ghost" className="text-destructive" onClick={async () => {
                       if(confirm("¿Eliminar usuario?")) {
                         try {
-                          const res = await fetch(`${API}/users/${u.id}`, { method: "DELETE" });
+                          const res = await fetch(`${API}/users/${u.id}`, { 
+                            method: "DELETE",
+                            headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                          });
                           if(res.ok) {
                             toast.success("Usuario eliminado");
                             fetchUsers();
@@ -978,7 +981,11 @@ export default function ConfiguracionPage() {
                     try {
                       const { privileges, branchIds, ...userDataToSend } = newUser;
                       const res = await fetch(`${API}/users`, {
-                        method: "POST", headers: { "Content-Type": "application/json" },
+                        method: "POST", 
+                        headers: { 
+                          "Content-Type": "application/json",
+                          "Authorization": `Bearer ${localStorage.getItem("token")}`
+                        },
                         body: JSON.stringify({ ...userDataToSend, country: "Venezuela", permissions: privileges, branchIds: branchIds })
                       });
                       if(res.ok) {
@@ -1082,7 +1089,11 @@ export default function ConfiguracionPage() {
                     try {
                       const { id, privileges, branchIds, ...updateData } = editUser;
                       const res = await fetch(`${API}/users/${id}`, {
-                        method: "PATCH", headers: { "Content-Type": "application/json" },
+                        method: "PATCH", 
+                        headers: { 
+                          "Content-Type": "application/json",
+                          "Authorization": `Bearer ${localStorage.getItem("token")}`
+                        },
                         body: JSON.stringify({ ...updateData, permissions: privileges, branchIds: branchIds })
                       });
                       if(res.ok) {
