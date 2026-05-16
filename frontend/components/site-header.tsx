@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function SiteHeader() {
-  const { currency, setCurrency, exchangeRate, bcvDate, syncBcvDashboard } = useCurrency();
+  const { currency, setCurrency, exchangeRate, eurExchangeRate, bcvDate, syncBcvDashboard } = useCurrency();
   const [isSyncing, setIsSyncing] = useState(false);
 
   const userStr = typeof window !== 'undefined' ? localStorage.getItem("user") : null;
@@ -97,7 +97,7 @@ export function SiteHeader() {
               disabled={isSyncing}
             >
               <IconRefresh size={14} className={cn("text-primary", isSyncing && "animate-spin")} />
-              <span>BCV: {exchangeRate.toFixed(2)}</span>
+              <span>BCV: {(currency === 'EUR' ? eurExchangeRate : exchangeRate).toFixed(2)}</span>
             </Button>
           </div>
         )}
