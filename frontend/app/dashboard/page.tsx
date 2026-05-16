@@ -133,18 +133,18 @@ export default function Page() {
               )}
             </CardTitle>
             <CardAction>
-              <Badge variant="outline" className="gap-1">
+              <Badge variant="outline" className="gap-1 opacity-0">
                 <IconTrendingUp className="size-3 text-emerald-500" />
-                +100%
+                +0%
               </Badge>
             </CardAction>
           </CardHeader>
           <CardFooter className="flex-col items-start gap-1.5 text-sm">
             <div className="line-clamp-1 flex gap-2 font-medium">
-              Actividad en Tiempo Real
+              Actividad del negocio
             </div>
             <div className="text-muted-foreground">
-              Ingresos procesados
+              Ingresos brutos acumulados
             </div>
           </CardFooter>
         </Card>
