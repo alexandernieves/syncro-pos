@@ -553,46 +553,24 @@ export default function ProductosPage() {
 
         if (!element) return;
 
-        // Soporte enfocado en códigos de barras 1D de productos para máxima velocidad y susceptibilidad
-        const formatsToSupport = [
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.CODE_39
-        ]; 
-
         html5QrCode = new Html5Qrcode("reader");
         await html5QrCode.start(
           { facingMode: "environment" },
           {
-            fps: 60,
-            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-              // Hacemos el recuadro rectangular de proporción 2.6:1 (perfecto para códigos 1D)
-              const w = Math.floor(viewfinderWidth * 0.85);
-              const h = Math.floor(w / 2.6);
-              return { width: w, height: h };
-            },
-            aspectRatio: 1.0, // Cambiado a 1.0 para maximizar el área de captura
+            fps: 30, // 30 FPS permite mayor tiempo de exposición de luz por fotograma (vital para códigos pequeños y nítidos)
+            aspectRatio: 1.0, // Maximiza el área del sensor
             disableFlip: true,
             rememberLastUsedCamera: true,
-            formatsToSupport,
             experimentalFeatures: {
-                useBarCodeDetectorIfSupported: true
+                useBarCodeDetectorIfSupported: true // Aprovecha la API nativa de Chrome si está disponible
             },
             videoConstraints: {
-                width: { min: 1280, ideal: 1920, max: 3840 }, // Forzamos alta resolución (hasta 4K)
-                height: { min: 720, ideal: 1080, max: 2160 },
                 facingMode: "environment",
                 focusMode: "continuous",
-                // Habilitamos controles avanzados de zoom si el navegador lo permite
+                width: { ideal: 1280 }, // Resolución HD ideal para enfoque macro rápido y procesamiento liviano
+                height: { ideal: 720 },
                 advanced: [{ 
-                    focusMode: "continuous",
-                    // @ts-ignore
-                    whiteBalanceMode: "continuous",
-                    // @ts-ignore
-                    exposureMode: "continuous"
+                    focusMode: "continuous"
                 }] as any
             }
           },
