@@ -13,14 +13,18 @@ export class SalesController {
     return this.salesService.create(saleData, userId);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get()
-  async findAll(@Query('branchId') branchId?: string) {
-    return this.salesService.findAll(branchId);
+  async findAll(@Req() req: any, @Query('branchId') branchId?: string) {
+    const businessId = req.user?.businessId;
+    return this.salesService.findAll(businessId, branchId);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    return this.salesService.findOne(id);
+  async findOne(@Req() req: any, @Param('id') id: string) {
+    const businessId = req.user?.businessId;
+    return this.salesService.findOne(id, businessId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -31,6 +35,7 @@ export class SalesController {
     @Req() req: any,
   ) {
     const userId = req.user?.sub || req.user?.id;
-    return this.salesService.returnItems(id, returnData, userId);
+    const businessId = req.user?.businessId;
+    return this.salesService.returnItems(id, returnData, userId, businessId);
   }
 }

@@ -32,7 +32,12 @@ export default function ReportsPage() {
   const fetchSales = async () => {
     try {
       const branchId = localStorage.getItem("currentBranchId") || "";
-      const res = await fetch(`${API}/sales${branchId ? `?branchId=${branchId}` : ""}`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/sales${branchId ? `?branchId=${branchId}` : ""}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (res.ok) {
         setSales(await res.json());
       }

@@ -94,7 +94,12 @@ export default function Page() {
   const fetchStats = async () => {
     try {
       const branchId = localStorage.getItem("currentBranchId") || "";
-      const res = await fetch(`${API}/dashboard/stats${branchId ? `?branchId=${branchId}` : ""}`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/dashboard/stats${branchId ? `?branchId=${branchId}` : ""}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (res.ok) {
         setStats(await res.json());
       }

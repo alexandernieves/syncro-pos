@@ -77,8 +77,8 @@ model ProductVariant {
   id                 String                  @id @default(uuid())
   productId          String
   name               String
-  sku                String                  @unique
-  barcode            String?                 @unique
+  sku                String
+  barcode            String?
   secondaryBarcodes  String[]                @default([])
   price              Float
   cost               Float?
@@ -344,7 +344,7 @@ model ProductWaitlist {
   name      String
   price     Float
   stock     Int        @default(0)
-  barcode   String     @unique
+  barcode   String
   status    String     @default("PENDING")
   branchId  String?
   userId    String

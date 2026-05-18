@@ -291,8 +291,14 @@ export class SalesService {
     }
   }
 
-  async findAll(branchId?: string) {
-    const where = branchId ? { branchId } : {};
+  async findAll(businessId?: string, branchId?: string) {
+    const where: any = {};
+    if (branchId) {
+      where.branchId = branchId;
+    }
+    if (businessId) {
+      where.branch = { businessId };
+    }
     return this.prisma.sale.findMany({
       where,
       include: { items: { include: { variant: true } }, user: true, branch: true },
@@ -300,9 +306,13 @@ export class SalesService {
     });
   }
 
-  async findOne(id: string) {
-    return this.prisma.sale.findUnique({
-      where: { id },
+  async findOne(id: string, businessId?: string) {
+    const where: any = { id };
+    if (businessId) {
+      where.branch = { businessId };
+    }
+    const sale = await this.prisma.sale.findFirst({
+      where,
       include: { 
         items: { include: { variant: { include: { product: true } } } }, 
         user: true, 
@@ -312,16 +322,21 @@ export class SalesService {
         payments: true
       }
     });
+    if (!sale) throw new BadRequestException('Venta no encontrada');
+    return sale;
   }
 
-  async returnItems(saleId: string, data: any, userId: string) {
+  async returnItems(saleId: string, data: any, userId: string, businessId?: string) {
     const { items, reason } = data; // items is an array of { variantId, quantity }
 
     try {
       return await this.prisma.$transaction(async (tx) => {
         // 1. Validate Sale
-        const sale = await tx.sale.findUnique({
-          where: { id: saleId },
+        const sale = await tx.sale.findFirst({
+          where: {
+            id: saleId,
+            ...(businessId ? { branch: { businessId } } : {})
+          },
           include: { items: true, returns: { include: { items: true } } }
         });
         if (!sale) throw new BadRequestException(`Venta ${saleId} no encontrada`);

@@ -15,42 +15,48 @@ export class SuppliersController {
     if (!req.user || !req.user.id) {
       throw new BadRequestException('Usuario no autenticado');
     }
-    return this.suppliersService.create(body);
+    const businessId = req.user.businessId;
+    return this.suppliersService.create({ ...body, businessId });
   }
 
   @Get() findAll(@Req() req: any) {
     if (!req.user || !req.user.id) {
       throw new BadRequestException('Usuario no autenticado');
     }
-    return this.suppliersService.findAll();
+    const businessId = req.user.businessId;
+    return this.suppliersService.findAll(businessId);
   }
 
   @Get(':id') findOne(@Req() req: any, @Param('id') id: string) {
     if (!req.user || !req.user.id) {
       throw new BadRequestException('Usuario no autenticado');
     }
-    return this.suppliersService.findOne(id);
+    const businessId = req.user.businessId;
+    return this.suppliersService.findOne(id, businessId);
   }
 
   @Get(':id/stats') getStats(@Req() req: any, @Param('id') id: string) {
     if (!req.user || !req.user.id) {
       throw new BadRequestException('Usuario no autenticado');
     }
-    return this.suppliersService.getStats(id);
+    const businessId = req.user.businessId;
+    return this.suppliersService.getStats(id, businessId);
   }
 
   @Get(':id/suggestions') getSuggestions(@Req() req: any, @Param('id') id: string) {
     if (!req.user || !req.user.id) {
       throw new BadRequestException('Usuario no autenticado');
     }
-    return this.suppliersService.getSuggestions(id);
+    const businessId = req.user.businessId;
+    return this.suppliersService.getSuggestions(id, businessId);
   }
 
   @Put(':id') update(@Req() req: any, @Param('id') id: string, @Body() body: any) {
     if (!req.user || !req.user.id) {
       throw new BadRequestException('Usuario no autenticado');
     }
-    return this.suppliersService.update(id, body);
+    const businessId = req.user.businessId;
+    return this.suppliersService.update(id, body, businessId);
   }
 
   @Post('seed') seed(@Req() req: any) {
@@ -64,7 +70,8 @@ export class SuppliersController {
     if (!req.user || !req.user.id) {
       throw new BadRequestException('Usuario no autenticado');
     }
-    return this.suppliersService.remove(id);
+    const businessId = req.user.businessId;
+    return this.suppliersService.remove(id, businessId);
   }
 
   @Get('alerts/all')
@@ -72,7 +79,8 @@ export class SuppliersController {
     if (!req.user || !req.user.id) {
       throw new BadRequestException('Usuario no autenticado');
     }
-    return this.suppliersAlertsService.getAllAlerts(branchId);
+    const businessId = req.user.businessId;
+    return this.suppliersAlertsService.getAllAlerts(businessId, branchId);
   }
 
   @Get('alerts/summary')
@@ -80,6 +88,7 @@ export class SuppliersController {
     if (!req.user || !req.user.id) {
       throw new BadRequestException('Usuario no autenticado');
     }
-    return this.suppliersAlertsService.getAlertsSummary();
+    const businessId = req.user.businessId;
+    return this.suppliersAlertsService.getAlertsSummary(businessId);
   }
 }

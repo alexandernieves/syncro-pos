@@ -6,31 +6,31 @@ import { InvoiceStatus } from '@prisma/client';
 export class SuppliersAlertsService {
   constructor(private prisma: PrismaService) {}
 
-  async getAllAlerts(branchId?: string) {
+  async getAllAlerts(businessId?: string, branchId?: string) {
     const alerts = [];
 
     // 1. Facturas vencidas
-    const overdueInvoices = await this.getOverdueInvoices();
+    const overdueInvoices = await this.getOverdueInvoices(businessId);
     alerts.push(...overdueInvoices);
 
     // 2. Proveedores inactivos
-    const inactiveSuppliers = await this.getInactiveSuppliers();
+    const inactiveSuppliers = await this.getInactiveSuppliers(businessId);
     alerts.push(...inactiveSuppliers);
 
     // 3. Cambios de precio significativos
-    const priceChanges = await this.getPriceChanges();
+    const priceChanges = await this.getPriceChanges(businessId);
     alerts.push(...priceChanges);
 
     // 4. Retrasos en entregas
-    const deliveryDelays = await this.getDeliveryDelays();
+    const deliveryDelays = await this.getDeliveryDelays(businessId);
     alerts.push(...deliveryDelays);
 
     // 5. Bajo stock de productos de proveedores críticos
-    const lowStockAlerts = await this.getLowStockAlerts(branchId);
+    const lowStockAlerts = await this.getLowStockAlerts(businessId, branchId);
     alerts.push(...lowStockAlerts);
 
     // 6. Proveedores con alto índice de devoluciones
-    const highReturnRate = await this.getHighReturnRateSuppliers();
+    const highReturnRate = await this.getHighReturnRateSuppliers(businessId);
     alerts.push(...highReturnRate);
 
     return alerts.sort((a, b) => {
@@ -39,12 +39,18 @@ export class SuppliersAlertsService {
     });
   }
 
-  private async getOverdueInvoices() {
+  private async getOverdueInvoices(businessId?: string) {
+    const where: any = {
+      status: { in: [InvoiceStatus.PENDING, InvoiceStatus.PARTIAL] },
+      dueDate: { lt: new Date() }
+    };
+    if (businessId) {
+      where.supplier = {
+        OR: [{ businessId: null }, { businessId }]
+      };
+    }
     const overdueInvoices = await this.prisma.supplierInvoice.findMany({
-      where: {
-        status: { in: [InvoiceStatus.PENDING, InvoiceStatus.PARTIAL] },
-        dueDate: { lt: new Date() }
-      },
+      where,
       include: {
         supplier: true
       }
@@ -64,18 +70,22 @@ export class SuppliersAlertsService {
     }));
   }
 
-  private async getInactiveSuppliers() {
+  private async getInactiveSuppliers(businessId?: string) {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const where: any = {
+      status: 'ACTIVE',
+      purchaseOrders: {
+        none: {
+          createdAt: { gte: thirtyDaysAgo }
+        }
+      }
+    };
+    if (businessId) {
+      where.OR = [{ businessId: null }, { businessId }];
+    }
     
     const inactiveSuppliers = await this.prisma.supplier.findMany({
-      where: {
-        status: 'ACTIVE',
-        purchaseOrders: {
-          none: {
-            createdAt: { gte: thirtyDaysAgo }
-          }
-        }
-      },
+      where,
       include: {
         purchaseOrders: {
           where: {
@@ -107,8 +117,15 @@ export class SuppliersAlertsService {
     });
   }
 
-  private async getPriceChanges() {
+  private async getPriceChanges(businessId?: string) {
+    const where: any = {};
+    if (businessId) {
+      where.supplier = {
+        OR: [{ businessId: null }, { businessId }]
+      };
+    }
     const supplierProducts = await this.prisma.supplierProduct.findMany({
+      where,
       include: {
         variant: true,
         supplier: true
@@ -149,12 +166,18 @@ export class SuppliersAlertsService {
     return priceChanges;
   }
 
-  private async getDeliveryDelays() {
+  private async getDeliveryDelays(businessId?: string) {
+    const where: any = {
+      status: 'SENT',
+      createdAt: { lt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) } // Más de 14 días enviada
+    };
+    if (businessId) {
+      where.supplier = {
+        OR: [{ businessId: null }, { businessId }]
+      };
+    }
     const delayedOrders = await this.prisma.purchaseOrder.findMany({
-      where: {
-        status: 'SENT',
-        createdAt: { lt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) } // Más de 14 días enviada
-      },
+      where,
       include: {
         supplier: true
       }
@@ -178,19 +201,27 @@ export class SuppliersAlertsService {
     });
   }
 
-  private async getLowStockAlerts(branchId?: string) {
-    const where = branchId ? { branchId } : {};
+  private async getLowStockAlerts(businessId?: string, branchId?: string) {
+    const where: any = {};
+    if (branchId) where.branchId = branchId;
+    if (businessId) {
+      where.variant = {
+        product: {
+          businessId,
+          supplierId: { not: null }
+        }
+      };
+    } else {
+      where.variant = {
+        product: {
+          supplierId: { not: null }
+        }
+      };
+    }
+    where.quantity = { lt: 5 }; // Menos de 5 unidades
     
     const lowStockItems = await this.prisma.inventory.findMany({
-      where: {
-        ...where,
-        quantity: { lt: 5 }, // Menos de 5 unidades
-        variant: {
-          product: {
-            supplierId: { not: null }
-          }
-        }
-      },
+      where,
       include: {
         variant: {
           include: {
@@ -222,11 +253,15 @@ export class SuppliersAlertsService {
     }));
   }
 
-  private async getHighReturnRateSuppliers() {
+  private async getHighReturnRateSuppliers(businessId?: string) {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const where: any = { status: 'ACTIVE' };
+    if (businessId) {
+      where.OR = [{ businessId: null }, { businessId }];
+    }
     
     const suppliers = await this.prisma.supplier.findMany({
-      where: { status: 'ACTIVE' },
+      where,
       include: {
         purchaseOrders: {
           where: { createdAt: { gte: thirtyDaysAgo } }
@@ -269,8 +304,8 @@ export class SuppliersAlertsService {
     return highReturnSuppliers;
   }
 
-  async getAlertsSummary() {
-    const alerts = await this.getAllAlerts();
+  async getAlertsSummary(businessId?: string) {
+    const alerts = await this.getAllAlerts(businessId);
     
     const summary = {
       total: alerts.length,

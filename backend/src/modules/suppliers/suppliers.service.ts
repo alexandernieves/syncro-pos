@@ -9,8 +9,16 @@ export class SuppliersService {
     return this.prisma.supplier.create({ data });
   }
 
-  async findAll() {
+  async findAll(businessId?: string) {
+    const where: any = {};
+    if (businessId) {
+      where.OR = [
+        { businessId: null },
+        { businessId }
+      ];
+    }
     const suppliers = await this.prisma.supplier.findMany({
+      where,
       include: {
         supplierInvoices: {
           where: { balance: { gt: 0 } },
@@ -33,24 +41,31 @@ export class SuppliersService {
     }));
   }
 
-  async findOne(id: string) {
-    const supplier = await this.prisma.supplier.findUnique({ where: { id } });
+  async findOne(id: string, businessId?: string) {
+    const where: any = { id };
+    if (businessId) {
+      where.OR = [
+        { businessId: null },
+        { businessId }
+      ];
+    }
+    const supplier = await this.prisma.supplier.findFirst({ where });
     if (!supplier) throw new NotFoundException('Proveedor no encontrado');
     return supplier;
   }
 
-  async update(id: string, data: any) {
+  async update(id: string, data: any, businessId?: string) {
+    await this.findOne(id, businessId);
     return this.prisma.supplier.update({ where: { id }, data });
   }
 
-  async remove(id: string) {
+  async remove(id: string, businessId?: string) {
+    await this.findOne(id, businessId);
     return this.prisma.supplier.delete({ where: { id } });
   }
 
-  async getStats(id: string) {
-    const supplier = await this.prisma.supplier.findUnique({
-      where: { id }
-    });
+  async getStats(id: string, businessId?: string) {
+    const supplier = await this.findOne(id, businessId);
 
     if (!supplier) {
       throw new NotFoundException('Proveedor no encontrado');
@@ -204,7 +219,8 @@ export class SuppliersService {
     return { message: 'Seeded successfully' } as any;
   }
 
-  async getSuggestions(supplierId: string) {
+  async getSuggestions(supplierId: string, businessId?: string) {
+    await this.findOne(supplierId, businessId);
     const products = await this.prisma.supplierProduct.findMany({
       where: { supplierId },
       include: {

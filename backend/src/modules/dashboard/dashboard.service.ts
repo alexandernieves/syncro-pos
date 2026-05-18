@@ -5,8 +5,14 @@ import { PrismaService } from '../prisma/prisma.service';
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
-  async getStats(branchId?: string) {
-    const whereClause = branchId ? { branchId } : {};
+  async getStats(businessId: string, branchId?: string) {
+    const whereClause: any = {};
+    if (branchId) {
+      whereClause.branchId = branchId;
+    }
+    if (businessId) {
+      whereClause.branch = { businessId };
+    }
 
     const [totalRevenue, totalSales, totalClients, productsCount, settings] = await Promise.all([
       this.prisma.sale.aggregate({
@@ -14,21 +20,22 @@ export class DashboardService {
         _sum: { total: true }
       }),
       this.prisma.sale.count({ where: whereClause }),
-      this.prisma.client.count(), // Clients are usually global
-      branchId 
-        ? this.prisma.product.count({
-            where: {
-              variants: {
-                some: {
-                  inventory: {
-                    some: { branchId }
-                  }
+      this.prisma.client.count({ where: { businessId } }),
+      this.prisma.product.count({
+        where: {
+          businessId,
+          ...(branchId ? {
+            variants: {
+              some: {
+                inventory: {
+                  some: { branchId }
                 }
               }
             }
-          })
-        : this.prisma.product.count(),
-      this.prisma.setting.findFirst()
+          } : {})
+        }
+      }),
+      this.prisma.setting.findFirst({ where: { businessId } })
     ]);
 
     const revenueValue = totalRevenue._sum.total || 0;
