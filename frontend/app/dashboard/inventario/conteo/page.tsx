@@ -43,10 +43,12 @@ export default function ConteoPage() {
     setLoading(true);
     try {
       const branchId = localStorage.getItem("currentBranchId") || "";
+      const token = localStorage.getItem("token");
+      const headers = { Authorization: `Bearer ${token}` };
       const [prodRes, catRes, movRes] = await Promise.all([
-        fetch(`${API}/products${branchId ? `?branchId=${branchId}` : ""}`),
-        fetch(`${API}/categories`),
-        fetch(`${API}/inventory/movements${branchId ? `?branchId=${branchId}` : ""}`)
+        fetch(`${API}/products${branchId ? `?branchId=${branchId}` : ""}`, { headers }),
+        fetch(`${API}/categories`, { headers }),
+        fetch(`${API}/inventory/movements${branchId ? `?branchId=${branchId}` : ""}`, { headers })
       ]);
 
       if (prodRes.ok) {

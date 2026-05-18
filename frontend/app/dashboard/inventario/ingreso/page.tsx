@@ -42,9 +42,11 @@ export default function IngresoPage() {
       const branchId = localStorage.getItem("currentBranchId") || "";
       if (branchId) setSelectedBranch(branchId);
 
+      const token = localStorage.getItem("token");
+      const headers = { Authorization: `Bearer ${token}` };
       const [pRes, bRes] = await Promise.all([
-        fetch(`${API}/products${branchId ? `?branchId=${branchId}` : ""}`),
-        fetch(`${API}/branches`)
+        fetch(`${API}/products${branchId ? `?branchId=${branchId}` : ""}`, { headers }),
+        fetch(`${API}/branches`, { headers })
       ]);
       if(pRes.ok && bRes.ok) {
         setProducts(await pRes.json());
@@ -65,9 +67,13 @@ export default function IngresoPage() {
 
     setSubmitting(true);
     try {
+      const token = localStorage.getItem("token");
       const res = await fetch(`${API}/inventory/restock`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           variantId: selectedVariant,
           branchId: selectedBranch,

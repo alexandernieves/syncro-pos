@@ -24,7 +24,8 @@ export class ProductsController {
       body.image = await this.uploadsService.uploadFile(file, email);
     }
     const userId = req.user?.id || req.user?.sub;
-    return this.productsService.create(body, userId);
+    const businessId = req.user?.businessId;
+    return this.productsService.create({ ...body, businessId }, userId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -34,17 +35,23 @@ export class ProductsController {
     return this.productsService.quickCreate({ ...data, businessId });
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get() 
-  findAll(@Query('branchId') branchId?: string) { 
-    return this.productsService.findAll(branchId); 
+  findAll(@Query('branchId') branchId: string, @Request() req: any) { 
+    const businessId = req.user?.businessId;
+    return this.productsService.findAll(businessId, branchId); 
   }
 
-  @Get(':id') findOne(@Param('id') id: string) { 
-    return this.productsService.findOne(id); 
+  @UseGuards(JwtAuthGuard)
+  @Get(':id') findOne(@Param('id') id: string, @Request() req: any) { 
+    const businessId = req.user?.businessId;
+    return this.productsService.findOne(id, businessId); 
   }
 
-  @Get(':id/stats') getStats(@Param('id') id: string) { 
-    return this.productsService.getStats(id); 
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/stats') getStats(@Param('id') id: string, @Request() req: any) { 
+    const businessId = req.user?.businessId;
+    return this.productsService.getStats(id, businessId); 
   }
 
   @UseGuards(JwtAuthGuard)
@@ -61,14 +68,16 @@ export class ProductsController {
       body.image = await this.uploadsService.uploadFile(file, email);
     }
     const userId = req.user?.id || req.user?.sub;
-    return this.productsService.update(id, body, userId);
+    const businessId = req.user?.businessId;
+    return this.productsService.update(id, body, userId, businessId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete(':id') async remove(@Param('id') id: string, @Request() req: any) { 
     console.log('[ProductsController] DELETE request received for ID:', id);
     const userId = req.user?.id || req.user?.sub;
-    const result = await this.productsService.remove(id, userId);
+    const businessId = req.user?.businessId;
+    const result = await this.productsService.remove(id, userId, businessId);
     return { 
       message: 'Product deletion processed', 
       id, 
@@ -77,13 +86,16 @@ export class ProductsController {
     };
   }
 
-  @Get('validate-barcode/:barcode') validateBarcode(@Param('barcode') barcode: string) {
-    return this.productsService.validateBarcode(barcode);
+  @UseGuards(JwtAuthGuard)
+  @Get('validate-barcode/:barcode') validateBarcode(@Param('barcode') barcode: string, @Request() req: any) {
+    const businessId = req.user?.businessId;
+    return this.productsService.validateBarcode(barcode, businessId);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('waitlist/all') getWaitlist() {
-    return this.productsService.getWaitlist();
+  @Get('waitlist/all') getWaitlist(@Request() req: any) {
+    const businessId = req.user?.businessId;
+    return this.productsService.getWaitlist(businessId);
   }
 
   @UseGuards(JwtAuthGuard)

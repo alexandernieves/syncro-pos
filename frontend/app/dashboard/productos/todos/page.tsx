@@ -250,7 +250,12 @@ export default function ProductosPage() {
     
     // Fetch stats
     try {
-      const res = await fetch(`${API}/products/${p.id}/stats`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/products/${p.id}/stats`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
       if (res.ok) setStats(await res.json());
     } catch (e) {}
   };
@@ -448,7 +453,12 @@ export default function ProductosPage() {
         return;
       }
 
-      const res = await fetch(`${API}/products/validate-barcode/${barcode}`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/products/validate-barcode/${barcode}`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
       const isAvailable = await res.json();
       
       if (!isAvailable) {

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -9,8 +9,13 @@ export class ClientsService {
     return this.prisma.client.create({ data });
   }
 
-  async findAll() {
+  async findAll(businessId?: string) {
+    const where: any = {};
+    if (businessId) {
+      where.businessId = businessId;
+    }
     return this.prisma.client.findMany({
+      where,
       include: { 
         sales: true,
         creditTransactions: {
@@ -22,21 +27,29 @@ export class ClientsService {
     });
   }
 
-  async searchByDocument(q: string) {
+  async searchByDocument(q: string, businessId?: string) {
+    const where: any = {
+      OR: [
+        { documentId: { contains: q, mode: 'insensitive' } },
+        { name: { contains: q, mode: 'insensitive' } },
+      ]
+    };
+    if (businessId) {
+      where.businessId = businessId;
+    }
     return this.prisma.client.findMany({
-      where: {
-        OR: [
-          { documentId: { contains: q, mode: 'insensitive' } },
-          { name: { contains: q, mode: 'insensitive' } },
-        ]
-      },
+      where,
       take: 10,
     });
   }
 
-  async findOne(id: string) {
-    return this.prisma.client.findUnique({
-      where: { id },
+  async findOne(id: string, businessId?: string) {
+    const where: any = { id };
+    if (businessId) {
+      where.businessId = businessId;
+    }
+    const client = await this.prisma.client.findFirst({
+      where,
       include: { 
         sales: true,
         creditTransactions: {
@@ -44,19 +57,23 @@ export class ClientsService {
         }
       }
     });
+    if (!client) throw new NotFoundException('Cliente no encontrado');
+    return client;
   }
 
-  async update(id: string, data: any) {
+  async update(id: string, data: any, businessId?: string) {
+    await this.findOne(id, businessId);
     return this.prisma.client.update({
       where: { id },
       data
     });
   }
 
-  async registerPayment(clientId: string, data: { amount: number; notes?: string }) {
+  async registerPayment(clientId: string, data: { amount: number; notes?: string }, businessId?: string) {
+    await this.findOne(clientId, businessId);
     return this.prisma.$transaction(async (tx) => {
       const client = await tx.client.findUnique({ where: { id: clientId } });
-      if (!client) throw new Error("Cliente no encontrado");
+      if (!client) throw new NotFoundException("Cliente no encontrado");
 
       const now = new Date();
       const isLate = client.nextPaymentDate && now > client.nextPaymentDate;
@@ -92,7 +109,6 @@ export class ClientsService {
           totalPaymentsCount: { increment: 1 },
           latePaymentsCount: isLate ? { increment: 1 } : undefined,
           lastPaymentDate: now,
-          // If debt is fully paid, we could clear nextPaymentDate or just extend it
           nextPaymentDate: client.currentDebt - data.amount <= 0.01 ? null : client.nextPaymentDate
         }
       });
@@ -111,7 +127,8 @@ export class ClientsService {
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, businessId?: string) {
+    await this.findOne(id, businessId);
     return this.prisma.client.delete({ where: { id } });
   }
 }

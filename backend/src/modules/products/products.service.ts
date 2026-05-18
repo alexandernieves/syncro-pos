@@ -127,9 +127,13 @@ export class ProductsService {
     });
   }
 
-  async findAll(branchId?: string) {
+  async findAll(businessId?: string, branchId?: string) {
+    const where: any = {};
+    if (businessId) {
+      where.businessId = businessId;
+    }
     const products = await this.prisma.product.findMany({
-      where: {},
+      where,
       include: {
         category: true,
         variants: {
@@ -180,9 +184,13 @@ export class ProductsService {
     });
   }
 
-  async findOne(id: string) {
-    const product = await this.prisma.product.findUnique({
-      where: { id },
+  async findOne(id: string, businessId?: string) {
+    const where: any = { id };
+    if (businessId) {
+      where.businessId = businessId;
+    }
+    const product = await this.prisma.product.findFirst({
+      where,
       include: {
         category: true,
         supplier: true,
@@ -201,8 +209,10 @@ export class ProductsService {
     return product;
   }
 
-  async update(id: string, data: any, userId?: string) {
+  async update(id: string, data: any, userId?: string, businessId?: string) {
+    await this.findOne(id, businessId);
     const { variants, ...productData } = data;
+    delete productData.businessId;
 
     return this.prisma.$transaction(async (tx) => {
       const updatedProduct = await tx.product.update({
@@ -253,8 +263,9 @@ export class ProductsService {
     });
   }
 
-  async remove(id: string, userId?: string) {
+  async remove(id: string, userId?: string, businessId?: string) {
     console.log('[ProductsService] Attempting to remove product ID:', id);
+    await this.findOne(id, businessId);
     try {
       const result = await this.prisma.product.delete({ where: { id } });
       console.log('[ProductsService] Successfully removed product:', result.name);
@@ -270,7 +281,7 @@ export class ProductsService {
       }
 
       return result;
-    } catch (error) {
+    } catch (error: any) {
       console.error('[ProductsService] Error deleting product:', error.message);
       if (error.code === 'P2003') {
         throw new BadRequestException('Este producto tiene historial de ventas o movimientos de inventario y no puede ser eliminado por razones de auditoría.');
@@ -279,8 +290,8 @@ export class ProductsService {
     }
   }
 
-  async getStats(id: string) {
-    const product = await this.findOne(id);
+  async getStats(id: string, businessId?: string) {
+    const product = await this.findOne(id, businessId);
     const variantIds = product.variants.map(v => v.id);
 
     const sevenDaysAgo = new Date();
@@ -317,22 +328,29 @@ export class ProductsService {
     };
   }
 
-
-  async validateBarcode(barcode: string) {
+  async validateBarcode(barcode: string, businessId?: string) {
+    const where: any = {
+      OR: [
+        { barcode: barcode },
+        { secondaryBarcodes: { has: barcode } }
+      ]
+    };
+    if (businessId) {
+      where.product = { businessId };
+    }
     const variant = await (this.prisma.productVariant as any).findFirst({
-      where: {
-        OR: [
-          { barcode: barcode },
-          { secondaryBarcodes: { has: barcode } }
-        ]
-      }
+      where
     });
     return !variant;
   }
 
-  async getWaitlist() {
+  async getWaitlist(businessId?: string) {
+    const where: any = { status: 'PENDING' };
+    if (businessId) {
+      where.branch = { businessId };
+    }
     return (this.prisma.productWaitlist as any).findMany({
-      where: { status: 'PENDING' },
+      where,
       orderBy: { createdAt: 'desc' },
       include: { branch: true }
     });
