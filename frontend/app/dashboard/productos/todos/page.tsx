@@ -20,7 +20,7 @@ import {
   IconEye, IconBuilding, IconList,
   IconTrendingUp, IconAlertCircle, IconBolt, IconScan, IconCamera,
   IconArrowRight, IconX, IconLayoutGrid, IconLayoutList,
-  IconDownload, IconUpload, IconFileText
+  IconDownload, IconUpload, IconFileText, IconDeviceFloppy, IconArrowLeft
 } from "@tabler/icons-react";
 import { Html5Qrcode } from "html5-qrcode";
 import * as XLSX from "xlsx";
@@ -32,6 +32,10 @@ import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCurrency } from "@/context/CurrencyContext";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
 const API = API_URL;
 
@@ -145,14 +149,184 @@ export default function ProductosPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [stats, setStats] = useState<any>(null);
 
-  const openDetail = async (p: Product) => { 
+  // Editing states inside the Drawer
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState("");
+  const [editSupplierId, setEditSupplierId] = useState("");
+  const [editIsWeighable, setEditIsWeighable] = useState(false);
+  const [editImage, setEditImage] = useState("");
+  const [editVariants, setEditVariants] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const editFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Fetch categories and suppliers on mount for select dropdowns
+  useEffect(() => {
+    const fetchSelects = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const headers = { Authorization: `Bearer ${token}` };
+        const [cRes, sRes] = await Promise.all([
+          fetch(`${API}/categories`, { headers }),
+          fetch(`${API}/suppliers`, { headers }),
+        ]);
+        if (cRes.ok) setCategories(await cRes.json());
+        if (sRes.ok) setSuppliers(await sRes.json());
+      } catch (e) {
+        console.error("Error loading categories/suppliers", e);
+      }
+    };
+    fetchSelects();
+  }, []);
+
+  const openDetail = async (p: Product, startInEditMode = false) => { 
     setSelectedProduct(p); 
+    setIsEditing(startInEditMode);
+    
+    // Initialize editing state from selected product
+    setEditName(p.name || "");
+    setEditDescription(p.description || "");
+    setEditCategoryId((p as any).categoryId || p.category?.id || "");
+    setEditSupplierId((p as any).supplierId || p.supplier?.id || "");
+    setEditIsWeighable((p as any).isWeighable || false);
+    setEditImage(p.image || "");
+    setEditVariants(p.variants ? p.variants.map((v: any) => ({
+      id: v.id,
+      name: v.name,
+      sku: v.sku,
+      barcode: v.barcode || "",
+      secondaryBarcodes: v.secondaryBarcodes || [],
+      price: String(v.price),
+      cost: String(v.cost || ""),
+      stock: String(v.stock),
+      minStock: String(v.minStock),
+      promoPrice: String(v.promoPrice || ""),
+      bulkPrice: String(v.bulkPrice || ""),
+    })) : []);
+
     setDetailOpen(true); 
+    
     // Fetch stats
     try {
       const res = await fetch(`${API}/products/${p.id}/stats`);
       if (res.ok) setStats(await res.json());
     } catch (e) {}
+  };
+
+  const handleEditImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    try {
+      const token = localStorage.getItem("token");
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const res = await fetch(`${API}/uploads`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        },
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setEditImage(data.url);
+        toast.success("Imagen subida exitosamente");
+      } else {
+        toast.error("Error al subir la imagen");
+      }
+    } catch (e) {
+      toast.error("Error de conexión al subir imagen");
+    } finally {
+      setUploadingImage(false);
+      if (editFileInputRef.current) editFileInputRef.current.value = "";
+    }
+  };
+
+  const handleAddVariant = () => {
+    const idx = editVariants.length;
+    const newVar = {
+      name: `Variante ${idx + 1}`,
+      sku: `SKU-${Date.now()}-${idx}`,
+      barcode: "",
+      secondaryBarcodes: [],
+      price: "",
+      cost: "",
+      promoPrice: "",
+      bulkPrice: "",
+      stock: "0",
+      minStock: "5",
+    };
+    setEditVariants([...editVariants, newVar]);
+  };
+
+  const handleRemoveVariant = (idx: number) => {
+    setEditVariants(editVariants.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveChanges = async () => {
+    if (!selectedProduct) return;
+    if (!editName.trim()) return toast.error("El nombre es obligatorio");
+    if (editVariants.length === 0) return toast.error("Debe tener al menos una variante");
+    if (editVariants.some(v => !v.name.trim())) return toast.error("Todas las variantes deben tener un nombre");
+    if (editVariants.some(v => !v.price || isNaN(Number(v.price)) || Number(v.price) < 0)) return toast.error("Todas las variantes deben tener un precio válido");
+    
+    setSaving(true);
+    try {
+      const token = localStorage.getItem("token");
+      const url = `${API}/products/${selectedProduct.id}`;
+      
+      const payload = {
+        name: editName,
+        description: editDescription,
+        categoryId: editCategoryId || null,
+        supplierId: editSupplierId || null,
+        isWeighable: editIsWeighable,
+        image: editImage || null,
+        variants: editVariants.map(v => ({
+          id: v.id,
+          name: v.name,
+          sku: v.sku,
+          barcode: v.barcode || "",
+          secondaryBarcodes: v.secondaryBarcodes || [],
+          price: Number(v.price),
+          cost: v.cost ? Number(v.cost) : null,
+          stock: Number(v.stock),
+          minStock: Number(v.minStock),
+          promoPrice: v.promoPrice ? Number(v.promoPrice) : null,
+          bulkPrice: v.bulkPrice ? Number(v.bulkPrice) : null,
+        }))
+      };
+
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        toast.success("Producto actualizado correctamente");
+        setDetailOpen(false);
+        load(); // Refresh products list
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        toast.error(errData.message || "Error al actualizar producto");
+      }
+    } catch (e) {
+      toast.error("Error al guardar cambios");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const loadWaitlist = async () => {
@@ -615,7 +789,7 @@ export default function ProductosPage() {
             <Button variant="ghost" size="icon" className="size-8 text-primary" title="Ver ficha" onClick={() => openDetail(p)}>
               <IconEye size={16} />
             </Button>
-            <Button variant="ghost" size="icon" className="size-8" title="Editar producto" onClick={() => router.push(`/dashboard/productos/editar?id=${p.id}`)}>
+            <Button variant="ghost" size="icon" className="size-8" title="Editar producto" onClick={() => openDetail(p, true)}>
               <IconPencil size={15} />
             </Button>
             <Button variant="ghost" size="icon" className="size-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50" title="Eliminar producto" onClick={() => setProductToDelete(p)}>
@@ -912,7 +1086,7 @@ export default function ProductosPage() {
                             <IconEye size={14} />
                           </button>
                           <button
-                            onClick={e => { e.stopPropagation(); router.push(`/dashboard/productos/editar?id=${p.id}`); }}
+                            onClick={e => { e.stopPropagation(); openDetail(p, true); }}
                             className="size-8 rounded-full bg-background border shadow-sm flex items-center justify-center hover:bg-foreground hover:text-background transition-colors"
                             title="Editar"
                           >
@@ -1079,128 +1253,501 @@ export default function ProductosPage() {
       <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
         <SheetContent className="sm:max-w-2xl overflow-y-auto">
           {selectedProduct && (
-            <div className="space-y-8 py-4 px-6 md:px-8">
-              <SheetHeader>
-                <div className="flex items-start gap-4">
-                  <div className="size-24 bg-muted rounded-2xl overflow-hidden border-2 border-primary/10">
-                    {selectedProduct.image ? <img src={selectedProduct.image} className="size-full object-cover" /> : <div className="size-full flex items-center justify-center opacity-20"><IconPackage size={40}/></div>}
-                  </div>
-                  <div className="flex-1">
-                     <div className="flex items-center gap-2 mb-2">
-                        <Badge variant="outline">{selectedProduct.category?.name || "Retail"}</Badge>
-                        {selectedProduct.supplier && (
-                           <Badge className="bg-primary/10 text-primary border-primary/20">{selectedProduct.supplier.name}</Badge>
-                        )}
+            <div className="space-y-6 py-4 px-4 md:px-6">
+              {!isEditing ? (
+                <>
+                  {/* VIEW MODE LAYOUT */}
+                  <SheetHeader className="relative">
+                    <div className="absolute top-0 right-0">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="gap-1.5 h-8 text-xs font-bold text-primary border-primary/20 hover:bg-primary/5 shadow-sm"
+                        onClick={() => setIsEditing(true)}
+                      >
+                        <IconPencil size={14} /> Editar Producto
+                      </Button>
+                    </div>
+                    <div className="flex items-start gap-4 pr-20">
+                      <div className="size-24 bg-muted rounded-2xl overflow-hidden border-2 border-primary/10 shrink-0">
+                        {selectedProduct.image ? <img src={selectedProduct.image} className="size-full object-cover" /> : <div className="size-full flex items-center justify-center opacity-20"><IconPackage size={40}/></div>}
+                      </div>
+                      <div className="flex-1">
+                         <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="outline">{selectedProduct.category?.name || "Retail"}</Badge>
+                            {selectedProduct.supplier && (
+                               <Badge className="bg-primary/10 text-primary border-primary/20">{selectedProduct.supplier.name}</Badge>
+                            )}
+                         </div>
+                         <SheetTitle className="text-3xl font-black leading-none mb-2">{selectedProduct.name}</SheetTitle>
+                         <p className="text-muted-foreground text-sm line-clamp-2">{selectedProduct.description || "Sin descripción de producto disponible."}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                     <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10">
+                       <p className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1">Stock Total</p>
+                       <p className="text-2xl font-black">{selectedProduct.totalStock}</p>
                      </div>
-                     <SheetTitle className="text-3xl font-black leading-none mb-2">{selectedProduct.name}</SheetTitle>
-                     <p className="text-muted-foreground text-sm line-clamp-2">{selectedProduct.description || "Sin descripción de producto disponible."}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                 <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10">
-                   <p className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1">Stock Total</p>
-                   <p className="text-2xl font-black">{selectedProduct.totalStock}</p>
-                 </div>
-                 <div className="bg-muted/50 p-4 rounded-2xl border">
-                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Costo Estim.</p>
-                   <p className="text-2xl font-black">${selectedProduct.variants?.[0]?.cost || 0}</p>
-                 </div>
-                 <div className="bg-muted/50 p-4 rounded-2xl border">
-                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Ventas (7d)</p>
-                   <p className="text-2xl font-black">{stats?.totalSoldLast7Days || 0}</p>
-                 </div>
-                 <div className="bg-muted/50 p-4 rounded-2xl border">
-                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Margen</p>
-                   <p className="text-2xl font-black">
-                     {selectedProduct.variants?.[0]?.cost 
-                        ? `${Math.round(((selectedProduct.variants[0].price - selectedProduct.variants[0].cost) / selectedProduct.variants[0].price) * 100)}%` 
-                        : "0%"}
-                   </p>
-                 </div>
-               </div>
-              </SheetHeader>
+                     <div className="bg-muted/50 p-4 rounded-2xl border">
+                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Costo Estim.</p>
+                       <p className="text-2xl font-black">${selectedProduct.variants?.[0]?.cost || 0}</p>
+                     </div>
+                     <div className="bg-muted/50 p-4 rounded-2xl border">
+                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Ventas (7d)</p>
+                       <p className="text-2xl font-black">{stats?.totalSoldLast7Days || 0}</p>
+                     </div>
+                     <div className="bg-muted/50 p-4 rounded-2xl border">
+                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Margen</p>
+                       <p className="text-2xl font-black">
+                         {selectedProduct.variants?.[0]?.cost 
+                            ? `${Math.round(((selectedProduct.variants[0].price - selectedProduct.variants[0].cost) / selectedProduct.variants[0].price) * 100)}%` 
+                            : "0%"}
+                       </p>
+                     </div>
+                   </div>
+                  </SheetHeader>
 
-              <Tabs defaultValue="variantes">
-                <TabsList className="w-full bg-muted/30 p-1 rounded-xl">
-                  <TabsTrigger value="variantes" className="flex-1 rounded-lg">Variantes</TabsTrigger>
-                  <TabsTrigger value="stats" className="flex-1 rounded-lg">Inteligencia</TabsTrigger>
-                </TabsList>
+                  <Tabs defaultValue="variantes">
+                    <TabsList className="w-full bg-muted/30 p-1 rounded-xl">
+                      <TabsTrigger value="variantes" className="flex-1 rounded-lg">Variantes</TabsTrigger>
+                      <TabsTrigger value="stats" className="flex-1 rounded-lg">Inteligencia</TabsTrigger>
+                    </TabsList>
 
-                <TabsContent value="variantes" className="mt-6 space-y-4">
-                  {selectedProduct.variants?.map((v: any, idx) => (
-                     <div key={v.id || v.sku || idx} className="p-5 rounded-2xl border bg-card hover:border-primary/40 transition-all flex flex-col gap-4 group">
-                       <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="size-12 bg-muted rounded-xl flex items-center justify-center font-black text-sm text-primary">
-                              {v.name.substring(0,2).toUpperCase()}
+                    <TabsContent value="variantes" className="mt-6 space-y-4">
+                      {selectedProduct.variants?.map((v: any, idx) => (
+                         <div key={v.id || v.sku || idx} className="p-5 rounded-2xl border bg-card hover:border-primary/40 transition-all flex flex-col gap-4 group">
+                           <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                <div className="size-12 bg-muted rounded-xl flex items-center justify-center font-black text-sm text-primary">
+                                  {v.name.substring(0,2).toUpperCase()}
+                                </div>
+                                <div>
+                                  <p className="font-black text-sm uppercase tracking-tight">{v.name}</p>
+                                  <p className="text-[10px] text-muted-foreground font-mono flex items-center gap-2">
+                                    <IconBarcode size={12}/> {v.sku} {v.barcode && `| ${v.barcode}`}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                 <p className="text-[10px] font-bold text-muted-foreground/60 uppercase">Precio Unit.</p>
+                                 <p className="font-black text-xl text-primary leading-none">${v.price}</p>
+                              </div>
+                           </div>
+
+                           <div className="grid grid-cols-3 gap-2 py-3 border-y border-dashed">
+                              <div>
+                                <p className="text-[9px] font-bold text-muted-foreground uppercase">Costo</p>
+                                <p className="font-bold text-sm text-foreground">${v.cost || 0}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] font-bold text-muted-foreground uppercase">Utilidad</p>
+                                <p className="font-bold text-sm text-green-600">${(v.price - (v.cost || 0)).toFixed(2)}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[9px] font-bold text-muted-foreground uppercase">Existencia</p>
+                                <p className={cn(
+                                  "font-bold text-sm",
+                                  v.stock <= v.minStock ? "text-destructive" : "text-foreground"
+                                )}>{v.stock} unid.</p>
+                              </div>
+                           </div>
+
+                           {v.secondaryBarcodes && v.secondaryBarcodes.length > 0 && (
+                              <div className="space-y-2">
+                                 <p className="text-[9px] font-bold text-muted-foreground uppercase">Códigos Adicionales</p>
+                                 <div className="flex flex-wrap gap-1.5">
+                                    {v.secondaryBarcodes.map((bc: string) => (
+                                       <Badge key={bc} variant="secondary" className="text-[9px] font-mono py-0 px-2 rounded-md bg-muted/50 border-none">
+                                          {bc}
+                                       </Badge>
+                                    ))}
+                                 </div>
+                              </div>
+                           )}
+                         </div>
+                       ))}
+                    </TabsContent>
+
+                    <TabsContent value="stats" className="mt-6 space-y-6">
+                      <div className="p-6 rounded-2xl border bg-gradient-to-br from-primary/5 to-transparent">
+                        <h3 className="font-bold mb-4 flex items-center gap-2"><IconTrendingUp size={18} className="text-primary"/> Rendimiento de Venta</h3>
+                        <div className="space-y-4 text-sm">
+                          <div className="flex justify-between py-2 border-b">
+                            <span className="text-muted-foreground">Ventas Totales (Acumulado)</span>
+                            <span className="font-bold">{stats?.totalQuantitySold || 0} unidades</span>
+                          </div>
+                          <div className="flex justify-between py-2 border-b">
+                            <span className="text-muted-foreground">Última Venta</span>
+                            <span className="font-bold">{stats?.lastSale ? new Date(stats.lastSale).toLocaleDateString() : 'Sin ventas'}</span>
+                          </div>
+                          <div className="flex justify-between py-2 border-b">
+                            <span className="text-muted-foreground">Precio Promedio Venta</span>
+                            <span className="font-bold text-primary">${stats?.averagePrice || 0}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </>
+              ) : (
+                <>
+                  {/* EDIT MODE LAYOUT */}
+                  <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="flex items-center justify-between pb-4 border-b border-border/60">
+                      <div>
+                        <h2 className="text-xl font-black">Editar Producto</h2>
+                        <p className="text-xs text-muted-foreground mt-0.5">Modifica los detalles generales y variantes.</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => setIsEditing(false)} 
+                          className="h-9 px-4 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-muted"
+                          disabled={saving}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button 
+                          onClick={handleSaveChanges} 
+                          className="h-9 px-5 rounded-xl text-xs font-bold gap-1.5 bg-primary text-primary-foreground shadow-sm shadow-primary/20"
+                          disabled={saving}
+                        >
+                          {saving ? (
+                            <>
+                              <div className="size-3.5 rounded-full border border-primary-foreground border-t-transparent animate-spin" />
+                              <span>Guardando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <IconDeviceFloppy size={14}/>
+                              <span>Guardar</span>
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="md:col-span-2 space-y-5">
+                        {/* Información General */}
+                        <div className="p-5 bg-card rounded-2xl border shadow-sm space-y-4">
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-primary">Información General</h3>
+                          <div className="space-y-4">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Nombre del Producto</Label>
+                              <Input 
+                                value={editName} 
+                                onChange={e => setEditName(e.target.value)} 
+                                placeholder="Ej: Zapatos Deportivos XYZ" 
+                                className="h-10 text-sm font-bold bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all" 
+                              />
                             </div>
-                            <div>
-                              <p className="font-black text-sm uppercase tracking-tight">{v.name}</p>
-                              <p className="text-[10px] text-muted-foreground font-mono flex items-center gap-2">
-                                <IconBarcode size={12}/> {v.sku} {v.barcode && `| ${v.barcode}`}
-                              </p>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Descripción</Label>
+                              <Input 
+                                value={editDescription} 
+                                onChange={e => setEditDescription(e.target.value)} 
+                                placeholder="Breve descripción para el cliente" 
+                                className="h-10 text-sm bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                <Label className="text-xs">Categoría</Label>
+                                <Select value={editCategoryId} onValueChange={setEditCategoryId}>
+                                  <SelectTrigger className="h-10 bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all">
+                                    <SelectValue placeholder="Seleccionar..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {categories.map((c, idx) => (
+                                      <SelectItem key={c.id || c._id || idx} value={c.id || c._id}>
+                                        {c.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs">Proveedor</Label>
+                                <Select value={editSupplierId} onValueChange={setEditSupplierId}>
+                                  <SelectTrigger className="h-10 bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all">
+                                    <SelectValue placeholder="Seleccionar..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {suppliers.map((s, idx) => (
+                                      <SelectItem key={s.id || s._id || idx} value={s.id || s._id}>
+                                        {s.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between p-3.5 border border-border/50 rounded-xl bg-muted/10">
+                              <div className="space-y-0.5">
+                                <Label htmlFor="edit-weighable-switch" className="font-bold text-xs cursor-pointer block">
+                                  Producto Pesable
+                                </Label>
+                                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                                  Activa si se vende por peso fraccionado (Ej: Kg).
+                                </p>
+                              </div>
+                              <Switch 
+                                id="edit-weighable-switch" 
+                                checked={editIsWeighable} 
+                                onCheckedChange={setEditIsWeighable} 
+                                className="data-[state=checked]:bg-emerald-500 shrink-0"
+                              />
                             </div>
                           </div>
-                          <div className="text-right">
-                             <p className="text-[10px] font-bold text-muted-foreground/60 uppercase">Precio Unit.</p>
-                             <p className="font-black text-xl text-primary leading-none">${v.price}</p>
-                          </div>
-                       </div>
+                        </div>
+                      </div>
 
-                       <div className="grid grid-cols-3 gap-2 py-3 border-y border-dashed">
-                          <div>
-                            <p className="text-[9px] font-bold text-muted-foreground uppercase">Costo</p>
-                            <p className="font-bold text-sm text-foreground">${v.cost || 0}</p>
+                      {/* Imagen Lateral */}
+                      <div className="space-y-5">
+                        <div className="p-5 bg-card rounded-2xl border shadow-sm space-y-3">
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-primary">Imagen del Producto</h3>
+                          <div 
+                            className="relative border-2 border-dashed border-primary/20 hover:border-primary/40 rounded-2xl bg-muted/5 hover:bg-muted/10 transition-all flex flex-col items-center justify-center p-4 text-center cursor-pointer min-h-[140px] group overflow-hidden"
+                            onClick={() => editFileInputRef.current?.click()}
+                          >
+                            <input 
+                              type="file" 
+                              ref={editFileInputRef} 
+                              className="hidden" 
+                              accept="image/*" 
+                              onChange={handleEditImageUpload} 
+                            />
+                            {uploadingImage ? (
+                              <div className="space-y-2">
+                                <div className="size-6 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
+                                <p className="text-[11px] text-muted-foreground font-medium">Subiendo...</p>
+                              </div>
+                            ) : editImage ? (
+                              <div className="relative w-full flex items-center justify-center">
+                                <img src={editImage} alt="Producto" className="max-h-[110px] object-contain rounded-lg" />
+                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                                  <p className="text-white text-[10px] font-bold flex items-center gap-1"><IconPlus size={12} /> Cambiar Imagen</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center mb-2 mx-auto">
+                                  <IconPlus className="text-primary size-5" />
+                                </div>
+                                <p className="text-xs font-bold">Subir Imagen</p>
+                                <p className="text-[10px] text-muted-foreground">PNG, JPG o WEBP</p>
+                              </>
+                            )}
                           </div>
-                          <div>
-                            <p className="text-[9px] font-bold text-muted-foreground uppercase">Utilidad</p>
-                            <p className="font-bold text-sm text-green-600">${(v.price - (v.cost || 0)).toFixed(2)}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-[9px] font-bold text-muted-foreground uppercase">Existencia</p>
-                            <p className={cn(
-                              "font-bold text-sm",
-                              v.stock <= v.minStock ? "text-destructive" : "text-foreground"
-                            )}>{v.stock} unid.</p>
-                          </div>
-                       </div>
+                        </div>
+                      </div>
+                    </div>
 
-                       {v.secondaryBarcodes && v.secondaryBarcodes.length > 0 && (
-                          <div className="space-y-2">
-                             <p className="text-[9px] font-bold text-muted-foreground uppercase">Códigos Adicionales</p>
-                             <div className="flex flex-wrap gap-1.5">
-                                {v.secondaryBarcodes.map((bc: string) => (
-                                   <Badge key={bc} variant="secondary" className="text-[9px] font-mono py-0 px-2 rounded-md bg-muted/50 border-none">
+                    {/* Variantes */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-primary">Variantes y Precios</h3>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={handleAddVariant} 
+                          className="gap-1.5 h-8 text-xs font-semibold border-primary/20 hover:bg-primary/5"
+                        >
+                          <IconPlus size={14}/> Añadir Variante
+                        </Button>
+                      </div>
+
+                      <div className="space-y-4">
+                        {editVariants.map((v, idx) => (
+                          <div 
+                            key={v.id || v.sku || idx} 
+                            className="p-5 bg-card rounded-2xl border shadow-sm relative group animate-in fade-in slide-in-from-top-2"
+                          >
+                            {editVariants.length > 1 && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="absolute top-2 right-2 size-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" 
+                                onClick={() => handleRemoveVariant(idx)}
+                              >
+                                <IconTrash size={15}/>
+                              </Button>
+                            )}
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                              <div className="sm:col-span-2 space-y-1.5">
+                                <Label className="text-[11px] text-muted-foreground font-semibold">Nombre de Variante</Label>
+                                <Input 
+                                  value={v.name} 
+                                  onChange={e => {
+                                    const n = [...editVariants]; 
+                                    n[idx].name = e.target.value; 
+                                    setEditVariants(n);
+                                  }} 
+                                  placeholder="Ej: Rojo / 42" 
+                                  className="h-9 text-xs bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] text-muted-foreground font-semibold">SKU</Label>
+                                <Input 
+                                  value={v.sku} 
+                                  onChange={e => {
+                                    const n = [...editVariants]; 
+                                    n[idx].sku = e.target.value; 
+                                    setEditVariants(n);
+                                  }} 
+                                  className="h-9 text-xs font-mono bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] text-muted-foreground font-semibold">Código de Barras principal</Label>
+                                <div className="relative">
+                                  <IconBarcode size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                  <Input 
+                                    value={v.barcode} 
+                                    onChange={e => {
+                                      const n = [...editVariants]; 
+                                      n[idx].barcode = e.target.value; 
+                                      setEditVariants(n);
+                                    }} 
+                                    className="h-9 text-xs pl-9 bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all" 
+                                    placeholder="EAN-13" 
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Códigos Adicionales */}
+                              <div className="sm:col-span-2 space-y-1.5">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-wider">Códigos de Barras Secundarios</Label>
+                                <div className="flex flex-wrap gap-1.5 p-2 bg-muted/10 rounded-xl border border-dashed border-muted-foreground/10">
+                                  {v.secondaryBarcodes?.map((bc: string, bIdx: number) => (
+                                    <div key={`${bc}-${bIdx}`} className="bg-background border px-2 py-1 rounded-lg text-[9px] font-mono flex items-center gap-1.5">
                                       {bc}
-                                   </Badge>
-                                ))}
-                             </div>
-                          </div>
-                       )}
-                     </div>
-                   ))}
-                </TabsContent>
+                                      <button 
+                                        type="button"
+                                        className="text-destructive hover:scale-110 transition-transform"
+                                        onClick={() => {
+                                          const n = [...editVariants];
+                                          n[idx].secondaryBarcodes = n[idx].secondaryBarcodes.filter((_: any, i: number) => i !== bIdx);
+                                          setEditVariants(n);
+                                        }}
+                                      >
+                                        <IconX size={10}/>
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <button 
+                                    type="button"
+                                    className="text-[9px] font-bold text-primary px-2 py-1 hover:bg-primary/5 rounded-lg border border-dashed border-primary/20 transition-colors"
+                                    onClick={() => {
+                                      const code = prompt("Nuevo código secundario:");
+                                      if (code) {
+                                        const n = [...editVariants];
+                                        if (!n[idx].secondaryBarcodes) n[idx].secondaryBarcodes = [];
+                                        n[idx].secondaryBarcodes.push(code);
+                                        setEditVariants(n);
+                                      }
+                                    }}
+                                  >
+                                    + Añadir
+                                  </button>
+                                </div>
+                              </div>
 
-                <TabsContent value="stats" className="mt-6 space-y-6">
-                  <div className="p-6 rounded-2xl border bg-gradient-to-br from-primary/5 to-transparent">
-                    <h3 className="font-bold mb-4 flex items-center gap-2"><IconTrendingUp size={18} className="text-primary"/> Rendimiento de Venta</h3>
-                    <div className="space-y-4 text-sm">
-                      <div className="flex justify-between py-2 border-b">
-                        <span className="text-muted-foreground">Ventas Totales (Acumulado)</span>
-                        <span className="font-bold">{stats?.totalQuantitySold || 0} unidades</span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b">
-                        <span className="text-muted-foreground">Última Venta</span>
-                        <span className="font-bold">{stats?.lastSale ? new Date(stats.lastSale).toLocaleDateString() : 'Sin ventas'}</span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b">
-                        <span className="text-muted-foreground">Precio Promedio Venta</span>
-                        <span className="font-bold text-primary">${stats?.averagePrice || 0}</span>
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] text-primary font-bold">Precio Venta</Label>
+                                <Input 
+                                  type="number" 
+                                  value={v.price} 
+                                  onChange={e => {
+                                    const n = [...editVariants]; 
+                                    n[idx].price = e.target.value; 
+                                    setEditVariants(n);
+                                  }} 
+                                  placeholder="0.00" 
+                                  className="h-9 text-xs bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all font-bold text-primary"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] text-muted-foreground font-semibold">Costo</Label>
+                                <Input 
+                                  type="number" 
+                                  value={v.cost} 
+                                  onChange={e => {
+                                    const n = [...editVariants]; 
+                                    n[idx].cost = e.target.value; 
+                                    setEditVariants(n);
+                                  }} 
+                                  placeholder="0.00" 
+                                  className="h-9 text-xs bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] text-muted-foreground font-semibold">Stock Inicial</Label>
+                                <Input 
+                                  type="number" 
+                                  value={v.stock} 
+                                  onChange={e => {
+                                    const n = [...editVariants]; 
+                                    n[idx].stock = e.target.value; 
+                                    setEditVariants(n);
+                                  }}
+                                  className="h-9 text-xs bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] text-muted-foreground font-semibold font-mono">Stock Mínimo</Label>
+                                <Input 
+                                  type="number" 
+                                  value={v.minStock} 
+                                  onChange={e => {
+                                    const n = [...editVariants]; 
+                                    n[idx].minStock = e.target.value; 
+                                    setEditVariants(n);
+                                  }}
+                                  className="h-9 text-xs bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] text-muted-foreground font-semibold">Precio Promo</Label>
+                                <Input 
+                                  type="number" 
+                                  value={v.promoPrice} 
+                                  onChange={e => {
+                                    const n = [...editVariants]; 
+                                    n[idx].promoPrice = e.target.value; 
+                                    setEditVariants(n);
+                                  }} 
+                                  className="h-9 text-xs bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all border-orange-200/50" 
+                                  placeholder="0.00"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] text-muted-foreground font-semibold">Precio Mayor</Label>
+                                <Input 
+                                  type="number" 
+                                  value={v.bulkPrice} 
+                                  onChange={e => {
+                                    const n = [...editVariants]; 
+                                    n[idx].bulkPrice = e.target.value; 
+                                    setEditVariants(n);
+                                  }} 
+                                  className="h-9 text-xs bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all border-blue-200/50" 
+                                  placeholder="0.00"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
-                </TabsContent>
-              </Tabs>
+                </>
+              )}
             </div>
           )}
         </SheetContent>
