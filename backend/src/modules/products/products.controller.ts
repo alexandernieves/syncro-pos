@@ -27,9 +27,11 @@ export class ProductsController {
     return this.productsService.create(body, userId);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('quick-create')
-  async quickCreate(@Body() data: { name: string, price: number, stock: number, barcodes: string[], branchId?: string, sku?: string }) {
-    return this.productsService.quickCreate(data);
+  async quickCreate(@Body() data: any, @Request() req: any) {
+    const businessId = req.user?.businessId;
+    return this.productsService.quickCreate({ ...data, businessId });
   }
 
   @Get() 

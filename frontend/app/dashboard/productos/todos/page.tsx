@@ -673,20 +673,28 @@ export default function ProductosPage() {
         console.log("Importing rows:", rows);
         
         let successCount = 0;
+        const token = localStorage.getItem("token");
+
         for (const row of rows as any[]) {
-          // Lógica flexible: mapeamos lo mínimo, y lo extra va a descripción o campos dinámicos si fuera necesario
           const payload = {
             name: row.Nombre || row.name || row.Producto || "Sin nombre",
-            price: Number(row.Precio || row.Precio_Venta || row.price || 0),
+            price: Number(row.Precio_USD || row.Precio || row.Precio_Venta || row.price || 0),
+            cost: Number(row.Costo_USD || row.Costo || row.cost || 0),
             stock: Number(row.Stock || row.Existencia || row.stock || 0),
             sku: row.SKU || row.sku || "",
             barcodes: row.Codigo_Barras || row.barcode ? [String(row.Codigo_Barras || row.barcode)] : [],
+            categoryName: row.Categoria || row.category || "",
+            isWeighable: !!(row.Pesable || row.isWeighable || false),
+            description: row.Descripcion || row.description || "",
             branchId: localStorage.getItem("currentBranchId") || ""
           };
 
           const res = await fetch(`${API}/products/quick-create`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
             body: JSON.stringify(payload)
           });
           if (res.ok) successCount++;

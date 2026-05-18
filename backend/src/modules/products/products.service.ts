@@ -54,7 +54,19 @@ export class ProductsService {
     return product;
   }
 
-  async quickCreate(data: { name: string, price: number, stock: number, barcodes: string[], branchId?: string, sku?: string }) {
+  async quickCreate(data: { 
+    name: string, 
+    price: number, 
+    cost?: number,
+    stock: number, 
+    barcodes: string[], 
+    branchId?: string, 
+    sku?: string,
+    categoryName?: string,
+    description?: string,
+    isWeighable?: boolean,
+    businessId?: string
+  }) {
     console.log('[QuickCreate] Incoming Data:', data);
     const sku = data.sku || `QC-${Date.now()}`;
     const barcodes = data.barcodes || [];
@@ -63,9 +75,34 @@ export class ProductsService {
 
     console.log('[QuickCreate] Assigned Barcodes:', { primary, secondary });
 
+    let categoryId = null;
+    if (data.categoryName && data.businessId) {
+      const name = data.categoryName.trim();
+      const businessId = data.businessId;
+      let category = await this.prisma.category.findFirst({
+        where: {
+          name,
+          businessId
+        }
+      });
+      if (!category) {
+        category = await this.prisma.category.create({
+          data: {
+            name,
+            businessId
+          }
+        });
+      }
+      categoryId = category.id;
+    }
+
     return this.prisma.product.create({
       data: {
         name: data.name,
+        description: data.description || null,
+        isWeighable: !!data.isWeighable,
+        categoryId,
+        businessId: data.businessId || null,
         variants: {
           create: [{
             name: 'Default',
@@ -73,6 +110,7 @@ export class ProductsService {
             barcode: primary,
             secondaryBarcodes: secondary,
             price: data.price,
+            cost: data.cost || null,
             stock: data.stock,
             inventory: {
               create: data.branchId ? [{

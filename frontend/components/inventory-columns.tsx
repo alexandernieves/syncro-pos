@@ -160,50 +160,22 @@ export const inventoryColumns: ColumnDef<z.infer<typeof inventorySchema>>[] = [
     accessorKey: "target",
     header: () => <div className="w-full text-right">Existencia</div>,
     cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Guardando stock de ${row.original.header}`,
-            success: "Stock actualizado",
-            error: "Error al actualizar",
-          })
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-target`} className="sr-only">
-          Existencia
-        </Label>
-        <Input
-          className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-20 border-transparent bg-transparent text-right shadow-none focus-visible:border dark:bg-transparent"
-          defaultValue={row.original.target}
-          id={`${row.original.id}-target`}
-        />
-      </form>
+      <div className="w-full text-right">
+        <span className="text-sm font-semibold pr-2">
+          {row.original.target}
+        </span>
+      </div>
     ),
   },
   {
     accessorKey: "limit",
     header: () => <div className="w-full text-right">Mínimo</div>,
     cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Guardando mínimo de ${row.original.header}`,
-            success: "Mínimo actualizado",
-            error: "Error al actualizar",
-          })
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-limit`} className="sr-only">
-          Mínimo
-        </Label>
-        <Input
-          className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-20 border-transparent bg-transparent text-right shadow-none focus-visible:border dark:bg-transparent text-muted-foreground/80"
-          defaultValue={row.original.limit}
-          id={`${row.original.id}-limit`}
-        />
-      </form>
+      <div className="w-full text-right">
+        <span className="text-sm font-medium text-muted-foreground/80 pr-2">
+          {row.original.limit}
+        </span>
+      </div>
     ),
   },
   {
