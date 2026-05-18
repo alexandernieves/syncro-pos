@@ -175,6 +175,10 @@ export default function ProductosPage() {
   const [scannedUnregisteredBarcode, setScannedUnregisteredBarcode] = useState("");
   const [associateSearchTerm, setAssociateSearchTerm] = useState("");
 
+  // Edit Drawer Barcode Scanning States
+  const [activeVariantIndexForPrimaryBarcode, setActiveVariantIndexForPrimaryBarcode] = useState<number | null>(null);
+  const [activeVariantIndexForSecondaryBarcode, setActiveVariantIndexForSecondaryBarcode] = useState<number | null>(null);
+
   const handleAddBarcodeConfirm = () => {
     if (activeVariantIndexForBarcode === null) return;
     const code = barcodePromptValue.trim();
@@ -399,6 +403,50 @@ export default function ProductosPage() {
       setIsDetected(true);
       const audio = new Audio("/scanner.mp3");
       audio.play().catch(e => console.error("Error playing audio", e));
+
+      // 1. Si estamos editando el código de barras PRINCIPAL de una variante en el Drawer
+      if (activeVariantIndexForPrimaryBarcode !== null) {
+        setEditVariants(prev => {
+          const n = [...prev];
+          if (n[activeVariantIndexForPrimaryBarcode]) {
+            n[activeVariantIndexForPrimaryBarcode].barcode = barcode;
+          }
+          return n;
+        });
+        toast.success("Código de barras principal actualizado");
+        setTimeout(() => {
+          setScannerOpen(false);
+          setUseCamera(false);
+          setIsDetected(false);
+          setActiveVariantIndexForPrimaryBarcode(null);
+        }, 800);
+        return;
+      }
+
+      // 2. Si estamos editando un código de barras SECUNDARIO de una variante en el Drawer
+      if (activeVariantIndexForSecondaryBarcode !== null) {
+        setEditVariants(prev => {
+          const n = [...prev];
+          const variant = n[activeVariantIndexForSecondaryBarcode];
+          if (variant) {
+            if (!variant.secondaryBarcodes) variant.secondaryBarcodes = [];
+            if (variant.barcode === barcode || variant.secondaryBarcodes.includes(barcode)) {
+              toast.error("El código ya está asociado a esta variante");
+            } else {
+              variant.secondaryBarcodes.push(barcode);
+              toast.success("Código secundario agregado");
+            }
+          }
+          return n;
+        });
+        setTimeout(() => {
+          setScannerOpen(false);
+          setUseCamera(false);
+          setIsDetected(false);
+          setActiveVariantIndexForSecondaryBarcode(null);
+        }, 800);
+        return;
+      }
 
       const res = await fetch(`${API}/products/validate-barcode/${barcode}`);
       const isAvailable = await res.json();
@@ -1652,9 +1700,20 @@ export default function ProductosPage() {
                                       n[idx].barcode = e.target.value; 
                                       setEditVariants(n);
                                     }} 
-                                    className="h-9 text-xs pl-9 bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all" 
+                                    className="h-9 text-xs pl-9 pr-8 bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all" 
                                     placeholder="EAN-13" 
                                   />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveVariantIndexForPrimaryBarcode(idx);
+                                      setScannerOpen(true);
+                                    }}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
+                                    title="Escanear Código de Barras"
+                                  >
+                                    <IconScan size={14} />
+                                  </button>
                                 </div>
                               </div>
 
@@ -1680,14 +1739,25 @@ export default function ProductosPage() {
                                   ))}
                                   <button 
                                     type="button"
-                                    className="text-[9px] font-bold text-primary px-2 py-1 hover:bg-primary/5 rounded-lg border border-dashed border-primary/20 transition-colors"
+                                    className="text-[9px] font-bold text-primary px-2 py-1 hover:bg-primary/5 rounded-lg border border-dashed border-primary/20 transition-colors flex items-center gap-1"
+                                    onClick={() => {
+                                      setActiveVariantIndexForSecondaryBarcode(idx);
+                                      setScannerOpen(true);
+                                    }}
+                                  >
+                                    <IconScan size={10} />
+                                    Escanear
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    className="text-[9px] font-bold text-muted-foreground px-2 py-1 hover:bg-muted rounded-lg border border-dashed border-muted-foreground/20 transition-colors"
                                     onClick={() => {
                                       setActiveVariantIndexForBarcode(idx);
                                       setBarcodePromptValue("");
                                       setBarcodePromptOpen(true);
                                     }}
                                   >
-                                    + Añadir
+                                    + Manual
                                   </button>
                                 </div>
                               </div>
@@ -1784,7 +1854,15 @@ export default function ProductosPage() {
       </Sheet>
 
       {/* 🟢 MODAL: ESCANEO MEJORADO */}
-      <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>
+      <Dialog open={scannerOpen} onOpenChange={(open) => {
+        setScannerOpen(open);
+        if (!open) {
+          setUseCamera(false);
+          setIsDetected(false);
+          setActiveVariantIndexForPrimaryBarcode(null);
+          setActiveVariantIndexForSecondaryBarcode(null);
+        }
+      }}>
         <DialogContent className={cn("overflow-hidden bg-black/95 border-white/10 shadow-2xl p-0 transition-all duration-300", useCamera ? "sm:max-w-[320px]" : "sm:max-w-md")}>
           <DialogHeader className="sr-only">
              <DialogTitle>Captura de Código de Barras</DialogTitle>
