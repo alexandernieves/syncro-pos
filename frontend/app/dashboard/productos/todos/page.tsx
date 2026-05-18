@@ -1248,10 +1248,13 @@ export default function ProductosPage() {
             filter: blur(1px);
             animation: scanline 2.5s ease-in-out infinite;
         }
+        .hide-close-btn button[class*="absolute"] {
+            display: none !important;
+        }
       `}</style>
 
       <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
-        <SheetContent className="sm:max-w-2xl overflow-y-auto">
+        <SheetContent className="sm:max-w-2xl overflow-y-auto hide-close-btn">
           {selectedProduct && (
             <div className="space-y-6 py-4 px-4 md:px-6">
               {!isEditing ? (
