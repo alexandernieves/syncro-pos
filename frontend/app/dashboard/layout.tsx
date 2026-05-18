@@ -14,21 +14,33 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
+    const token = localStorage.getItem("token");
     const userStr = localStorage.getItem("user");
-    if (userStr) {
+
+    if (!token || !userStr) {
+      router.replace("/");
+      return;
+    }
+
+    try {
       const user = JSON.parse(userStr);
       const p = user.permissions || [];
       const isPosOnly = p.includes("pos") && !p.some((perm: string) => perm !== "pos");
       if (isPosOnly || user.role === "pos") {
         router.replace("/pos");
+      } else {
+        setIsAuthenticated(true);
       }
+    } catch (e) {
+      router.replace("/");
     }
   }, [router]);
 
-  if (!isMounted) return null;
+  if (!isMounted || !isAuthenticated) return null;
 
   return (
     <SidebarProvider
