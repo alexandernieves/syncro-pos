@@ -12,6 +12,9 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -98,6 +101,7 @@ export default function ProductosPage() {
   const [gridPage, setGridPage] = useState(1);
   const [gridPageSize, setGridPageSize] = useState(10);
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [waitlistItems, setWaitlistItems] = useState<WaitlistItem[]>([]);
   const [loadingWaitlist, setLoadingWaitlist] = useState(false);
@@ -663,12 +667,16 @@ export default function ProductosPage() {
     }
   };
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     const selectedIds = Object.keys(rowSelection);
     if (selectedIds.length === 0) return;
+    setBulkDeleteConfirmOpen(true);
+  };
 
-    const confirmed = window.confirm(`¿Estás seguro de eliminar ${selectedIds.length} productos?`);
-    if (!confirmed) return;
+  const confirmBulkDelete = async () => {
+    setBulkDeleteConfirmOpen(false);
+    const selectedIds = Object.keys(rowSelection);
+    if (selectedIds.length === 0) return;
 
     toast.promise(
       async () => {
@@ -2396,6 +2404,23 @@ export default function ProductosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={bulkDeleteConfirmOpen} onOpenChange={setBulkDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás totalmente seguro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará de forma permanente {Object.keys(rowSelection).length} productos. Los datos de inventario relacionados se perderán y esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setBulkDeleteConfirmOpen(false)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmBulkDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Eliminar {Object.keys(rowSelection).length} productos
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
