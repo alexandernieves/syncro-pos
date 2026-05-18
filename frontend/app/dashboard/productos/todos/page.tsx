@@ -20,7 +20,8 @@ import {
   IconEye, IconBuilding, IconList,
   IconTrendingUp, IconAlertCircle, IconBolt, IconScan, IconCamera,
   IconArrowRight, IconX, IconLayoutGrid, IconLayoutList,
-  IconDownload, IconUpload, IconFileText, IconDeviceFloppy, IconArrowLeft
+  IconDownload, IconUpload, IconFileText, IconDeviceFloppy, IconArrowLeft,
+  IconSearch, IconAlertTriangle
 } from "@tabler/icons-react";
 import { Html5Qrcode } from "html5-qrcode";
 import * as XLSX from "xlsx";
@@ -168,6 +169,11 @@ export default function ProductosPage() {
   const [barcodePromptOpen, setBarcodePromptOpen] = useState(false);
   const [barcodePromptValue, setBarcodePromptValue] = useState("");
   const [activeVariantIndexForBarcode, setActiveVariantIndexForBarcode] = useState<number | null>(null);
+
+  // Barcode Unregistered Options
+  const [barcodeNoMatchOpen, setBarcodeNoMatchOpen] = useState(false);
+  const [scannedUnregisteredBarcode, setScannedUnregisteredBarcode] = useState("");
+  const [associateSearchTerm, setAssociateSearchTerm] = useState("");
 
   const handleAddBarcodeConfirm = () => {
     if (activeVariantIndexForBarcode === null) return;
@@ -420,12 +426,13 @@ export default function ProductosPage() {
 
       setScannedBarcodes([barcode]);
       
-      // Salto inmediato a creación
+      // Abrir modal de opciones para código no registrado
       setTimeout(() => {
         setScannerOpen(false);
         setUseCamera(false);
         setIsDetected(false);
-        setQuickCreateOpen(true);
+        setScannedUnregisteredBarcode(barcode);
+        setBarcodeNoMatchOpen(true);
       }, 500);
     } catch (e) {
       toast.error("Error al validar el código");
@@ -1919,6 +1926,104 @@ export default function ProductosPage() {
               Confirmar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 🟠 MODAL: CÓDIGO DE BARRAS NO REGISTRADO */}
+      <Dialog open={barcodeNoMatchOpen} onOpenChange={setBarcodeNoMatchOpen}>
+        <DialogContent className="sm:max-w-md border-border/40 shadow-xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black flex items-center gap-2 text-foreground">
+              <IconAlertTriangle className="text-amber-500 size-5" />
+              Código no Registrado
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              El código escaneado <span className="font-mono font-bold bg-muted px-1.5 py-0.5 rounded text-foreground">{scannedUnregisteredBarcode}</span> no coincide con ningún producto en el catálogo.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            {/* Opción 1: Crear Producto */}
+            <div className="border border-muted/30 hover:border-primary/20 hover:bg-primary/5 transition-all p-3.5 rounded-xl cursor-pointer flex flex-col gap-1 group"
+              onClick={() => {
+                setScannedBarcodes([scannedUnregisteredBarcode]);
+                setBarcodeNoMatchOpen(false);
+                setQuickCreateOpen(true);
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
+                  <IconPlus className="size-4" />
+                  Crear como Producto Nuevo
+                </span>
+                <span className="text-[10px] text-muted-foreground font-semibold px-2 py-0.5 rounded-full bg-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">Recomendado</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-normal">
+                Registra un nuevo producto desde cero en tu catálogo usando este código de barras.
+              </p>
+            </div>
+
+            {/* Divisor */}
+            <div className="relative my-2">
+              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-dashed" /></div>
+              <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-wider"><span className="bg-background px-2 text-muted-foreground/60">O Asócialo a tu Importación</span></div>
+            </div>
+
+            {/* Opción 2: Asociar a Existente */}
+            <div className="space-y-2.5">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">Buscar en tus {products.length} productos importados</Label>
+              <div className="relative">
+                <Input
+                  placeholder="Buscar por nombre, categoría o SKU..."
+                  value={associateSearchTerm}
+                  onChange={(e) => setAssociateSearchTerm(e.target.value)}
+                  className="h-9 text-xs bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all pl-8"
+                />
+                <IconSearch className="absolute left-2.5 top-2.5 size-4 text-muted-foreground/60" />
+              </div>
+
+              {associateSearchTerm.trim().length > 1 && (
+                <div className="border rounded-xl max-h-[160px] overflow-y-auto divide-y bg-background/50 backdrop-blur shadow-inner">
+                  {products
+                    .filter(p => 
+                      p.name.toLowerCase().includes(associateSearchTerm.toLowerCase()) ||
+                      p.category?.name?.toLowerCase().includes(associateSearchTerm.toLowerCase()) ||
+                      p.variants?.[0]?.sku?.toLowerCase().includes(associateSearchTerm.toLowerCase())
+                    )
+                    .slice(0, 10)
+                    .map(p => (
+                      <div 
+                        key={p.id} 
+                        className="p-2.5 hover:bg-muted/50 cursor-pointer flex items-center justify-between text-xs transition-colors"
+                        onClick={() => {
+                          // Prefill the barcode into first variant and open in edit mode!
+                          openDetail(p, true);
+                          setEditVariants(prev => {
+                            const n = [...prev];
+                            if (n[0]) {
+                              n[0].barcode = scannedUnregisteredBarcode;
+                            }
+                            return n;
+                          });
+                          setBarcodeNoMatchOpen(false);
+                          setAssociateSearchTerm("");
+                          toast.info(`Asignando código a ${p.name}. ¡Haz clic en Guardar para finalizar!`);
+                        }}
+                      >
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-semibold text-foreground leading-normal">{p.name}</span>
+                          <span className="text-[10px] text-muted-foreground leading-none">{p.category?.name || "Sin categoría"} • SKU: {p.variants?.[0]?.sku || "N/D"}</span>
+                        </div>
+                        <span className="text-[11px] font-bold text-primary font-mono">${p.variants?.[0]?.price || 0}</span>
+                      </div>
+                    ))}
+                  {products.filter(p => p.name.toLowerCase().includes(associateSearchTerm.toLowerCase()) || p.category?.name?.toLowerCase().includes(associateSearchTerm.toLowerCase()) || p.variants?.[0]?.sku?.toLowerCase().includes(associateSearchTerm.toLowerCase())).length === 0 && (
+                    <p className="text-[11px] text-muted-foreground text-center py-4">No se encontraron productos coincidentes.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
