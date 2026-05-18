@@ -59,6 +59,7 @@ type Product = {
     stock: number;
     sku: string;
     barcode?: string;
+    secondaryBarcodes?: string[];
   }>;
   image?: string;
   category?: { name: string };
@@ -653,8 +654,29 @@ export default function POSPage() {
     }
   };
 
+  // Función helper para comparar códigos de barras de forma inteligente (resuelve discrepancias de ceros o dígitos iniciales como EAN-13 vs UPC-A)
+  const matchBarcodes = (barcodeA: string | undefined, barcodeB: string) => {
+    if (!barcodeA || !barcodeB) return false;
+    const cleanA = barcodeA.trim().replace(/^0+/, ''); // Quitar ceros a la izquierda
+    const cleanB = barcodeB.trim().replace(/^0+/, ''); // Quitar ceros a la izquierda
+    if (cleanA === cleanB) return true;
+    
+    // Si uno de los códigos tiene 12 dígitos y el otro 13 (ej. EAN-13 vs UPC-A),
+    // o si uno es sufijo del otro por diferencia de dígitos de control/país.
+    if (cleanA.length >= 12 && cleanB.length >= 12) {
+      return cleanA.endsWith(cleanB) || cleanB.endsWith(cleanA);
+    }
+    return false;
+  };
+
   const handleNumpadEnter = (code: string) => {
-    const product = products.find(p => p.variants?.[0]?.barcode === code || p.variants?.[0]?.sku === code || p.variants?.some(v => v.barcode === code || v.sku === code));
+    const product = products.find(p => 
+      p.variants?.some(v => 
+        matchBarcodes(v.barcode, code) || 
+        v.sku === code || 
+        v.secondaryBarcodes?.some(sb => matchBarcodes(sb, code))
+      )
+    );
     if (product) {
       // addToCart is declared later, we will handle it in a useEffect or ensure it's available. 
       // Actually addToCart is defined below in the file, we can call it here because of hoisting or closure behavior in React components.
@@ -911,7 +933,11 @@ export default function POSPage() {
   const processBarcode = (code: string) => {
     console.log("Processing Barcode:", code);
     const found = products.find(p => 
-      p.variants?.some(v => v.barcode === code || v.sku === code)
+      p.variants?.some(v => 
+        matchBarcodes(v.barcode, code) || 
+        v.sku === code || 
+        v.secondaryBarcodes?.some(sb => matchBarcodes(sb, code))
+      )
     );
     if (found) {
       addToCart(found);
