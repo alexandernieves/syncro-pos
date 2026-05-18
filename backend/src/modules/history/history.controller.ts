@@ -1,4 +1,4 @@
-import { Controller, Get, Delete, Query, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Delete, Query, Param, UseGuards, Request } from '@nestjs/common';
 import { HistoryService } from './history.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -8,17 +8,20 @@ export class HistoryController {
   constructor(private readonly historyService: HistoryService) {}
 
   @Get()
-  async findAll(@Query() query: any) {
-    return this.historyService.findAll(query);
+  async findAll(@Query() query: any, @Request() req: any) {
+    const businessId = req.user?.businessId;
+    return this.historyService.findAll({ ...query, businessId });
   }
 
   @Get('stats')
-  async getStats() {
-    return this.historyService.getStats();
+  async getStats(@Request() req: any) {
+    const businessId = req.user?.businessId;
+    return this.historyService.getStats(businessId);
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    return this.historyService.remove(id);
+  async remove(@Param('id') id: string, @Request() req: any) {
+    const businessId = req.user?.businessId;
+    return this.historyService.remove(id, businessId);
   }
 }

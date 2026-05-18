@@ -12,8 +12,18 @@ export class HistoryService {
     entityId?: string;
     details?: any;
     ipAddress?: string;
+    businessId?: string;
   }) {
     try {
+      let businessId = data.businessId || null;
+      if (!businessId && data.userId) {
+        const user = await this.prisma.user.findUnique({
+          where: { id: data.userId },
+          select: { businessId: true }
+        });
+        businessId = user?.businessId || null;
+      }
+
       return await this.prisma.auditLog.create({
         data: {
           userId: data.userId,
@@ -22,6 +32,7 @@ export class HistoryService {
           entityId: data.entityId,
           details: data.details ? JSON.stringify(data.details) : null,
           ipAddress: data.ipAddress || '127.0.0.1',
+          businessId,
         },
       });
     } catch (error) {
@@ -35,6 +46,11 @@ export class HistoryService {
     if (query?.userId) where.userId = query.userId;
     if (query?.action) where.action = query.action;
     if (query?.entity) where.entity = query.entity;
+    
+    // Scoping to current tenant
+    if (query?.businessId) {
+      where.businessId = query.businessId;
+    }
 
     if (query?.startDate || query?.endDate) {
       where.createdAt = {};
@@ -60,10 +76,16 @@ export class HistoryService {
     });
   }
 
-  async getStats() {
-    const totalActions = await this.prisma.auditLog.count();
+  async getStats(businessId?: string) {
+    const where: any = {};
+    if (businessId) {
+      where.businessId = businessId;
+    }
+
+    const totalActions = await this.prisma.auditLog.count({ where });
     const criticalAlerts = await this.prisma.auditLog.count({
       where: {
+        ...where,
         action: { in: ['DELETE', 'SECURITY_BREACH', 'FAILED_LOGIN'] }
       }
     });
@@ -75,9 +97,13 @@ export class HistoryService {
     };
   }
 
-  async remove(id: string) {
-    return this.prisma.auditLog.delete({
-      where: { id }
+  async remove(id: string, businessId?: string) {
+    const where: any = { id };
+    if (businessId) {
+      where.businessId = businessId;
+    }
+    return this.prisma.auditLog.deleteMany({
+      where
     });
   }
 }
