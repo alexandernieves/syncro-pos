@@ -164,6 +164,34 @@ export default function ProductosPage() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const editFileInputRef = React.useRef<HTMLInputElement>(null);
 
+  // Barcode Dialog State
+  const [barcodePromptOpen, setBarcodePromptOpen] = useState(false);
+  const [barcodePromptValue, setBarcodePromptValue] = useState("");
+  const [activeVariantIndexForBarcode, setActiveVariantIndexForBarcode] = useState<number | null>(null);
+
+  const handleAddBarcodeConfirm = () => {
+    if (activeVariantIndexForBarcode === null) return;
+    const code = barcodePromptValue.trim();
+    if (!code) {
+      toast.error("El código de barras no puede estar vacío");
+      return;
+    }
+    const n = [...editVariants];
+    if (!n[activeVariantIndexForBarcode].secondaryBarcodes) {
+      n[activeVariantIndexForBarcode].secondaryBarcodes = [];
+    }
+    // Prevent duplicate secondary barcodes
+    if (n[activeVariantIndexForBarcode].secondaryBarcodes.includes(code)) {
+      toast.error("Este código ya existe como secundario");
+      return;
+    }
+    n[activeVariantIndexForBarcode].secondaryBarcodes.push(code);
+    setEditVariants(n);
+    setBarcodePromptOpen(false);
+    setBarcodePromptValue("");
+    toast.success("Código secundario agregado");
+  };
+
   // Fetch categories and suppliers on mount for select dropdowns
   useEffect(() => {
     const fetchSelects = async () => {
@@ -1647,13 +1675,9 @@ export default function ProductosPage() {
                                     type="button"
                                     className="text-[9px] font-bold text-primary px-2 py-1 hover:bg-primary/5 rounded-lg border border-dashed border-primary/20 transition-colors"
                                     onClick={() => {
-                                      const code = prompt("Nuevo código secundario:");
-                                      if (code) {
-                                        const n = [...editVariants];
-                                        if (!n[idx].secondaryBarcodes) n[idx].secondaryBarcodes = [];
-                                        n[idx].secondaryBarcodes.push(code);
-                                        setEditVariants(n);
-                                      }
+                                      setActiveVariantIndexForBarcode(idx);
+                                      setBarcodePromptValue("");
+                                      setBarcodePromptOpen(true);
                                     }}
                                   >
                                     + Añadir
@@ -1690,16 +1714,12 @@ export default function ProductosPage() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <Label className="text-[11px] text-muted-foreground font-semibold">Stock Inicial</Label>
+                                <Label className="text-[11px] text-muted-foreground/60 font-semibold font-sans">Stock Actual</Label>
                                 <Input 
                                   type="number" 
                                   value={v.stock} 
-                                  onChange={e => {
-                                    const n = [...editVariants]; 
-                                    n[idx].stock = e.target.value; 
-                                    setEditVariants(n);
-                                  }}
-                                  className="h-9 text-xs bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all"
+                                  disabled
+                                  className="h-9 text-xs bg-muted/50 border-transparent text-muted-foreground/80 cursor-not-allowed select-none opacity-80"
                                 />
                               </div>
                               <div className="space-y-1.5">
@@ -1848,6 +1868,57 @@ export default function ProductosPage() {
                 </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 🟣 MODAL: AGREGAR CÓDIGO SECUNDARIO */}
+      <Dialog open={barcodePromptOpen} onOpenChange={setBarcodePromptOpen}>
+        <DialogContent className="sm:max-w-md border-border/40 shadow-xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black flex items-center gap-2 text-foreground">
+              <IconBarcode className="text-primary size-5" />
+              Nuevo Código Secundario
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Escanea o ingresa un código de barras adicional para asociar a esta variante.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-3">
+            <div className="space-y-2">
+              <Label htmlFor="secondary-barcode-input" className="text-xs font-bold text-muted-foreground uppercase">Código de Barras</Label>
+              <Input
+                id="secondary-barcode-input"
+                placeholder="Escribe o escanea el código..."
+                value={barcodePromptValue}
+                onChange={(e) => setBarcodePromptValue(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddBarcodeConfirm();
+                  }
+                }}
+                className="h-10 text-sm font-semibold tracking-wide bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setBarcodePromptOpen(false)}
+              className="h-9 text-xs font-semibold rounded-xl text-muted-foreground hover:bg-muted"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleAddBarcodeConfirm}
+              className="h-9 text-xs font-bold rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/20 px-5"
+            >
+              Confirmar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
