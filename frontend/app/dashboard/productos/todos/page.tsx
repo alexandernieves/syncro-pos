@@ -23,7 +23,7 @@ import {
   IconDownload, IconUpload, IconFileText, IconDeviceFloppy, IconArrowLeft,
   IconSearch, IconAlertTriangle
 } from "@tabler/icons-react";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { PosTable } from "@/components/pos-table";
@@ -553,18 +553,31 @@ export default function ProductosPage() {
 
         if (!element) return;
 
-        // Soporte completo para todos los formatos de códigos de barras comunes
-        const formatsToSupport = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]; 
+        // Soporte enfocado en códigos de barras 1D de productos para máxima velocidad y susceptibilidad
+        const formatsToSupport = [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_39
+        ]; 
 
         html5QrCode = new Html5Qrcode("reader");
         await html5QrCode.start(
           { facingMode: "environment" },
           {
             fps: 60,
-            qrbox: 250,
+            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+              // Hacemos el recuadro rectangular de proporción 2.6:1 (perfecto para códigos 1D)
+              const w = Math.floor(viewfinderWidth * 0.85);
+              const h = Math.floor(w / 2.6);
+              return { width: w, height: h };
+            },
             aspectRatio: 1.0, // Cambiado a 1.0 para maximizar el área de captura
             disableFlip: true,
             rememberLastUsedCamera: true,
+            formatsToSupport,
             experimentalFeatures: {
                 useBarCodeDetectorIfSupported: true
             },
@@ -622,6 +635,7 @@ export default function ProductosPage() {
   const handleQuickSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+        const token = localStorage.getItem("token");
         const payload = { 
           name: quickFormData.name, 
           price: Number(quickFormData.price), 
@@ -631,7 +645,10 @@ export default function ProductosPage() {
         console.log('[Frontend] QuickCreate Payload:', payload);
         const res = await fetch(`${API}/products/quick-create`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
           body: JSON.stringify(payload)
         });
       if (res.ok) {
@@ -1923,18 +1940,22 @@ export default function ProductosPage() {
                         {/* the #reader container must be square-ish so the camera stretches nicely */}
                         <div id="reader" className="w-full h-full [&_video]:object-cover [&_video]:w-full [&_video]:h-full [&_video]:min-h-full [&_#qr-shaded-region]:hidden"></div>
                         
-                        {/* Láser Minimalista (Oscilante) */}
-                        <div className={cn(
-                            "absolute inset-x-8 z-10 animate-scanline transition-all duration-300 h-0.5 shadow-[0_0_8px_currentColor]",
-                            isDetected ? "text-green-500 bg-green-500" : "text-primary bg-primary"
-                        )} />
-                        
-                        {/* Esquinas Rectangulares Transparentes */}
-                        <div className="absolute inset-6 z-20 pointer-events-none opacity-40 mix-blend-difference filter drop-shadow-md">
-                            <div className={cn("absolute top-0 left-0 size-8 border-t-2 border-l-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
-                            <div className={cn("absolute top-0 right-0 size-8 border-t-2 border-r-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
-                            <div className={cn("absolute bottom-0 left-0 size-8 border-b-2 border-l-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
-                            <div className={cn("absolute bottom-0 right-0 size-8 border-b-2 border-r-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                        {/* 🟢 CUSTOM RECTANGULAR SCAN RETICLE */}
+                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-20">
+                          {/* El recuadro es w-[85%] h-[110px] */}
+                          <div className="relative w-[85%] h-[110px] rounded-2xl overflow-hidden flex items-center justify-center shadow-[0_0_0_9999px_rgba(0,0,0,0.55)] border border-white/10">
+                            {/* Esquinas neon brillantes */}
+                            <div className={cn("absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 rounded-tl-md transition-colors duration-300", isDetected ? "border-green-500" : "border-primary")}></div>
+                            <div className={cn("absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 rounded-tr-md transition-colors duration-300", isDetected ? "border-green-500" : "border-primary")}></div>
+                            <div className={cn("absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 rounded-bl-md transition-colors duration-300", isDetected ? "border-green-500" : "border-primary")}></div>
+                            <div className={cn("absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 rounded-br-md transition-colors duration-300", isDetected ? "border-green-500" : "border-primary")}></div>
+                            
+                            {/* Línea láser oscilante dentro del rectángulo */}
+                            <div className={cn(
+                                "absolute w-[95%] h-0.5 shadow-[0_0_8px_currentColor] animate-scanline transition-all duration-300",
+                                isDetected ? "text-green-500 bg-green-500" : "text-primary bg-primary"
+                            )} />
+                          </div>
                         </div>
 
                         {isDetected && (
