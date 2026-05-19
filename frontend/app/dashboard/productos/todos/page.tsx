@@ -945,17 +945,35 @@ export default function ProductosPage() {
         let successCount = 0;
         const token = localStorage.getItem("token");
 
-        for (const row of rows as any[]) {
+        for (const rawRow of rows as any[]) {
+          const row: any = {};
+          for (const key in rawRow) {
+            const cleanKey = key.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
+            row[cleanKey] = rawRow[key];
+          }
+
+          const parseNumber = (val: any) => {
+            if (typeof val === 'number') return val;
+            if (typeof val === 'string') {
+              const cleaned = val.replace(/[^\d,\.-]/g, '').replace(',', '.');
+              const num = Number(cleaned);
+              return isNaN(num) ? 0 : num;
+            }
+            return 0;
+          };
+
           const payload = {
-            name: row.Nombre || row.name || row.Producto || "Sin nombre",
-            price: Number(row.Precio_USD || row.Precio || row.Precio_Venta || row.price || 0),
-            cost: Number(row.Costo_USD || row.Costo || row.cost || 0),
-            stock: Number(row.Stock || row.Existencia || row.stock || 0),
-            sku: row.SKU || row.sku || "",
-            barcodes: row.Codigo_Barras || row.barcode ? [String(row.Codigo_Barras || row.barcode)] : [],
-            categoryName: row.Categoria || row.category || "",
-            isWeighable: !!(row.Pesable || row.isWeighable || false),
-            description: row.Descripcion || row.description || "",
+            name: row.nombre || row.producto || row.name || "Sin nombre",
+            price: parseNumber(row.precio_de_venta || row.precio_venta || row.precio_usd || row.precio || row.price || 0),
+            cost: parseNumber(row.precio_de_costo || row.precio_costo || row.costo_usd || row.costo || row.cost || 0),
+            stock: parseNumber(row.stock || row.existencia || row.cantidad || 0),
+            minStock: parseNumber(row.stock_minimo || row.min_stock || 1),
+            sku: String(row.codigo || row.sku || ""),
+            barcodes: (row.codigo_de_barras || row.codigo_barras || row.barcode || row.codigo) ? [String(row.codigo_de_barras || row.codigo_barras || row.barcode || row.codigo)] : [],
+            categoryName: row.categoria || row.category || "",
+            supplierName: row.proveedor || row.supplier || "",
+            isWeighable: !!(row.pesable || row.isweighable || false),
+            description: row.descripcion || row.description || "",
             branchId: localStorage.getItem("currentBranchId") || ""
           };
 
