@@ -226,7 +226,7 @@ export function PosTable<TData>({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="top">
-                {[10, 20, 50].map(size => (
+                {[10, 20, 50, 100, 500].map(size => (
                   <SelectItem key={size} value={`${size}`}>{size}</SelectItem>
                 ))}
               </SelectContent>
