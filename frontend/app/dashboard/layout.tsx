@@ -47,6 +47,10 @@ export default function DashboardLayout({
       
       setIsStandalone(standalone);
       if (standalone) {
+        if (typeof document !== "undefined") {
+          document.documentElement.classList.add("pwa-standalone");
+          document.body.classList.add("pwa-standalone");
+        }
         if (window.location.pathname !== "/dashboard/soporte" && window.location.pathname !== "/dashboard/soporte/") {
           router.replace("/dashboard/soporte");
           return;

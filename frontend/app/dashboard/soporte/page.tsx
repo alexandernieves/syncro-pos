@@ -69,15 +69,32 @@ export default function SupportChatPage() {
   const [mounted, setMounted] = useState(false);
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
   const [isStandalone, setIsStandalone] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState("100dvh");
   
   useEffect(() => {
     setMounted(true);
     if (typeof window !== "undefined") {
-      setIsStandalone(
+      const standalone = 
         window.matchMedia("(display-mode: standalone)").matches ||
         window.location.search.includes("pwa=true") ||
-        localStorage.getItem("is_pwa") === "true"
-      );
+        localStorage.getItem("is_pwa") === "true";
+      setIsStandalone(standalone);
+
+      if (standalone && window.visualViewport) {
+        const handleResize = () => {
+          if (window.visualViewport) {
+            setViewportHeight(`${window.visualViewport.height}px`);
+          }
+        };
+        window.visualViewport.addEventListener("resize", handleResize);
+        window.visualViewport.addEventListener("scroll", handleResize);
+        handleResize();
+
+        return () => {
+          window.visualViewport?.removeEventListener("resize", handleResize);
+          window.visualViewport?.removeEventListener("scroll", handleResize);
+        };
+      }
     }
   }, []);
 
@@ -363,18 +380,20 @@ export default function SupportChatPage() {
 
   return (
     <>
-    <div className={cn(
-      "flex overflow-hidden bg-background",
-      isStandalone ? "fixed inset-0 md:relative md:h-full md:w-full" : "h-[calc(100vh-var(--header-height,60px))]"
-    )}>
+    <div 
+      style={isStandalone ? { height: viewportHeight } : {}}
+      className={cn(
+        "flex overflow-hidden bg-background w-full",
+        isStandalone ? "fixed inset-0 md:relative md:h-full md:w-full" : "h-[calc(100vh-var(--header-height,60px))]"
+      )}>
       
       <div className={cn(
-        "flex w-[200vw] md:w-full h-full transition-transform duration-300 ease-in-out",
+        "flex w-[200%] md:w-full h-full transition-transform duration-300 ease-in-out",
         mobileView === "chat" ? "-translate-x-1/2 md:translate-x-0" : "translate-x-0"
       )}>
 
         {/* ── LEFT SIDEBAR ─────────────────────────────── */}
-        <aside className="w-[100vw] md:w-[300px] shrink-0 border-r flex flex-col bg-muted/20">
+        <aside className="w-1/2 md:w-[300px] shrink-0 border-r flex flex-col bg-muted/20">
           {/* Sidebar header */}
           <div className="px-4 py-4 border-b flex items-center justify-between bg-background">
             <div className="flex items-center gap-3">
@@ -442,8 +461,8 @@ export default function SupportChatPage() {
         </div>
       </aside>
 
-      {/* ── MAIN CHAT AREA ───────────────────────────── */}
-      <div className="w-[100vw] md:flex-1 flex flex-col min-w-0">
+        {/* ── MAIN CHAT AREA ───────────────────────────── */}
+        <div className="w-1/2 md:flex-1 flex flex-col min-w-0">
 
         {/* Chat header */}
         <div className="flex items-center justify-between px-5 py-3 border-b bg-background/80 backdrop-blur-sm shrink-0">
