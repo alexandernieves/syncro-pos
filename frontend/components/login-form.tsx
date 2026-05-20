@@ -43,6 +43,8 @@ export function LoginForm({
   const [selectedProfile, setSelectedProfile] = useState<SavedProfile | null>(null)
   const [viewMode, setViewMode] = useState<"profiles" | "password" | "classic">("classic")
   const [isStandalone, setIsStandalone] = useState(false)
+  // Random nonce to defeat browser form-fill caching
+  const [formNonce] = useState(() => typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36))
   const router = useRouter()
 
   // Obtiene o crea un client_id único para este navegador
@@ -73,11 +75,13 @@ export function LoginForm({
   }
 
   useEffect(() => {
-    loadSavedProfiles()
     if (typeof window !== "undefined") {
-      setIsStandalone(
-        window.matchMedia("(display-mode: standalone)").matches
-      )
+      const standalone = window.matchMedia("(display-mode: standalone)").matches
+      setIsStandalone(standalone)
+      // Only load saved profiles in browser mode, not in PWA (session-only)
+      if (!standalone) {
+        loadSavedProfiles()
+      }
     }
   }, [])
 
@@ -234,20 +238,24 @@ export function LoginForm({
             )}
           </CardHeader>
           <CardContent className="pt-2">
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} autoComplete="off">
+              {/* Honeypot field — hidden from users, traps bots */}
+              <input type="text" name="username" style={{ display: "none" }} tabIndex={-1} autoComplete="off" aria-hidden="true" />
               <FieldGroup>
                 <Field>
                   <div className="flex items-center">
-                    <FieldLabel htmlFor="profile-password">Contraseña</FieldLabel>
+                    <FieldLabel htmlFor={`pwd-${formNonce}`}>Contraseña</FieldLabel>
                   </div>
                   <div className="relative">
                     <Input
-                      id="profile-password"
+                      id={`pwd-${formNonce}`}
+                      name={`pwd-${formNonce}`}
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       autoFocus
+                      autoComplete="new-password"
                       className="pr-10"
                     />
                     <button
@@ -362,22 +370,26 @@ export function LoginForm({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} autoComplete="off">
+            {/* Honeypot field — hidden from users, traps bots */}
+            <input type="text" name="username" style={{ display: "none" }} tabIndex={-1} autoComplete="off" aria-hidden="true" />
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="email">Correo electrónico</FieldLabel>
+                <FieldLabel htmlFor={`em-${formNonce}`}>Correo electrónico</FieldLabel>
                 <Input
-                  id="email"
+                  id={`em-${formNonce}`}
+                  name={`em-${formNonce}`}
                   type="email"
                   placeholder="ejemplo@correo.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="off"
                 />
               </Field>
               <Field>
                 <div className="flex items-center">
-                  <FieldLabel htmlFor="password">Contraseña</FieldLabel>
+                  <FieldLabel htmlFor={`pw-${formNonce}`}>Contraseña</FieldLabel>
                   <a
                     href="#"
                     className="ml-auto text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
@@ -387,11 +399,13 @@ export function LoginForm({
                 </div>
                 <div className="relative">
                   <Input
-                    id="password"
+                    id={`pw-${formNonce}`}
+                    name={`pw-${formNonce}`}
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    autoComplete="new-password"
                     className="pr-10"
                   />
                   <button

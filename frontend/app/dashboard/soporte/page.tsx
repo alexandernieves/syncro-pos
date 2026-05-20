@@ -82,28 +82,66 @@ export default function SupportChatPage() {
   useEffect(() => {
     setMounted(true);
     if (typeof window !== "undefined") {
+      const isMobile = window.matchMedia("(max-width: 1023px)").matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       const standalone = window.matchMedia("(display-mode: standalone)").matches;
-      setIsStandalone(standalone);
+      
+      const useViewportResizing = standalone || isMobile;
+      setIsStandalone(useViewportResizing);
 
-      if (standalone && window.visualViewport) {
-        const handleResize = () => {
-          if (window.visualViewport) {
-            setViewportHeight(`${window.visualViewport.height}px`);
-            resetScroll();
+      if (useViewportResizing) {
+        document.documentElement.classList.add("pwa-standalone");
+        document.body.classList.add("pwa-standalone");
+      }
+
+      const handleResize = () => {
+        if (window.visualViewport) {
+          const height = `${window.visualViewport.height}px`;
+          setViewportHeight(height);
+          
+          if (useViewportResizing) {
+            if (document.documentElement) {
+              document.documentElement.style.height = height;
+              document.documentElement.style.setProperty('overflow', 'hidden', 'important');
+            }
+            if (document.body) {
+              document.body.style.height = height;
+              document.body.style.setProperty('overflow', 'hidden', 'important');
+            }
           }
-        };
-        const handleScroll = () => {
           resetScroll();
-        };
+        }
+      };
+
+      const handleScroll = () => {
+        resetScroll();
+      };
+
+      if (window.visualViewport) {
         window.visualViewport.addEventListener("resize", handleResize);
         window.visualViewport.addEventListener("scroll", handleScroll);
         handleResize();
-
-        return () => {
-          window.visualViewport?.removeEventListener("resize", handleResize);
-          window.visualViewport?.removeEventListener("scroll", handleScroll);
-        };
       }
+      
+      // Listen for window scrolls to instantly counter panned/scrolled layout viewports
+      window.addEventListener("scroll", handleScroll, { passive: true });
+
+      return () => {
+        document.documentElement.classList.remove("pwa-standalone");
+        document.body.classList.remove("pwa-standalone");
+        if (document.documentElement) {
+          document.documentElement.style.height = "";
+          document.documentElement.style.overflow = "";
+        }
+        if (document.body) {
+          document.body.style.height = "";
+          document.body.style.overflow = "";
+        }
+        if (window.visualViewport) {
+          window.visualViewport.removeEventListener("resize", handleResize);
+          window.visualViewport.removeEventListener("scroll", handleScroll);
+        }
+        window.removeEventListener("scroll", handleScroll);
+      };
     }
   }, []);
 
