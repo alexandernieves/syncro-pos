@@ -1,5 +1,7 @@
 import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './modules/users/users.module';
@@ -33,6 +35,14 @@ import { UploadModule } from './modules/upload/upload.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // ── Rate Limiting (global, 60 req / 60 s; login overrides to 5 / 900 s) ──
+    ThrottlerModule.forRoot([
+      {
+        name: 'default',
+        ttl: 60000,   // 60 seconds
+        limit: 60,    // max 60 requests per window
+      },
+    ]),
     UsersModule,
     AuthModule,
     ProductsModule,
@@ -61,7 +71,14 @@ import { UploadModule } from './modules/upload/upload.module';
     UploadModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // ── Global Rate-Limit Guard ────────────────────────────────────────────
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule implements OnModuleInit {
   constructor(private readonly usersService: UsersService) {}

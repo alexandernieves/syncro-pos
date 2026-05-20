@@ -9,19 +9,33 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './jwt.strategy';
 import { SettingsModule } from '../settings/settings.module';
 import { BranchesModule } from '../branches/branches.module';
+import { HistoryModule } from '../history/history.module';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [
     UsersModule,
     SettingsModule,
     BranchesModule,
+    HistoryModule,
+    PrismaModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') || 'syncro-pos-secret-key-2025',
-        signOptions: { expiresIn: '1d' },
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const secret = configService.get<string>('JWT_SECRET');
+        if (!secret) {
+          throw new Error('[AuthModule] JWT_SECRET env var is not set! Refusing to start.');
+        }
+        return {
+          secret,
+          signOptions: {
+            expiresIn: '8h',       // Tokens expire after 8 hours
+            issuer: 'syncro-pos',  // Identify the issuer
+            audience: 'syncro-pos-app',
+          },
+        };
+      },
       inject: [ConfigService],
     }),
   ],

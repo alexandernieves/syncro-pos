@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useId } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { API_URL } from "@/lib/constants"
@@ -31,6 +31,27 @@ interface SavedProfile {
   lastLogin: string
 }
 
+// ── Helper: get stored token regardless of PWA/browser mode ──────────────────
+function getStoredToken(): string | null {
+  if (typeof window === "undefined") return null
+  const isPwa = window.matchMedia("(display-mode: standalone)").matches
+  return isPwa ? sessionStorage.getItem("token") : localStorage.getItem("token")
+}
+
+// ── Helper: get/create clientId bound to this browser ────────────────────────
+function getClientId(): string {
+  if (typeof window === "undefined") return ""
+  let clientId = localStorage.getItem("syncro_cid")
+  if (!clientId) {
+    clientId =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36).substring(2) + Date.now().toString(36)
+    localStorage.setItem("syncro_cid", clientId)
+  }
+  return clientId
+}
+
 export function LoginForm({
   className,
   ...props
@@ -43,56 +64,75 @@ export function LoginForm({
   const [selectedProfile, setSelectedProfile] = useState<SavedProfile | null>(null)
   const [viewMode, setViewMode] = useState<"profiles" | "password" | "classic">("classic")
   const [isStandalone, setIsStandalone] = useState(false)
-  // Random nonce to defeat browser form-fill caching
-  const [formNonce] = useState(() => typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36))
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
 
-  // Obtiene o crea un client_id único para este navegador
-  const getClientId = () => {
-    let clientId = localStorage.getItem("client_id")
-    if (!clientId) {
-      clientId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)
-      localStorage.setItem("client_id", clientId)
-    }
-    return clientId
-  }
+  // ── Unique IDs for this render — defeats browser autocomplete heuristics ───
+  // useId() produces a stable but unique-per-mount string like ":r0:", ":r1:", etc.
+  const uid = useId()
+  const emailId   = `em-${uid}`
+  const passwordId = `pw-${uid}`
+  const decoyId   = `dc-${uid}`
 
-  // Carga los perfiles guardados desde PostgreSQL
+  // ── Mount ─────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    setMounted(true)
+    if (typeof window !== "undefined") {
+      const standalone = window.matchMedia("(display-mode: standalone)").matches
+      setIsStandalone(standalone)
+      // Only load saved profiles in browser mode with a valid auth token
+      if (!standalone) {
+        loadSavedProfiles()
+      }
+    }
+
+    // Cleanup: clear sensitive state on unmount
+    return () => {
+      setEmail("")
+      setPassword("")
+    }
+  }, [])
+
+  // ── Load Saved Profiles (requires auth token) ─────────────────────────────
   const loadSavedProfiles = async () => {
     try {
+      const token = getStoredToken()
+      if (!token) return // Don't fetch without a valid session
+
       const clientId = getClientId()
-      const response = await fetch(`${API_URL}/auth/saved-profiles?clientId=${clientId}`)
+      const response = await fetch(
+        `${API_URL}/auth/saved-profiles?clientId=${clientId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      )
       if (response.ok) {
-        const profiles = await response.json() as SavedProfile[]
+        const profiles = (await response.json()) as SavedProfile[]
         setSavedProfiles(profiles)
         if (profiles.length > 0 && viewMode === "classic") {
           setViewMode("profiles")
         }
       }
     } catch (e) {
-      console.error("Error fetching saved profiles from database", e)
+      // Silently swallow — don't reveal internals
     }
   }
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const standalone = window.matchMedia("(display-mode: standalone)").matches
-      setIsStandalone(standalone)
-      // Only load saved profiles in browser mode, not in PWA (session-only)
-      if (!standalone) {
-        loadSavedProfiles()
-      }
-    }
-  }, [])
-
-  const handleLoginSuccess = async (user: any, emailAddress: string) => {
+  // ── Save Profile after successful login ───────────────────────────────────
+  const handleLoginSuccess = async (
+    user: any,
+    emailAddress: string,
+    token: string,
+  ) => {
     try {
       const clientId = getClientId()
-      // Guardar/Actualizar el perfil en la base de datos de PostgreSQL
       await fetch(`${API_URL}/auth/saved-profiles`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           clientId,
@@ -102,26 +142,25 @@ export function LoginForm({
           businessName: user.business?.name || user.businessName || undefined,
         }),
       })
-
-      // Recargar lista actualizada
-      await loadSavedProfiles()
-    } catch (e) {
-      console.error("Error saving profile details in database", e)
+    } catch {
+      // Best-effort — don't block the UX flow
     }
   }
 
+  // ── Handle Submit ─────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
-    const targetEmail = viewMode === "password" && selectedProfile ? selectedProfile.email : email
+    const targetEmail =
+      viewMode === "password" && selectedProfile
+        ? selectedProfile.email
+        : email
 
     const loginPromise = async () => {
       const response = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: targetEmail, password }),
       })
 
@@ -131,19 +170,24 @@ export function LoginForm({
         throw new Error(data.message || "Error al iniciar sesión")
       }
 
-      // Guardar token y datos del usuario
-      const isStandalonePwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+      const token: string = data.access_token
+      const isStandalonePwa =
+        typeof window !== "undefined" &&
+        window.matchMedia("(display-mode: standalone)").matches
+
       if (isStandalonePwa) {
-        sessionStorage.setItem("token", data.access_token)
+        sessionStorage.setItem("token", token)
         sessionStorage.setItem("user", JSON.stringify(data.user))
-        document.cookie = `token=${data.access_token}; path=/; SameSite=Lax`;
+        // HttpOnly-style cookie for server middleware (SameSite=Strict, Secure)
+        document.cookie = `token=${token}; path=/; SameSite=Strict; Secure`
       } else {
-        localStorage.setItem("token", data.access_token)
+        localStorage.setItem("token", token)
         localStorage.setItem("user", JSON.stringify(data.user))
-        document.cookie = `token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
+        document.cookie = `token=${token}; path=/; max-age=28800; SameSite=Strict; Secure`
       }
-      
-      await handleLoginSuccess(data.user, targetEmail)
+
+      // Save the profile (async, non-blocking)
+      handleLoginSuccess(data.user, targetEmail, token)
 
       return data
     }
@@ -152,16 +196,19 @@ export function LoginForm({
       loading: "Iniciando sesión...",
       success: (data) => {
         setLoading(false)
-        const p = data.user.permissions || [];
-        const isPosOnly = p.includes("pos") && !p.some((perm: string) => perm !== "pos");
-        const targetPath = (isPosOnly || data.user.role === "pos")
-          ? "/pos"
-          : window.matchMedia("(display-mode: standalone)").matches
+        // Clear sensitive fields immediately after login
+        setPassword("")
+        setEmail("")
+        const p = data.user.permissions || []
+        const isPosOnly =
+          p.includes("pos") && !p.some((perm: string) => perm !== "pos")
+        const targetPath =
+          isPosOnly || data.user.role === "pos"
+            ? "/pos"
+            : window.matchMedia("(display-mode: standalone)").matches
             ? "/dashboard/soporte"
             : "/dashboard"
-        setTimeout(() => {
-          router.push(targetPath)
-        }, 500)
+        setTimeout(() => router.push(targetPath), 500)
         return "¡Inicio de sesión exitoso!"
       },
       error: (err) => {
@@ -180,36 +227,59 @@ export function LoginForm({
   const deleteProfile = async (e: React.MouseEvent, emailToDelete: string) => {
     e.stopPropagation()
     try {
+      const token = getStoredToken()
+      if (!token) return
       const clientId = getClientId()
-      // Eliminar el perfil en la base de datos de PostgreSQL
-      const response = await fetch(`${API_URL}/auth/saved-profiles?clientId=${clientId}&email=${encodeURIComponent(emailToDelete)}`, {
-        method: "DELETE"
-      })
-
+      const response = await fetch(
+        `${API_URL}/auth/saved-profiles?clientId=${clientId}&email=${encodeURIComponent(emailToDelete)}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
       if (response.ok) {
-        const updated = savedProfiles.filter(p => p.email.toLowerCase() !== emailToDelete.toLowerCase())
+        const updated = savedProfiles.filter(
+          (p) => p.email.toLowerCase() !== emailToDelete.toLowerCase(),
+        )
         setSavedProfiles(updated)
-        if (updated.length === 0) {
-          setViewMode("classic")
-        } else if (viewMode === "password" && selectedProfile?.email === emailToDelete) {
+        if (updated.length === 0) setViewMode("classic")
+        else if (
+          viewMode === "password" &&
+          selectedProfile?.email === emailToDelete
+        ) {
           setViewMode("profiles")
         }
       }
-    } catch (e) {
-      console.error("Error deleting profile from database", e)
+    } catch {
+      // Silently swallow
     }
   }
 
-  const getInitials = (name: string) => {
-    return name
+  const getInitials = (name: string) =>
+    name
       .split(" ")
-      .map(n => n[0])
+      .map((n) => n[0])
       .slice(0, 2)
       .join("")
       .toUpperCase()
+
+  // ── Shared autocomplete-killing props for every input ─────────────────────
+  // Multiple browser-specific attributes used together for maximum coverage:
+  //   autoComplete="new-password"  → triggers the "new password" flow, not fill
+  //   data-lpignore="true"         → LastPass
+  //   data-form-type="other"       → Dashlane
+  //   data-1p-ignore               → 1Password
+  //   readOnly + onFocus handler   → Prevents initial autofill, then re-enables input
+  const noFillProps = {
+    autoComplete: "new-password" as const,
+    "data-lpignore": "true",
+    "data-form-type": "other",
+    "data-1p-ignore": true,
   }
 
-  // 1️⃣ MODO: ENTRADA DE CONTRASEÑA DE UN PERFIL GUARDADO
+  if (!mounted) return null
+
+  // ── 1️⃣ MODE: Password entry for a saved profile ──────────────────────────
   if (viewMode === "password" && selectedProfile) {
     return (
       <div className={cn("flex flex-col gap-6 w-full", className)} {...props}>
@@ -218,7 +288,9 @@ export function LoginForm({
             variant="ghost"
             size="icon"
             className="absolute left-4 top-4 rounded-full size-8 hover:bg-muted"
-            onClick={() => setViewMode(savedProfiles.length > 0 ? "profiles" : "classic")}
+            onClick={() =>
+              setViewMode(savedProfiles.length > 0 ? "profiles" : "classic")
+            }
             type="button"
           >
             <ArrowLeft size={16} />
@@ -227,7 +299,9 @@ export function LoginForm({
             <div className="mx-auto size-16 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-bold shadow-sm mb-2 select-none">
               {getInitials(selectedProfile.name)}
             </div>
-            <CardTitle className="text-xl font-bold">{selectedProfile.name}</CardTitle>
+            <CardTitle className="text-xl font-bold">
+              {selectedProfile.name}
+            </CardTitle>
             <CardDescription className="text-xs font-mono truncate max-w-[280px] mx-auto">
               {selectedProfile.email}
             </CardDescription>
@@ -238,31 +312,50 @@ export function LoginForm({
             )}
           </CardHeader>
           <CardContent className="pt-2">
-            <form onSubmit={handleSubmit} autoComplete="off">
-              {/* Honeypot field — hidden from users, traps bots */}
-              <input type="text" name="username" style={{ display: "none" }} tabIndex={-1} autoComplete="off" aria-hidden="true" />
+            {/* autocomplete=off on form is ignored by modern browsers — we use per-field tricks instead */}
+            <form onSubmit={handleSubmit} autoComplete="off" noValidate>
+              {/* Decoy field: browsers will fill this instead of the real field */}
+              <input
+                id={decoyId}
+                type="text"
+                name="username"
+                tabIndex={-1}
+                aria-hidden="true"
+                style={{ display: "none" }}
+                autoComplete="username"
+              />
+              <input
+                type="password"
+                name="password-decoy"
+                tabIndex={-1}
+                aria-hidden="true"
+                style={{ display: "none" }}
+                autoComplete="current-password"
+              />
               <FieldGroup>
                 <Field>
                   <div className="flex items-center">
-                    <FieldLabel htmlFor={`pwd-${formNonce}`}>Contraseña</FieldLabel>
+                    <FieldLabel htmlFor={passwordId}>Contraseña</FieldLabel>
                   </div>
                   <div className="relative">
                     <Input
-                      id={`pwd-${formNonce}`}
-                      name={`pwd-${formNonce}`}
+                      id={passwordId}
+                      name={passwordId}
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       autoFocus
-                      autoComplete="new-password"
                       className="pr-10"
+                      {...noFillProps}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                      aria-label={
+                        showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+                      }
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -289,13 +382,15 @@ export function LoginForm({
     )
   }
 
-  // 2️⃣ MODO: LISTA DE PERFILES GUARDADOS (DE LA BASE DE DATOS DE POSTGRESQL)
+  // ── 2️⃣ MODE: Saved profiles list ─────────────────────────────────────────
   if (viewMode === "profiles" && savedProfiles.length > 0) {
     return (
       <div className={cn("flex flex-col gap-6 w-full", className)} {...props}>
         <Card className="border-none shadow-2xl animate-in fade-in duration-200">
           <CardHeader className="text-center pb-2">
-            <CardTitle className="text-xl font-bold">Selecciona tu perfil</CardTitle>
+            <CardTitle className="text-xl font-bold">
+              Selecciona tu perfil
+            </CardTitle>
             <CardDescription>
               Elige una sesión guardada para ingresar rápidamente
             </CardDescription>
@@ -337,7 +432,10 @@ export function LoginForm({
                     >
                       <Trash2 size={14} />
                     </Button>
-                    <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all duration-300" />
+                    <ChevronRight
+                      size={16}
+                      className="text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all duration-300"
+                    />
                   </div>
                 </div>
               ))}
@@ -359,7 +457,7 @@ export function LoginForm({
     )
   }
 
-  // 3️⃣ MODO: FORMULARIO CLÁSICO / ESTÁNDAR
+  // ── 3️⃣ MODE: Classic login form ──────────────────────────────────────────
   return (
     <div className={cn("flex flex-col gap-6 w-full", className)} {...props}>
       <Card className="border-none shadow-2xl animate-in fade-in duration-200">
@@ -370,26 +468,40 @@ export function LoginForm({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} autoComplete="off">
-            {/* Honeypot field — hidden from users, traps bots */}
-            <input type="text" name="username" style={{ display: "none" }} tabIndex={-1} autoComplete="off" aria-hidden="true" />
+          <form onSubmit={handleSubmit} autoComplete="off" noValidate>
+            {/* ── Decoy fields that browsers fill instead of the real ones ── */}
+            <div aria-hidden="true" style={{ display: "none" }}>
+              <input
+                id={decoyId}
+                type="text"
+                name="username"
+                tabIndex={-1}
+                autoComplete="username"
+              />
+              <input
+                type="password"
+                name="password-decoy"
+                tabIndex={-1}
+                autoComplete="current-password"
+              />
+            </div>
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor={`em-${formNonce}`}>Correo electrónico</FieldLabel>
+                <FieldLabel htmlFor={emailId}>Correo electrónico</FieldLabel>
                 <Input
-                  id={`em-${formNonce}`}
-                  name={`em-${formNonce}`}
+                  id={emailId}
+                  name={emailId}
                   type="email"
                   placeholder="ejemplo@correo.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  autoComplete="off"
+                  {...noFillProps}
                 />
               </Field>
               <Field>
                 <div className="flex items-center">
-                  <FieldLabel htmlFor={`pw-${formNonce}`}>Contraseña</FieldLabel>
+                  <FieldLabel htmlFor={passwordId}>Contraseña</FieldLabel>
                   <a
                     href="#"
                     className="ml-auto text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
@@ -399,20 +511,22 @@ export function LoginForm({
                 </div>
                 <div className="relative">
                   <Input
-                    id={`pw-${formNonce}`}
-                    name={`pw-${formNonce}`}
+                    id={passwordId}
+                    name={passwordId}
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    autoComplete="new-password"
                     className="pr-10"
+                    {...noFillProps}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    aria-label={
+                      showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+                    }
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
@@ -434,7 +548,13 @@ export function LoginForm({
                 )}
                 {!isStandalone && (
                   <FieldDescription className="text-center mt-2">
-                    ¿No tienes una cuenta? <a href="/register" className="underline font-medium hover:text-foreground">Regístrate</a>
+                    ¿No tienes una cuenta?{" "}
+                    <a
+                      href="/register"
+                      className="underline font-medium hover:text-foreground"
+                    >
+                      Regístrate
+                    </a>
                   </FieldDescription>
                 )}
               </Field>
@@ -443,8 +563,21 @@ export function LoginForm({
         </CardContent>
       </Card>
       <FieldDescription className="px-6 text-center">
-        Al hacer clic en continuar, aceptas nuestros <a href="#" className="underline underline-offset-4 hover:text-primary">Términos de servicio</a>{" "}
-        y nuestra <a href="#" className="underline underline-offset-4 hover:text-primary">Política de privacidad</a>.
+        Al hacer clic en continuar, aceptas nuestros{" "}
+        <a
+          href="#"
+          className="underline underline-offset-4 hover:text-primary"
+        >
+          Términos de servicio
+        </a>{" "}
+        y nuestra{" "}
+        <a
+          href="#"
+          className="underline underline-offset-4 hover:text-primary"
+        >
+          Política de privacidad
+        </a>
+        .
       </FieldDescription>
     </div>
   )
