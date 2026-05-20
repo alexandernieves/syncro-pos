@@ -388,7 +388,7 @@ export default function SupportChatPage() {
       )}>
       
       <div className={cn(
-        "flex w-[200%] md:w-full h-full transition-transform duration-300 ease-in-out",
+        "flex w-[200%] md:w-full shrink-0 md:shrink h-full transition-transform duration-300 ease-in-out",
         mobileView === "chat" ? "-translate-x-1/2 md:translate-x-0" : "translate-x-0"
       )}>
 
@@ -462,7 +462,7 @@ export default function SupportChatPage() {
       </aside>
 
         {/* ── MAIN CHAT AREA ───────────────────────────── */}
-        <div className="w-1/2 md:flex-1 flex flex-col min-w-0">
+        <div className="w-1/2 md:flex-1 shrink-0 flex flex-col min-w-0">
 
         {/* Chat header */}
         <div className="flex items-center justify-between px-5 py-3 border-b bg-background/80 backdrop-blur-sm shrink-0">
