@@ -42,6 +42,7 @@ export function LoginForm({
   const [savedProfiles, setSavedProfiles] = useState<SavedProfile[]>([])
   const [selectedProfile, setSelectedProfile] = useState<SavedProfile | null>(null)
   const [viewMode, setViewMode] = useState<"profiles" | "password" | "classic">("classic")
+  const [isStandalone, setIsStandalone] = useState(false)
   const router = useRouter()
 
   // Obtiene o crea un client_id único para este navegador
@@ -73,6 +74,9 @@ export function LoginForm({
 
   useEffect(() => {
     loadSavedProfiles()
+    if (typeof window !== "undefined") {
+      setIsStandalone(window.matchMedia("(display-mode: standalone)").matches)
+    }
   }, [])
 
   const handleLoginSuccess = async (user: any, emailAddress: string) => {
@@ -137,7 +141,11 @@ export function LoginForm({
         setLoading(false)
         const p = data.user.permissions || [];
         const isPosOnly = p.includes("pos") && !p.some((perm: string) => perm !== "pos");
-        const targetPath = (isPosOnly || data.user.role === "pos") ? "/pos" : "/dashboard"
+        const targetPath = (isPosOnly || data.user.role === "pos")
+          ? "/pos"
+          : window.matchMedia("(display-mode: standalone)").matches
+            ? "/dashboard/soporte"
+            : "/dashboard"
         setTimeout(() => {
           router.push(targetPath)
         }, 500)
@@ -401,9 +409,11 @@ export function LoginForm({
                     Ver perfiles guardados ({savedProfiles.length})
                   </Button>
                 )}
-                <FieldDescription className="text-center mt-2">
-                  ¿No tienes una cuenta? <a href="/register" className="underline font-medium hover:text-foreground">Regístrate</a>
-                </FieldDescription>
+                {!isStandalone && (
+                  <FieldDescription className="text-center mt-2">
+                    ¿No tienes una cuenta? <a href="/register" className="underline font-medium hover:text-foreground">Regístrate</a>
+                  </FieldDescription>
+                )}
               </Field>
             </FieldGroup>
           </form>

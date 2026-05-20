@@ -1,6 +1,18 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { RegisterForm } from "@/components/register-form"
 
 export default function RegisterPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches) {
+      router.replace("/");
+    }
+  }, [router]);
+
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-6 md:p-10">
       <div className="flex w-full max-w-sm flex-col gap-6">

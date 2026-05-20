@@ -15,6 +15,7 @@ import {
   IconSearch,
   IconMessageCircle,
   IconHeadset,
+  IconArrowLeft,
 } from "@tabler/icons-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -64,9 +65,14 @@ export default function SupportChatPage() {
   const [isOtherOnline, setIsOtherOnline] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [mobileView, setMobileView] = useState<"list" | "chat">("list");
+  const [isStandalone, setIsStandalone] = useState(false);
   
   useEffect(() => {
     setMounted(true);
+    if (typeof window !== "undefined") {
+      setIsStandalone(window.matchMedia("(display-mode: standalone)").matches);
+    }
   }, []);
 
   usePushNotifications(user?.id ?? null);
@@ -344,10 +350,16 @@ export default function SupportChatPage() {
 
   return (
     <>
-    <div className="flex h-[calc(100vh-var(--header-height,60px))] overflow-hidden bg-background">
+    <div className={cn(
+      "flex overflow-hidden bg-background",
+      isStandalone ? "h-screen w-screen" : "h-[calc(100vh-var(--header-height,60px))]"
+    )}>
 
       {/* ── LEFT SIDEBAR ─────────────────────────────── */}
-      <aside className="w-[300px] shrink-0 border-r flex flex-col bg-muted/20">
+      <aside className={cn(
+        "w-full md:w-[300px] shrink-0 border-r flex flex-col bg-muted/20",
+        mobileView === "list" ? "flex" : "hidden md:flex"
+      )}>
         {/* Sidebar header */}
         <div className="px-4 py-4 border-b flex items-center gap-3 bg-background">
           <div className="size-9 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -361,10 +373,13 @@ export default function SupportChatPage() {
 
         {/* Single conversation item */}
         <div className="flex-1 p-2">
-          <div className={cn(
-            "flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer transition-colors",
-            "bg-primary/10 border border-primary/20"
-          )}>
+          <div 
+            onClick={() => setMobileView("chat")}
+            className={cn(
+              "flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer transition-colors",
+              "bg-primary/10 border border-primary/20"
+            )}
+          >
             <div className="relative">
               <Avatar className="size-11">
                 <AvatarImage src="/syncro.png" />
@@ -399,18 +414,29 @@ export default function SupportChatPage() {
       </aside>
 
       {/* ── MAIN CHAT AREA ───────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className={cn(
+        "flex-1 flex flex-col min-w-0",
+        mobileView === "chat" ? "flex" : "hidden md:flex"
+      )}>
 
         {/* Chat header */}
         <div className="flex items-center justify-between px-5 py-3 border-b bg-background/80 backdrop-blur-sm shrink-0">
           <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden size-8 -ml-2 mr-1 text-muted-foreground"
+              onClick={() => setMobileView("list")}
+            >
+              <IconArrowLeft size={20} />
+            </Button>
             <Avatar className="size-9">
               <AvatarImage src="/syncro.png" />
               <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">SP</AvatarFallback>
             </Avatar>
             <div>
               <p className="font-semibold text-sm">
-                {conversation?.business?.name || "Soporte Syncro POS"}
+                Soporte Syncro POS
               </p>
               <div className="flex items-center gap-1.5 h-4">
                 {mounted && (

@@ -15,6 +15,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -32,15 +33,35 @@ export default function DashboardLayout({
       const isPosOnly = p.includes("pos") && !p.some((perm: string) => perm !== "pos");
       if (isPosOnly || user.role === "pos") {
         router.replace("/pos");
-      } else {
-        setIsAuthenticated(true);
+        return;
       }
+
+      const standalone = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+      setIsStandalone(standalone);
+      if (standalone) {
+        if (window.location.pathname !== "/dashboard/soporte" && window.location.pathname !== "/dashboard/soporte/") {
+          router.replace("/dashboard/soporte");
+          return;
+        }
+      }
+
+      setIsAuthenticated(true);
     } catch (e) {
       router.replace("/");
     }
   }, [router]);
 
   if (!isMounted || !isAuthenticated) return null;
+
+  if (isStandalone) {
+    return (
+      <div className="flex flex-col h-screen w-screen bg-background overflow-hidden">
+        <main className="flex-1 flex flex-col overflow-hidden">
+          {children}
+        </main>
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider
