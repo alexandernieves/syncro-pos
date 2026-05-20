@@ -179,13 +179,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       
       const fetchConfig = async () => {
         try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || `${API_URL}`}/settings`);
+          const token = localStorage.getItem("token");
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || `${API_URL}`}/settings`, {
+            headers: token ? { "Authorization": `Bearer ${token}` } : {}
+          });
           if(res.ok) {
             const config = await res.json();
             if(config) {
               if (config.businessName) {
                 setBusinessName(config.businessName);
                 localStorage.setItem("businessName", config.businessName);
+              } else {
+                setBusinessName("SYNCRO POS");
+                localStorage.setItem("businessName", "SYNCRO POS");
               }
             }
           }
