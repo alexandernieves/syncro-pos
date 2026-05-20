@@ -69,12 +69,29 @@ export default function SupportChatPage() {
   const [mounted, setMounted] = useState(false);
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
   const [isStandalone, setIsStandalone] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState("100dvh");
   
   useEffect(() => {
     setMounted(true);
     if (typeof window !== "undefined") {
       const standalone = window.matchMedia("(display-mode: standalone)").matches;
       setIsStandalone(standalone);
+
+      if (standalone && window.visualViewport) {
+        const handleResize = () => {
+          if (window.visualViewport) {
+            setViewportHeight(`${window.visualViewport.height}px`);
+          }
+        };
+        window.visualViewport.addEventListener("resize", handleResize);
+        window.visualViewport.addEventListener("scroll", handleResize);
+        handleResize();
+
+        return () => {
+          window.visualViewport?.removeEventListener("resize", handleResize);
+          window.visualViewport?.removeEventListener("scroll", handleResize);
+        };
+      }
     }
   }, []);
 
@@ -360,10 +377,12 @@ export default function SupportChatPage() {
 
   return (
     <>
-    <div className={cn(
+    <div 
+      style={isStandalone ? { height: viewportHeight } : {}}
+      className={cn(
         "flex bg-background w-full overflow-hidden",
         isStandalone
-          ? "fixed inset-0"
+          ? "fixed top-0 left-0 right-0"
           : "h-[calc(100vh-var(--header-height,60px))]"
       )}>
       
