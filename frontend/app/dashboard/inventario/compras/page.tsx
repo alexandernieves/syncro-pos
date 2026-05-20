@@ -31,11 +31,13 @@ import {
 
 import { UniversalTable } from "@/components/universal-table";
 import { getPurchaseOrdersColumns } from "@/components/purchase-orders-columns";
+import { useCurrency } from "@/context/CurrencyContext";
 
 const API = API_URL;
 
 export default function PurchaseOrdersPage() {
   const router = useRouter();
+  const { formatPrice } = useCurrency();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -103,7 +105,7 @@ export default function PurchaseOrdersPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("es-VE", { style: "currency", currency: "USD" }).format(amount);
+    return formatPrice(amount);
   };
 
   const tableData = React.useMemo(() => {
@@ -131,7 +133,7 @@ export default function PurchaseOrdersPage() {
       reviewer: order.supplier.name,
       raw: order
     }));
-  }, [orders]);
+  }, [orders, formatPrice]);
 
   const [selectedOrderForReception, setSelectedOrderForReception] = useState<any | null>(null);
 
@@ -199,7 +201,7 @@ export default function PurchaseOrdersPage() {
           <CardHeader>
             <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">Capitalización</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-              USD {stats.totalMonth.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+              {formatPrice(stats.totalMonth)}
             </CardTitle>
             <CardAction>
               <Badge variant="outline" className="gap-1 border-none bg-emerald-500/10 text-emerald-600 font-bold uppercase text-[9px]">
@@ -342,7 +344,7 @@ export default function PurchaseOrdersPage() {
                         <p className="text-[10px] text-muted-foreground font-medium uppercase">{item.variant.name}</p>
                       </TableCell>
                       <TableCell className="text-center font-black text-sm text-foreground">{item.quantity}</TableCell>
-                      <TableCell className="text-right tabular-nums text-xs text-muted-foreground">USD {item.cost.toFixed(2)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs text-muted-foreground">{formatPrice(item.cost)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

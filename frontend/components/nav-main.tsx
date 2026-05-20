@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { IconCirclePlusFilled, IconMail, IconCornerDownRight, type Icon } from "@tabler/icons-react"
@@ -47,6 +48,15 @@ export function NavMain({
     return pathname === item.url || pathname.startsWith(item.url)
   }
 
+  const [openItem, setOpenItem] = useState<string | null>(null)
+
+  useEffect(() => {
+    const activeItem = items.find(item => isParentActive(item))
+    if (activeItem) {
+      setOpenItem(activeItem.title)
+    }
+  }, [pathname, items])
+
   const isDashboardActive = pathname === "/dashboard"
 
   return (
@@ -64,9 +74,16 @@ export function NavMain({
               <Collapsible
                 key={item.title}
                 asChild
-                // Keep open if any child matches current route
-                open={item.items && item.items.length > 0 ? anySubActive || parentActive || undefined : undefined}
-                defaultOpen={parentActive}
+                open={openItem === item.title}
+                onOpenChange={(isOpen) => {
+                  if (isOpen) {
+                    setOpenItem(item.title)
+                  } else {
+                    if (openItem === item.title) {
+                      setOpenItem(null)
+                    }
+                  }
+                }}
                 className="group/collapsible"
               >
                 <SidebarMenuItem>
