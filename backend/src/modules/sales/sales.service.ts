@@ -72,7 +72,7 @@ export class SalesService {
           if (!variant) throw new BadRequestException(`Variante ${item.variantId} no encontrada`);
           
           const inventory = variant.inventory[0];
-          const currentStock = inventory?.quantity || 0;
+          const currentStock = inventory !== undefined ? inventory.quantity : variant.stock;
           if (currentStock < item.quantity) {
             throw new BadRequestException(`Stock insuficiente para ${variant.name} (${currentStock} disponibles)`);
           }
@@ -94,9 +94,10 @@ export class SalesService {
           });
 
           // 2. Discount Stock
-          await tx.inventory.update({
+          await tx.inventory.upsert({
             where: { variantId_branchId: { variantId: item.variantId, branchId } },
-            data: { quantity: { decrement: item.quantity } }
+            update: { quantity: { decrement: item.quantity } },
+            create: { variantId: item.variantId, branchId, quantity: variant.stock - item.quantity }
           });
 
           await tx.productVariant.update({
@@ -377,9 +378,10 @@ export class SalesService {
           });
 
           // Restore Inventory
-          await tx.inventory.update({
+          await tx.inventory.upsert({
              where: { variantId_branchId: { variantId: item.variantId, branchId: sale.branchId } },
-             data: { quantity: { increment: item.quantity } }
+             update: { quantity: { increment: item.quantity } },
+             create: { variantId: item.variantId, branchId: sale.branchId, quantity: item.quantity }
           });
 
           await tx.productVariant.update({

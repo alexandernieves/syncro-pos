@@ -244,17 +244,25 @@ export class ProductsService {
     return products.map(p => {
       // Calculate total stock across variants (filtered by branch if provided)
       const totalStock = p.variants.reduce((acc, v) => {
-        const vStock = branchId 
-          ? v.inventory.reduce((vacc, inv) => vacc + inv.quantity, 0)
-          : v.stock;
+        let vStock = v.stock;
+        if (branchId) {
+          const branchInventory = v.inventory.find(inv => inv.branchId === branchId);
+          if (branchInventory !== undefined) {
+            vStock = branchInventory.quantity;
+          }
+        }
         return acc + vStock;
       }, 0);
 
       // Check for low stock alerts
       const alerts = p.variants.map(v => {
-        const vStock = branchId 
-          ? v.inventory.reduce((vacc, inv) => vacc + inv.quantity, 0)
-          : v.stock;
+        let vStock = v.stock;
+        if (branchId) {
+          const branchInventory = v.inventory.find(inv => inv.branchId === branchId);
+          if (branchInventory !== undefined) {
+            vStock = branchInventory.quantity;
+          }
+        }
         
         if (vStock === 0) return 'CRITICAL';
         if (vStock < v.minStock) return 'LOW';
@@ -262,12 +270,19 @@ export class ProductsService {
       });
 
       // Map variants to include branch-specific stock
-      const mappedVariants = p.variants.map(v => ({
-        ...v,
-        stock: branchId 
-          ? v.inventory.reduce((vacc, inv) => vacc + inv.quantity, 0)
-          : v.stock
-      }));
+      const mappedVariants = p.variants.map(v => {
+        let vStock = v.stock;
+        if (branchId) {
+          const branchInventory = v.inventory.find(inv => inv.branchId === branchId);
+          if (branchInventory !== undefined) {
+            vStock = branchInventory.quantity;
+          }
+        }
+        return {
+          ...v,
+          stock: vStock
+        };
+      });
 
       return {
         ...p,
