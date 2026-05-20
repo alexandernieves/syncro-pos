@@ -69,33 +69,12 @@ export default function SupportChatPage() {
   const [mounted, setMounted] = useState(false);
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
   const [isStandalone, setIsStandalone] = useState(false);
-  const [isReady, setIsReady] = useState(false);
-  const [viewportHeight, setViewportHeight] = useState("100dvh");
   
   useEffect(() => {
     setMounted(true);
     if (typeof window !== "undefined") {
       const standalone = window.matchMedia("(display-mode: standalone)").matches;
       setIsStandalone(standalone);
-      // Delay enabling transitions so the initial layout paint
-      // doesn't trigger an unwanted slide animation
-      requestAnimationFrame(() => setIsReady(true));
-
-      if (standalone && window.visualViewport) {
-        const handleResize = () => {
-          if (window.visualViewport) {
-            setViewportHeight(`${window.visualViewport.height}px`);
-          }
-        };
-        window.visualViewport.addEventListener("resize", handleResize);
-        window.visualViewport.addEventListener("scroll", handleResize);
-        handleResize();
-
-        return () => {
-          window.visualViewport?.removeEventListener("resize", handleResize);
-          window.visualViewport?.removeEventListener("scroll", handleResize);
-        };
-      }
     }
   }, []);
 
@@ -381,32 +360,21 @@ export default function SupportChatPage() {
 
   return (
     <>
-    <div 
-      style={isStandalone ? { height: viewportHeight } : {}}
-      className={cn(
+    <div className={cn(
         "flex bg-background w-full overflow-hidden",
         isStandalone
           ? "fixed inset-0"
           : "h-[calc(100vh-var(--header-height,60px))]"
       )}>
       
-      {/* sliding wrapper: 200% wide in PWA, full width in browser */}
-      <div className={cn(
-        "flex h-full",
-        isStandalone
-          ? cn(
-              "w-[200%] shrink-0",
-              // Only enable transition AFTER first paint to avoid auto-slide on mount
-              isReady && "transition-transform duration-300 ease-in-out",
-              mobileView === "chat" ? "-translate-x-1/2" : "translate-x-0"
-            )
-          : "w-full"
-      )}>
+      <div className="flex w-full h-full">
 
         {/* ── LEFT SIDEBAR ─────────────────────────────── */}
         <aside className={cn(
           "shrink-0 border-r flex flex-col bg-muted/20",
-          isStandalone ? "w-1/2" : "w-[300px] hidden md:flex"
+          isStandalone
+            ? mobileView === "list" ? "flex w-full" : "hidden"
+            : "w-[300px] hidden md:flex"
         )}>
           {/* Sidebar header */}
           <div className="px-4 py-4 border-b flex items-center justify-between bg-background">
@@ -478,7 +446,9 @@ export default function SupportChatPage() {
         {/* ── MAIN CHAT AREA ───────────────────────────── */}
         <div className={cn(
           "flex flex-col min-w-0",
-          isStandalone ? "w-1/2 shrink-0" : "flex-1"
+          isStandalone
+            ? mobileView === "chat" ? "flex flex-1" : "hidden"
+            : "flex-1"
         )}>
 
         {/* Chat header */}
