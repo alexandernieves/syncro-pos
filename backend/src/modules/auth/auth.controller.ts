@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UnauthorizedException, ConflictException, Get, Request, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UnauthorizedException, ConflictException, Get, Request, UseGuards, Query, Delete, BadRequestException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 
@@ -63,5 +63,27 @@ export class AuthController {
       timestamp: new Date().toISOString(),
       platform,
     };
+  }
+
+  @Get('saved-profiles')
+  async getSavedProfiles(@Query('clientId') clientId: string) {
+    if (!clientId) return [];
+    return this.authService.getSavedProfiles(clientId);
+  }
+
+  @Post('saved-profiles')
+  async saveProfile(@Body() body: { clientId: string; email: string; name: string; role?: string; businessName?: string }) {
+    if (!body.clientId || !body.email || !body.name) {
+      throw new BadRequestException('Faltan campos requeridos');
+    }
+    return this.authService.saveProfile(body);
+  }
+
+  @Delete('saved-profiles')
+  async deleteSavedProfile(@Query('clientId') clientId: string, @Query('email') email: string) {
+    if (!clientId || !email) {
+      throw new BadRequestException('Faltan campos requeridos');
+    }
+    return this.authService.deleteSavedProfile(clientId, email);
   }
 }

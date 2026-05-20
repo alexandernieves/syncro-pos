@@ -676,3 +676,17 @@ enum TransferStatus {
   COMPLETED
   CANCELLED
 }
+
+model SavedProfile {
+  id           String   @id @default(uuid())
+  clientId     String
+  email        String
+  name         String
+  role         String?
+  businessName String?
+  lastLogin    DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([clientId, email])
+}

@@ -28,7 +28,7 @@ interface SavedProfile {
   name: string
   role?: string
   businessName?: string
-  lastLogin: number
+  lastLogin: string
 }
 
 export function LoginForm({
@@ -44,46 +44,59 @@ export function LoginForm({
   const [viewMode, setViewMode] = useState<"profiles" | "password" | "classic">("classic")
   const router = useRouter()
 
-  useEffect(() => {
+  // Obtiene o crea un client_id único para este navegador
+  const getClientId = () => {
+    let clientId = localStorage.getItem("client_id")
+    if (!clientId) {
+      clientId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)
+      localStorage.setItem("client_id", clientId)
+    }
+    return clientId
+  }
+
+  // Carga los perfiles guardados desde PostgreSQL
+  const loadSavedProfiles = async () => {
     try {
-      const stored = localStorage.getItem("saved_profiles")
-      if (stored) {
-        const parsed = JSON.parse(stored) as SavedProfile[]
-        const sorted = parsed.sort((a, b) => b.lastLogin - a.lastLogin)
-        setSavedProfiles(sorted)
-        if (sorted.length > 0) {
+      const clientId = getClientId()
+      const response = await fetch(`${API_URL}/auth/saved-profiles?clientId=${clientId}`)
+      if (response.ok) {
+        const profiles = await response.json() as SavedProfile[]
+        setSavedProfiles(profiles)
+        if (profiles.length > 0 && viewMode === "classic") {
           setViewMode("profiles")
         }
       }
     } catch (e) {
-      console.error("Error reading saved profiles", e)
+      console.error("Error fetching saved profiles from database", e)
     }
+  }
+
+  useEffect(() => {
+    loadSavedProfiles()
   }, [])
 
-  const handleLoginSuccess = (user: any, emailAddress: string) => {
+  const handleLoginSuccess = async (user: any, emailAddress: string) => {
     try {
-      const stored = localStorage.getItem("saved_profiles")
-      let currentProfiles: SavedProfile[] = stored ? JSON.parse(stored) : []
-      
-      const newProfile: SavedProfile = {
-        email: emailAddress,
-        name: user.name || user.username || emailAddress.split("@")[0],
-        role: user.role || "Usuario",
-        businessName: user.business?.name || user.businessName || undefined,
-        lastLogin: Date.now()
-      }
+      const clientId = getClientId()
+      // Guardar/Actualizar el perfil en la base de datos de PostgreSQL
+      await fetch(`${API_URL}/auth/saved-profiles`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          clientId,
+          email: emailAddress,
+          name: user.name || user.username || emailAddress.split("@")[0],
+          role: user.role || "Usuario",
+          businessName: user.business?.name || user.businessName || undefined,
+        }),
+      })
 
-      // Remove existing entry for the same email
-      currentProfiles = currentProfiles.filter(p => p.email.toLowerCase() !== emailAddress.toLowerCase())
-      // Add new profile at the beginning
-      currentProfiles.unshift(newProfile)
-      // Limit to 4 profiles
-      currentProfiles = currentProfiles.slice(0, 4)
-
-      localStorage.setItem("saved_profiles", JSON.stringify(currentProfiles))
-      setSavedProfiles(currentProfiles)
+      // Recargar lista actualizada
+      await loadSavedProfiles()
     } catch (e) {
-      console.error("Error saving profile details", e)
+      console.error("Error saving profile details in database", e)
     }
   }
 
@@ -113,7 +126,7 @@ export function LoginForm({
       localStorage.setItem("user", JSON.stringify(data.user))
       document.cookie = `token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
       
-      handleLoginSuccess(data.user, targetEmail)
+      await handleLoginSuccess(data.user, targetEmail)
 
       return data
     }
@@ -143,17 +156,26 @@ export function LoginForm({
     setViewMode("password")
   }
 
-  const deleteProfile = (e: React.MouseEvent, emailToDelete: string) => {
+  const deleteProfile = async (e: React.MouseEvent, emailToDelete: string) => {
     e.stopPropagation()
     try {
-      const updated = savedProfiles.filter(p => p.email.toLowerCase() !== emailToDelete.toLowerCase())
-      localStorage.setItem("saved_profiles", JSON.stringify(updated))
-      setSavedProfiles(updated)
-      if (updated.length === 0) {
-        setViewMode("classic")
+      const clientId = getClientId()
+      // Eliminar el perfil en la base de datos de PostgreSQL
+      const response = await fetch(`${API_URL}/auth/saved-profiles?clientId=${clientId}&email=${encodeURIComponent(emailToDelete)}`, {
+        method: "DELETE"
+      })
+
+      if (response.ok) {
+        const updated = savedProfiles.filter(p => p.email.toLowerCase() !== emailToDelete.toLowerCase())
+        setSavedProfiles(updated)
+        if (updated.length === 0) {
+          setViewMode("classic")
+        } else if (viewMode === "password" && selectedProfile?.email === emailToDelete) {
+          setViewMode("profiles")
+        }
       }
     } catch (e) {
-      console.error("Error deleting profile", e)
+      console.error("Error deleting profile from database", e)
     }
   }
 
@@ -170,7 +192,7 @@ export function LoginForm({
   if (viewMode === "password" && selectedProfile) {
     return (
       <div className={cn("flex flex-col gap-6 w-full", className)} {...props}>
-        <Card className="border-none shadow-2xl relative overflow-hidden">
+        <Card className="border-none shadow-2xl relative overflow-hidden animate-in fade-in duration-200">
           <Button
             variant="ghost"
             size="icon"
@@ -242,11 +264,11 @@ export function LoginForm({
     )
   }
 
-  // 2️⃣ MODO: LISTA DE PERFILES GUARDADOS
+  // 2️⃣ MODO: LISTA DE PERFILES GUARDADOS (DE LA BASE DE DATOS DE POSTGRESQL)
   if (viewMode === "profiles" && savedProfiles.length > 0) {
     return (
       <div className={cn("flex flex-col gap-6 w-full", className)} {...props}>
-        <Card className="border-none shadow-2xl">
+        <Card className="border-none shadow-2xl animate-in fade-in duration-200">
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-xl font-bold">Selecciona tu perfil</CardTitle>
             <CardDescription>
@@ -315,7 +337,7 @@ export function LoginForm({
   // 3️⃣ MODO: FORMULARIO CLÁSICO / ESTÁNDAR
   return (
     <div className={cn("flex flex-col gap-6 w-full", className)} {...props}>
-      <Card className="border-none shadow-2xl">
+      <Card className="border-none shadow-2xl animate-in fade-in duration-200">
         <CardHeader className="text-center">
           <CardTitle className="text-xl font-bold">Bienvenido de nuevo</CardTitle>
           <CardDescription>

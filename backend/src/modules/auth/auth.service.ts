@@ -101,4 +101,41 @@ export class AuthService {
       businessId: business.id,
     });
   }
+
+  async getSavedProfiles(clientId: string) {
+    return this.prisma.savedProfile.findMany({
+      where: { clientId },
+      orderBy: { lastLogin: 'desc' }
+    });
+  }
+
+  async saveProfile(data: { clientId: string; email: string; name: string; role?: string; businessName?: string }) {
+    return this.prisma.savedProfile.upsert({
+      where: {
+        clientId_email: {
+          clientId: data.clientId,
+          email: data.email
+        }
+      },
+      update: {
+        name: data.name,
+        role: data.role,
+        businessName: data.businessName,
+        lastLogin: new Date()
+      },
+      create: {
+        clientId: data.clientId,
+        email: data.email,
+        name: data.name,
+        role: data.role,
+        businessName: data.businessName
+      }
+    });
+  }
+
+  async deleteSavedProfile(clientId: string, email: string) {
+    return this.prisma.savedProfile.deleteMany({
+      where: { clientId, email }
+    });
+  }
 }
