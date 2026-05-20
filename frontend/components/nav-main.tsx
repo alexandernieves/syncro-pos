@@ -40,12 +40,12 @@ export function NavMain({
 }) {
   const pathname = usePathname()
 
-  // A parent is "active" if the current path starts with its URL or any child matches
+  // A parent is "active" if it has sub-items and one of its sub-items matches the current path
   const isParentActive = (item: typeof items[0]) => {
     if (item.items && item.items.length > 0) {
       return item.items.some(sub => pathname === sub.url || pathname.startsWith(sub.url))
     }
-    return pathname === item.url || pathname.startsWith(item.url)
+    return false
   }
 
   const [openItem, setOpenItem] = useState<string | null>(null)
@@ -54,6 +54,8 @@ export function NavMain({
     const activeItem = items.find(item => isParentActive(item))
     if (activeItem) {
       setOpenItem(activeItem.title)
+    } else {
+      setOpenItem(null)
     }
   }, [pathname, items])
 

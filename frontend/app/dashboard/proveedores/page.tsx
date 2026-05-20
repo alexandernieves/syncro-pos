@@ -32,6 +32,7 @@ import { useRouter } from "next/navigation";
 
 import { UniversalTable } from "@/components/universal-table";
 import { getSuppliersColumns } from "@/components/suppliers-columns";
+import { useCurrency } from "@/context/CurrencyContext";
 
 const API = API_URL;
 
@@ -55,6 +56,7 @@ const FORM_INITIAL_STATE = {
 
 export default function SuppliersPage() {
   const router = useRouter();
+  const { formatPrice } = useCurrency();
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -247,7 +249,7 @@ export default function SuppliersPage() {
         <CardHeader>
           <CardDescription>Pasivos Totales</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            ${(alertsSummary?.summary?.totalBalance || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+            {formatPrice(alertsSummary?.summary?.totalBalance || 0)}
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="gap-1 opacity-0">
