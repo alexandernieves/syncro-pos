@@ -128,9 +128,16 @@ export function LoginForm({
       }
 
       // Guardar token y datos del usuario
-      localStorage.setItem("token", data.access_token)
-      localStorage.setItem("user", JSON.stringify(data.user))
-      document.cookie = `token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
+      const isStandalonePwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+      if (isStandalonePwa) {
+        sessionStorage.setItem("token", data.access_token)
+        sessionStorage.setItem("user", JSON.stringify(data.user))
+        document.cookie = `token=${data.access_token}; path=/; SameSite=Lax`;
+      } else {
+        localStorage.setItem("token", data.access_token)
+        localStorage.setItem("user", JSON.stringify(data.user))
+        document.cookie = `token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
+      }
       
       await handleLoginSuccess(data.user, targetEmail)
 

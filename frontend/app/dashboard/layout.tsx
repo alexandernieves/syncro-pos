@@ -19,8 +19,9 @@ export default function DashboardLayout({
 
   useEffect(() => {
     setIsMounted(true);
-    const token = localStorage.getItem("token");
-    const userStr = localStorage.getItem("user");
+    const isMqlStandalone = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+    const token = isMqlStandalone ? sessionStorage.getItem("token") : localStorage.getItem("token");
+    const userStr = isMqlStandalone ? sessionStorage.getItem("user") : localStorage.getItem("user");
 
     if (!token || !userStr) {
       router.replace("/");
@@ -36,7 +37,6 @@ export default function DashboardLayout({
         return;
       }
 
-      const isMqlStandalone = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
       const standalone = isMqlStandalone;
       
       setIsStandalone(standalone);

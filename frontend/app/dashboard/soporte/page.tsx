@@ -98,6 +98,8 @@ export default function SupportChatPage() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
     document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax";
     window.location.href = "/";
   };
@@ -107,7 +109,8 @@ export default function SupportChatPage() {
 
   // Role guard: support team has their own chat panel
   useEffect(() => {
-    const userStr = localStorage.getItem("user");
+    const isPwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+    const userStr = isPwa ? sessionStorage.getItem("user") : localStorage.getItem("user");
     if (userStr) {
       const u = JSON.parse(userStr);
       if (u.role === "syncropos") {
@@ -142,7 +145,9 @@ export default function SupportChatPage() {
   };
 
   const initSocket = (convId: string) => {
-    const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+    const isPwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+    const userStr = isPwa ? sessionStorage.getItem("user") : localStorage.getItem("user");
+    const storedUser = JSON.parse(userStr || "{}");
     if (!storedUser.id) return;
 
     const socketUrl = API;
@@ -591,62 +596,69 @@ export default function SupportChatPage() {
 
         {/* Input bar */}
         <div className="px-4 py-3 border-t bg-background/80 backdrop-blur-sm shrink-0 flex items-center gap-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground size-9 hover:bg-primary/10 hover:text-primary transition-colors">
-                <IconMoodSmile size={20} />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent side="top" align="start" className="w-[320px] p-0 border-none shadow-2xl rounded-2xl bg-popover/95 backdrop-blur-md overflow-hidden">
-              <div className="flex flex-col h-[350px]">
-                <div className="px-4 py-3 border-b bg-muted/30">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Emojis</p>
-                </div>
-                <ScrollArea className="flex-1">
-                  <div className="p-3 space-y-4">
-                    {EMOJI_CATEGORIES.map((cat) => (
-                      <div key={cat.label} className="space-y-2">
-                        <p className="text-[10px] font-bold text-muted-foreground px-1 uppercase">{cat.label}</p>
-                        <div className="grid grid-cols-8 gap-1">
-                          {cat.emojis.map((emoji) => (
-                            <button
-                              key={emoji}
-                              onClick={() => addEmoji(emoji)}
-                              className="size-8 flex items-center justify-center rounded-lg hover:bg-muted text-lg transition-all active:scale-90"
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-            </PopoverContent>
-          </Popover>
-          <div className="relative shrink-0">
-            <Button variant="ghost" size="icon" className="text-muted-foreground size-9">
-              <IconPaperclip size={20} />
-            </Button>
-            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleFileUpload} accept="image/*,video/*" />
-          </div>
-
           {voiceState === "idle" ? (
-            <Input
-              className="flex-1 h-10 rounded-full bg-muted/50 border-none focus-visible:ring-1 focus-visible:ring-primary/30 px-4 text-sm"
-              placeholder={uploading ? "Subiendo archivo..." : "Escribe un mensaje..."}
-              value={inputText}
-              onChange={(e) => handleInputChange(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              disabled={uploading}
-            />
+            <div className="flex-1 flex items-center bg-muted/50 rounded-full px-2 py-1 border border-transparent focus-within:border-primary/10 focus-within:bg-background/80 focus-within:ring-1 focus-within:ring-primary/10 transition-all">
+              {/* Emoji Button */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground size-8 rounded-full hover:bg-muted active:scale-95">
+                    <IconMoodSmile size={20} />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent side="top" align="start" className="w-[320px] p-0 border-none shadow-2xl rounded-2xl bg-popover/95 backdrop-blur-md overflow-hidden">
+                  <div className="flex flex-col h-[350px]">
+                    <div className="px-4 py-3 border-b bg-muted/30">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Emojis</p>
+                    </div>
+                    <ScrollArea className="flex-1">
+                      <div className="p-3 space-y-4">
+                        {EMOJI_CATEGORIES.map((cat) => (
+                          <div key={cat.label} className="space-y-2">
+                            <p className="text-[10px] font-bold text-muted-foreground px-1 uppercase">{cat.label}</p>
+                            <div className="grid grid-cols-8 gap-1">
+                              {cat.emojis.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => addEmoji(emoji)}
+                                  className="size-8 flex items-center justify-center rounded-lg hover:bg-muted text-lg transition-all active:scale-90"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Text Input */}
+              <input
+                type="text"
+                className="flex-1 min-w-0 bg-transparent border-none outline-none focus:outline-none focus:ring-0 px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground"
+                placeholder={uploading ? "Subiendo archivo..." : "Escribe un mensaje..."}
+                value={inputText}
+                onChange={(e) => handleInputChange(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                disabled={uploading}
+              />
+
+              {/* Attachment Clip */}
+              <div className="relative shrink-0">
+                <Button variant="ghost" size="icon" className="text-muted-foreground size-8 rounded-full hover:bg-muted active:scale-95">
+                  <IconPaperclip size={20} />
+                </Button>
+                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleFileUpload} accept="image/*,video/*" />
+              </div>
+            </div>
           ) : null}
 
           {inputText.trim() && voiceState === "idle" ? (
             <Button
               size="icon"
-              className="shrink-0 size-10 rounded-full bg-primary shadow-lg shadow-primary/20 transition-all"
+              className="shrink-0 size-10 rounded-full bg-primary shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95"
               onClick={handleSend}
             >
               <IconSend size={18} />
