@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { API_URL } from "@/lib/constants"
@@ -18,11 +18,18 @@ import {
   FieldDescription,
   FieldGroup,
   FieldLabel,
-  FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, Trash2, ArrowLeft, ChevronRight } from "lucide-react"
+
+interface SavedProfile {
+  email: string
+  name: string
+  role?: string
+  businessName?: string
+  lastLogin: number
+}
 
 export function LoginForm({
   className,
@@ -32,11 +39,59 @@ export function LoginForm({
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [savedProfiles, setSavedProfiles] = useState<SavedProfile[]>([])
+  const [selectedProfile, setSelectedProfile] = useState<SavedProfile | null>(null)
+  const [viewMode, setViewMode] = useState<"profiles" | "password" | "classic">("classic")
   const router = useRouter()
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("saved_profiles")
+      if (stored) {
+        const parsed = JSON.parse(stored) as SavedProfile[]
+        const sorted = parsed.sort((a, b) => b.lastLogin - a.lastLogin)
+        setSavedProfiles(sorted)
+        if (sorted.length > 0) {
+          setViewMode("profiles")
+        }
+      }
+    } catch (e) {
+      console.error("Error reading saved profiles", e)
+    }
+  }, [])
+
+  const handleLoginSuccess = (user: any, emailAddress: string) => {
+    try {
+      const stored = localStorage.getItem("saved_profiles")
+      let currentProfiles: SavedProfile[] = stored ? JSON.parse(stored) : []
+      
+      const newProfile: SavedProfile = {
+        email: emailAddress,
+        name: user.name || user.username || emailAddress.split("@")[0],
+        role: user.role || "Usuario",
+        businessName: user.business?.name || user.businessName || undefined,
+        lastLogin: Date.now()
+      }
+
+      // Remove existing entry for the same email
+      currentProfiles = currentProfiles.filter(p => p.email.toLowerCase() !== emailAddress.toLowerCase())
+      // Add new profile at the beginning
+      currentProfiles.unshift(newProfile)
+      // Limit to 4 profiles
+      currentProfiles = currentProfiles.slice(0, 4)
+
+      localStorage.setItem("saved_profiles", JSON.stringify(currentProfiles))
+      setSavedProfiles(currentProfiles)
+    } catch (e) {
+      console.error("Error saving profile details", e)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+
+    const targetEmail = viewMode === "password" && selectedProfile ? selectedProfile.email : email
 
     const loginPromise = async () => {
       const response = await fetch(`${API_URL}/auth/login`, {
@@ -44,7 +99,7 @@ export function LoginForm({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: targetEmail, password }),
       })
 
       const data = await response.json()
@@ -58,6 +113,8 @@ export function LoginForm({
       localStorage.setItem("user", JSON.stringify(data.user))
       document.cookie = `token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
       
+      handleLoginSuccess(data.user, targetEmail)
+
       return data
     }
 
@@ -80,11 +137,187 @@ export function LoginForm({
     })
   }
 
+  const selectProfile = (profile: SavedProfile) => {
+    setSelectedProfile(profile)
+    setPassword("")
+    setViewMode("password")
+  }
+
+  const deleteProfile = (e: React.MouseEvent, emailToDelete: string) => {
+    e.stopPropagation()
+    try {
+      const updated = savedProfiles.filter(p => p.email.toLowerCase() !== emailToDelete.toLowerCase())
+      localStorage.setItem("saved_profiles", JSON.stringify(updated))
+      setSavedProfiles(updated)
+      if (updated.length === 0) {
+        setViewMode("classic")
+      }
+    } catch (e) {
+      console.error("Error deleting profile", e)
+    }
+  }
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map(n => n[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase()
+  }
+
+  // 1️⃣ MODO: ENTRADA DE CONTRASEÑA DE UN PERFIL GUARDADO
+  if (viewMode === "password" && selectedProfile) {
+    return (
+      <div className={cn("flex flex-col gap-6 w-full", className)} {...props}>
+        <Card className="border-none shadow-2xl relative overflow-hidden">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute left-4 top-4 rounded-full size-8 hover:bg-muted"
+            onClick={() => setViewMode(savedProfiles.length > 0 ? "profiles" : "classic")}
+            type="button"
+          >
+            <ArrowLeft size={16} />
+          </Button>
+          <CardHeader className="text-center pb-2 pt-8">
+            <div className="mx-auto size-16 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-bold shadow-sm mb-2 select-none">
+              {getInitials(selectedProfile.name)}
+            </div>
+            <CardTitle className="text-xl font-bold">{selectedProfile.name}</CardTitle>
+            <CardDescription className="text-xs font-mono truncate max-w-[280px] mx-auto">
+              {selectedProfile.email}
+            </CardDescription>
+            {selectedProfile.businessName && (
+              <span className="inline-flex mx-auto items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 mt-2">
+                {selectedProfile.businessName}
+              </span>
+            )}
+          </CardHeader>
+          <CardContent className="pt-2">
+            <form onSubmit={handleSubmit}>
+              <FieldGroup>
+                <Field>
+                  <div className="flex items-center">
+                    <FieldLabel htmlFor="profile-password">Contraseña</FieldLabel>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="profile-password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      autoFocus
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </Field>
+                <Field>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "Verificando..." : "Ingresar"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full text-xs text-muted-foreground hover:text-foreground mt-2"
+                    onClick={() => setViewMode("classic")}
+                  >
+                    Usar otra cuenta
+                  </Button>
+                </Field>
+              </FieldGroup>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // 2️⃣ MODO: LISTA DE PERFILES GUARDADOS
+  if (viewMode === "profiles" && savedProfiles.length > 0) {
+    return (
+      <div className={cn("flex flex-col gap-6 w-full", className)} {...props}>
+        <Card className="border-none shadow-2xl">
+          <CardHeader className="text-center pb-2">
+            <CardTitle className="text-xl font-bold">Selecciona tu perfil</CardTitle>
+            <CardDescription>
+              Elige una sesión guardada para ingresar rápidamente
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-2">
+            <div className="grid gap-3 max-h-[320px] overflow-y-auto pr-1">
+              {savedProfiles.map((profile) => (
+                <div
+                  key={profile.email}
+                  onClick={() => selectProfile(profile)}
+                  className="group relative flex items-center justify-between p-3 rounded-xl border border-border/50 hover:border-primary/40 bg-muted/10 hover:bg-primary/5 transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-full bg-primary/10 group-hover:bg-primary/20 text-primary flex items-center justify-center font-bold text-xs transition-colors shadow-inner select-none">
+                      {getInitials(profile.name)}
+                    </div>
+                    <div className="flex flex-col text-left max-w-[170px]">
+                      <span className="font-bold text-sm tracking-tight group-hover:text-primary transition-colors truncate">
+                        {profile.name}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono truncate leading-none mt-0.5">
+                        {profile.email}
+                      </span>
+                      {profile.businessName && (
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium leading-none truncate mt-1">
+                          {profile.businessName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 rounded-lg opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-all duration-300"
+                      onClick={(e) => deleteProfile(e, profile.email)}
+                      aria-label="Eliminar perfil"
+                      type="button"
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                    <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all duration-300" />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => setViewMode("classic")}
+              >
+                Usar otra cuenta
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // 3️⃣ MODO: FORMULARIO CLÁSICO / ESTÁNDAR
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card>
+    <div className={cn("flex flex-col gap-6 w-full", className)} {...props}>
+      <Card className="border-none shadow-2xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">Bienvenido de nuevo</CardTitle>
+          <CardTitle className="text-xl font-bold">Bienvenido de nuevo</CardTitle>
           <CardDescription>
             Ingresa con tu correo electrónico para acceder
           </CardDescription>
@@ -108,7 +341,7 @@ export function LoginForm({
                   <FieldLabel htmlFor="password">Contraseña</FieldLabel>
                   <a
                     href="#"
-                    className="ml-auto text-sm underline-offset-4 hover:underline"
+                    className="ml-auto text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
                   >
                     ¿Olvidaste tu contraseña?
                   </a>
@@ -136,8 +369,18 @@ export function LoginForm({
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Iniciando sesión..." : "Iniciar sesión"}
                 </Button>
+                {savedProfiles.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full text-xs text-muted-foreground hover:text-foreground mt-2"
+                    onClick={() => setViewMode("profiles")}
+                  >
+                    Ver perfiles guardados ({savedProfiles.length})
+                  </Button>
+                )}
                 <FieldDescription className="text-center mt-2">
-                  ¿No tienes una cuenta? <a href="/register" className="underline">Regístrate</a>
+                  ¿No tienes una cuenta? <a href="/register" className="underline font-medium hover:text-foreground">Regístrate</a>
                 </FieldDescription>
               </Field>
             </FieldGroup>
