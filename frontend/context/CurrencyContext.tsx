@@ -33,11 +33,22 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchRates = async () => {
+    setIsLoading(true);
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        setPosRate(40.0);
+        setDashboardRate(40.0);
+        setExchangeRate(40.0);
+        setEurExchangeRate(42.0);
+        setBcvDate("No disponible");
+        setIsLoading(false);
+        return;
+      }
+
       const res = await fetch(`${API_URL}/settings?t=${Date.now()}`, {
         headers: { 
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          "Authorization": `Bearer ${token}`
         }
       });
       if (res.ok) {
@@ -61,6 +72,13 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setEurExchangeRate(dEurRate);
           setBcvDate(data.bcvUpdateDateDashboard || data.bcvUpdateDate || "No disponible");
         }
+      } else {
+        // Clear or set fallback if response is not ok (e.g. 401)
+        setPosRate(40.0);
+        setDashboardRate(40.0);
+        setExchangeRate(40.0);
+        setEurExchangeRate(42.0);
+        setBcvDate("No disponible");
       }
     } catch (e) {
       console.error("Error fetching rates", e);

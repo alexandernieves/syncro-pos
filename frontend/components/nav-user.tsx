@@ -1,6 +1,8 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import { clearAuthSession } from "@/lib/auth-helpers"
+
 import {
   IconCreditCard,
   IconDotsVertical,
@@ -44,10 +46,8 @@ export function NavUser({
   const { isMobile } = useSidebar()
   const router = useRouter()
 
-  const handleLogout = () => {
-    localStorage.removeItem("token")
-    localStorage.removeItem("user")
-    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
+  const handleLogout = async () => {
+    await clearAuthSession()
     toast.success("Has cerrado sesión correctamente")
     router.replace("/")
   }

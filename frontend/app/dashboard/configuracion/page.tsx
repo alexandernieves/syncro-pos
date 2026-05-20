@@ -1,6 +1,8 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { API_URL } from "@/lib/constants"
+import { clearAuthSession } from "@/lib/auth-helpers";
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { 
   AlertDialog, 
@@ -1205,13 +1207,12 @@ export default function ConfiguracionPage() {
                 </div>
                 
                 <Button variant="outline" className="w-full justify-start gap-2 border-destructive/20 text-destructive hover:bg-destructive/10"
-                  onClick={() => {
-                    localStorage.removeItem("token");
-                    localStorage.removeItem("user");
-                    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                  onClick={async () => {
+                    await clearAuthSession();
                     window.location.href = "/";
                   }}
                 >
+
                   <IconLogout size={16} />
                   Cerrar todas las sesiones
                 </Button>

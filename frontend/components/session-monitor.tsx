@@ -3,6 +3,8 @@
 import { useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { clearAuthSession } from "@/lib/auth-helpers"
+
 
 interface SessionMonitorProps {
   timeoutMinutes?: number
@@ -12,11 +14,9 @@ export function SessionMonitor({ timeoutMinutes = 30 }: SessionMonitorProps) {
   const router = useRouter()
   const timeoutId = useRef<NodeJS.Timeout | null>(null)
   
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
     // Limpiar almacenamiento
-    localStorage.removeItem("token")
-    localStorage.removeItem("user")
-    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
+    await clearAuthSession()
     
     toast.error("Sesión cerrada por inactividad", {
       description: "Por seguridad, tu sesión ha sido finalizada tras un periodo de inactividad.",
