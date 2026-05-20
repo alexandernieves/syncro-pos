@@ -76,9 +76,7 @@ export function LoginForm({
     loadSavedProfiles()
     if (typeof window !== "undefined") {
       setIsStandalone(
-        window.matchMedia("(display-mode: standalone)").matches ||
-        window.location.search.includes("pwa=true") ||
-        localStorage.getItem("is_pwa") === "true"
+        window.matchMedia("(display-mode: standalone)").matches
       )
     }
   }, [])
@@ -147,7 +145,7 @@ export function LoginForm({
         const isPosOnly = p.includes("pos") && !p.some((perm: string) => perm !== "pos");
         const targetPath = (isPosOnly || data.user.role === "pos")
           ? "/pos"
-          : (window.matchMedia("(display-mode: standalone)").matches || localStorage.getItem("is_pwa") === "true")
+          : window.matchMedia("(display-mode: standalone)").matches
             ? "/dashboard/soporte"
             : "/dashboard"
         setTimeout(() => {

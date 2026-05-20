@@ -74,10 +74,7 @@ export default function SupportChatPage() {
   useEffect(() => {
     setMounted(true);
     if (typeof window !== "undefined") {
-      const standalone = 
-        window.matchMedia("(display-mode: standalone)").matches ||
-        window.location.search.includes("pwa=true") ||
-        localStorage.getItem("is_pwa") === "true";
+      const standalone = window.matchMedia("(display-mode: standalone)").matches;
       setIsStandalone(standalone);
 
       if (standalone && window.visualViewport) {
@@ -383,17 +380,26 @@ export default function SupportChatPage() {
     <div 
       style={isStandalone ? { height: viewportHeight } : {}}
       className={cn(
-        "flex overflow-hidden bg-background w-full",
-        isStandalone ? "fixed inset-0 md:relative md:h-full md:w-full" : "h-[calc(100vh-var(--header-height,60px))]"
+        "flex bg-background w-full overflow-hidden",
+        isStandalone
+          ? "fixed inset-0"
+          : "h-[calc(100vh-var(--header-height,60px))]"
       )}>
       
+      {/* sliding wrapper: 200% wide in PWA, full width in browser */}
       <div className={cn(
-        "flex w-[200%] md:w-full shrink-0 md:shrink h-full transition-transform duration-300 ease-in-out",
-        mobileView === "chat" ? "-translate-x-1/2 md:translate-x-0" : "translate-x-0"
+        "flex h-full",
+        isStandalone
+          ? cn("w-[200%] shrink-0 transition-transform duration-300 ease-in-out",
+              mobileView === "chat" ? "-translate-x-1/2" : "translate-x-0")
+          : "w-full"
       )}>
 
         {/* ── LEFT SIDEBAR ─────────────────────────────── */}
-        <aside className="w-1/2 md:w-[300px] shrink-0 border-r flex flex-col bg-muted/20">
+        <aside className={cn(
+          "shrink-0 border-r flex flex-col bg-muted/20",
+          isStandalone ? "w-1/2" : "w-[300px] hidden md:flex"
+        )}>
           {/* Sidebar header */}
           <div className="px-4 py-4 border-b flex items-center justify-between bg-background">
             <div className="flex items-center gap-3">
@@ -462,7 +468,10 @@ export default function SupportChatPage() {
       </aside>
 
         {/* ── MAIN CHAT AREA ───────────────────────────── */}
-        <div className="w-1/2 md:flex-1 shrink-0 flex flex-col min-w-0">
+        <div className={cn(
+          "flex flex-col min-w-0",
+          isStandalone ? "w-1/2 shrink-0" : "flex-1"
+        )}>
 
         {/* Chat header */}
         <div className="flex items-center justify-between px-5 py-3 border-b bg-background/80 backdrop-blur-sm shrink-0">

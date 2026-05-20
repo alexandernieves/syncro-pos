@@ -36,14 +36,8 @@ export default function DashboardLayout({
         return;
       }
 
-      const isPwaQuery = typeof window !== "undefined" && window.location.search.includes("pwa=true");
-      const isPwaStorage = typeof window !== "undefined" && localStorage.getItem("is_pwa") === "true";
       const isMqlStandalone = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
-      const standalone = isMqlStandalone || isPwaQuery || isPwaStorage;
-
-      if (typeof window !== "undefined" && (isPwaQuery || isMqlStandalone)) {
-        localStorage.setItem("is_pwa", "true");
-      }
+      const standalone = isMqlStandalone;
       
       setIsStandalone(standalone);
       if (standalone) {
