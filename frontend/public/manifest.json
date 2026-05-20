@@ -4,8 +4,8 @@
   "description": "Mensajería en tiempo real con Soporte Syncro POS",
   "start_url": "/dashboard/soporte?pwa=true",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#10b981",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
   "icons": [
     {
       "src": "/syncro.png",

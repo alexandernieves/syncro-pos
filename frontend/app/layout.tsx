@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#10b981",
+  themeColor: "#09090b",
 };
 
 import { NotificationsProvider } from "@/context/NotificationsContext";

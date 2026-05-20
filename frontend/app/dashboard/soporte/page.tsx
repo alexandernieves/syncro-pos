@@ -16,7 +16,9 @@ import {
   IconMessageCircle,
   IconHeadset,
   IconArrowLeft,
+  IconPower,
 } from "@tabler/icons-react";
+import { ModeSwitcher } from "@/components/mode-switcher";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +80,13 @@ export default function SupportChatPage() {
       );
     }
   }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax";
+    window.location.href = "/";
+  };
 
   usePushNotifications(user?.id ?? null);
   
@@ -356,24 +365,40 @@ export default function SupportChatPage() {
     <>
     <div className={cn(
       "flex overflow-hidden bg-background",
-      isStandalone ? "h-screen w-screen" : "h-[calc(100vh-var(--header-height,60px))]"
+      isStandalone ? "fixed inset-0 md:relative md:h-full md:w-full" : "h-[calc(100vh-var(--header-height,60px))]"
     )}>
-
-      {/* ── LEFT SIDEBAR ─────────────────────────────── */}
-      <aside className={cn(
-        "w-full md:w-[300px] shrink-0 border-r flex flex-col bg-muted/20",
-        mobileView === "list" ? "flex" : "hidden md:flex"
+      
+      <div className={cn(
+        "flex w-[200vw] md:w-full h-full transition-transform duration-300 ease-in-out",
+        mobileView === "chat" ? "-translate-x-1/2 md:translate-x-0" : "translate-x-0"
       )}>
-        {/* Sidebar header */}
-        <div className="px-4 py-4 border-b flex items-center gap-3 bg-background">
-          <div className="size-9 rounded-xl bg-primary/10 flex items-center justify-center">
-            <IconHeadset size={20} className="text-primary" />
+
+        {/* ── LEFT SIDEBAR ─────────────────────────────── */}
+        <aside className="w-[100vw] md:w-[300px] shrink-0 border-r flex flex-col bg-muted/20">
+          {/* Sidebar header */}
+          <div className="px-4 py-4 border-b flex items-center justify-between bg-background">
+            <div className="flex items-center gap-3">
+              <div className="size-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                <IconHeadset size={20} className="text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">Syncro Soporte</p>
+                <p className="text-[11px] text-muted-foreground">Canal de ayuda</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <ModeSwitcher />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg"
+                onClick={handleLogout}
+                title="Cerrar sesión"
+              >
+                <IconPower size={18} />
+              </Button>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm">Syncro Soporte</p>
-            <p className="text-[11px] text-muted-foreground">Canal de ayuda</p>
-          </div>
-        </div>
 
         {/* Single conversation item */}
         <div className="flex-1 p-2">
@@ -418,10 +443,7 @@ export default function SupportChatPage() {
       </aside>
 
       {/* ── MAIN CHAT AREA ───────────────────────────── */}
-      <div className={cn(
-        "flex-1 flex flex-col min-w-0",
-        mobileView === "chat" ? "flex" : "hidden md:flex"
-      )}>
+      <div className="w-[100vw] md:flex-1 flex flex-col min-w-0">
 
         {/* Chat header */}
         <div className="flex items-center justify-between px-5 py-3 border-b bg-background/80 backdrop-blur-sm shrink-0">
@@ -617,6 +639,7 @@ export default function SupportChatPage() {
             />
           )}
         </div>
+      </div>
       </div>
     </div>
       {/* Gooey Filter Definition - Refined for sharp edges */}

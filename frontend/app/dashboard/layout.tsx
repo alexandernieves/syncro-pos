@@ -63,7 +63,7 @@ export default function DashboardLayout({
 
   if (isStandalone) {
     return (
-      <div className="flex flex-col h-screen w-screen bg-background overflow-hidden">
+      <div className="fixed inset-0 bg-background overflow-hidden flex flex-col">
         <main className="flex-1 flex flex-col overflow-hidden">
           {children}
         </main>
