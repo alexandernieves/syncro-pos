@@ -11,6 +11,10 @@ export class BranchesController {
   create(@Body() data: any, @Request() req: any) { 
     if (!req.user) throw new UnauthorizedException('No user context');
     const businessId = req.user.businessId;
+    if (!businessId) throw new UnauthorizedException('Acceso denegado: falta businessId');
+    if (req.user.role !== 'ownerpos') {
+      throw new UnauthorizedException('No tienes permisos de administrador para crear sucursales');
+    }
     return this.branchesService.create({ ...data, businessId }); 
   }
 
@@ -18,6 +22,7 @@ export class BranchesController {
   findAll(@Request() req: any) { 
     if (!req.user) throw new UnauthorizedException('No user context');
     const businessId = req.user.businessId;
+    if (!businessId) throw new UnauthorizedException('Acceso denegado: falta businessId');
     return this.branchesService.findAll(businessId); 
   }
 
@@ -25,6 +30,7 @@ export class BranchesController {
   findMain(@Request() req: any) { 
     if (!req.user) throw new UnauthorizedException('No user context');
     const businessId = req.user.businessId;
+    if (!businessId) throw new UnauthorizedException('Acceso denegado: falta businessId');
     return this.branchesService.findMain(businessId); 
   }
 
@@ -32,6 +38,7 @@ export class BranchesController {
   findOne(@Param('id') id: string, @Request() req: any) { 
     if (!req.user) throw new UnauthorizedException('No user context');
     const businessId = req.user.businessId;
+    if (!businessId) throw new UnauthorizedException('Acceso denegado: falta businessId');
     return this.branchesService.findOne(id, businessId); 
   }
 
@@ -39,6 +46,10 @@ export class BranchesController {
   update(@Param('id') id: string, @Body() data: any, @Request() req: any) { 
     if (!req.user) throw new UnauthorizedException('No user context');
     const businessId = req.user.businessId;
+    if (!businessId) throw new UnauthorizedException('Acceso denegado: falta businessId');
+    if (req.user.role !== 'ownerpos') {
+      throw new UnauthorizedException('No tienes permisos de administrador para modificar sucursales');
+    }
     return this.branchesService.update(id, data, businessId); 
   }
 
@@ -46,6 +57,10 @@ export class BranchesController {
   setMain(@Param('id') id: string, @Request() req: any) { 
     if (!req.user) throw new UnauthorizedException('No user context');
     const businessId = req.user.businessId;
+    if (!businessId) throw new UnauthorizedException('Acceso denegado: falta businessId');
+    if (req.user.role !== 'ownerpos') {
+      throw new UnauthorizedException('No tienes permisos de administrador para establecer la sucursal principal');
+    }
     return this.branchesService.setMain(id, businessId); 
   }
 
@@ -53,6 +68,10 @@ export class BranchesController {
   remove(@Param('id') id: string, @Request() req: any) { 
     if (!req.user) throw new UnauthorizedException('No user context');
     const businessId = req.user.businessId;
+    if (!businessId) throw new UnauthorizedException('Acceso denegado: falta businessId');
+    if (req.user.role !== 'ownerpos') {
+      throw new UnauthorizedException('No tienes permisos de administrador para eliminar sucursales');
+    }
     return this.branchesService.remove(id, businessId); 
   }
 
@@ -61,6 +80,10 @@ export class BranchesController {
     if (!req.user) throw new UnauthorizedException('No user context');
     const userId = req.user?.id || req.user?.sub;
     const businessId = req.user.businessId;
+    if (!businessId) throw new UnauthorizedException('Acceso denegado: falta businessId');
+    if (req.user.role !== 'ownerpos') {
+      throw new UnauthorizedException('No tienes permisos de administrador para formatear/limpiar los datos de la sucursal');
+    }
     return this.branchesService.wipeData(id, userId, password, businessId);
   }
 }

@@ -27,12 +27,21 @@ export class BranchesService {
   }
 
   async findAll(businessId: string) {
+    if (!businessId) {
+      throw new BadRequestException('El ID del negocio es requerido para listar las sucursales');
+    }
     return this.prisma.branch.findMany({
       where: { businessId }
     });
   }
 
   async findOne(id: string, businessId: string) {
+    if (!id) {
+      throw new BadRequestException('El ID de la sucursal es requerido');
+    }
+    if (!businessId) {
+      throw new BadRequestException('El ID del negocio es requerido');
+    }
     let branch = await this.prisma.branch.findFirst({ 
       where: { id, businessId } 
     });
