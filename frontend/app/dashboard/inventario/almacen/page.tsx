@@ -17,10 +17,12 @@ import { inventoryColumns } from "@/components/inventory-columns";
 
 import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
+import { useCurrency } from "@/context/CurrencyContext";
 
 const API = API_URL;
 
 export default function AlmacenPage() {
+  const { formatPrice } = useCurrency();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isMainBranch, setIsMainBranch] = useState(false);
@@ -137,7 +139,7 @@ export default function AlmacenPage() {
             <CardHeader>
               <CardDescription>Valor del Almacén</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                ${stats.value.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {formatPrice(stats.value)}
               </CardTitle>
               <CardAction>
                 <Badge variant="outline" className="gap-1">
