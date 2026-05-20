@@ -114,6 +114,7 @@ export function useSync() {
             totalStock: p.totalStock,
             image: p.image,
             categoryName: p.category?.name,
+            category: p.category ? { id: p.category.id, name: p.category.name } : undefined,
             variants: p.variants || [],
             lastUpdated: Date.now()
           })));

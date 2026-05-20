@@ -68,10 +68,10 @@ export class ProductsService {
     businessId?: string
   }) {
     console.log('[QuickCreate] Incoming Data:', data);
-    const sku = data.sku || `QC-${Date.now()}`;
     const barcodes = data.barcodes || [];
     const primary = barcodes[0] || null;
     const secondary = barcodes.slice(1);
+    const sku = data.sku || null;
 
     console.log('[QuickCreate] Assigned Barcodes:', { primary, secondary });
 
@@ -96,6 +96,100 @@ export class ProductsService {
       categoryId = category.id;
     }
 
+    // Deduplication check: Find if a variant already exists with the same SKU or Barcode for this business
+    let existingVariant = null;
+    if (data.businessId) {
+      existingVariant = await this.prisma.productVariant.findFirst({
+        where: {
+          product: {
+            businessId: data.businessId
+          },
+          OR: [
+            ...(sku ? [{ sku }] : []),
+            ...(primary ? [{ barcode: primary }] : []),
+            ...(primary ? [{ secondaryBarcodes: { has: primary } }] : [])
+          ]
+        },
+        include: {
+          product: true
+        }
+      });
+
+      // If still not found, try matching by product name for this business
+      if (!existingVariant) {
+        const existingProduct = await this.prisma.product.findFirst({
+          where: {
+            name: data.name,
+            businessId: data.businessId
+          },
+          include: {
+            variants: true
+          }
+        });
+        if (existingProduct && existingProduct.variants.length > 0) {
+          existingVariant = existingProduct.variants[0];
+          (existingVariant as any).product = existingProduct;
+        }
+      }
+    }
+
+    if (existingVariant) {
+      console.log(`[QuickCreate] Found existing product/variant. Updating instead of creating:`, existingVariant.id);
+      
+      const updatedProduct = await this.prisma.product.update({
+        where: { id: existingVariant.productId },
+        data: {
+          name: data.name,
+          description: data.description || (existingVariant as any).product.description,
+          isWeighable: data.isWeighable !== undefined ? !!data.isWeighable : (existingVariant as any).product.isWeighable,
+          categoryId: categoryId || (existingVariant as any).product.categoryId
+        }
+      });
+
+      const updatedVariant = await this.prisma.productVariant.update({
+        where: { id: existingVariant.id },
+        data: {
+          price: data.price,
+          cost: data.cost !== undefined ? data.cost : existingVariant.cost,
+          stock: data.stock,
+          sku: sku || existingVariant.sku,
+          barcode: primary || existingVariant.barcode,
+          secondaryBarcodes: secondary.length > 0 ? secondary : existingVariant.secondaryBarcodes
+        }
+      });
+
+      if (data.branchId) {
+        const existingInventory = await this.prisma.inventory.findFirst({
+          where: {
+            variantId: existingVariant.id,
+            branchId: data.branchId
+          }
+        });
+
+        if (existingInventory) {
+          await this.prisma.inventory.update({
+            where: { id: existingInventory.id },
+            data: { quantity: data.stock }
+          });
+        } else {
+          await this.prisma.inventory.create({
+            data: {
+              variantId: existingVariant.id,
+              branchId: data.branchId,
+              quantity: data.stock
+            }
+          });
+        }
+      }
+
+      return this.prisma.product.findUnique({
+        where: { id: updatedProduct.id },
+        include: { variants: true }
+      });
+    }
+
+    // Original Flow: Create new product
+    const finalSku = sku || `QC-${Date.now()}`;
     return this.prisma.product.create({
       data: {
         name: data.name,
@@ -106,7 +200,7 @@ export class ProductsService {
         variants: {
           create: [{
             name: 'Default',
-            sku,
+            sku: finalSku,
             barcode: primary,
             secondaryBarcodes: secondary,
             price: data.price,

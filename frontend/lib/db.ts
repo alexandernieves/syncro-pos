@@ -6,6 +6,7 @@ export interface LocalProduct {
   totalStock: number;
   image?: string;
   categoryName?: string;
+  category?: { id: string; name: string };
   variants: any[]; // Store variants as array
   lastUpdated: number;
 }

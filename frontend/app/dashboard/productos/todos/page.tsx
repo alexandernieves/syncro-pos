@@ -87,6 +87,7 @@ export default function ProductosPage() {
   const [manualBarcodeValue, setManualBarcodeValue] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
   const scannerInputRef = React.useRef<HTMLInputElement>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [useCamera, setUseCamera] = useState(false);
@@ -932,6 +933,7 @@ export default function ProductosPage() {
 
   const handleImport = async (file: File) => {
     setIsImporting(true);
+    setImportProgress(0);
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
@@ -944,8 +946,10 @@ export default function ProductosPage() {
         
         let successCount = 0;
         const token = localStorage.getItem("token");
+        const total = rows.length;
 
-        for (const rawRow of rows as any[]) {
+        for (let i = 0; i < total; i++) {
+          const rawRow = rows[i] as any;
           const row: any = {};
           for (const key in rawRow) {
             const cleanKey = key.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
@@ -986,15 +990,18 @@ export default function ProductosPage() {
             body: JSON.stringify(payload)
           });
           if (res.ok) successCount++;
+          
+          setImportProgress(Math.round(((i + 1) / total) * 100));
         }
 
-        toast.success(`Importación finalizada: ${successCount} productos creados`);
+        toast.success(`Importación finalizada: ${successCount} productos procesados (creados/actualizados)`);
         setImportOpen(false);
         load();
       } catch (err) {
         toast.error("Error al procesar el archivo");
       } finally {
         setIsImporting(false);
+        setImportProgress(0);
       }
     };
     reader.readAsBinaryString(file);
@@ -2303,8 +2310,8 @@ export default function ProductosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 🟢 MODAL: IMPORTACIÓN MASIVA */}
-      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+      {/* 🟢 MODAL: IMPORTAR PRODUCTOS */}
+      <Dialog open={importOpen} onOpenChange={isImporting ? () => {} : setImportOpen}>
         <DialogContent className="sm:max-w-md border-none shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
@@ -2316,43 +2323,65 @@ export default function ProductosPage() {
           </DialogHeader>
 
           <div className="space-y-6 py-4">
-            <div 
-              className={cn(
-                "border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center gap-4 transition-all cursor-pointer group",
-                isImporting ? "opacity-50 pointer-events-none" : "hover:border-primary/50 hover:bg-primary/5"
-              )}
-              onClick={() => document.getElementById('file-input')?.click()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                const file = e.dataTransfer.files[0];
-                if (file) handleImport(file);
-              }}
-            >
-              <input 
-                id="file-input" 
-                type="file" 
-                className="hidden" 
-                accept=".csv, .xlsx" 
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
+            {isImporting ? (
+              <div className="flex flex-col items-center justify-center p-8 gap-5">
+                <div className="relative size-24 flex items-center justify-center">
+                  <div className="absolute inset-0 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+                  <span className="text-xl font-extrabold text-primary font-mono">{importProgress}%</span>
+                </div>
+                <div className="text-center space-y-2 w-full">
+                  <p className="font-bold text-sm">Sincronizando catálogo...</p>
+                  <p className="text-xs text-muted-foreground leading-normal">
+                    Procesando e importando productos uno a uno para evitar duplicados.
+                  </p>
+                  <div className="w-full h-2.5 rounded-full bg-muted overflow-hidden mt-3">
+                    <div 
+                      className="h-full bg-primary transition-all duration-300 ease-out" 
+                      style={{ width: `${importProgress}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div 
+                className={cn(
+                  "border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center gap-4 transition-all cursor-pointer group",
+                  "hover:border-primary/50 hover:bg-primary/5"
+                )}
+                onClick={() => document.getElementById('file-input')?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const file = e.dataTransfer.files[0];
                   if (file) handleImport(file);
                 }}
-              />
-              <div className="size-16 rounded-full bg-muted flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                <IconFileText size={32} className="text-muted-foreground group-hover:text-primary" />
+              >
+                <input 
+                  id="file-input" 
+                  type="file" 
+                  className="hidden" 
+                  accept=".csv, .xlsx" 
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImport(file);
+                  }}
+                />
+                <div className="size-16 rounded-full bg-muted flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <IconFileText size={32} className="text-muted-foreground group-hover:text-primary" />
+                </div>
+                <div className="text-center">
+                  <p className="font-bold text-sm">Haz clic o arrastra tu archivo aquí</p>
+                  <p className="text-[10px] text-muted-foreground uppercase mt-1">Soporta .XLSX y .CSV</p>
+                </div>
               </div>
-              <div className="text-center">
-                <p className="font-bold text-sm">Haz clic o arrastra tu archivo aquí</p>
-                <p className="text-[10px] text-muted-foreground uppercase mt-1">Soporta .XLSX y .CSV</p>
-              </div>
-            </div>
+            )}
 
             <div className="flex flex-col gap-2">
               <Button 
                 variant="link" 
                 className="text-[11px] h-auto p-0 text-muted-foreground hover:text-primary flex items-center gap-1.5"
                 onClick={downloadTemplate}
+                disabled={isImporting}
               >
                 <IconDownload size={14} /> Descargar plantilla de ejemplo
               </Button>
