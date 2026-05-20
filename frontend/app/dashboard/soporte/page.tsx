@@ -71,7 +71,11 @@ export default function SupportChatPage() {
   useEffect(() => {
     setMounted(true);
     if (typeof window !== "undefined") {
-      setIsStandalone(window.matchMedia("(display-mode: standalone)").matches);
+      setIsStandalone(
+        window.matchMedia("(display-mode: standalone)").matches ||
+        window.location.search.includes("pwa=true") ||
+        localStorage.getItem("is_pwa") === "true"
+      );
     }
   }, []);
 
