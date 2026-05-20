@@ -69,6 +69,7 @@ export default function SupportChatPage() {
   const [mounted, setMounted] = useState(false);
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
   const [isStandalone, setIsStandalone] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const [viewportHeight, setViewportHeight] = useState("100dvh");
   
   useEffect(() => {
@@ -76,6 +77,9 @@ export default function SupportChatPage() {
     if (typeof window !== "undefined") {
       const standalone = window.matchMedia("(display-mode: standalone)").matches;
       setIsStandalone(standalone);
+      // Delay enabling transitions so the initial layout paint
+      // doesn't trigger an unwanted slide animation
+      requestAnimationFrame(() => setIsReady(true));
 
       if (standalone && window.visualViewport) {
         const handleResize = () => {
@@ -390,8 +394,12 @@ export default function SupportChatPage() {
       <div className={cn(
         "flex h-full",
         isStandalone
-          ? cn("w-[200%] shrink-0 transition-transform duration-300 ease-in-out",
-              mobileView === "chat" ? "-translate-x-1/2" : "translate-x-0")
+          ? cn(
+              "w-[200%] shrink-0",
+              // Only enable transition AFTER first paint to avoid auto-slide on mount
+              isReady && "transition-transform duration-300 ease-in-out",
+              mobileView === "chat" ? "-translate-x-1/2" : "translate-x-0"
+            )
           : "w-full"
       )}>
 
