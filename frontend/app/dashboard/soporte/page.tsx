@@ -70,6 +70,14 @@ export default function SupportChatPage() {
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
   const [isStandalone, setIsStandalone] = useState(false);
   const [viewportHeight, setViewportHeight] = useState("100dvh");
+
+  const resetScroll = () => {
+    if (typeof window !== "undefined") {
+      window.scrollTo(0, 0);
+      if (document.body) document.body.scrollTop = 0;
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+    }
+  };
   
   useEffect(() => {
     setMounted(true);
@@ -81,15 +89,19 @@ export default function SupportChatPage() {
         const handleResize = () => {
           if (window.visualViewport) {
             setViewportHeight(`${window.visualViewport.height}px`);
+            resetScroll();
           }
         };
+        const handleScroll = () => {
+          resetScroll();
+        };
         window.visualViewport.addEventListener("resize", handleResize);
-        window.visualViewport.addEventListener("scroll", handleResize);
+        window.visualViewport.addEventListener("scroll", handleScroll);
         handleResize();
 
         return () => {
           window.visualViewport?.removeEventListener("resize", handleResize);
-          window.visualViewport?.removeEventListener("scroll", handleResize);
+          window.visualViewport?.removeEventListener("scroll", handleScroll);
         };
       }
     }
@@ -642,6 +654,10 @@ export default function SupportChatPage() {
                 value={inputText}
                 onChange={(e) => handleInputChange(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                onFocus={() => {
+                  setTimeout(resetScroll, 50);
+                  setTimeout(resetScroll, 150);
+                }}
                 disabled={uploading}
               />
 
