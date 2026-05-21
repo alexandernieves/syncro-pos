@@ -25,6 +25,7 @@ async function bootstrap() {
         },
       },
       crossOriginEmbedderPolicy: false, // Required for some PWA features
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
       hsts: {
         maxAge: 31536000,     // 1 year
         includeSubDomains: true,
