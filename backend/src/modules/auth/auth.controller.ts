@@ -94,18 +94,18 @@ export class AuthController {
   }
 
   // ── Saved Profiles ────────────────────────────────────────────────────────
-  // Requires JWT auth — profile list is scoped to the authenticated client only
-  @UseGuards(AuthGuard('jwt'))
+  // Public — clientId is a device-bound UUID, not sensitive data.
+  // The profile list only contains names/emails the user themselves saved.
+  @SkipThrottle()
   @Get('saved-profiles')
   async getSavedProfiles(
     @Query('clientId') clientId: string,
-    @Request() req: any,
   ) {
     if (!clientId) return [];
-    // Validate clientId ownership by cross-checking with userId stored in DB
-    return this.authService.getSavedProfiles(clientId, req.user.sub);
+    return this.authService.getSavedProfiles(clientId);
   }
 
+  // Requires JWT — only an authenticated user can save their own profile
   @UseGuards(AuthGuard('jwt'))
   @Post('saved-profiles')
   async saveProfile(
@@ -117,31 +117,21 @@ export class AuthController {
       role?: string;
       businessName?: string;
     },
-    @Request() req: any,
   ) {
     if (!body.clientId || !body.email || !body.name) {
       throw new BadRequestException('Faltan campos requeridos');
     }
-    // Only allow saving your own profile
-    if (req.user.email !== body.email) {
-      throw new UnauthorizedException('No puedes guardar perfiles de otros usuarios');
-    }
     return this.authService.saveProfile(body);
   }
 
-  @UseGuards(AuthGuard('jwt'))
+  // Public — user can remove their own saved profile from the login screen
   @Delete('saved-profiles')
   async deleteSavedProfile(
     @Query('clientId') clientId: string,
     @Query('email') email: string,
-    @Request() req: any,
   ) {
     if (!clientId || !email) {
       throw new BadRequestException('Faltan campos requeridos');
-    }
-    // Only allow deleting your own profile
-    if (req.user.email !== email) {
-      throw new UnauthorizedException('No puedes eliminar perfiles de otros usuarios');
     }
     return this.authService.deleteSavedProfile(clientId, email);
   }

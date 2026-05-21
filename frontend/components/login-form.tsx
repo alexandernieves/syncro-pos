@@ -93,20 +93,14 @@ export function LoginForm({
     }
   }, [])
 
-  // ── Load Saved Profiles (requires auth token) ─────────────────────────────
+  // ── Load Saved Profiles ───────────────────────────────────────────────────
   const loadSavedProfiles = async () => {
     try {
-      const token = getStoredToken()
-      if (!token) return // Don't fetch without a valid session
-
       const clientId = getClientId()
+      if (!clientId) return
+
       const response = await fetch(
-        `${API_URL}/auth/saved-profiles?clientId=${clientId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
+        `${API_URL}/auth/saved-profiles?clientId=${clientId}`
       )
       if (response.ok) {
         const profiles = (await response.json()) as SavedProfile[]
@@ -227,14 +221,12 @@ export function LoginForm({
   const deleteProfile = async (e: React.MouseEvent, emailToDelete: string) => {
     e.stopPropagation()
     try {
-      const token = getStoredToken()
-      if (!token) return
       const clientId = getClientId()
+      if (!clientId) return
       const response = await fetch(
         `${API_URL}/auth/saved-profiles?clientId=${clientId}&email=${encodeURIComponent(emailToDelete)}`,
         {
           method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
         },
       )
       if (response.ok) {
