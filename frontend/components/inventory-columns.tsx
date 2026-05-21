@@ -24,18 +24,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
   Select,
@@ -218,109 +208,28 @@ export const inventoryColumns: ColumnDef<z.infer<typeof inventorySchema>>[] = [
 
 function ActionsCell({ row }: { row: any }) {
   const router = useRouter();
-  const [showDelete, setShowDelete] = React.useState(false);
-  const [isDeleting, setIsDeleting] = React.useState(false);
-  const productId = row.original.productId;
   const variantId = row.original.id;
 
-  const handleDelete = async () => {
-    console.log('[Inventory] Deleting Product ID:', productId);
-    
-    toast.promise(
-      async () => {
-        const token = localStorage.getItem("token");
-        const res = await fetch(`${API}/products/${productId}`, {
-          method: "DELETE",
-          headers: { 
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json"
-          }
-        });
-
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.message || "Error al eliminar");
-        }
-
-        setShowDelete(false);
-        setTimeout(() => window.location.reload(), 1000);
-        return true;
-      },
-      {
-        loading: "Eliminando producto...",
-        success: "Producto eliminado correctamente",
-        error: (err) => err.message,
-      }
-    );
-  };
-
-  const handleDuplicate = async () => {
-      toast.info("Funcionalidad de duplicación próximamente...");
-  };
-
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            className="flex size-8 text-muted-foreground data-[state=open]:bg-muted rounded-full"
-            size="icon"
-          >
-            <IconDotsVertical size={16} />
-            <span className="sr-only">Abrir menú</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48 border-none shadow-2xl rounded-xl">
-          <DropdownMenuItem 
-            className="text-xs"
-            onClick={() => router.push(`/dashboard/productos/editar?id=${productId}`)}
-          >
-            Editar Producto
-          </DropdownMenuItem>
-          <DropdownMenuItem 
-            className="text-xs"
-            onClick={handleDuplicate}
-          >
-            Duplicar
-          </DropdownMenuItem>
-          <DropdownMenuItem 
-            className="text-xs"
-            onClick={() => router.push(`/dashboard/inventario/movimientos?variantId=${variantId}`)}
-          >
-            Kardex de Movimientos
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem 
-            variant="destructive" 
-            className="text-xs text-rose-600"
-            onClick={() => setShowDelete(true)}
-          >
-            Eliminar
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <Dialog open={showDelete} onOpenChange={setShowDelete}>
-        <DialogContent className="max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>¿Eliminar producto?</DialogTitle>
-            <DialogDescription>
-              Esta acción eliminará <span className="font-semibold text-foreground">"{row.original.header}"</span> permanentemente del catálogo. No se puede deshacer.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-             <Button variant="ghost" onClick={() => setShowDelete(false)}>Cancelar</Button>
-             <Button 
-                variant="destructive" 
-                onClick={handleDelete}
-                disabled={isDeleting}
-             >
-                {isDeleting ? 'Eliminando...' : 'Eliminar'}
-             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          className="flex size-8 text-muted-foreground data-[state=open]:bg-muted rounded-full"
+          size="icon"
+        >
+          <IconDotsVertical size={16} />
+          <span className="sr-only">Abrir menú</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48 border-none shadow-2xl rounded-xl">
+        <DropdownMenuItem 
+          className="text-xs"
+          onClick={() => router.push(`/dashboard/inventario/movimientos?variantId=${variantId}`)}
+        >
+          Kardex de Movimientos
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

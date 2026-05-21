@@ -109,7 +109,7 @@ const API = API_URL;
 
 // --- Types & Schema ---
 
-export const orderItemSchema = z.object({
+const orderItemSchema = z.object({
   variantId: z.string(),
   productName: z.string(),
   variantName: z.string(),

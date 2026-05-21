@@ -309,11 +309,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48 border-none shadow-2xl rounded-xl">
-          <DropdownMenuItem className="text-xs">Editar Producto</DropdownMenuItem>
-          <DropdownMenuItem className="text-xs">Duplicar</DropdownMenuItem>
           <DropdownMenuItem className="text-xs">Kardex de Movimientos</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" className="text-xs text-rose-600">Eliminar</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     ),

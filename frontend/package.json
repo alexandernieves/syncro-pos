@@ -1,6 +1,8 @@
 {
-  "name": "orcish-dashboard",
-  "version": "0.1.0",
+  "name": "syncro-pos",
+  "version": "1.0.0",
+  "description": "Syncro POS - Sistema de Punto de Venta profesional",
+  "author": "Syncro Technologies <soporte@syncropos.com>",
   "private": true,
   "main": "main/index.js",
   "scripts": {
@@ -9,13 +11,16 @@
     "start": "next start -p 3001",
     "lint": "next lint",
     "electron:dev": "NODE_ENV=development electron .",
-    "electron:build": "next build && electron-builder",
-    "dist:win": "next build && electron-builder --win",
-    "dist:mac": "next build && electron-builder --mac"
+    "electron:build": "next build --webpack && electron-builder",
+    "dist:win": "next build --webpack && electron-builder --win --x64",
+    "dist:win:ia32": "next build --webpack && electron-builder --win --ia32",
+    "dist:mac": "next build --webpack && electron-builder --mac"
   },
   "build": {
     "appId": "com.syncro.pos",
     "productName": "Syncro POS",
+    "asar": true,
+    "prune": false,
     "directories": {
       "output": "dist"
     },
@@ -55,8 +60,32 @@
       ]
     },
     "win": {
-      "icon": "public/syncro.png",
-      "target": "nsis"
+      "icon": "public/syncro.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ],
+      "forceCodeSigning": false,
+      "verifyUpdateCodeSignature": false,
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "installerIcon": "public/syncro.ico",
+      "uninstallerIcon": "public/syncro.ico",
+      "installerHeader": "public/syncro.png",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Syncro POS",
+      "include": null
     }
   },
   "dependencies": {
