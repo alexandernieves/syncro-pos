@@ -10,30 +10,60 @@ export class ProductsService {
   ) {}
 
   async create(data: any, userId?: string) {
-    const { variants, ...productData } = data;
+    let { variants, ...productData } = data;
     
+    // Parse variants if it was sent as a string (e.g. multipart/form-data)
+    if (typeof variants === 'string') {
+      try {
+        variants = JSON.parse(variants);
+      } catch (e) {
+        throw new BadRequestException('El formato de las variantes no es un JSON válido');
+      }
+    }
+
+    if (!variants || !Array.isArray(variants)) {
+      variants = [];
+    }
+
+    // Clean optional fields
+    delete productData.id;
+    if (productData.categoryId === '') productData.categoryId = null;
+    if (productData.supplierId === '') productData.supplierId = null;
+    if (productData.businessId === '') productData.businessId = null;
+
+    const mappedVariants = variants.map((v: any, index: number) => {
+      const price = typeof v.price === 'number' && !isNaN(v.price) ? v.price : Number(v.price) || 0;
+      const cost = typeof v.cost === 'number' && !isNaN(v.cost) ? v.cost : (v.cost !== null && v.cost !== undefined && v.cost !== '') ? Number(v.cost) : null;
+      const promoPrice = typeof v.promoPrice === 'number' && !isNaN(v.promoPrice) ? v.promoPrice : (v.promoPrice !== null && v.promoPrice !== undefined && v.promoPrice !== '') ? Number(v.promoPrice) : null;
+      const bulkPrice = typeof v.bulkPrice === 'number' && !isNaN(v.bulkPrice) ? v.bulkPrice : (v.bulkPrice !== null && v.bulkPrice !== undefined && v.bulkPrice !== '') ? Number(v.bulkPrice) : null;
+      const stock = typeof v.stock === 'number' && !isNaN(v.stock) ? v.stock : parseInt(v.stock) || 0;
+      const minStock = typeof v.minStock === 'number' && !isNaN(v.minStock) ? v.minStock : parseInt(v.minStock) || 0;
+
+      return {
+        name: v.name || `Variante ${index + 1}`,
+        sku: v.sku || `SKU-${Date.now()}-${index}`,
+        barcode: v.barcode || null,
+        secondaryBarcodes: Array.isArray(v.secondaryBarcodes) ? v.secondaryBarcodes : [],
+        price,
+        cost: isNaN(cost as number) ? null : cost,
+        promoPrice: isNaN(promoPrice as number) ? null : promoPrice,
+        bulkPrice: isNaN(bulkPrice as number) ? null : bulkPrice,
+        stock,
+        minStock,
+        inventory: {
+          create: v.branchId ? [{
+            branchId: v.branchId,
+            quantity: stock
+          }] : []
+        }
+      };
+    });
+
     const product = await this.prisma.product.create({
       data: {
         ...productData,
         variants: {
-          create: variants.map((v: any) => ({
-            name: v.name,
-            sku: v.sku,
-            barcode: v.barcode,
-            secondaryBarcodes: v.secondaryBarcodes || [],
-            price: v.price,
-            cost: v.cost,
-            promoPrice: v.promoPrice,
-            bulkPrice: v.bulkPrice,
-            stock: v.stock,
-            minStock: v.minStock,
-            inventory: {
-              create: v.branchId ? [{
-                branchId: v.branchId,
-                quantity: v.stock
-              }] : []
-            }
-          } as any))
+          create: mappedVariants as any
         }
       },
       include: {
@@ -42,13 +72,17 @@ export class ProductsService {
     });
 
     if (userId) {
-      await this.historyService.logAction({
-        userId,
-        action: 'CREATE_PRODUCT',
-        entity: 'PRODUCT',
-        entityId: product.id,
-        details: { name: product.name, sku: variants[0]?.sku }
-      });
+      try {
+        await this.historyService.logAction({
+          userId,
+          action: 'CREATE_PRODUCT',
+          entity: 'PRODUCT',
+          entityId: product.id,
+          details: { name: product.name, sku: product.variants[0]?.sku }
+        });
+      } catch (historyError) {
+        console.error('[ProductsService] Failed to log action CREATE_PRODUCT:', historyError);
+      }
     }
 
     return product;
@@ -320,8 +354,21 @@ export class ProductsService {
 
   async update(id: string, data: any, userId?: string, businessId?: string) {
     await this.findOne(id, businessId);
-    const { variants, ...productData } = data;
+    let { variants, ...productData } = data;
     delete productData.businessId;
+    delete productData.id;
+
+    if (productData.categoryId === '') productData.categoryId = null;
+    if (productData.supplierId === '') productData.supplierId = null;
+
+    // Parse variants if sent as a string (multipart/form-data)
+    if (typeof variants === 'string') {
+      try {
+        variants = JSON.parse(variants);
+      } catch (e) {
+        throw new BadRequestException('El formato de las variantes no es un JSON válido');
+      }
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const updatedProduct = await tx.product.update({
@@ -329,28 +376,37 @@ export class ProductsService {
         data: productData,
       });
 
-      if (variants) {
+      if (variants && Array.isArray(variants)) {
         for (const v of variants) {
+          const price = typeof v.price === 'number' && !isNaN(v.price) ? v.price : Number(v.price) || 0;
+          const cost = typeof v.cost === 'number' && !isNaN(v.cost) ? v.cost : (v.cost !== null && v.cost !== undefined && v.cost !== '') ? Number(v.cost) : null;
+          const promoPrice = typeof v.promoPrice === 'number' && !isNaN(v.promoPrice) ? v.promoPrice : (v.promoPrice !== null && v.promoPrice !== undefined && v.promoPrice !== '') ? Number(v.promoPrice) : null;
+          const bulkPrice = typeof v.bulkPrice === 'number' && !isNaN(v.bulkPrice) ? v.bulkPrice : (v.bulkPrice !== null && v.bulkPrice !== undefined && v.bulkPrice !== '') ? Number(v.bulkPrice) : null;
+          const stock = typeof v.stock === 'number' && !isNaN(v.stock) ? v.stock : parseInt(v.stock) || 0;
+          const minStock = typeof v.minStock === 'number' && !isNaN(v.minStock) ? v.minStock : parseInt(v.minStock) || 0;
+
+          const variantData = {
+            name: v.name,
+            sku: v.sku,
+            barcode: v.barcode || null,
+            secondaryBarcodes: Array.isArray(v.secondaryBarcodes) ? v.secondaryBarcodes : [],
+            price,
+            cost: isNaN(cost as number) ? null : cost,
+            promoPrice: isNaN(promoPrice as number) ? null : promoPrice,
+            bulkPrice: isNaN(bulkPrice as number) ? null : bulkPrice,
+            stock,
+            minStock,
+          };
+
           if (v.id) {
             await tx.productVariant.update({
               where: { id: v.id },
-              data: {
-                name: v.name,
-                sku: v.sku,
-                barcode: v.barcode,
-                secondaryBarcodes: v.secondaryBarcodes || [],
-                price: v.price,
-                cost: v.cost,
-                promoPrice: v.promoPrice,
-                bulkPrice: v.bulkPrice,
-                stock: v.stock,
-                minStock: v.minStock,
-              } as any
+              data: variantData as any
             });
           } else {
             await tx.productVariant.create({
               data: {
-                ...v,
+                ...variantData,
                 productId: id
               } as any
             });
@@ -359,13 +415,17 @@ export class ProductsService {
       }
 
       if (userId) {
-        await this.historyService.logAction({
-          userId,
-          action: 'UPDATE_PRODUCT',
-          entity: 'PRODUCT',
-          entityId: id,
-          details: { name: updatedProduct.name }
-        });
+        try {
+          await this.historyService.logAction({
+            userId,
+            action: 'UPDATE_PRODUCT',
+            entity: 'PRODUCT',
+            entityId: id,
+            details: { name: updatedProduct.name }
+          });
+        } catch (historyError) {
+          console.error('[ProductsService] Failed to log action UPDATE_PRODUCT:', historyError);
+        }
       }
 
       return updatedProduct;
@@ -380,13 +440,17 @@ export class ProductsService {
       console.log('[ProductsService] Successfully removed product:', result.name);
 
       if (userId) {
-        await this.historyService.logAction({
-          userId,
-          action: 'DELETE_PRODUCT',
-          entity: 'PRODUCT',
-          entityId: id,
-          details: { name: result.name }
-        });
+        try {
+          await this.historyService.logAction({
+            userId,
+            action: 'DELETE_PRODUCT',
+            entity: 'PRODUCT',
+            entityId: id,
+            details: { name: result.name }
+          });
+        } catch (historyError) {
+          console.error('[ProductsService] Failed to log action DELETE_PRODUCT:', historyError);
+        }
       }
 
       return result;
