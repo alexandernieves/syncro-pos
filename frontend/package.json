@@ -20,7 +20,6 @@
     "appId": "com.syncro.pos",
     "productName": "Syncro POS",
     "asar": true,
-    "prune": false,
     "directories": {
       "output": "dist"
     },
