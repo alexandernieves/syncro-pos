@@ -9,7 +9,9 @@ export class NotificationsController {
 
   @Get()
   findAll(@Request() req: any) {
-    return this.notificationsService.findAll();
+    const businessId = req.user.businessId;
+    const userId = req.user.id || req.user.sub;
+    return this.notificationsService.findAll(businessId, userId);
   }
 
   @Post()
@@ -24,7 +26,8 @@ export class NotificationsController {
 
   @Post('read-all')
   markAllAsRead(@Request() req: any) {
+    const businessId = req.user.businessId;
     const userId = req.user.id || req.user.sub;
-    return this.notificationsService.markAllAsRead(userId);
+    return this.notificationsService.markAllAsRead(businessId, userId);
   }
 }

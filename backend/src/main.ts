@@ -8,6 +8,9 @@ import cookieParser from 'cookie-parser';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  // ── Trust Proxy ────────────────────────────────────────────────────────────
+  app.set('trust proxy', 1);
+
   // ── Security Headers (Helmet) ─────────────────────────────────────────────
   app.use(
     helmet({
