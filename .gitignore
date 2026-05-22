@@ -33,3 +33,13 @@ frontend/dist*
 frontend/build
 frontend/out
 backend/dist
+
+# Test files
+backend/test-*.js
+backend/test-*.txt
+
+# Data files
+*.csv
+
+# Old build caches
+frontend/.next-old-root/
