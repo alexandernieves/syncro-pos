@@ -37,10 +37,10 @@ export class BcvService {
 
         if (response.ok) {
           const html = await response.text();
-          const usdRegex = /id="dolar"[\s\S]*?<strong>\s*([\d,.]+)\s*<\/strong>/i;
-          const eurRegex = /id="euro"[\s\S]*?<strong>\s*([\d,.]+)\s*<\/strong>/i;
-          const dateRegex = /id="fecha"[\s\S]*?<span>\s*([^<]+)\s*<\/span/i;
-          const alternateDateRegex = /Fecha Valor:\s*<strong>\s*([^<]+)\s*<\/strong>/i;
+          const usdRegex = /id="dolar"[\s\S]*?<strong[^>]*?>\s*([\d,.]+)\s*<\/strong>/i;
+          const eurRegex = /id="euro"[\s\S]*?<strong[^>]*?>\s*([\d,.]+)\s*<\/strong>/i;
+          const dateRegex = /id="fecha"[\s\S]*?<span[^>]*?>\s*([^<]+)\s*<\/span>/i;
+          const alternateDateRegex = /Fecha Valor:\s*<span[^>]*?>\s*([^<]+)\s*<\/span>/i;
 
           const matchUsd = html.match(usdRegex);
           const matchEur = html.match(eurRegex);
