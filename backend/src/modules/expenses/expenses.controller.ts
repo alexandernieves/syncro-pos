@@ -8,13 +8,15 @@ export class ExpensesController {
   constructor(private readonly expensesService: ExpensesService) {}
 
   @Get()
-  findAll(@Query('branchId') branchId?: string) {
-    return this.expensesService.findAll(branchId);
+  findAll(@Request() req: any, @Query('branchId') branchId?: string) {
+    const businessId = req.user?.businessId;
+    return this.expensesService.findAll(businessId, branchId);
   }
 
   @Get('stats')
-  getStats(@Query('branchId') branchId?: string) {
-    return this.expensesService.getStats(branchId);
+  getStats(@Request() req: any, @Query('branchId') branchId?: string) {
+    const businessId = req.user?.businessId;
+    return this.expensesService.getStats(businessId, branchId);
   }
 
   @Post()

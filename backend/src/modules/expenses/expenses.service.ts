@@ -9,9 +9,14 @@ export class ExpensesService {
     private notificationsService: NotificationsService,
   ) {}
 
-  async findAll(branchId?: string) {
+  async findAll(businessId: string, branchId?: string) {
+    const where: any = {
+      branch: { businessId }
+    };
+    if (branchId) where.branchId = branchId;
+
     return this.prisma.expense.findMany({
-      where: branchId ? { branchId } : {},
+      where,
       include: {
         user: { select: { name: true } },
         branch: { select: { name: true } },
@@ -71,9 +76,14 @@ export class ExpensesService {
     return this.prisma.expense.delete({ where: { id } });
   }
 
-  async getStats(branchId?: string) {
+  async getStats(businessId: string, branchId?: string) {
+    const where: any = {
+      branch: { businessId }
+    };
+    if (branchId) where.branchId = branchId;
+
     const total = await this.prisma.expense.aggregate({
-      where: branchId ? { branchId } : {},
+      where,
       _sum: { amount: true },
     });
 

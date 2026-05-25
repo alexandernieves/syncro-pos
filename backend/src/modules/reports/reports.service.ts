@@ -5,8 +5,11 @@ import { PrismaService } from '../prisma/prisma.service';
 export class ReportsService {
   constructor(private prisma: PrismaService) {}
 
-  async getDashboardStats(branchId?: string, startDate?: string, endDate?: string) {
-    const queryWhere: any = {};
+  async getDashboardStats(businessId: string, branchId?: string, startDate?: string, endDate?: string) {
+    // Build where clause strictly scoped to this business
+    const queryWhere: any = {
+      branch: { businessId }
+    };
     if (branchId) queryWhere.branchId = branchId;
     if (startDate || endDate) {
       queryWhere.createdAt = {};
@@ -14,7 +17,7 @@ export class ReportsService {
       if (endDate) queryWhere.createdAt.lte = new Date(endDate);
     }
 
-    // 1. Fetch Sales with essential relations
+    // 1. Fetch Sales with essential relations — strictly scoped to this business
     const sales = await this.prisma.sale.findMany({
       where: queryWhere,
       include: { 
@@ -32,8 +35,8 @@ export class ReportsService {
       }
     });
 
-    // 2. Fetch Customer acquisition count
-    const customerWhere: any = {};
+    // 2. Fetch Customer count — scoped to this business
+    const customerWhere: any = { businessId };
     if (startDate) {
       customerWhere.createdAt = { gte: new Date(startDate) };
     }
@@ -85,25 +88,31 @@ export class ReportsService {
     // 7. Calculate Costs and Profit
     const totalCosts = sales.flatMap(s => s.items).reduce((acc, item) => acc + (item.cost ? item.cost * item.quantity : 0), 0);
     
-    // 8. Fetch Expenses for the period
+    // 8. Fetch Expenses for the period — scoped to this business
+    const expenseWhere: any = { branch: { businessId } };
+    if (branchId) expenseWhere.branchId = branchId;
+    if (queryWhere.createdAt) expenseWhere.createdAt = queryWhere.createdAt;
+
     const expenses = await this.prisma.expense.findMany({
-      where: queryWhere
+      where: expenseWhere
     });
     const totalExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
     
     const grossProfit = totalRevenue - totalCosts;
     const netProfit = grossProfit - totalExpenses;
 
-    // 9. Sales by Branch (if global)
+    // 9. Sales by Branch (only within this business)
     let branchStats: any[] = [];
     if (!branchId) {
-        const branchMap: Record<string, number> = {};
-        const branches = await this.prisma.branch.findMany();
-        branches.forEach(b => {
-            const bSales = sales.filter(s => s.branchId === b.id);
-            branchMap[b.name] = bSales.reduce((acc, s) => acc + s.total, 0);
-        });
-        branchStats = Object.entries(branchMap).map(([name, value]) => ({ name, value }));
+      const branches = await this.prisma.branch.findMany({
+        where: { businessId }
+      });
+      const branchMap: Record<string, number> = {};
+      branches.forEach(b => {
+        const bSales = sales.filter(s => s.branchId === b.id);
+        branchMap[b.name] = bSales.reduce((acc, s) => acc + s.total, 0);
+      });
+      branchStats = Object.entries(branchMap).map(([name, value]) => ({ name, value }));
     }
 
     return {

@@ -97,9 +97,13 @@ export default function AccountingPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const branchId = localStorage.getItem("currentBranchId") || "";
+      const token = localStorage.getItem("token");
+      const headers = { 'Authorization': `Bearer ${token}` };
+
       const [entriesRes, statsRes] = await Promise.all([
-        fetch(`${API}/accounting`),
-        fetch(`${API}/accounting/advanced-stats`)
+        fetch(`${API}/accounting${branchId ? `?branchId=${branchId}` : ""}`, { headers }),
+        fetch(`${API}/accounting/advanced-stats${branchId ? `?branchId=${branchId}` : ""}`, { headers })
       ]);
       
       if (entriesRes.ok) {
@@ -127,12 +131,19 @@ export default function AccountingPage() {
 
       setSubmitting(true);
       try {
+          const token = localStorage.getItem("token");
+          const branchId = localStorage.getItem("currentBranchId") || "";
+          
           const res = await fetch(`${API}/accounting`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` 
+              },
               body: JSON.stringify({
                   ...formData,
-                  amount: parseFloat(formData.amount)
+                  amount: parseFloat(formData.amount),
+                  branchId
               })
           });
 

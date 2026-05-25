@@ -15,15 +15,21 @@ export class AccountingService {
     });
   }
 
-  async findAll() {
+  async findAll(businessId: string) {
     return (this.prisma.accountingEntry as any).findMany({
+      where: {
+        branch: { businessId }
+      },
       include: { user: true, sale: true, branch: true },
       orderBy: { createdAt: 'desc' }
     });
   }
 
-  async getAdvancedStats(branchId?: string, startDate?: string, endDate?: string) {
-    const queryWhere: any = {};
+  async getAdvancedStats(businessId: string, branchId?: string, startDate?: string, endDate?: string) {
+    // Build where clause scoped strictly to this business
+    const queryWhere: any = {
+      branch: { businessId }
+    };
     if (branchId) queryWhere.branchId = branchId;
     if (startDate || endDate) {
       queryWhere.createdAt = {};
@@ -71,10 +77,12 @@ export class AccountingService {
       });
     });
 
-    // 5. Operating Expenses
+    // 5. Operating Expenses — scoped to this business
     const expenseEntries = await this.prisma.accountingEntry.findMany({
       where: {
-        ...queryWhere,
+        branch: { businessId },
+        ...(branchId ? { branchId } : {}),
+        ...(queryWhere.createdAt ? { createdAt: queryWhere.createdAt } : {}),
         type: 'EXPENSE'
       }
     });
@@ -83,8 +91,10 @@ export class AccountingService {
     // 6. Net Profit
     const netProfit = grossMargin - operatingExpenses;
 
-    // 7. Inventory Value (Snapshot)
-    const inventoryFilter: any = {};
+    // 7. Inventory Value (Snapshot) — scoped to this business via branchId
+    const inventoryFilter: any = {
+      branch: { businessId }
+    };
     if (branchId) inventoryFilter.branchId = branchId;
     
     const inventory = await this.prisma.inventory.findMany({
@@ -133,7 +143,7 @@ export class AccountingService {
       trend,
       topProducts: Object.entries(
         sales.flatMap(s => s.items).reduce((acc: any, item: any) => {
-          const name = item.variant.name;
+          const name = item.variant?.name || 'Desconocido';
           const profit = (item.price - (item.cost || 0)) * item.quantity;
           if (!acc[name]) acc[name] = { name, profit: 0, quantity: 0 };
           acc[name].profit += profit;
@@ -144,14 +154,20 @@ export class AccountingService {
     };
   }
 
-  async getStats() {
+  async getStats(businessId: string) {
     const incomeAggregate = await this.prisma.accountingEntry.aggregate({
-      where: { type: 'INCOME' },
+      where: { 
+        branch: { businessId },
+        type: 'INCOME' 
+      },
       _sum: { amount: true }
     });
 
     const expenseAggregate = await this.prisma.accountingEntry.aggregate({
-      where: { type: 'EXPENSE' },
+      where: { 
+        branch: { businessId },
+        type: 'EXPENSE' 
+      },
       _sum: { amount: true }
     });
 
@@ -162,9 +178,12 @@ export class AccountingService {
     };
   }
 
-  async getInvestmentBySupplier() {
+  async getInvestmentBySupplier(businessId: string) {
     const entries = await this.prisma.accountingEntry.findMany({
-      where: { category: 'COMPRA_INVENTARIO' }
+      where: { 
+        branch: { businessId },
+        category: 'COMPRA_INVENTARIO' 
+      }
     });
 
     const investment = entries.reduce((acc: any, entry: any) => {

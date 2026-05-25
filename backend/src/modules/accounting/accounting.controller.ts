@@ -1,33 +1,45 @@
-import { Controller, Get, Post, Body, Req, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Req, Query, UseGuards } from '@nestjs/common';
 import { AccountingService } from './accounting.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('accounting')
+@UseGuards(JwtAuthGuard)
 export class AccountingController {
   constructor(private readonly accountingService: AccountingService) {}
 
   @Post()
   async create(@Body() entryData: any, @Req() req: any) {
-    const userId = req.user?.id || 'admin-id-placeholder';
-    return this.accountingService.create({ ...entryData, userId });
+    const userId = req.user?.id || req.user?.sub;
+    const businessId = req.user?.businessId;
+    return this.accountingService.create({ ...entryData, userId, businessId });
   }
 
   @Get()
-  async findAll() {
-    return this.accountingService.findAll();
+  async findAll(@Req() req: any) {
+    const businessId = req.user?.businessId;
+    return this.accountingService.findAll(businessId);
   }
 
   @Get('stats')
-  async getStats() {
-    return this.accountingService.getStats();
+  async getStats(@Req() req: any) {
+    const businessId = req.user?.businessId;
+    return this.accountingService.getStats(businessId);
   }
 
   @Get('advanced-stats')
-  async getAdvancedStats(@Query('branchId') branchId?: string, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string) {
-    return this.accountingService.getAdvancedStats(branchId, startDate, endDate);
+  async getAdvancedStats(
+    @Req() req: any,
+    @Query('branchId') branchId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const businessId = req.user?.businessId;
+    return this.accountingService.getAdvancedStats(businessId, branchId, startDate, endDate);
   }
 
   @Get('investment-by-supplier')
-  async getInvestmentBySupplier() {
-    return this.accountingService.getInvestmentBySupplier();
+  async getInvestmentBySupplier(@Req() req: any) {
+    const businessId = req.user?.businessId;
+    return this.accountingService.getInvestmentBySupplier(businessId);
   }
 }
