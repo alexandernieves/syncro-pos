@@ -72,7 +72,16 @@ export function NotificationBell() {
                       <div className="flex items-center justify-between">
                         <p className={cn("text-xs font-bold", !n.isRead ? "text-primary" : "text-foreground")}>{n.title}</p>
                         <span className="text-[10px] text-muted-foreground">
-                          {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: es })}
+                          {(() => {
+                            try {
+                              if (!n.createdAt) return "Hace un momento";
+                              const d = new Date(n.createdAt);
+                              if (isNaN(d.getTime())) return "Hace un momento";
+                              return formatDistanceToNow(d, { addSuffix: true, locale: es });
+                            } catch (e) {
+                              return "Hace un momento";
+                            }
+                          })()}
                         </span>
                       </div>
                       <p className="text-[11px] text-muted-foreground leading-relaxed">{n.message}</p>

@@ -143,9 +143,13 @@ export default function AccountPage() {
       // Use email endpoint if ID is not available
       const endpoint = user?.id ? `${API}/users/${user.id}` : `${API}/users/email/${user.email}`;
       
+      const token = localStorage.getItem("token");
       const res = await fetch(endpoint, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(updatePayload)
       });
 

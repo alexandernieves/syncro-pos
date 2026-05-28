@@ -214,14 +214,14 @@ export function ProductForm({ productId }: { productId?: string }) {
                 <Label>Categoría</Label>
                 <Select value={categoryId} onValueChange={setCategoryId}>
                   <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                  <SelectContent>{categories.map((c, idx) => <SelectItem key={c.id || c._id || idx} value={c.id || c._id}>{c.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{categories.map((c, idx) => <SelectItem key={c.id || c._id || idx} value={c.id || c._id || `cat-${idx}`}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
                 </div>
                 <div className="space-y-2">
                 <Label>Proveedor</Label>
                 <Select value={supplierId} onValueChange={setSupplierId}>
                   <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                  <SelectContent>{suppliers.map((s, idx) => <SelectItem key={s.id || s._id || idx} value={s.id || s._id}>{s.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{suppliers.map((s, idx) => <SelectItem key={s.id || s._id || idx} value={s.id || s._id || `sup-${idx}`}>{s.name}</SelectItem>)}</SelectContent>
                 </Select>
                 </div>
               </div>

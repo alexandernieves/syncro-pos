@@ -559,9 +559,16 @@ export default function SupportChatPage() {
                       <span className="text-[11px] text-muted-foreground font-medium">
                         {isOtherOnline 
                           ? "En línea" 
-                          : otherLastSeen 
-                            ? `Últ. vez ${formatDistanceToNow(new Date(otherLastSeen), { addSuffix: true, locale: es })}`
-                            : "Desconectado"
+                          : (() => {
+                              try {
+                                if (!otherLastSeen) return "Desconectado";
+                                const d = new Date(otherLastSeen);
+                                if (isNaN(d.getTime())) return "Desconectado";
+                                return `Últ. vez ${formatDistanceToNow(d, { addSuffix: true, locale: es })}`;
+                              } catch (e) {
+                                return "Desconectado";
+                              }
+                            })()
                         }
                       </span>
                     </>
@@ -631,7 +638,15 @@ export default function SupportChatPage() {
                       )}>
                         {renderContent(msg)}
                         <div className={cn("flex items-center gap-1 mt-1 text-[10px]", isMe ? "text-white/60 justify-end" : "text-muted-foreground")}>
-                          {format(new Date(msg.createdAt), 'hh:mm a')}
+                          {(() => {
+                            try {
+                              const d = new Date(msg.createdAt || Date.now());
+                              if (isNaN(d.getTime())) return "";
+                              return format(d, 'hh:mm a');
+                            } catch (e) {
+                              return "";
+                            }
+                          })()}
                           {isMe && <IconChecks size={12} className={msg.isRead ? "text-sky-400" : "text-white/40"} />}
                         </div>
                       </div>
