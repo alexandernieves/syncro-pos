@@ -40,7 +40,7 @@ export class SettingsService {
       'requireClient', 'printOnSale', 'lowStockAlert', 'allowNegativeStock',
       'defaultPrinter', 'paperWidth', 'copiesPerSale',
       'paymentMethods', 'discountPin', 'pinPermissions',
-      'salesGoal', 'showSalesGoal',
+      'salesGoal', 'showSalesGoal', 'showNetMargin',
       'exchangeRate', 'exchangeRateEur', 'bcvUpdateDate',
       'exchangeRateDashboard', 'exchangeRateDashboardEur', 'bcvUpdateDateDashboard'
     ];

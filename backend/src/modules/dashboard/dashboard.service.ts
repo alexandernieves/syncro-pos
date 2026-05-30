@@ -14,7 +14,16 @@ export class DashboardService {
       whereClause.branch = { businessId };
     }
 
-    const [totalRevenue, totalSales, totalClients, productsCount, settings] = await Promise.all([
+    const [
+      totalRevenue, 
+      totalSales, 
+      totalClients, 
+      productsCount, 
+      settings,
+      expensesTotal,
+      salesItemsTotal,
+      totalNetRevenue
+    ] = await Promise.all([
       this.prisma.sale.aggregate({
         where: whereClause,
         _sum: { total: true }
@@ -35,10 +44,42 @@ export class DashboardService {
           } : {})
         }
       }),
-      this.prisma.setting.findFirst({ where: { businessId } })
+      this.prisma.setting.findFirst({ where: { businessId } }),
+      this.prisma.accountingEntry.aggregate({
+        where: {
+          type: 'EXPENSE',
+          branch: { businessId },
+          ...(branchId ? { branchId } : {})
+        },
+        _sum: { amount: true }
+      }),
+      this.prisma.saleItem.findMany({
+        where: {
+          sale: whereClause
+        },
+        select: {
+          quantity: true,
+          cost: true
+        }
+      }),
+      this.prisma.sale.aggregate({
+        where: whereClause,
+        _sum: { subtotal: true }
+      })
     ]);
 
     const revenueValue = totalRevenue._sum.total || 0;
+    const netRevenueValue = totalNetRevenue._sum.subtotal || 0;
+    const totalExpenses = expensesTotal._sum.amount || 0;
+
+    let totalProductCost = 0;
+    salesItemsTotal.forEach(item => {
+      totalProductCost += item.quantity * (item.cost || 0);
+    });
+
+    const grossMargin = netRevenueValue - totalProductCost;
+    const netProfit = grossMargin - totalExpenses;
+    const netMarginPercentage = revenueValue > 0 ? (netProfit / revenueValue) * 100 : 0;
 
     // Get real chart data (last 30 days)
     const thirtyDaysAgo = new Date();
@@ -122,7 +163,14 @@ export class DashboardService {
       salesCount: totalSales,
       clientsCount: totalClients, 
       productsCount,
-      settings: settings || { salesGoal: 10000, showSalesGoal: true },
+      settings: {
+        ...settings,
+        salesGoal: settings?.salesGoal ?? 10000,
+        showSalesGoal: settings?.showSalesGoal ?? true,
+        showNetMargin: settings?.showNetMargin ?? true
+      },
+      netProfit,
+      netMarginPercentage,
       chartData,
       hasActiveShift,
       recentSales: daySales.map(s => ({
@@ -135,4 +183,29 @@ export class DashboardService {
       }))
     };
   }
+
+  async getSalesDates(businessId: string, branchId?: string) {
+    const whereClause: any = {};
+    if (branchId) {
+      whereClause.branchId = branchId;
+    }
+    if (businessId) {
+      whereClause.branch = { businessId };
+    }
+
+    const sales = await this.prisma.sale.findMany({
+      where: whereClause,
+      select: { createdAt: true }
+    });
+
+    const datesSet = new Set<string>();
+    sales.forEach(sale => {
+      const localTime = new Date(sale.createdAt.getTime() - 4 * 60 * 60 * 1000);
+      const key = localTime.toISOString().split('T')[0];
+      datesSet.add(key);
+    });
+
+    return Array.from(datesSet);
+  }
 }
+

@@ -123,7 +123,9 @@ export function useSync() {
             id: c.id,
             name: c.name,
             documentId: c.documentId,
-            walletBalance: c.walletBalance || 0
+            walletBalance: c.walletBalance || 0,
+            creditLimit: c.creditLimit || 0,
+            currentDebt: c.currentDebt || 0
           })));
         });
       }

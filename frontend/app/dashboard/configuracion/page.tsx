@@ -152,6 +152,7 @@ export default function ConfiguracionPage() {
   const [dashboardConfig, setDashboardConfig] = useState({
     salesGoal: "10000",
     showSalesGoal: true,
+    showNetMargin: true,
   });
 
   const [printConfig, setPrintConfig] = useState({
@@ -313,6 +314,7 @@ export default function ConfiguracionPage() {
             setDashboardConfig({
               salesGoal: String(data.salesGoal || "10000"),
               showSalesGoal: data.showSalesGoal !== undefined ? data.showSalesGoal : true,
+              showNetMargin: data.showNetMargin !== undefined ? data.showNetMargin : true,
             });
           }
         }
@@ -381,6 +383,7 @@ export default function ConfiguracionPage() {
         pinPermissions: pinPermissions, 
         salesGoal: Number(dashboardConfig.salesGoal) || 10000,
         showSalesGoal: !!dashboardConfig.showSalesGoal,
+        showNetMargin: !!dashboardConfig.showNetMargin,
       };
 
       const res = await fetch(`${API}/settings`, {
@@ -491,7 +494,7 @@ export default function ConfiguracionPage() {
                         { id: 'IconBuildingStore', label: "Tienda" },
                         { id: 'IconHexagon', label: "Global" },
                       ].map((item) => {
-                        const ItemIcon = ICONS_MAP[item.id];
+                        const ItemIcon = (ICONS_MAP[item.id] || IconInnerShadowTop) as any;
                         return (
                           <DropdownMenuItem key={item.id} onClick={() => setNegocio({ ...negocio, businessIcon: item.id })} className="gap-2 cursor-pointer">
                             <div className="flex size-6 items-center justify-center rounded-sm border bg-background">
@@ -823,6 +826,17 @@ export default function ConfiguracionPage() {
                   <Switch 
                     checked={dashboardConfig.showSalesGoal} 
                     onCheckedChange={(val) => setDashboardConfig(d => ({ ...d, showSalesGoal: val }))}
+                  />
+                </div>
+
+                <div className="flex justify-between items-center py-4">
+                  <div>
+                    <p className="font-medium text-sm">Mostrar Margen y Ganancia Real (Neto)</p>
+                    <p className="text-xs text-muted-foreground">Activa el módulo de cálculo de ganancias netas descontando mercancía y egresos</p>
+                  </div>
+                  <Switch 
+                    checked={dashboardConfig.showNetMargin} 
+                    onCheckedChange={(val) => setDashboardConfig(d => ({ ...d, showNetMargin: val }))}
                   />
                 </div>
 

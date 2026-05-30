@@ -489,6 +489,13 @@ export default function POSPage() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD">("CASH");
   const [amountReceived, setAmountReceived] = useState<string>("0");
+
+  // Abono Modal State
+  const [isPaymentModalAbonoOpen, setIsPaymentModalAbonoOpen] = useState(false);
+  const [abonoAmount, setAbonoAmount] = useState<string>("");
+  const [abonoPaymentMethod, setAbonoPaymentMethod] = useState<string>("CASH");
+  const [abonoNotes, setAbonoNotes] = useState<string>("");
+  const [isSubmittingAbono, setIsSubmittingAbono] = useState(false);
   
   // Quick Client State
   const [isQuickClientOpen, setIsQuickClientOpen] = useState(false);
@@ -1242,6 +1249,51 @@ export default function POSPage() {
     }]);
     setTempAmount("0");
     setTempReference("");
+  };
+
+  const handleRegisterAbono = async () => {
+    if (!abonoAmount || parseFloat(abonoAmount) <= 0) {
+      toast.error("Monto inválido");
+      return;
+    }
+
+    setIsSubmittingAbono(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/clients/${selectedClientId}/payment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          amount: parseFloat(abonoAmount),
+          notes: abonoNotes || `Abono en ${abonoPaymentMethod}`
+        })
+      });
+
+      if (res.ok) {
+        toast.success("Pago registrado y deuda actualizada");
+        setIsPaymentModalAbonoOpen(false);
+        setAbonoNotes("");
+        setAbonoAmount("");
+        
+        // Reload clients to update debt visually
+        const updatedRes = await fetch(`${API}/clients`, { headers: { Authorization: `Bearer ${token}` } });
+        if (updatedRes.ok) {
+           const data = await updatedRes.json();
+           setClients(data);
+           await db.clients.clear();
+           await db.clients.bulkAdd(data.map((c:any) => ({...c, _id: c.id})));
+        }
+      } else {
+        toast.error("Error al registrar pago");
+      }
+    } catch (error) {
+      toast.error("Error de conexión");
+    } finally {
+      setIsSubmittingAbono(false);
+    }
   };
 
   const processSale = async (overriddenPayments?: any[]) => {
@@ -2210,6 +2262,31 @@ export default function POSPage() {
                         </div>
                       )}
 
+                      {/* Current Debt & Abono */}
+                      {(c.currentDebt || 0) > 0 && (
+                        <div className="flex flex-col gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                          <div className="flex items-center justify-between">
+                             <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 flex items-center gap-1.5">
+                               <IconHistory size={14} /> Deuda Activa
+                             </span>
+                             <span className="text-sm font-black text-amber-600 tabular-nums">
+                               ${(c.currentDebt || 0).toFixed(2)}
+                             </span>
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="w-full h-7 text-[10px] border-amber-500/30 text-amber-700 dark:text-amber-500 hover:bg-amber-500/20"
+                            onClick={() => {
+                               setAbonoAmount(c.currentDebt.toString());
+                               setIsPaymentModalAbonoOpen(true);
+                            }}
+                          >
+                            Abonar a Deuda
+                          </Button>
+                        </div>
+                      )}
+
                       {/* Credit Status - HIDDEN DURING CONSTRUCTION MODE */}
                       {/* 
                       <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-blue-500/5 border border-blue-500/10 font-sans">
@@ -2447,6 +2524,12 @@ export default function POSPage() {
                   <DialogTitle className="text-base font-semibold tracking-tight text-foreground">Procesar Pago</DialogTitle>
                   <p className="text-[11px] text-muted-foreground font-medium">Complete la información de pago</p>
                 </div>
+                <div className="flex items-center gap-2 px-3 py-1.5 mr-6 rounded-full bg-muted/40 border">
+                  <IconUser size={14} className="text-muted-foreground" />
+                  <span className="text-[11px] font-semibold truncate max-w-[150px]" title={selectedClient ? selectedClient.name : "Consumidor Final"}>
+                    {selectedClient ? selectedClient.name : "Consumidor Final"}
+                  </span>
+                </div>
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -2598,6 +2681,19 @@ export default function POSPage() {
                           placeholder="0.00"
                           onFocus={(e) => e.target.select()}
                         />
+                      </div>
+                    )}
+
+                    {tempPaymentMethod === "CREDIT" && selectedClient && (selectedClient.currentDebt || 0) > 0 && (
+                      <div className="col-span-6 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                         <div className="flex items-center gap-2">
+                            <IconHistory className="text-amber-600 size-5" />
+                            <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-500 tracking-tight">Deuda Previa Abierta</span>
+                         </div>
+                         <div className="flex flex-col text-right">
+                            <span className="text-[10px] font-bold text-amber-600/80 uppercase">Libreta Actual</span>
+                            <span className="text-sm font-black text-amber-600 tabular-nums">${(selectedClient.currentDebt || 0).toFixed(2)}</span>
+                         </div>
                       </div>
                     )}
 
@@ -2795,11 +2891,68 @@ export default function POSPage() {
                     <span className="flex items-center gap-2">
                       <IconRefresh className="animate-spin size-4" /> Procesando...
                     </span>
-                  ) : (tempPaymentMethod === 'CREDIT' && addedPayments.length === 0) ? "Confirmar Fiado" : "Finalizar Venta"}
+                  ) : (tempPaymentMethod === 'CREDIT' && addedPayments.length === 0) ? ((selectedClient?.currentDebt || 0) > 0 ? "Agregar a Libreta" : "Confirmar Fiado") : "Finalizar Venta"}
                 </Button>
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: ABONAR A DEUDA */}
+      <Dialog open={isPaymentModalAbonoOpen} onOpenChange={setIsPaymentModalAbonoOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <IconHistory size={18} /> Abonar a Deuda
+            </DialogTitle>
+            <DialogDescription>
+              Registra un pago para reducir la deuda activa del cliente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+             <div className="space-y-2">
+               <Label>Monto a Abonar (USD) <span className="text-destructive">*</span></Label>
+               <Input 
+                type="number"
+                placeholder="0.00"
+                value={abonoAmount}
+                onChange={(e) => setAbonoAmount(e.target.value)}
+                className="font-mono text-lg"
+               />
+             </div>
+             <div className="space-y-2">
+               <Label>Método de Pago</Label>
+               <Select value={abonoPaymentMethod} onValueChange={setAbonoPaymentMethod}>
+                 <SelectTrigger>
+                   <SelectValue placeholder="Seleccione método" />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="CASH">Efectivo</SelectItem>
+                   <SelectItem value="CARD">Punto de Venta</SelectItem>
+                   <SelectItem value="PAGO_MOVIL">Pago Móvil</SelectItem>
+                   <SelectItem value="TRANSFER">Transferencia</SelectItem>
+                   <SelectItem value="ZELLE">Zelle</SelectItem>
+                   <SelectItem value="BINANCE">Binance</SelectItem>
+                 </SelectContent>
+               </Select>
+             </div>
+             <div className="space-y-2">
+               <Label>Referencia / Notas</Label>
+               <Input 
+                placeholder="Opcional"
+                value={abonoNotes}
+                onChange={(e) => setAbonoNotes(e.target.value)}
+               />
+             </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsPaymentModalAbonoOpen(false)} disabled={isSubmittingAbono}>Cancelar</Button>
+            <Button onClick={handleRegisterAbono} disabled={isSubmittingAbono} className="bg-amber-600 hover:bg-amber-700 text-white">
+              {isSubmittingAbono ? <IconRefresh className="animate-spin size-4 mr-2" /> : null}
+              Registrar Abono
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

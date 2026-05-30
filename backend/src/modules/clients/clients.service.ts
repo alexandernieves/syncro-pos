@@ -127,6 +127,37 @@ export class ClientsService {
     });
   }
 
+  async registerCharge(clientId: string, data: { amount: number; notes?: string }, businessId?: string) {
+    await this.findOne(clientId, businessId);
+    return this.prisma.$transaction(async (tx) => {
+      const client = await tx.client.findUnique({ where: { id: clientId } });
+      if (!client) throw new NotFoundException("Cliente no encontrado");
+
+      const now = new Date();
+      
+      // Update Client
+      const updatedClient = await tx.client.update({
+        where: { id: clientId },
+        data: { 
+          currentDebt: { increment: data.amount },
+          nextPaymentDate: client.nextPaymentDate || new Date(now.getTime() + client.paymentCycleDays * 24 * 60 * 60 * 1000)
+        }
+      });
+
+      // Create Transaction record
+      await tx.creditTransaction.create({
+        data: {
+          clientId,
+          amount: data.amount,
+          type: 'DEBT',
+          notes: data.notes || 'Cargo manual de deuda'
+        }
+      });
+
+      return updatedClient;
+    });
+  }
+
   async remove(id: string, businessId?: string) {
     await this.findOne(id, businessId);
     return this.prisma.client.delete({ where: { id } });

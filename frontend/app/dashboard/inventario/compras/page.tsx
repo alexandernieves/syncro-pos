@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
-  IconTruck, IconPlus, IconAlertTriangle, IconClock, IconReceipt, IconTrendingUp, IconDownload, IconBox
+  IconTruck, IconPlus, IconAlertTriangle, IconClock, IconReceipt, IconTrendingUp, IconDownload, IconBox, IconSparkles
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -258,6 +258,9 @@ export default function PurchaseOrdersPage() {
         </div>
         
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => router.push('/dashboard/inventario/compras/prediccion')} className="h-9 shadow-none bg-gradient-to-r from-violet-600/10 to-indigo-600/10 hover:from-violet-600/20 hover:to-indigo-600/20 text-indigo-600 dark:text-indigo-400 font-bold border-indigo-500/20 gap-2">
+            <IconSparkles size={16} /> Predicción IA
+          </Button>
           <Button variant="outline" size="sm" className="h-9 shadow-none bg-card">
             <IconDownload size={16} className="mr-2" /> Reporte Mensual
           </Button>

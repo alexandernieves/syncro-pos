@@ -17,4 +17,14 @@ export class DashboardController {
     const userId = req.user.id || req.user.sub;
     return this.dashboardService.getStats(businessId, branchId, userId, date);
   }
+
+  @Get('sales-dates')
+  async getSalesDates(
+    @Req() req: any,
+    @Query('branchId') branchId?: string
+  ) {
+    const businessId = req.user.businessId;
+    return this.dashboardService.getSalesDates(businessId, branchId);
+  }
 }
+

@@ -10,7 +10,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { 
   IconTrendingUp, IconUsers, IconShoppingCart, IconPackage, IconCheck, IconExternalLink, 
-  IconCash, IconCreditCard, IconTarget, IconBrandWhatsapp, IconTrendingDown, IconCalendar 
+  IconCash, IconCreditCard, IconTarget, IconBrandWhatsapp, IconTrendingDown, IconCalendar,
+  IconChevronLeft, IconChevronRight, IconChevronsLeft, IconChevronsRight
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -103,58 +105,71 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
 
       {/* Reusable Platform Pagination Footer */}
       {sales.length > 0 && (
-        <div className="flex items-center justify-between px-2 text-xs text-muted-foreground bg-card/40 border border-[#79716b]/10 rounded-xl p-3 shadow-xs font-sans">
+        <div className="flex items-center justify-between px-4 py-3 text-xs text-muted-foreground bg-card/40 border border-[#79716b]/10 rounded-xl shadow-xs font-sans">
           <span>{sales.length} venta{sales.length !== 1 ? 's' : ''} en total</span>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
             {/* Rows per page selector */}
             <div className="flex items-center gap-2">
-              <span>Filas por página</span>
-              <select
-                value={pageSize}
-                onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-                className="h-8 rounded-lg border border-[#79716b]/20 bg-muted/40 px-2 text-xs cursor-pointer outline-none focus:ring-1 focus:ring-primary/20 text-white font-medium"
+              <span className="text-[11px] text-muted-foreground">Filas por página</span>
+              <Select
+                value={`${pageSize}`}
+                onValueChange={(value) => {
+                  setPageSize(Number(value));
+                  setCurrentPage(1);
+                }}
               >
-                {[5, 10, 20, 50].map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+                <SelectTrigger size="sm" className="w-16 h-8 bg-card border-[#79716b]/20 text-white font-medium text-xs rounded-lg" id="rows-per-page">
+                  <SelectValue placeholder={pageSize} />
+                </SelectTrigger>
+                <SelectContent side="top" className="bg-[#121110] border-[#79716b]/20 text-white">
+                  {[5, 10, 20, 50].map((size) => (
+                    <SelectItem key={size} value={`${size}`} className="hover:bg-emerald-500/20 focus:bg-emerald-500/20 text-xs">
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {/* Page info */}
-            <span className="font-medium text-white">Página {currentPage} de {totalPages}</span>
+            <span className="font-semibold text-white/90 text-xs">Página {currentPage} de {totalPages}</span>
             {/* Nav buttons */}
-            <div className="flex items-center gap-1">
-              <button
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                className="size-8 p-0 border-[#79716b]/20 bg-muted/20 hover:bg-muted/60 text-white disabled:opacity-30 rounded-lg transition-all"
                 onClick={() => setCurrentPage(1)}
                 disabled={currentPage === 1}
-                className="size-8 flex items-center justify-center rounded-lg border border-[#79716b]/20 bg-muted/30 hover:bg-muted/80 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 title="Primera página"
               >
-                <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M2 7.5L7.5 2M2 7.5L7.5 13M2 7.5H13M8.5 2L14 7.5M8.5 13L14 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
-              <button
+                <IconChevronsLeft size={15} />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8 p-0 border-[#79716b]/20 bg-muted/20 hover:bg-muted/60 text-white disabled:opacity-30 rounded-lg transition-all"
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="size-8 flex items-center justify-center rounded-lg border border-[#79716b]/20 bg-muted/30 hover:bg-muted/80 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 title="Anterior"
               >
-                <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M9 11L5 7.5L9 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
-              <button
+                <IconChevronLeft size={15} />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8 p-0 border-[#79716b]/20 bg-muted/20 hover:bg-muted/60 text-white disabled:opacity-30 rounded-lg transition-all"
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="size-8 flex items-center justify-center rounded-lg border border-[#79716b]/20 bg-muted/30 hover:bg-muted/80 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 title="Siguiente"
               >
-                <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M6 4L10 7.5L6 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
-              <button
+                <IconChevronRight size={15} />
+              </Button>
+              <Button
+                variant="outline"
+                className="size-8 p-0 border-[#79716b]/20 bg-muted/20 hover:bg-muted/60 text-white disabled:opacity-30 rounded-lg transition-all"
                 onClick={() => setCurrentPage(totalPages)}
                 disabled={currentPage === totalPages}
-                className="size-8 flex items-center justify-center rounded-lg border border-[#79716b]/20 bg-muted/30 hover:bg-muted/80 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 title="Última página"
               >
-                <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M13 7.5L7.5 2M13 7.5L7.5 13M13 7.5H2M6.5 2L1 7.5M6.5 13L1 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
+                <IconChevronsRight size={15} />
+              </Button>
             </div>
           </div>
         </div>
@@ -169,6 +184,19 @@ export default function Page() {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [salesDates, setSalesDates] = useState<string[]>([]);
+
+  const salesDatesMap = React.useMemo(() => {
+    return new Set(salesDates);
+  }, [salesDates]);
+
+  const isSalesDate = React.useCallback((date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const formatted = `${year}-${month}-${day}`;
+    return salesDatesMap.has(formatted);
+  }, [salesDatesMap]);
 
   useEffect(() => {
     const userStr = localStorage.getItem("user");
@@ -190,13 +218,24 @@ export default function Page() {
       const branchId = localStorage.getItem("currentBranchId") || "";
       const token = localStorage.getItem("token");
       const dateStr = selectedDate.toISOString();
-      const res = await fetch(`${API}/dashboard/stats?date=${dateStr}${branchId ? `&branchId=${branchId}` : ""}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (res.ok) {
-        setStats(await res.json());
+      const [resStats, resDates] = await Promise.all([
+        fetch(`${API}/dashboard/stats?date=${dateStr}${branchId ? `&branchId=${branchId}` : ""}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }),
+        fetch(`${API}/dashboard/sales-dates${branchId ? `?branchId=${branchId}` : ""}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+      ]);
+
+      if (resStats.ok) {
+        setStats(await resStats.json());
+      }
+      if (resDates.ok) {
+        setSalesDates(await resDates.json());
       }
     } catch {
       toast.error("Error al cargar estadísticas");
@@ -311,32 +350,69 @@ export default function Page() {
       </div>
 
       {/* Syncro Growth Partner Section */}
-      {stats?.settings?.showSalesGoal && (
+      {(stats?.settings?.showSalesGoal || stats?.settings?.showNetMargin) && (
         <div className="px-4 lg:px-6">
           <div className="flex items-center gap-2 mb-4">
             <IconTarget size={18} className="text-blue-500" />
-            <h2 className="text-sm font-bold uppercase tracking-tight text-blue-500">Syncro Growth Partner (Metas)</h2>
+            <h2 className="text-sm font-bold uppercase tracking-tight text-blue-500">Syncro Growth Partner (Métricas Clave)</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Sales Goal */}
-            <Card className="bg-gradient-to-br from-blue-500/5 to-transparent border-blue-500/20">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold flex items-center justify-between">
-                  Meta de Ventas del Mes
-                  <span className="text-xs font-mono text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full">
-                    {Math.min(Math.round(((stats?.revenue || 0) / (stats?.settings?.salesGoal || 10000)) * 100), 100)}%
-                  </span>
-                </CardTitle>
-                <CardDescription className="text-xs">Progreso hacia el objetivo de {formatPrice(stats?.settings?.salesGoal || 10000)}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Progress value={Math.min(((stats?.revenue || 0) / (stats?.settings?.salesGoal || 10000)) * 100, 100)} className="h-2 bg-blue-500/10" indicatorColor="bg-blue-500" />
-                <div className="flex justify-between text-xs font-medium tabular-nums">
-                  <span className="text-muted-foreground">{formatPrice(stats?.revenue || 0)}</span>
-                  <span className="text-blue-600 font-bold">{formatPrice(stats?.settings?.salesGoal || 10000)}</span>
-                </div>
-              </CardContent>
-            </Card>
+            {stats?.settings?.showSalesGoal && (
+              <Card className="bg-gradient-to-br from-blue-500/5 to-transparent border-blue-500/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold flex items-center justify-between">
+                    Meta de Ventas del Mes
+                    <span className="text-xs font-mono text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full">
+                      {Math.min(Math.round(((stats?.revenue || 0) / (stats?.settings?.salesGoal || 10000)) * 100), 100)}%
+                    </span>
+                  </CardTitle>
+                  <CardDescription className="text-xs">Progreso hacia el objetivo de {formatPrice(stats?.settings?.salesGoal || 10000)}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Progress value={Math.min(((stats?.revenue || 0) / (stats?.settings?.salesGoal || 10000)) * 100, 100)} className="h-2 bg-blue-500/10" indicatorColor="bg-blue-500" />
+                  <div className="flex justify-between text-xs font-medium tabular-nums">
+                    <span className="text-muted-foreground">{formatPrice(stats?.revenue || 0)}</span>
+                    <span className="text-blue-600 font-bold">{formatPrice(stats?.settings?.salesGoal || 10000)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Net Margin & Real Profit */}
+            {stats?.settings?.showNetMargin && (
+              <Card className="bg-gradient-to-t from-primary/5 to-card border border-[#79716b]/10 shadow-xs">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold flex items-center justify-between">
+                    Margen y Ganancia Real (Neto)
+                    <span className="text-xs font-mono text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full font-bold">
+                      {stats?.netMarginPercentage !== undefined ? `${stats.netMarginPercentage.toFixed(1)}%` : "0.0%"}
+                    </span>
+                  </CardTitle>
+                  <CardDescription className="text-xs">Deduciendo costo de mercancía y egresos del negocio</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] uppercase text-muted-foreground font-semibold">Valor Neto Estimado</span>
+                    <span className="text-2xl font-semibold tabular-nums text-foreground tracking-tight">
+                      {formatPrice(stats?.netProfit || 0)}
+                    </span>
+                    {currency === "USD" && (
+                      <div className="text-xs text-muted-foreground font-medium mt-0.5">
+                        Bs {((stats?.netProfit || 0) * exchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                      </div>
+                    )}
+                  </div>
+                  {/* Subtle bar to visualize net margin ratio */}
+                  <div className="h-1.5 w-full bg-emerald-500/10 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                      style={{ width: `${Math.min(Math.max((stats?.netMarginPercentage || 0), 0), 100)}%` }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       )}
@@ -362,25 +438,36 @@ export default function Page() {
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className={cn(
-                  "w-[260px] justify-start text-left font-semibold h-9 border-[#79716b]/20 bg-card hover:bg-muted/50 text-white text-xs rounded-xl shadow-xs gap-2"
-                )}
+                className="w-[260px] justify-start text-left font-semibold h-10 border border-[#79716b]/20 bg-card/40 hover:bg-card/75 backdrop-blur-md text-white text-xs rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:border-emerald-500/30 transition-all duration-300 gap-2.5 group active:scale-[0.98]"
               >
-                <IconCalendar size={15} className="text-primary" />
-                {selectedDate ? (
-                  format(selectedDate, "eeee, dd 'de' MMMM", { locale: es })
-                ) : (
-                  <span>Seleccionar Día</span>
-                )}
+                <IconCalendar size={15} className="text-emerald-500 group-hover:scale-110 transition-transform duration-300" />
+                <span className="flex-1 capitalize text-white/90">
+                  {selectedDate ? (
+                    format(selectedDate, "eeee, dd 'de' MMMM", { locale: es })
+                  ) : (
+                    "Seleccionar Día"
+                  )}
+                </span>
+                <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 border-[#79716b]/20 bg-card rounded-xl overflow-hidden shadow-xl" align="end">
+            <PopoverContent 
+              className="w-auto p-0 border border-white/5 bg-[#121110]/95 backdrop-blur-xl rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in fade-in-50 zoom-in-95 duration-200" 
+              align="end"
+              sideOffset={8}
+            >
               <Calendar
                 mode="single"
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
                 initialFocus
-                className="bg-card text-white font-sans"
+                className="bg-transparent text-white font-sans p-4"
+                modifiers={{
+                  hasSales: isSalesDate
+                }}
+                modifiersClassNames={{
+                  hasSales: "relative after:absolute after:bottom-[3px] after:left-1/2 after:-translate-x-1/2 after:size-1.5 after:rounded-full after:bg-emerald-500 after:shadow-[0_0_8px_rgba(16,185,129,0.8)] after:transition-all after:duration-200 aria-selected:after:bg-white aria-selected:after:shadow-[0_0_8px_rgba(255,255,255,0.8)] hover:after:scale-110"
+                }}
               />
             </PopoverContent>
           </Popover>

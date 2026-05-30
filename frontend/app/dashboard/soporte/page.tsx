@@ -26,6 +26,9 @@ import {
   IconX,
   IconHistory,
   IconPlus,
+  IconThumbUp,
+  IconThumbDown,
+  IconCopy,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { ModeSwitcher } from "@/components/mode-switcher";
@@ -186,6 +189,8 @@ export default function SupportChatPage() {
   const [sessionId, setSessionId] = useState<string>("default");
   const [sessions, setSessions] = useState<any[]>([]);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [commentingMsgId, setCommentingMsgId] = useState<string | null>(null);
+  const [feedbackComment, setFeedbackComment] = useState("");
 
   // Map loading/recording state to ElevenLabs AgentState
   const aiAgentState: AgentState = isAiLoading
@@ -196,12 +201,41 @@ export default function SupportChatPage() {
         ? "talking"
         : null;
 
-  const AI_QUICK_ACTIONS = [
+  const [quickActions, setQuickActions] = useState<Array<{ label: string; text: string }>>([
     { label: "¿Cómo hago el cuadre de caja?", text: "¿Cómo hago el cuadre de caja paso a paso?" },
     { label: "Ver mi turno activo", text: "Ver mi turno activo de hoy" },
     { label: "Registrar un egreso", text: "Quiero registrar un egreso para el negocio" },
     { label: "¿Cuánto vendí hoy?", text: "¿Cuánto he vendido hoy en total?" },
-  ];
+  ]);
+
+  useEffect(() => {
+    const lastRoute = localStorage.getItem("syncro_last_visited_dashboard_route") || "";
+    if (lastRoute.includes("/productos") || lastRoute.includes("/inventario")) {
+      setQuickActions([
+        { label: "📦 Bajo Stock", text: "¿Qué productos tienen bajo stock?" },
+        { label: "💰 Valor del Inventario", text: "¿Cuál es el valor total de mi inventario actual?" },
+        { label: "🔥 Productos Más Vendidos", text: "¿Qué producto se vende más rápido y cuál es el top de ventas?" },
+      ]);
+    } else if (lastRoute.includes("/proveedores") || lastRoute.includes("/compras")) {
+      setQuickActions([
+        { label: "📝 Sugerir Orden de Compra", text: "Generar propuesta de orden de compra inteligente" },
+        { label: "🚚 Facturas Pendientes", text: "¿Qué proveedores tienen facturas pendientes de pago?" },
+        { label: "📊 Compras del Mes", text: "Ver resumen de compras de este mes" },
+      ]);
+    } else if (lastRoute.includes("/ventas") || lastRoute.includes("/facturas")) {
+      setQuickActions([
+        { label: "🎟️ Ticket Promedio", text: "¿Cuál es el ticket de venta promedio hoy?" },
+        { label: "💳 Ventas por Transferencia", text: "¿Cuántas ventas se hicieron por transferencia y en efectivo hoy?" },
+        { label: "⏱️ Últimas Ventas", text: "Ver las últimas transacciones de venta registradas" },
+      ]);
+    } else if (lastRoute.includes("/caja") || lastRoute.includes("/turnos") || lastRoute.includes("/contabilidad")) {
+      setQuickActions([
+        { label: "🔑 Cuadre Paso a Paso", text: "¿Cómo hago el cuadre de caja paso a paso?" },
+        { label: "⏳ Ver Turno Activo", text: "Ver estado del turno activo de hoy" },
+        { label: "💸 Registrar Egreso", text: "Quiero registrar un egreso para el negocio" },
+      ]);
+    }
+  }, []);
 
   const resetScroll = () => {
     if (typeof window !== "undefined") {
@@ -425,27 +459,80 @@ export default function SupportChatPage() {
         Authorization: `Bearer ${token}`
       };
 
-      const res = await fetch(`${API}/ai-agent/chat`, {
+      const res = await fetch(`${API}/ai-agent/chat-stream`, {
         method: "POST",
         headers,
         body: JSON.stringify({ message: text, sessionId }),
       });
 
       if (res.ok) {
-        const data = await res.json();
+        const reader = res.body?.getReader();
+        if (!reader) {
+          throw new Error("No readable stream in response");
+        }
+
+        const decoder = new TextDecoder();
+        let assistantText = "";
+        let finalId = `temp-ai-${Date.now()}`;
+
+        // Create the initial placeholder bubble
         const tempAiMsg = {
-          id: `temp-ai-${Date.now()}`,
+          id: finalId,
           role: "assistant",
-          content: data.message,
-          action: data.action,
+          content: "",
+          action: null,
           createdAt: new Date().toISOString(),
-          isNew: true, // Trigger typewriter effect
+          isNew: false, // Turn off typewriter since we stream live!
         };
         setAiMessages((prev) => [...prev, tempAiMsg]);
 
-        // Speak response if voice response is enabled
-        if (aiVoiceResponseEnabled) {
-          playAiVoiceResponse(data.message);
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || ""; // Keep the last incomplete line
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            if (trimmed.startsWith("data: ")) {
+              try {
+                const parsed = JSON.parse(trimmed.slice(6));
+                if (parsed.chunk) {
+                  assistantText += parsed.chunk;
+                  setAiMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === finalId ? { ...m, content: assistantText } : m
+                    )
+                  );
+                  setTimeout(scrollToBottom, 30);
+                }
+                if (parsed.done) {
+                  if (parsed.id) {
+                    const savedId = parsed.id;
+                    setAiMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === finalId
+                          ? { ...m, id: savedId, content: parsed.message, action: parsed.action }
+                          : m
+                      )
+                    );
+                    finalId = savedId;
+                  }
+                  
+                  // Speak response if voice response is enabled
+                  if (aiVoiceResponseEnabled && parsed.message) {
+                    playAiVoiceResponse(parsed.message);
+                  }
+                }
+              } catch (e) {
+                // Ignore parsing errors for partial lines
+              }
+            }
+          }
         }
       } else {
         toast.error("El Asistente IA no pudo responder.");
@@ -455,6 +542,60 @@ export default function SupportChatPage() {
     } finally {
       setIsAiLoading(false);
       setTimeout(scrollToBottom, 100);
+    }
+  };
+
+  const handleCopy = (text: string) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      toast.success("¡Texto copiado al portapapeles!");
+    } else {
+      toast.error("Tu navegador no soporta la copia automática.");
+    }
+  };
+
+  const handleFeedback = async (msgId: string, rating: "LIKE" | "DISLIKE", comment?: string) => {
+    try {
+      const isPwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+      const token = isPwa ? sessionStorage.getItem("token") : localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      };
+
+      const msgIndex = aiMessages.findIndex(m => m.id === msgId);
+      if (msgIndex === -1) return;
+      const responseMsg = aiMessages[msgIndex];
+
+      let promptText = "";
+      for (let i = msgIndex - 1; i >= 0; i--) {
+        if (aiMessages[i].role === "user") {
+          promptText = aiMessages[i].content;
+          break;
+        }
+      }
+      if (!promptText) promptText = "Consulta general de soporte";
+
+      const res = await fetch(`${API}/ai-agent/feedback`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          messageId: msgId.startsWith("temp-") ? undefined : msgId,
+          prompt: promptText,
+          response: responseMsg.content,
+          rating,
+          comment
+        })
+      });
+
+      if (res.ok) {
+        setAiMessages(prev => prev.map(m => m.id === msgId ? { ...m, rating, comment } : m));
+        toast.success(rating === "LIKE" ? "¡Gracias por calificar la respuesta!" : "¡Gracias por tu comentario para ayudarnos a mejorar!");
+      } else {
+        toast.error("No se pudo enviar la calificación.");
+      }
+    } catch {
+      toast.error("Error de conexión al enviar feedback.");
     }
   };
 
@@ -688,6 +829,73 @@ export default function SupportChatPage() {
       }
     } catch (err) {
       toast.error("Error de conexión al confirmar la acción.");
+    }
+  };
+
+  const handleUndoAction = async (msgId: string) => {
+    try {
+      const isPwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+      const token = isPwa ? sessionStorage.getItem("token") : localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      };
+
+      const res = await fetch(`${API}/ai-agent/undo-action`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ msgId }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          toast.success(data.message);
+          setAiMessages((prev) =>
+            prev.map(m => m.id === msgId ? { ...m, actionConfirmed: false } : m)
+          );
+        } else {
+          toast.error(data.message);
+        }
+      } else {
+        toast.error("Error al deshacer el registro.");
+      }
+    } catch (err) {
+      toast.error("Error de conexión al deshacer el registro.");
+    }
+  };
+
+  const handleDismissAction = async (msgId: string) => {
+    try {
+      const isPwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+      const token = isPwa ? sessionStorage.getItem("token") : localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      };
+
+      const res = await fetch(`${API}/ai-agent/dismiss-action`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ msgId }),
+      });
+
+      if (res.ok) {
+        setAiMessages((prev) =>
+          prev.map((m) => m.id === msgId ? { ...m, actionConfirmed: 'dismissed' } : m)
+        );
+        toast.info("Acción sugerida cancelada.");
+      } else {
+        setAiMessages((prev) =>
+          prev.map((m) => m.id === msgId ? { ...m, actionConfirmed: 'dismissed' } : m)
+        );
+        toast.info("Acción sugerida cancelada.");
+      }
+    } catch {
+      setAiMessages((prev) =>
+        prev.map((m) => m.id === msgId ? { ...m, actionConfirmed: 'dismissed' } : m)
+      );
+      toast.info("Acción sugerida cancelada.");
     }
   };
 
@@ -1372,7 +1580,7 @@ export default function SupportChatPage() {
                           animate={{ scale: 1, opacity: 1, y: 0 }}
                           exit={{ scale: 0.8, opacity: 0 }}
                           transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                          className={cn("flex flex-col max-w-[80%]", isMe ? "self-end items-end" : "self-start items-start")}
+                          className={cn("flex flex-col max-w-[80%] overflow-visible pb-2.5", isMe ? "self-end items-end" : "self-start items-start")}
                         >
                           <div className={cn(
                             "px-4 py-2.5 rounded-2xl shadow-sm text-sm relative border",
@@ -1465,7 +1673,28 @@ export default function SupportChatPage() {
                                     </>
                                   )}
                                 </div>
-                                {!msg.actionConfirmed ? (
+                                {msg.actionConfirmed === true ? (
+                                  <div className="space-y-2">
+                                    <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center gap-1.5">
+                                      <IconCheck size={14} className="text-emerald-600" />
+                                      <span className="text-[10px] font-bold text-emerald-600">Acción ejecutada</span>
+                                    </div>
+                                    {(msg.action?.type === 'register_expense' || msg.action?.type === 'register_income') && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleUndoAction(msg.id)}
+                                        className="w-full text-[10px] font-bold border-rose-500/20 text-rose-600 hover:bg-rose-500/5 hover:text-rose-700 h-8 rounded-lg shadow-sm"
+                                      >
+                                        Deshacer registro
+                                      </Button>
+                                    )}
+                                  </div>
+                                ) : (msg.actionConfirmed === 'dismissed' || msg.actionConfirmed === null) ? (
+                                  <div className="p-2 rounded-lg bg-muted/30 border border-muted/50 flex items-center justify-center gap-1.5">
+                                    <span className="text-[10px] font-bold text-muted-foreground">Acción cancelada</span>
+                                  </div>
+                                ) : (
                                   <div className="flex gap-2 pt-1">
                                     <Button
                                       size="sm"
@@ -1477,25 +1706,11 @@ export default function SupportChatPage() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => {
-                                        setAiMessages((prev) =>
-                                          prev.map(m => m.id === msg.id ? { ...m, actionConfirmed: 'dismissed' } : m)
-                                        );
-                                        toast.info("Acción sugerida cancelada.");
-                                      }}
+                                      onClick={() => handleDismissAction(msg.id)}
                                       className="flex-1 border-rose-500/20 text-rose-600 hover:bg-rose-500/5 hover:text-rose-700 font-semibold text-[11px] py-1 h-8 rounded-lg"
                                     >
                                       Cancelar
                                     </Button>
-                                  </div>
-                                ) : msg.actionConfirmed === true ? (
-                                  <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center gap-1.5">
-                                    <IconCheck size={14} className="text-emerald-600" />
-                                    <span className="text-[10px] font-bold text-emerald-600">Acción ejecutada</span>
-                                  </div>
-                                ) : (
-                                  <div className="p-2 rounded-lg bg-muted/30 border border-muted/50 flex items-center justify-center gap-1.5">
-                                    <span className="text-[10px] font-bold text-muted-foreground">Acción cancelada</span>
                                   </div>
                                 )}
                               </div>
@@ -1514,6 +1729,89 @@ export default function SupportChatPage() {
                               {isMe && chatType === "human" && <IconChecks size={12} className={msg.isRead ? "text-sky-400" : "text-white/40"} />}
                             </div>
                           </div>
+
+                          {/* Feedback Bar */}
+                          {chatType === "ai" && !isMe && !msg.isNew && (
+                            <div className="flex items-center gap-1.5 mt-1.5 px-1 text-muted-foreground/60 transition-all select-none overflow-visible">
+                              {/* Like Button */}
+                              <button
+                                onClick={() => handleFeedback(msg.id, "LIKE")}
+                                className={cn(
+                                  "hover:text-emerald-500 active:scale-95 transition-all flex items-center justify-center rounded-lg hover:bg-emerald-500/10 h-6 w-6 shrink-0 transition-colors",
+                                  msg.rating === "LIKE" && "text-emerald-500 bg-emerald-500/10"
+                                )}
+                                title="Me gusta"
+                              >
+                                <IconThumbUp size={14} className={cn(msg.rating === "LIKE" && "fill-emerald-500/10")} />
+                              </button>
+
+                              {/* Dislike Button */}
+                              <button
+                                onClick={() => {
+                                  if (msg.rating === "DISLIKE") {
+                                    handleFeedback(msg.id, "LIKE");
+                                  } else {
+                                    setCommentingMsgId(msg.id);
+                                    setFeedbackComment("");
+                                  }
+                                }}
+                                className={cn(
+                                  "hover:text-rose-500 active:scale-95 transition-all flex items-center justify-center rounded-lg hover:bg-rose-500/10 h-6 w-6 shrink-0 transition-colors",
+                                  msg.rating === "DISLIKE" && "text-rose-500 bg-rose-500/10"
+                                )}
+                                title="No me gusta"
+                              >
+                                <IconThumbDown size={14} className={cn(msg.rating === "DISLIKE" && "fill-rose-500/10")} />
+                              </button>
+
+                              {/* Copy Button */}
+                              <button
+                                onClick={() => handleCopy(msg.content)}
+                                className="hover:text-primary active:scale-95 transition-all flex items-center justify-center rounded-lg hover:bg-primary/10 h-6 w-6 shrink-0 transition-colors"
+                                title="Copiar respuesta"
+                              >
+                                <IconCopy size={14} />
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Inline Comment Box for Dislike */}
+                          {commentingMsgId === msg.id && (
+                            <div className="flex items-center gap-1.5 mt-2 ml-1 w-full max-w-[260px] animate-in fade-in slide-in-from-top-1 duration-200">
+                              <input
+                                type="text"
+                                placeholder="¿Cómo podemos mejorar? (Opcional)..."
+                                className="flex-1 bg-muted/70 dark:bg-muted/30 border border-border rounded-lg px-2.5 py-1 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/20"
+                                value={feedbackComment}
+                                onChange={(e) => setFeedbackComment(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleFeedback(msg.id, "DISLIKE", feedbackComment);
+                                    setCommentingMsgId(null);
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <Button
+                                size="sm"
+                                className="h-7 text-[10px] px-2 rounded-lg font-bold bg-primary hover:opacity-90 text-white"
+                                onClick={() => {
+                                  handleFeedback(msg.id, "DISLIKE", feedbackComment);
+                                  setCommentingMsgId(null);
+                                }}
+                              >
+                                Enviar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-[10px] px-2 rounded-lg text-muted-foreground hover:bg-muted"
+                                onClick={() => setCommentingMsgId(null)}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          )}
                         </motion.div>
                       );
                     })}
@@ -1549,7 +1847,7 @@ export default function SupportChatPage() {
             {/* Quick action chips (AI chat only) */}
             {chatType === "ai" && (
               <div className="px-4 pt-2 pb-1 bg-background/80 backdrop-blur-sm shrink-0 flex gap-2 overflow-x-auto scrollbar-none border-t border-primary/5">
-                {AI_QUICK_ACTIONS.map((action, i) => (
+                {quickActions.map((action, i) => (
                   <button
                     key={i}
                     onClick={() => handleSendAi(action.text)}
@@ -1562,192 +1860,199 @@ export default function SupportChatPage() {
               </div>
             )}
 
-            <div className="px-4 py-3 border-t bg-background/80 backdrop-blur-sm shrink-0 flex items-center gap-2">
-              {chatType === "human" ? (
-                <>
-                  {voiceState === "idle" ? (
-                    <div className="flex-1 flex items-center bg-muted/50 rounded-full px-2 py-1 border border-transparent focus-within:border-primary/10 focus-within:bg-background/80 focus-within:ring-1 focus-within:ring-primary/10 transition-all">
-                      {/* Emoji Button */}
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground size-8 rounded-full hover:bg-muted active:scale-95">
-                            <IconMoodSmile size={20} />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent side="top" align="start" className="w-[320px] p-0 border-none shadow-2xl rounded-2xl bg-popover/95 backdrop-blur-md overflow-hidden">
-                          <div className="flex flex-col h-[350px]">
-                            <div className="px-4 py-3 border-b bg-muted/30">
-                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Emojis</p>
-                            </div>
-                            <ScrollArea className="flex-1">
-                              <div className="p-3 space-y-4">
-                                {EMOJI_CATEGORIES.map((cat) => (
-                                  <div key={cat.label} className="space-y-2">
-                                    <p className="text-[10px] font-bold text-muted-foreground px-1 uppercase">{cat.label}</p>
-                                    <div className="grid grid-cols-8 gap-1">
-                                      {cat.emojis.map((emoji) => (
-                                        <button
-                                          key={emoji}
-                                          onClick={() => addEmoji(emoji)}
-                                          className="size-8 flex items-center justify-center rounded-lg hover:bg-muted text-lg transition-all active:scale-90"
-                                        >
-                                          {emoji}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ))}
+            <div className="px-4 py-3 border-t bg-background/80 backdrop-blur-sm shrink-0 flex flex-col gap-1.5">
+              <div className="flex items-center gap-2 w-full">
+                {chatType === "human" ? (
+                  <>
+                    {voiceState === "idle" ? (
+                      <div className="flex-1 flex items-center bg-muted/50 rounded-full px-2 py-1 border border-transparent focus-within:border-primary/10 focus-within:bg-background/80 focus-within:ring-1 focus-within:ring-primary/10 transition-all">
+                        {/* Emoji Button */}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground size-8 rounded-full hover:bg-muted active:scale-95">
+                              <IconMoodSmile size={20} />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent side="top" align="start" className="w-[320px] p-0 border-none shadow-2xl rounded-2xl bg-popover/95 backdrop-blur-md overflow-hidden">
+                            <div className="flex flex-col h-[350px]">
+                              <div className="px-4 py-3 border-b bg-muted/30">
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Emojis</p>
                               </div>
-                            </ScrollArea>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
+                              <ScrollArea className="flex-1">
+                                <div className="p-3 space-y-4">
+                                  {EMOJI_CATEGORIES.map((cat) => (
+                                    <div key={cat.label} className="space-y-2">
+                                      <p className="text-[10px] font-bold text-muted-foreground px-1 uppercase">{cat.label}</p>
+                                      <div className="grid grid-cols-8 gap-1">
+                                        {cat.emojis.map((emoji) => (
+                                          <button
+                                            key={emoji}
+                                            onClick={() => addEmoji(emoji)}
+                                            className="size-8 flex items-center justify-center rounded-lg hover:bg-muted text-lg transition-all active:scale-90"
+                                          >
+                                            {emoji}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </ScrollArea>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
 
-                      {/* Text Input */}
-                      <input
-                        type="text"
-                        className="flex-1 min-w-0 bg-transparent border-none outline-none focus:outline-none focus:ring-0 px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground"
-                        placeholder={uploading ? "Subiendo archivo..." : "Escribe un mensaje..."}
-                        value={inputText}
-                        onChange={(e) => handleInputChange(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                        onFocus={() => {
-                          setTimeout(resetScroll, 50);
-                          setTimeout(resetScroll, 150);
-                        }}
-                        disabled={uploading}
-                      />
-
-                      {/* Attachment Clip */}
-                      <div className="relative shrink-0">
-                        <Button variant="ghost" size="icon" className="text-muted-foreground size-8 rounded-full hover:bg-muted active:scale-95">
-                          <IconPaperclip size={20} />
-                        </Button>
-                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleFileUpload} accept="image/*,video/*" />
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {inputText.trim() && voiceState === "idle" ? (
-                    <Button
-                      size="icon"
-                      className="shrink-0 size-10 rounded-full bg-primary shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95"
-                      onClick={handleSend}
-                    >
-                      <IconSend size={18} />
-                    </Button>
-                  ) : (
-                    <VoiceButton
-                      state={voiceState}
-                      onStart={startRecording}
-                      onStop={pauseRecording}
-                      onResume={resumeRecording}
-                      onSend={stopAndSendRecording}
-                      onDiscard={discardRecording}
-                      audioPreviewUrl={audioPreviewUrl}
-                      className={cn("shrink-0 transition-all duration-300", voiceState !== "idle" && "flex-1")}
-                    />
-                  )}
-                </>
-              ) : (
-                <>
-                  {aiVoiceState === "listening" ? (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.98 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.98 }}
-                      className="flex-1 flex items-center bg-card border border-primary/20 rounded-full px-3 h-11 gap-2 shadow-md"
-                    >
-                      {/* DISCARD BUTTON */}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-full size-8 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 shrink-0"
-                        onClick={() => stopAiVoice(aiMediaStream, speechRecognition, false)}
-                      >
-                        <IconTrash size={16} />
-                      </Button>
-
-                      {/* PULSING RECORDING STATUS & LIVE PREVIEW TEXT */}
-                      <div className="flex-1 flex items-center min-w-0 gap-3">
-                        <div className="flex items-center gap-1.5 shrink-0 px-1 border-r pr-2 border-muted">
-                          <span className="size-2 rounded-full bg-rose-500 animate-pulse" />
-                          <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Escuchando</span>
-                        </div>
-
-                        {/* REAL-TIME PREVIEW TEXT */}
-                        <span className="text-xs text-foreground font-medium truncate flex-1 italic placeholder:text-muted-foreground">
-                          {aiInputText || "Habla ahora..."}
-                        </span>
-                      </div>
-
-                      {/* BAR VISUALIZER IN THE INPUT FIELD */}
-                      <div className="w-28 h-6 overflow-hidden shrink-0 flex items-center justify-center">
-                        <BarVisualizer
-                          state="listening"
-                          barCount={10}
-                          mediaStream={aiMediaStream}
-                          centerAlign={true}
-                          minHeight={15}
-                          maxHeight={90}
-                        />
-                      </div>
-
-                      {/* SEND BUTTON */}
-                      <Button
-                        size="icon"
-                        className="rounded-full size-8 bg-primary hover:opacity-90 shrink-0 shadow-sm"
-                        onClick={() => stopAiVoice(aiMediaStream, speechRecognition, true)}
-                      >
-                        <IconSend size={14} />
-                      </Button>
-                    </motion.div>
-                  ) : (
-                    <>
-                      <div className="flex-1 flex items-center bg-primary/5 hover:bg-primary/10 focus-within:bg-background rounded-full px-4 py-1.5 border border-primary/10 focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/30 transition-all">
-                        {/* Text Input for AI */}
+                        {/* Text Input */}
                         <input
                           type="text"
-                          className="flex-1 min-w-0 bg-transparent border-none outline-none focus:outline-none focus:ring-0 px-1 py-1 text-sm text-foreground placeholder:text-primary/40"
-                          placeholder="Pregúntame sobre el cuadre de caja, egresos, ventas..."
-                          value={aiInputText}
-                          onChange={(e) => setAiInputText(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && handleSendAi()}
+                          className="flex-1 min-w-0 bg-transparent border-none outline-none focus:outline-none focus:ring-0 px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground"
+                          placeholder={uploading ? "Subiendo archivo..." : "Escribe un mensaje..."}
+                          value={inputText}
+                          onChange={(e) => handleInputChange(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleSend()}
                           onFocus={() => {
                             setTimeout(resetScroll, 50);
                             setTimeout(resetScroll, 150);
                           }}
-                          disabled={isAiLoading}
+                          disabled={uploading}
                         />
 
-                        {/* Microphone Trigger Button */}
+                        {/* Attachment Clip */}
+                        <div className="relative shrink-0">
+                          <Button variant="ghost" size="icon" className="text-muted-foreground size-8 rounded-full hover:bg-muted active:scale-95">
+                            <IconPaperclip size={20} />
+                          </Button>
+                          <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleFileUpload} accept="image/*,video/*" />
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {inputText.trim() && voiceState === "idle" ? (
+                      <Button
+                        size="icon"
+                        className="shrink-0 size-10 rounded-full bg-primary shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95"
+                        onClick={handleSend}
+                      >
+                        <IconSend size={18} />
+                      </Button>
+                    ) : (
+                      <VoiceButton
+                        state={voiceState}
+                        onStart={startRecording}
+                        onStop={pauseRecording}
+                        onResume={resumeRecording}
+                        onSend={stopAndSendRecording}
+                        onDiscard={discardRecording}
+                        audioPreviewUrl={audioPreviewUrl}
+                        className={cn("shrink-0 transition-all duration-300", voiceState !== "idle" && "flex-1")}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {aiVoiceState === "listening" ? (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.98 }}
+                        className="flex-1 flex items-center bg-card border border-primary/20 rounded-full px-3 h-11 gap-2 shadow-md"
+                      >
+                        {/* DISCARD BUTTON */}
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={startAiVoice}
-                          disabled={isAiLoading}
-                          className="shrink-0 size-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full active:scale-95 transition-all"
-                          title="Preguntar por voz"
+                          className="rounded-full size-8 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 shrink-0"
+                          onClick={() => stopAiVoice(aiMediaStream, speechRecognition, false)}
                         >
-                          <IconMicrophone size={18} />
+                          <IconTrash size={16} />
                         </Button>
-                      </div>
 
-                      <Button
-                        size="icon"
-                        disabled={!aiInputText.trim() || isAiLoading}
-                        className="shrink-0 size-10 rounded-full bg-primary hover:opacity-90 disabled:bg-muted disabled:text-muted-foreground shadow-lg shadow-primary/10 transition-all hover:scale-105 active:scale-95"
-                        onClick={() => handleSendAi()}
-                      >
-                        {isAiLoading ? (
-                          <IconLoader2 className="animate-spin" size={18} />
-                        ) : (
-                          <IconSend size={18} />
-                        )}
-                      </Button>
-                    </>
-                  )}
-                </>
+                        {/* PULSING RECORDING STATUS & LIVE PREVIEW TEXT */}
+                        <div className="flex-1 flex items-center min-w-0 gap-3">
+                          <div className="flex items-center gap-1.5 shrink-0 px-1 border-r pr-2 border-muted">
+                            <span className="size-2 rounded-full bg-rose-500 animate-pulse" />
+                            <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Escuchando</span>
+                          </div>
+
+                          {/* REAL-TIME PREVIEW TEXT */}
+                          <span className="text-xs text-foreground font-medium truncate flex-1 italic placeholder:text-muted-foreground">
+                            {aiInputText || "Habla ahora..."}
+                          </span>
+                        </div>
+
+                        {/* BAR VISUALIZER IN THE INPUT FIELD */}
+                        <div className="w-28 h-6 overflow-hidden shrink-0 flex items-center justify-center">
+                          <BarVisualizer
+                            state="listening"
+                            barCount={10}
+                            mediaStream={aiMediaStream}
+                            centerAlign={true}
+                            minHeight={15}
+                            maxHeight={90}
+                          />
+                        </div>
+
+                        {/* SEND BUTTON */}
+                        <Button
+                          size="icon"
+                          className="rounded-full size-8 bg-primary hover:opacity-90 shrink-0 shadow-sm"
+                          onClick={() => stopAiVoice(aiMediaStream, speechRecognition, true)}
+                        >
+                          <IconSend size={14} />
+                        </Button>
+                      </motion.div>
+                    ) : (
+                      <>
+                        <div className="flex-1 flex items-center bg-primary/5 hover:bg-primary/10 focus-within:bg-background rounded-full px-4 py-1.5 border border-primary/10 focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/30 transition-all">
+                          {/* Text Input for AI */}
+                          <input
+                            type="text"
+                            className="flex-1 min-w-0 bg-transparent border-none outline-none focus:outline-none focus:ring-0 px-1 py-1 text-sm text-foreground placeholder:text-primary/40"
+                            placeholder="Pregúntame sobre el cuadre de caja, egresos, ventas..."
+                            value={aiInputText}
+                            onChange={(e) => setAiInputText(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && handleSendAi()}
+                            onFocus={() => {
+                              setTimeout(resetScroll, 50);
+                              setTimeout(resetScroll, 150);
+                            }}
+                            disabled={isAiLoading}
+                          />
+
+                          {/* Microphone Trigger Button */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={startAiVoice}
+                            disabled={isAiLoading}
+                            className="shrink-0 size-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full active:scale-95 transition-all"
+                            title="Preguntar por voz"
+                          >
+                            <IconMicrophone size={18} />
+                          </Button>
+                        </div>
+
+                        <Button
+                          size="icon"
+                          disabled={!aiInputText.trim() || isAiLoading}
+                          className="shrink-0 size-10 rounded-full bg-primary hover:opacity-90 disabled:bg-muted disabled:text-muted-foreground shadow-lg shadow-primary/10 transition-all hover:scale-105 active:scale-95"
+                          onClick={() => handleSendAi()}
+                        >
+                          {isAiLoading ? (
+                            <IconLoader2 className="animate-spin" size={18} />
+                          ) : (
+                            <IconSend size={18} />
+                          )}
+                        </Button>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+              {chatType === "ai" && (
+                <p className="text-[10px] text-muted-foreground/60 text-center w-full mt-0.5 tracking-tight font-medium">
+                  es una IA y puede cometer errores porfavor califique
+                </p>
               )}
             </div>
           </div>

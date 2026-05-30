@@ -49,6 +49,12 @@ export class ClientsController {
     return this.clientsService.registerPayment(id, body, businessId);
   }
 
+  @Post(':id/charge')
+  registerCharge(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    const businessId = req.user.businessId;
+    return this.clientsService.registerCharge(id, body, businessId);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string, @Request() req: any) {
     const businessId = req.user.businessId;

@@ -361,15 +361,7 @@ export default function AccountingPage() {
           
           {/* Main Chart: Sales Trend */}
           <div className="lg:col-span-2">
-             <Card className="border-none shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold">Tendencia de Ingresos</CardTitle>
-                  <CardDescription>Histórico de ventas brutas de los últimos 7 días</CardDescription>
-                </CardHeader>
-                <CardContent className="h-[300px]">
-                   <ChartAreaInteractive data={stats?.trend || []} />
-                </CardContent>
-             </Card>
+             <ChartAreaInteractive data={stats?.trend || []} />
           </div>
 
           {/* Margen Operativo & Cash Flow */}

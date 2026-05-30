@@ -4,8 +4,9 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/constants";
 
 export default function DashboardLayout({
   children,
@@ -13,9 +14,43 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [isMounted, setIsMounted] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    if (pathname && pathname !== "/dashboard/soporte" && pathname !== "/dashboard/soporte/") {
+      localStorage.setItem("syncro_last_visited_dashboard_route", pathname);
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const runProactiveCheck = async () => {
+      try {
+        const isMqlStandalone = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+        const token = isMqlStandalone ? sessionStorage.getItem("token") : localStorage.getItem("token");
+        if (!token) return;
+
+        await fetch(`${API_URL}/ai-agent/proactive-check`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          }
+        });
+      } catch (e) {
+        console.warn("Failed to run proactive AI check", e);
+      }
+    };
+
+    runProactiveCheck();
+
+    const interval = setInterval(runProactiveCheck, 600000); // 10 minutes
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     setIsMounted(true);

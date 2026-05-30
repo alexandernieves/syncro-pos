@@ -14,6 +14,10 @@ interface BusinessContext {
   clients: any[];
   suppliers: any[];
   branches: any[];
+  lowStockStats?: {
+    totalLowStock: number;
+    criticalItems: { productName: string; variantName: string; stock: number; minStock: number }[];
+  };
 }
 
 interface ChatMessage {
@@ -22,6 +26,7 @@ interface ChatMessage {
 }
 
 interface AgentResponse {
+  id?: string;
   message: string;
   action: AgentAction | null;
 }
@@ -32,6 +37,9 @@ interface AgentAction {
   data: Record<string, any>;
 }
 
+import { NotificationsService } from '../notifications/notifications.service';
+import { PushService } from '../chat/push.service';
+
 @Injectable()
 export class AiAgentService {
   private readonly logger = new Logger('AiAgentService');
@@ -41,6 +49,8 @@ export class AiAgentService {
     private readonly prisma: PrismaService,
     private readonly embeddingsService: EmbeddingsService,
     private readonly config: ConfigService,
+    private readonly notificationsService: NotificationsService,
+    private readonly pushService: PushService,
   ) {
     this.openrouterApiKey = this.config.get<string>('OPENROUTER_API_KEY') || '';
   }
@@ -82,12 +92,92 @@ export class AiAgentService {
     const { message, action } = this.parseResponse(rawResponse);
 
     // 8. Save assistant response to history DB
-    await this.prisma.aiChatMessage.create({
+    const savedMessage = await this.prisma.aiChatMessage.create({
       data: { businessId, userId, sessionId, role: 'assistant', content: message, actionJson: action ? JSON.stringify(action) : null }
     });
 
-    return { message, action };
+    // Send push notification about AI response
+    this.pushService.sendToUser(userId, {
+      title: '🤖 Syncro IA ha respondido',
+      body: message.length > 120 ? (message.substring(0, 117) + '...') : message,
+      url: '/dashboard/soporte'
+    }).catch(err => this.logger.warn(`Failed to send push notification: ${err.message}`));
+
+    return { id: savedMessage.id, message, action };
   }
+
+  // ── Chat Stream ──────────────────────────────────────────────────────────────
+
+  async chatStream(
+    userId: string,
+    businessId: string,
+    userMessage: string,
+    sessionId: string = 'default',
+    onChunk: (chunk: string) => void,
+    onFinish: (result: AgentResponse) => void
+  ): Promise<void> {
+    try {
+      // 1. Get recent history
+      const history = await this.getHistory(businessId, userId, sessionId, 10);
+
+      // Ensure session exists
+      if (sessionId !== 'default') {
+        const sessionExists = await this.prisma.aiChatSession.findUnique({ where: { id: sessionId } });
+        if (!sessionExists) {
+          await this.prisma.aiChatSession.create({
+            data: { id: sessionId, businessId, userId, title: userMessage.substring(0, 30) + '...' }
+          });
+        }
+      }
+
+      // 2. Save user message to history DB
+      await this.prisma.aiChatMessage.create({
+        data: { businessId, userId, sessionId, role: 'user', content: userMessage }
+      });
+
+      // 3. Retrieve relevant knowledge chunks (RAG)
+      const relevantChunks = await this.embeddingsService.searchRelevantChunks(userMessage, 3);
+
+      // 4. Augment with real business data
+      const context = await this.getBusinessContext(userId, businessId);
+
+      // 5. Build system prompt
+      const systemPrompt = this.buildSystemPrompt(relevantChunks, context);
+
+      // 6. Call OpenRouter with streaming
+      const rawResponse = await this.callOpenRouterStream(systemPrompt, history, userMessage, onChunk);
+
+      // 7. Parse action if present
+      const { message, action } = this.parseResponse(rawResponse);
+
+      // 8. Save assistant response to history DB
+      const savedMessage = await this.prisma.aiChatMessage.create({
+        data: {
+          businessId,
+          userId,
+          sessionId,
+          role: 'assistant',
+          content: message,
+          actionJson: action ? JSON.stringify(action) : null
+        }
+      });
+
+      // 9. Callback on completion
+      onFinish({ id: savedMessage.id, message, action });
+
+      // Send push notification about AI response
+      this.pushService.sendToUser(userId, {
+        title: '🤖 Syncro IA ha respondido',
+        body: message.length > 120 ? (message.substring(0, 117) + '...') : message,
+        url: '/dashboard/soporte'
+      }).catch(err => this.logger.warn(`Failed to send push notification in stream: ${err.message}`));
+    } catch (error) {
+      this.logger.error(`Error in chatStream: ${error.message}`);
+      onChunk('⚠️ Ocurrió un error al procesar tu solicitud.');
+      onFinish({ message: '⚠️ Ocurrió un error al procesar tu solicitud.', action: null });
+    }
+  }
+
 
   // ── Sessions & History ───────────────────────────────────────────────────────
 
@@ -120,10 +210,23 @@ export class AiAgentService {
       where: { businessId, userId, sessionId },
       orderBy: { createdAt: 'asc' },
     });
-    return messages.map(m => ({
-      ...m,
-      action: m.actionJson ? JSON.parse(m.actionJson) : null
-    }));
+
+    const messageIds = messages.map(m => m.id);
+    const feedbacks = await this.prisma.aiFeedback.findMany({
+      where: { messageId: { in: messageIds } }
+    });
+
+    const feedbackMap = new Map(feedbacks.map(f => [f.messageId, f]));
+
+    return messages.map(m => {
+      const fb = feedbackMap.get(m.id);
+      return {
+        ...m,
+        action: m.actionJson ? JSON.parse(m.actionJson) : null,
+        rating: fb ? fb.rating : null,
+        comment: fb ? fb.comment : null,
+      };
+    });
   }
 
   async clearHistory(businessId: string, userId: string, sessionId: string = 'default') {
@@ -156,16 +259,31 @@ export class AiAgentService {
               }
             })
           ]);
-          if (msgId) {
-            await this.prisma.aiChatMessage.update({
-              where: { id: msgId },
-              data: { actionConfirmed: true }
-            });
+          if (msgId && !msgId.startsWith('temp-')) {
+            try {
+              const dbMsg = await this.prisma.aiChatMessage.findUnique({ where: { id: msgId } });
+              if (dbMsg) {
+                const parsedAction = dbMsg.actionJson ? JSON.parse(dbMsg.actionJson) : action;
+                parsedAction.createdIds = {
+                  accountingEntryId: accountingEntry.id,
+                  expenseId: expense.id
+                };
+                await this.prisma.aiChatMessage.update({
+                  where: { id: msgId },
+                  data: { 
+                    actionConfirmed: true,
+                    actionJson: JSON.stringify(parsedAction)
+                  }
+                });
+              }
+            } catch (e) {
+              this.logger.warn(`Failed to update actionJson on confirm for msg ${msgId}: ${e.message}`);
+            }
           }
           return { success: true, message: `✅ Egreso registrado: ${action.data.description} por $${action.data.amount}` };
         }
         case 'register_income': {
-          await this.prisma.accountingEntry.create({
+          const accountingEntry = await this.prisma.accountingEntry.create({
             data: {
               description: action.data.description,
               type: 'INCOME',
@@ -175,11 +293,25 @@ export class AiAgentService {
               branchId,
             }
           });
-          if (msgId) {
-            await this.prisma.aiChatMessage.update({
-              where: { id: msgId },
-              data: { actionConfirmed: true }
-            });
+          if (msgId && !msgId.startsWith('temp-')) {
+            try {
+              const dbMsg = await this.prisma.aiChatMessage.findUnique({ where: { id: msgId } });
+              if (dbMsg) {
+                const parsedAction = dbMsg.actionJson ? JSON.parse(dbMsg.actionJson) : action;
+                parsedAction.createdIds = {
+                  accountingEntryId: accountingEntry.id
+                };
+                await this.prisma.aiChatMessage.update({
+                  where: { id: msgId },
+                  data: { 
+                    actionConfirmed: true,
+                    actionJson: JSON.stringify(parsedAction)
+                  }
+                });
+              }
+            } catch (e) {
+              this.logger.warn(`Failed to update actionJson on confirm for msg ${msgId}: ${e.message}`);
+            }
           }
           return { success: true, message: `✅ Ingreso registrado: ${action.data.description} por $${action.data.amount}` };
         }
@@ -253,11 +385,18 @@ export class AiAgentService {
             }
           });
 
-          if (msgId) {
-            await this.prisma.aiChatMessage.update({
-              where: { id: msgId },
-              data: { actionConfirmed: true }
-            });
+          if (msgId && !msgId.startsWith('temp-')) {
+            try {
+              const msgExists = await this.prisma.aiChatMessage.findUnique({ where: { id: msgId } });
+              if (msgExists) {
+                await this.prisma.aiChatMessage.update({
+                  where: { id: msgId },
+                  data: { actionConfirmed: true }
+                });
+              }
+            } catch (e) {
+              this.logger.warn(`Failed to update actionConfirmed for message ${msgId}: ${e.message}`);
+            }
           }
           return { success: true, message: `✅ Turno cerrado exitosamente. Diferencia: $${difference.toFixed(2)}` };
         }
@@ -284,12 +423,22 @@ export class AiAgentService {
       0
     ));
 
-    const [activeShift, recentClosedShifts, todaySales, recentSales, accountingEntries, settings, products, clients, suppliers, branches] = await Promise.all([
-      // Active shift for this user
-      (this.prisma.shift as any).findFirst({
-        where: { userId, status: 'OPEN' },
-        include: { branch: true }
-      }),
+    // 1. Fetch active shift first to determine branch
+    const activeShift = await (this.prisma.shift as any).findFirst({
+      where: { userId, status: 'OPEN' },
+      include: { branch: true }
+    });
+
+    const branchIdToUse = activeShift?.branchId;
+    let targetBranchId = branchIdToUse;
+    if (!targetBranchId) {
+      const firstBranch = await this.prisma.branch.findFirst({
+        where: { businessId }
+      });
+      targetBranchId = firstBranch?.id;
+    }
+
+    const [recentClosedShifts, todaySales, recentSales, accountingEntries, settings, products, clients, suppliers, branches, allBranchVariants] = await Promise.all([
       // Recent closed shifts
       this.prisma.shift.findMany({
         where: { branch: { businessId }, status: 'CLOSED' },
@@ -327,7 +476,15 @@ export class AiAgentService {
       // Products with variants and stock (limit 150)
       this.prisma.product.findMany({
         where: { businessId },
-        include: { variants: true },
+        include: {
+          variants: {
+            include: {
+              inventory: targetBranchId ? {
+                where: { branchId: targetBranchId }
+              } : true
+            }
+          }
+        },
         take: 150
       }),
       // Clients (limit 50)
@@ -343,6 +500,18 @@ export class AiAgentService {
       // Branches (all)
       this.prisma.branch.findMany({
         where: { businessId }
+      }),
+      // All variants in business with their inventories to calculate complete low stock list
+      this.prisma.productVariant.findMany({
+        where: {
+          product: { businessId }
+        },
+        include: {
+          product: true,
+          inventory: targetBranchId ? {
+            where: { branchId: targetBranchId }
+          } : true
+        }
       })
     ]);
 
@@ -368,6 +537,34 @@ export class AiAgentService {
       }, 0);
       shiftExpected = activeShift.openingBalance + cashPayments;
     }
+
+    // Process all variants to compute complete low stock list
+    const lowStockAlerts: { productName: string; variantName: string; stock: number; minStock: number }[] = [];
+    allBranchVariants.forEach((v: any) => {
+      let vStock = v.stock;
+      if (targetBranchId && v.inventory) {
+        const branchInventory = v.inventory.find((inv: any) => inv.branchId === targetBranchId);
+        if (branchInventory !== undefined) {
+          vStock = branchInventory.quantity;
+        }
+      }
+      const isLow = vStock < v.minStock;
+      const isCritical = vStock === 0;
+      if (isLow || isCritical) {
+        lowStockAlerts.push({
+          productName: v.product.name,
+          variantName: v.name,
+          stock: vStock,
+          minStock: v.minStock
+        });
+      }
+    });
+
+    // Sort by severity (lowest stock first)
+    lowStockAlerts.sort((a, b) => a.stock - b.stock);
+
+    // Limit to top 20 most critical for system prompt to avoid token overflow
+    const criticalItems = lowStockAlerts.slice(0, 20);
 
     return {
       activeShift: activeShift ? {
@@ -419,18 +616,31 @@ export class AiAgentService {
       products: products.map(p => ({
         name: p.name,
         isWeighable: p.isWeighable,
-        variants: p.variants.map((v: any) => ({
-          id: v.id,
-          name: v.name,
-          price: v.price,
-          cost: v.cost || 0,
-          stock: v.stock,
-          minStock: v.minStock
-        }))
+        variants: p.variants.map((v: any) => {
+          let vStock = v.stock;
+          if (targetBranchId && v.inventory) {
+            const branchInventory = v.inventory.find((inv: any) => inv.branchId === targetBranchId);
+            if (branchInventory !== undefined) {
+              vStock = branchInventory.quantity;
+            }
+          }
+          return {
+            id: v.id,
+            name: v.name,
+            price: v.price,
+            cost: v.cost || 0,
+            stock: vStock,
+            minStock: v.minStock
+          };
+        })
       })),
       clients: clients.map(c => ({ name: c.name, document: c.documentId, phone: c.phone })),
       suppliers: suppliers.map(s => ({ id: s.id, name: s.name, contact: s.contactName, status: s.status })),
-      branches: branches.map(b => ({ name: b.name, location: b.location }))
+      branches: branches.map(b => ({ name: b.name, location: b.location })),
+      lowStockStats: {
+        totalLowStock: lowStockAlerts.length,
+        criticalItems
+      }
     };
   }
 
@@ -474,6 +684,13 @@ ${context.recentSales.map(s => `- Venta | Fecha: ${new Date(s.createdAt).toLocal
 ${context.products.slice(0, 50).map(p => `- ${p.name}: ${p.variants.map((v: any) => `${v.name} (ID: ${v.id}, Stock: ${v.stock})`).join(' | ')}`).join('\n')}`
       : '\n## Inventario: Sin productos registrados.';
 
+    const lowStockInfo = context.lowStockStats && context.lowStockStats.totalLowStock > 0
+      ? `\n## Alertas de Bajo Stock (Reabastecimiento):
+- Total de productos con bajo stock en la sucursal actual: ${context.lowStockStats.totalLowStock} productos.
+- Los productos con bajo stock más críticos (prioridad alta para compras) son:
+${context.lowStockStats.criticalItems.map(item => `- ${item.productName}${item.variantName !== 'Default' && item.variantName !== 'Default variant' && item.variantName !== '' ? ` (${item.variantName})` : ''}: Stock actual: ${item.stock} | Stock mínimo requerido: ${item.minStock}`).join('\n')}`
+      : '\n## Alertas de Bajo Stock: Todos los productos de la sucursal superan el stock mínimo.';
+
     const otherInfo = `\n## Sucursales:
 ${context.branches.map(b => `- ${b.name} (Ubicación: ${b.location || 'N/A'})`).join('\n')}
 ## Proveedores (Muestra):
@@ -498,7 +715,7 @@ Tu misión es:
 - Sé conciso pero completo
 - Si el usuario te pide registrar algo (ej: "registra este gasto", "crea una orden", "cierra la caja"), genera la acción JSON pero NUNCA le digas "he registrado" o "he cerrado". Dile siempre algo como: "Claro, preparé la acción. Por favor haz clic en Confirmar en la tarjeta para proceder."
 - Nunca ejecutes acciones sin confirmación explícita del usuario, la acción solo pre-llena los datos para que el usuario confirme.
-- IMPORTANTE PARA CIERRE DE CAJA: Si el usuario te pide cerrar la caja o cuadrar turno, PRIMERO debes preguntarle: "¿Cuánto dinero en efectivo (billetes y monedas) contaste físicamente en la gaveta?". Solo cuando te diga el monto contado, generas la acción 'close_shift'.
+- IMPORTANTE PARA CIERRE DE CAJA: Si el usuario te pide cerrar la caja o cuadrar turno, primero verifica si ya te proporcionó el monto de efectivo que contó físicamente en la gaveta en su mensaje anterior (por ejemplo, si te dijo "tengo 0", "no hay efectivo", o especificó un valor numérico exacto). Si NO te ha dado el monto físico, pregúntale: "¿Cuánto dinero en efectivo (billetes y monedas) contaste físicamente en la gaveta?". Si SÍ te dio el monto, NO le vuelvas a preguntar; procede inmediatamente a preparar la acción 'close_shift' utilizando ese valor como dinero reportado.
 
 ## Formato de acciones (cuando el usuario quiere ejecutar algo):
 Si detectas que el usuario te está pidiendo registrar un egreso o gasto (por ejemplo: "compré una coca cola por 5", "pagué 20 de luz", "saqué de la caja chica para X"), INCLUYE al FINAL de tu respuesta EXACTAMENTE este bloque JSON, adaptando los datos:
@@ -567,7 +784,114 @@ ${todayInfo}
 ${recentSalesInfo}
 ${accountingInfo}
 ${inventoryInfo}
+${lowStockInfo}
 ${otherInfo}`;
+  }
+
+  private async callOpenRouterStream(
+    systemPrompt: string,
+    history: ChatMessage[],
+    userMessage: string,
+    onChunk: (chunk: string) => void
+  ): Promise<string> {
+    const messages = [
+      ...history.slice(-8).map(m => ({ role: m.role, content: m.content })),
+      { role: 'user', content: userMessage }
+    ];
+
+    const models = [
+      'openai/gpt-4o-mini',
+      'google/gemini-2.5-flash',
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'openrouter/free',
+    ];
+
+    for (const model of models) {
+      try {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.openrouterApiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://syncropos.com',
+            'X-Title': 'Syncro POS AI Agent',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              ...messages,
+            ],
+            max_tokens: 800,
+            temperature: 0.4,
+            stream: true,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          this.logger.warn(`Model ${model} failed stream call: ${response.status} — ${errorText}`);
+          continue; // try next model
+        }
+
+        if (!response.body) {
+          this.logger.warn(`Model ${model} failed: Response body is null`);
+          continue;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullResponseText = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep the last incomplete line in the buffer
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            if (trimmed === 'data: [DONE]') continue;
+            if (trimmed.startsWith('data: ')) {
+              try {
+                const json = JSON.parse(trimmed.slice(6));
+                const text = json.choices?.[0]?.delta?.content || '';
+                if (text) {
+                  fullResponseText += text;
+                  onChunk(text);
+                }
+              } catch (e) {
+                // Ignore parse errors for incomplete lines
+              }
+            }
+          }
+        }
+
+        // Process remaining buffer
+        if (buffer && buffer.startsWith('data: ')) {
+          try {
+            const json = JSON.parse(buffer.slice(6));
+            const text = json.choices?.[0]?.delta?.content || '';
+            if (text) {
+              fullResponseText += text;
+              onChunk(text);
+            }
+          } catch (e) {}
+        }
+
+        return fullResponseText;
+      } catch (err) {
+        this.logger.warn(`Model ${model} stream error: ${err.message}`);
+        continue; // try next model
+      }
+    }
+
+    this.logger.error('All OpenRouter models failed streaming');
+    return '⚠️ El asistente no está disponible en este momento. Por favor intenta de nuevo en unos segundos.';
   }
 
   private async callOpenRouter(systemPrompt: string, history: ChatMessage[], userMessage: string): Promise<string> {
@@ -690,5 +1014,410 @@ ${otherInfo}`;
 
     const arrayBuffer = await response.arrayBuffer();
     return Buffer.from(arrayBuffer);
+  }
+
+  async submitFeedback(
+    businessId: string | null,
+    data: { messageId?: string; prompt: string; response: string; rating: string; comment?: string },
+  ) {
+    if (data.messageId) {
+      const existing = await this.prisma.aiFeedback.findFirst({
+        where: { messageId: data.messageId },
+      });
+      if (existing) {
+        return this.prisma.aiFeedback.update({
+          where: { id: existing.id },
+          data: {
+            rating: data.rating,
+            comment: data.comment || null,
+            prompt: data.prompt,
+            response: data.response,
+          },
+        });
+      }
+    }
+
+    return this.prisma.aiFeedback.create({
+      data: {
+        messageId: data.messageId || null,
+        prompt: data.prompt,
+        response: data.response,
+        rating: data.rating,
+        comment: data.comment || null,
+        businessId: businessId || null,
+      },
+    });
+  }
+
+  async getAllFeedback() {
+    return this.prisma.aiFeedback.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        business: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+  }
+
+  async undoAction(userId: string, businessId: string, msgId: string) {
+    if (!msgId || msgId.startsWith('temp-')) {
+      return { success: false, message: 'ID de mensaje no válido.' };
+    }
+
+    const dbMsg = await this.prisma.aiChatMessage.findUnique({ where: { id: msgId } });
+    if (!dbMsg) {
+      return { success: false, message: 'No se encontró el registro de la acción en el chat.' };
+    }
+
+    if (!dbMsg.actionJson) {
+      return { success: false, message: 'Este mensaje no tiene una acción asociada.' };
+    }
+
+    const action = JSON.parse(dbMsg.actionJson);
+    if (!action.createdIds) {
+      return { success: false, message: 'La acción no ha sido confirmada o no se pueden revertir sus cambios.' };
+    }
+
+    const { accountingEntryId, expenseId } = action.createdIds;
+
+    try {
+      if (action.type === 'register_expense') {
+        const operations = [];
+        if (accountingEntryId) {
+          operations.push(this.prisma.accountingEntry.delete({ where: { id: accountingEntryId } }));
+        }
+        if (expenseId) {
+          operations.push(this.prisma.expense.delete({ where: { id: expenseId } }));
+        }
+        if (operations.length > 0) {
+          await this.prisma.$transaction(operations);
+        }
+      } else if (action.type === 'register_income') {
+        if (accountingEntryId) {
+          await this.prisma.accountingEntry.delete({ where: { id: accountingEntryId } });
+        }
+      } else {
+        return { success: false, message: 'Solo se pueden deshacer los registros de ingresos y egresos.' };
+      }
+
+      // Reset action state to unconfirmed and clean createdIds
+      delete action.createdIds;
+      await this.prisma.aiChatMessage.update({
+        where: { id: msgId },
+        data: { 
+          actionConfirmed: false,
+          actionJson: JSON.stringify(action)
+        }
+      });
+
+      return { success: true, message: 'Acción deshecha correctamente de tu contabilidad.' };
+    } catch (e) {
+      this.logger.error(`Error undoing action: ${e.message}`);
+      return { success: false, message: `Error al deshacer la acción: ${e.message}` };
+    }
+  }
+
+  async dismissAction(msgId: string) {
+    if (!msgId || msgId.startsWith('temp-')) {
+      return { success: false, message: 'ID de mensaje no válido.' };
+    }
+
+    try {
+      const msgExists = await this.prisma.aiChatMessage.findUnique({ where: { id: msgId } });
+      if (msgExists) {
+        await this.prisma.aiChatMessage.update({
+          where: { id: msgId },
+          data: { actionConfirmed: null }
+        });
+        return { success: true, message: 'Acción sugerida cancelada en base de datos.' };
+      }
+      return { success: false, message: 'No se encontró el registro del mensaje.' };
+    } catch (e) {
+      this.logger.error(`Error dismissing action: ${e.message}`);
+      return { success: false, message: `Error: ${e.message}` };
+    }
+  }
+
+  // ── Proactive AI Auditing & Alerts ───────────────────────────────────────────
+
+  async runProactiveAudit(businessId: string): Promise<{ success: boolean; alertsFound: number }> {
+    try {
+      this.logger.log(`Running proactive AI business audit for business ${businessId}...`);
+      let alertsCount = 0;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // 1. Stock Crítico Check
+      const inventories = await this.prisma.inventory.findMany({
+        where: {
+          branch: { businessId },
+        },
+        include: {
+          variant: {
+            include: { product: true }
+          },
+          branch: true
+        }
+      });
+
+      const lowStockItems = inventories.filter(inv => inv.quantity <= inv.variant.minStock);
+      for (const item of lowStockItems) {
+        const title = `⚠️ Stock Crítico: ${item.variant.product.name}`;
+        const msg = `El producto "${item.variant.product.name} (${item.variant.name})" en la sucursal ${item.branch.name} tiene un stock crítico de ${item.quantity} unidades (mínimo requerido: ${item.variant.minStock}).`;
+
+        const exists = await this.prisma.notification.findFirst({
+          where: {
+            branchId: item.branchId,
+            title,
+            createdAt: { gte: today }
+          }
+        });
+
+        if (!exists) {
+          await this.notificationsService.create({
+            type: 'STOCK_ALERT',
+            title,
+            message: msg,
+            branchId: item.branchId
+          });
+          alertsCount++;
+        }
+      }
+
+      const sixteenHoursAgo = new Date(Date.now() - 16 * 60 * 60 * 1000);
+      const longOpenShifts = await this.prisma.shift.findMany({
+        where: {
+          status: 'OPEN',
+          openedAt: { lte: sixteenHoursAgo },
+          branch: { businessId }
+        },
+        include: {
+          branch: true,
+          user: true
+        }
+      });
+
+      for (const shift of longOpenShifts) {
+        const title = `⏳ Turno de Caja Prolongado`;
+        const msg = `La caja abierta por ${shift.user.name} en la sucursal ${shift.branch.name} lleva más de 16 horas activa sin cuadre. Por favor recuerda realizar el cierre de caja.`;
+
+        const exists = await this.prisma.notification.findFirst({
+          where: {
+            branchId: shift.branchId,
+            title,
+            createdAt: { gte: today }
+          }
+        });
+
+        if (!exists) {
+          await this.notificationsService.create({
+            type: 'SHIFT_ALERT',
+            title,
+            message: msg,
+            branchId: shift.branchId
+          });
+          alertsCount++;
+        }
+      }
+
+      // 3. Anomalía de Gastos Check (today's expenses > 1.5x daily avg and > $100)
+      const todayExpenses = await this.prisma.expense.aggregate({
+        where: {
+          businessId,
+          createdAt: { gte: today }
+        },
+        _sum: { amount: true }
+      });
+      const todaySum = todayExpenses._sum.amount || 0;
+
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      sevenDaysAgo.setHours(0, 0, 0, 0);
+      const pastExpenses = await this.prisma.expense.findMany({
+        where: {
+          businessId,
+          createdAt: {
+            gte: sevenDaysAgo,
+            lt: today
+          }
+        },
+        select: { amount: true }
+      });
+
+      const pastSum = pastExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+      const dailyAvg = pastSum > 0 ? (pastSum / 7) : 20; // default benchmark fallback
+
+      if (todaySum > dailyAvg * 1.5 && todaySum > 100) {
+        const title = `💸 Alerta de Gastos Inusuales`;
+        const msg = `Se ha registrado un incremento inusual en los egresos de hoy ($${todaySum.toFixed(2)}), superando por más de 50% el promedio diario habitual ($${dailyAvg.toFixed(2)}).`;
+
+        const exists = await this.prisma.notification.findFirst({
+          where: {
+            title,
+            createdAt: { gte: today }
+          }
+        });
+
+        if (!exists) {
+          const firstBranch = await this.prisma.branch.findFirst({ where: { businessId } });
+          if (firstBranch) {
+            await this.notificationsService.create({
+              type: 'EXPENSE_ALERT',
+              title,
+              message: msg,
+              branchId: firstBranch.id
+            });
+            alertsCount++;
+          }
+        }
+      }
+
+      this.logger.log(`Proactive AI business audit completed successfully. Alerts pushed: ${alertsCount}`);
+      return { success: true, alertsFound: alertsCount };
+    } catch (e) {
+      this.logger.error(`Error in runProactiveAudit: ${e.message}`);
+      return { success: false, alertsFound: 0 };
+    }
+  }
+
+  // ── Predictive Smart Purchases ───────────────────────────────────────────────
+
+  async getPredictivePurchases(businessId: string, branchId?: string) {
+    try {
+      const products = await this.prisma.product.findMany({
+        where: { businessId },
+        include: {
+          variants: true,
+          supplier: true
+        }
+      });
+
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const saleItems = await this.prisma.saleItem.findMany({
+        where: {
+          sale: {
+            businessId,
+            status: 'COMPLETED',
+            createdAt: { gte: thirtyDaysAgo }
+          }
+        },
+        select: {
+          variantId: true,
+          quantity: true
+        }
+      });
+
+      const variantSalesMap = new Map<string, number>();
+      for (const item of saleItems) {
+        if (!item.variantId) continue;
+        const currentVal = variantSalesMap.get(item.variantId) || 0;
+        variantSalesMap.set(item.variantId, currentVal + item.quantity);
+      }
+
+      const inventories = await this.prisma.inventory.findMany({
+        where: {
+          branch: { businessId },
+          ...(branchId ? { branchId } : {})
+        },
+        select: {
+          variantId: true,
+          quantity: true
+        }
+      });
+
+      const variantStockMap = new Map<string, number>();
+      for (const inv of inventories) {
+        const currentStock = variantStockMap.get(inv.variantId) || 0;
+        variantStockMap.set(inv.variantId, currentStock + inv.quantity);
+      }
+
+      const supplierGroups = new Map<string, {
+        supplierId: string;
+        supplierName: string;
+        items: any[];
+        totalCost: number;
+      }>();
+
+      const noSupplierGroup: {
+        supplierId: string;
+        supplierName: string;
+        items: any[];
+        totalCost: number;
+      } = {
+        supplierId: 'no-supplier',
+        supplierName: 'Sin Proveedor Asignado',
+        items: [],
+        totalCost: 0
+      };
+
+      for (const product of products) {
+        const supplier = product.supplier;
+        const supplierId = supplier?.id || 'no-supplier';
+        const supplierName = supplier?.name || 'Sin Proveedor Asignado';
+
+        for (const variant of product.variants) {
+          const currentStock = variantStockMap.get(variant.id) || 0;
+          const totalSoldLast30Days = variantSalesMap.get(variant.id) || 0;
+          const salesVelocityDaily = totalSoldLast30Days / 30;
+          const daysOfStockRemaining = salesVelocityDaily > 0 ? (currentStock / salesVelocityDaily) : 999;
+
+          const needsPurchase = currentStock <= variant.minStock || (daysOfStockRemaining < 10 && salesVelocityDaily > 0);
+
+          if (needsPurchase) {
+            const targetStock = Math.ceil(salesVelocityDaily * 14) + variant.minStock;
+            let suggestQty = targetStock - currentStock;
+            if (suggestQty < 5) suggestQty = 5;
+
+            const itemCost = variant.cost || (variant.price * 0.6);
+            const estimatedTotalCost = suggestQty * itemCost;
+
+            const suggestedItem = {
+              productId: product.id,
+              productName: product.name,
+              variantId: variant.id,
+              variantName: variant.name,
+              sku: variant.sku,
+              currentStock,
+              minStock: variant.minStock,
+              salesVelocityDaily: parseFloat(salesVelocityDaily.toFixed(2)),
+              totalSoldLast30Days,
+              daysOfStockRemaining: daysOfStockRemaining === 999 ? 'N/A' : Math.round(daysOfStockRemaining),
+              suggestedQuantity: suggestQty,
+              cost: itemCost,
+              totalCost: estimatedTotalCost
+            };
+
+            if (supplierId === 'no-supplier') {
+              noSupplierGroup.items.push(suggestedItem);
+              noSupplierGroup.totalCost += estimatedTotalCost;
+            } else {
+              if (!supplierGroups.has(supplierId)) {
+                supplierGroups.set(supplierId, {
+                  supplierId,
+                  supplierName,
+                  items: [],
+                  totalCost: 0
+                });
+              }
+              const group = supplierGroups.get(supplierId)!;
+              group.items.push(suggestedItem);
+              group.totalCost += estimatedTotalCost;
+            }
+          }
+        }
+      }
+
+      const result = Array.from(supplierGroups.values());
+      if (noSupplierGroup.items.length > 0) {
+        result.push(noSupplierGroup);
+      }
+
+      return result;
+    } catch (e) {
+      this.logger.error(`Error in getPredictivePurchases: ${e.message}`);
+      throw e;
+    }
   }
 }

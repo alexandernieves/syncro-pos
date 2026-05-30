@@ -150,6 +150,7 @@ const data = {
       items: [
         { title: "Gestión de Negocios", url: "/dashboard/syncro/owners" },
         { title: "Mensajería", url: "/dashboard/syncro/chat" },
+        { title: "Feedback de IA", url: "/dashboard/syncro/feedback" },
         { title: "Suscripciones", url: "/dashboard/syncro/subscriptions" },
         { title: "Métricas Globales", url: "/dashboard/syncro/stats" },
         { title: "Auditoría Global", url: "/dashboard/syncro/audit" },

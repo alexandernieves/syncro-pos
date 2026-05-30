@@ -52,7 +52,19 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       });
       if (res.ok) {
-        const data = await res.json();
+        const text = await res.text();
+        if (!text) {
+          // Empty content fallback (e.g. for support superadmin without business context)
+          setPosRate(40.0);
+          setDashboardRate(40.0);
+          setExchangeRate(40.0);
+          setEurExchangeRate(42.0);
+          setBcvDate("No disponible");
+          setIsLoading(false);
+          return;
+        }
+
+        const data = JSON.parse(text);
         const isPos = pathname?.includes("/pos");
 
         const pRate = Number(data.exchangeRate || 40);

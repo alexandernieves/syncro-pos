@@ -32,6 +32,7 @@ model Business {
   settings      Setting[]
   suppliers     Supplier[]
   users         User[]
+  feedbacks     AiFeedback[]
 }
 
 model Conversation {
@@ -272,6 +273,7 @@ model Setting {
   pinPermissions           Json?
   salesGoal                Float     @default(10000)
   showSalesGoal            Boolean   @default(true)
+  showNetMargin            Boolean   @default(true)
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
   businessId               String?
@@ -726,4 +728,16 @@ model AiChatMessage {
   createdAt       DateTime @default(now())
 
   session         AiChatSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model AiFeedback {
+  id           String    @id @default(uuid())
+  messageId    String?
+  prompt       String
+  response     String
+  rating       String    // 'LIKE' or 'DISLIKE'
+  comment      String?
+  createdAt    DateTime  @default(now())
+  businessId   String?
+  business     Business? @relation(fields: [businessId], references: [id])
 }
