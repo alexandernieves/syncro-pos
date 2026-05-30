@@ -300,7 +300,7 @@ export class AiAgentService {
       // Today's sales summary
       this.prisma.sale.findMany({
         where: {
-          businessId,
+          branch: { businessId },
           createdAt: { gte: startOfDay },
           status: { not: 'CANCELLED' }
         },
@@ -308,7 +308,10 @@ export class AiAgentService {
       }),
       // Recent sales summary (last 30) for history audits
       this.prisma.sale.findMany({
-        where: { businessId, status: { not: 'CANCELLED' } },
+        where: {
+          branch: { businessId },
+          status: { not: 'CANCELLED' }
+        },
         orderBy: { createdAt: 'desc' },
         take: 30,
         include: { payments: true, user: true, client: true }
