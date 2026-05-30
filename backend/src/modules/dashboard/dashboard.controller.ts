@@ -10,6 +10,7 @@ export class DashboardController {
   @Get('stats')
   async getStats(@Req() req: any, @Query('branchId') branchId?: string) {
     const businessId = req.user.businessId;
-    return this.dashboardService.getStats(businessId, branchId);
+    const userId = req.user.id || req.user.sub;
+    return this.dashboardService.getStats(businessId, branchId, userId);
   }
 }

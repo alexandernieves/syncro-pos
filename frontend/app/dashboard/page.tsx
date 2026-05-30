@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { useCurrency } from "@/context/CurrencyContext";
+import { cn } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -26,49 +27,130 @@ const API = API_URL;
 
 const RecentSalesTable = ({ sales }: { sales: any[] }) => {
   const { formatPrice } = useCurrency();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const totalPages = Math.max(1, Math.ceil(sales.length / pageSize));
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [sales.length]);
+
+  const paginatedSales = sales.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
   return (
-    <div className="rounded-xl border border-[#79716b]/10 bg-card overflow-hidden">
-      <Table>
-        <TableHeader className="bg-muted/50">
-          <TableRow className="hover:bg-transparent border-[#79716b]/10 font-semibold uppercase tracking-tight text-[10px] text-[#79716b]">
-            <TableHead className="w-[100px] h-10 px-4">Orden</TableHead>
-            <TableHead className="h-10 px-4">Cliente</TableHead>
-            <TableHead className="h-10 px-4">Metodo</TableHead>
-            <TableHead className="h-10 px-4 text-right">Total</TableHead>
-            <TableHead className="h-10 px-4">Estado</TableHead>
-            <TableHead className="h-10 px-4 text-right">Fecha</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sales.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={6} className="h-24 text-center text-xs text-muted-foreground italic">No hay ventas registradas recientemente</TableCell>
+    <div className="space-y-3">
+      <div className="rounded-xl border border-[#79716b]/10 bg-card overflow-hidden">
+        <Table>
+          <TableHeader className="bg-muted/50">
+            <TableRow className="hover:bg-transparent border-[#79716b]/10 font-semibold uppercase tracking-tight text-[10px] text-[#79716b]">
+              <TableHead className="w-[100px] h-10 px-4">Orden</TableHead>
+              <TableHead className="h-10 px-4">Cliente</TableHead>
+              <TableHead className="h-10 px-4">Metodo</TableHead>
+              <TableHead className="h-10 px-4 text-right">Total</TableHead>
+              <TableHead className="h-10 px-4">Estado</TableHead>
+              <TableHead className="h-10 px-4 text-right">Fecha</TableHead>
             </TableRow>
-          ) : (
-            sales.map((sale) => (
-              <TableRow key={sale.id} className="hover:bg-muted/30 border-[#79716b]/5 transition-colors group">
-                <TableCell className="px-4 py-3 font-mono text-[10px] text-primary">{sale.id?.substring(0, 8) || 'N/A'}</TableCell>
-                <TableCell className="px-4 py-3 text-xs font-bold text-white uppercase tracking-tight">{sale.client || 'Consumidor Final'}</TableCell>
-                <TableCell className="px-4 py-3">
-                    <Badge variant="outline" className="text-[10px] gap-1.5 border-[#79716b]/20 text-[#79716b] font-semibold uppercase">
-                     <IconCash size={10} /> POS
-                   </Badge>
-                </TableCell>
-                <TableCell className="px-4 py-3 text-right font-black tabular-nums text-white text-sm">
-                  {formatPrice(sale.total)}
-                </TableCell>
-                <TableCell className="px-4 py-3">
-                   <div className="flex items-center gap-1.5">
-                      <div className="size-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                      <span className="text-[10px] font-semibold uppercase tracking-tight text-emerald-500">Completada</span>
-                   </div>
-                </TableCell>
-                <TableCell className="px-4 py-3 text-right text-[10px] text-muted-foreground font-medium uppercase">{new Date(sale.date).toLocaleString('es-VE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</TableCell>
+          </TableHeader>
+          <TableBody>
+            {paginatedSales.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="h-24 text-center text-xs text-muted-foreground italic">No hay ventas registradas recientemente</TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+            ) : (
+              paginatedSales.map((sale) => (
+                <TableRow key={sale.id} className="hover:bg-muted/30 border-[#79716b]/5 transition-colors group">
+                  <TableCell className="px-4 py-3 font-mono text-[10px] text-primary">{sale.id?.substring(0, 8) || 'N/A'}</TableCell>
+                  <TableCell className="px-4 py-3 text-xs font-bold text-white uppercase tracking-tight">{sale.client || 'Consumidor Final'}</TableCell>
+                  <TableCell className="px-4 py-3">
+                      <Badge variant="outline" className="text-[10px] gap-1.5 border-[#79716b]/20 text-[#79716b] font-semibold uppercase">
+                       <IconCash size={10} /> POS
+                     </Badge>
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-right font-black tabular-nums text-white text-sm">
+                    {formatPrice(sale.total)}
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                     <div className="flex items-center gap-1.5">
+                        <div className={cn(
+                          "size-1.5 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]",
+                          sale.status === 'CANCELLED' ? "bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                        )} />
+                        <span className={cn(
+                          "text-[10px] font-semibold uppercase tracking-tight",
+                          sale.status === 'CANCELLED' ? "text-rose-500 animate-pulse" : "text-emerald-500"
+                        )}>{sale.status === 'CANCELLED' ? 'Cancelada' : 'Completada'}</span>
+                     </div>
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-right text-[10px] text-muted-foreground font-medium uppercase">{new Date(sale.date).toLocaleString('es-VE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Reusable Platform Pagination Footer */}
+      {sales.length > 0 && (
+        <div className="flex items-center justify-between px-2 text-xs text-muted-foreground bg-card/40 border border-[#79716b]/10 rounded-xl p-3 shadow-xs font-sans">
+          <span>{sales.length} venta{sales.length !== 1 ? 's' : ''} en total</span>
+          <div className="flex items-center gap-4">
+            {/* Rows per page selector */}
+            <div className="flex items-center gap-2">
+              <span>Filas por página</span>
+              <select
+                value={pageSize}
+                onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                className="h-8 rounded-lg border border-[#79716b]/20 bg-muted/40 px-2 text-xs cursor-pointer outline-none focus:ring-1 focus:ring-primary/20 text-white font-medium"
+              >
+                {[5, 10, 20, 50].map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+            {/* Page info */}
+            <span className="font-medium text-white">Página {currentPage} de {totalPages}</span>
+            {/* Nav buttons */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="size-8 flex items-center justify-center rounded-lg border border-[#79716b]/20 bg-muted/30 hover:bg-muted/80 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                title="Primera página"
+              >
+                <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M2 7.5L7.5 2M2 7.5L7.5 13M2 7.5H13M8.5 2L14 7.5M8.5 13L14 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="size-8 flex items-center justify-center rounded-lg border border-[#79716b]/20 bg-muted/30 hover:bg-muted/80 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                title="Anterior"
+              >
+                <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M9 11L5 7.5L9 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="size-8 flex items-center justify-center rounded-lg border border-[#79716b]/20 bg-muted/30 hover:bg-muted/80 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                title="Siguiente"
+              >
+                <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M6 4L10 7.5L6 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="size-8 flex items-center justify-center rounded-lg border border-[#79716b]/20 bg-muted/30 hover:bg-muted/80 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                title="Última página"
+              >
+                <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M13 7.5L7.5 2M13 7.5L7.5 13M13 7.5H2M6.5 2L1 7.5M6.5 13L1 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -252,7 +334,15 @@ export default function Page() {
       
       <div className="px-4 lg:px-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold uppercase tracking-tight text-[#79716b]">Ventas Recientes</h2>
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              "size-2 rounded-full",
+              stats?.hasActiveShift ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" : "bg-[#79716b]/40"
+            )} />
+            <h2 className="text-sm font-bold uppercase tracking-tight text-white">
+              {stats?.hasActiveShift ? "Ventas del Turno de Caja Abierto" : "Ventas Recientes"}
+            </h2>
+          </div>
         </div>
         <RecentSalesTable sales={stats?.recentSales || []} />
       </div>

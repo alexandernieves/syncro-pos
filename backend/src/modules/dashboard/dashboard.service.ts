@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
-  async getStats(businessId: string, branchId?: string) {
+  async getStats(businessId: string, branchId?: string, userId?: string) {
     const whereClause: any = {};
     if (branchId) {
       whereClause.branchId = branchId;
@@ -74,13 +74,39 @@ export class DashboardService {
 
     const chartData = Object.values(dailyData).sort((a,b) => a.date.localeCompare(b.date));
 
-    // Get recent activity (last 10 sales)
-    const recentSales = await this.prisma.sale.findMany({
-      where: whereClause,
-      take: 10,
-      orderBy: { createdAt: 'desc' },
-      include: { client: true, user: true, branch: true }
-    });
+    // Get recent activity or all sales of the active open shift
+    let shiftSales = [];
+    let hasActiveShift = false;
+
+    if (userId) {
+      const activeShift = await this.prisma.shift.findFirst({
+        where: {
+          userId,
+          status: 'OPEN',
+          ...(branchId ? { branchId } : {})
+        }
+      });
+      if (activeShift) {
+        hasActiveShift = true;
+        shiftSales = await this.prisma.sale.findMany({
+          where: {
+            shiftId: activeShift.id,
+            status: { not: 'CANCELLED' }
+          },
+          orderBy: { createdAt: 'desc' },
+          include: { client: true, user: true, branch: true }
+        });
+      }
+    }
+
+    const recentSales = hasActiveShift
+      ? shiftSales
+      : await this.prisma.sale.findMany({
+          where: whereClause,
+          take: 15,
+          orderBy: { createdAt: 'desc' },
+          include: { client: true, user: true, branch: true }
+        });
 
     return {
       revenue: revenueValue,
@@ -89,11 +115,12 @@ export class DashboardService {
       productsCount,
       settings: settings || { salesGoal: 10000, showSalesGoal: true },
       chartData,
+      hasActiveShift,
       recentSales: recentSales.map(s => ({
         id: s.id,
         client: s.client?.name || "Consumidor Final",
         total: s.total,
-        status: "COMPLETED",
+        status: s.status || "COMPLETED",
         branch: s.branch?.name || "N/A",
         date: s.createdAt
       }))
