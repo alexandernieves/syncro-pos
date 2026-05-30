@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
-  async getStats(businessId: string, branchId?: string, userId?: string) {
+  async getStats(businessId: string, branchId?: string, userId?: string, dateParam?: string) {
     const whereClause: any = {};
     if (branchId) {
       whereClause.branchId = branchId;
@@ -74,10 +74,36 @@ export class DashboardService {
 
     const chartData = Object.values(dailyData).sort((a,b) => a.date.localeCompare(b.date));
 
-    // Get recent activity or all sales of the active open shift
-    let shiftSales = [];
-    let hasActiveShift = false;
+    // Parse selected date or today
+    const now = dateParam ? new Date(dateParam) : new Date();
+    // VET (Venezuela Time) is GMT-4. Adjust start of day to GMT-4.
+    const localTime = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+    const startOfDay = new Date(Date.UTC(
+      localTime.getUTCFullYear(),
+      localTime.getUTCMonth(),
+      localTime.getUTCDate(),
+      4, // 04:00:00 UTC = 00:00:00 VET (GMT-4)
+      0,
+      0,
+      0
+    ));
+    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
+    // Get all sales for the selected day in this business/branch
+    const daySales = await this.prisma.sale.findMany({
+      where: {
+        ...whereClause,
+        createdAt: {
+          gte: startOfDay,
+          lt: endOfDay
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      include: { client: true, user: true, branch: true }
+    });
+
+    // Check if there is an active shift for this user in this branch to light the live pulsing indicator
+    let hasActiveShift = false;
     if (userId) {
       const activeShift = await this.prisma.shift.findFirst({
         where: {
@@ -88,25 +114,8 @@ export class DashboardService {
       });
       if (activeShift) {
         hasActiveShift = true;
-        shiftSales = await this.prisma.sale.findMany({
-          where: {
-            shiftId: activeShift.id,
-            status: { not: 'CANCELLED' }
-          },
-          orderBy: { createdAt: 'desc' },
-          include: { client: true, user: true, branch: true }
-        });
       }
     }
-
-    const recentSales = hasActiveShift
-      ? shiftSales
-      : await this.prisma.sale.findMany({
-          where: whereClause,
-          take: 15,
-          orderBy: { createdAt: 'desc' },
-          include: { client: true, user: true, branch: true }
-        });
 
     return {
       revenue: revenueValue,
@@ -116,7 +125,7 @@ export class DashboardService {
       settings: settings || { salesGoal: 10000, showSalesGoal: true },
       chartData,
       hasActiveShift,
-      recentSales: recentSales.map(s => ({
+      recentSales: daySales.map(s => ({
         id: s.id,
         client: s.client?.name || "Consumidor Final",
         total: s.total,

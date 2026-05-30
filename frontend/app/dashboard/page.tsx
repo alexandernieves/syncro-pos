@@ -8,12 +8,20 @@ import {
   Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription, CardAction 
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { IconTrendingUp, IconUsers, IconShoppingCart, IconPackage, IconCheck, IconExternalLink, IconCash, IconCreditCard, IconTarget, IconBrandWhatsapp, IconTrendingDown } from "@tabler/icons-react";
+import { 
+  IconTrendingUp, IconUsers, IconShoppingCart, IconPackage, IconCheck, IconExternalLink, 
+  IconCash, IconCreditCard, IconTarget, IconBrandWhatsapp, IconTrendingDown, IconCalendar 
+} from "@tabler/icons-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { useCurrency } from "@/context/CurrencyContext";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import {
   Table,
   TableBody,
@@ -160,6 +168,7 @@ export default function Page() {
   const { formatPrice, currency, exchangeRate } = useCurrency();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   useEffect(() => {
     const userStr = localStorage.getItem("user");
@@ -170,14 +179,18 @@ export default function Page() {
         return;
       }
     }
-    fetchStats();
   }, []);
+
+  useEffect(() => {
+    fetchStats();
+  }, [selectedDate]);
 
   const fetchStats = async () => {
     try {
       const branchId = localStorage.getItem("currentBranchId") || "";
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API}/dashboard/stats${branchId ? `?branchId=${branchId}` : ""}`, {
+      const dateStr = selectedDate.toISOString();
+      const res = await fetch(`${API}/dashboard/stats?date=${dateStr}${branchId ? `&branchId=${branchId}` : ""}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -333,16 +346,44 @@ export default function Page() {
       </div>
       
       <div className="px-4 lg:px-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-2">
             <div className={cn(
               "size-2 rounded-full",
               stats?.hasActiveShift ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" : "bg-[#79716b]/40"
             )} />
             <h2 className="text-sm font-bold uppercase tracking-tight text-white">
-              {stats?.hasActiveShift ? "Ventas del Turno de Caja Abierto" : "Ventas Recientes"}
+              Ventas del Día
             </h2>
           </div>
+
+          {/* Reusable Style Popover Calendar Date Picker */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-[260px] justify-start text-left font-semibold h-9 border-[#79716b]/20 bg-card hover:bg-muted/50 text-white text-xs rounded-xl shadow-xs gap-2"
+                )}
+              >
+                <IconCalendar size={15} className="text-primary" />
+                {selectedDate ? (
+                  format(selectedDate, "eeee, dd 'de' MMMM", { locale: es })
+                ) : (
+                  <span>Seleccionar Día</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 border-[#79716b]/20 bg-card rounded-xl overflow-hidden shadow-xl" align="end">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                initialFocus
+                className="bg-card text-white font-sans"
+              />
+            </PopoverContent>
+          </Popover>
         </div>
         <RecentSalesTable sales={stats?.recentSales || []} />
       </div>
