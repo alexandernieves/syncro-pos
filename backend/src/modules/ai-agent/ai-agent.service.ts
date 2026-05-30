@@ -5,7 +5,9 @@ import { EmbeddingsService } from './embeddings.service';
 
 interface BusinessContext {
   activeShift: any;
+  recentClosedShifts: any[];
   todayStats: any;
+  recentSales: any[];
   accountingStats: any;
   settings: any;
   products: any[];
@@ -282,11 +284,18 @@ export class AiAgentService {
       0
     ));
 
-    const [activeShift, todaySales, accountingEntries, settings, products, clients, suppliers, branches] = await Promise.all([
+    const [activeShift, recentClosedShifts, todaySales, recentSales, accountingEntries, settings, products, clients, suppliers, branches] = await Promise.all([
       // Active shift for this user
       (this.prisma.shift as any).findFirst({
         where: { userId, status: 'OPEN' },
         include: { branch: true }
+      }),
+      // Recent closed shifts
+      this.prisma.shift.findMany({
+        where: { branch: { businessId }, status: 'CLOSED' },
+        orderBy: { closedAt: 'desc' },
+        take: 10,
+        include: { branch: true, user: true }
       }),
       // Today's sales summary
       this.prisma.sale.findMany({
@@ -296,6 +305,13 @@ export class AiAgentService {
           status: { not: 'CANCELLED' }
         },
         include: { payments: true }
+      }),
+      // Recent sales summary (last 30) for history audits
+      this.prisma.sale.findMany({
+        where: { businessId, status: { not: 'CANCELLED' } },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        include: { payments: true, user: true, client: true }
       }),
       // Accounting totals
       this.prisma.accountingEntry.findMany({
@@ -356,11 +372,34 @@ export class AiAgentService {
         expectedCash: shiftExpected,
         openedAtFormatted: new Date(activeShift.openedAt).toLocaleString('es-VE'),
       } : null,
+      recentClosedShifts: recentClosedShifts.map(s => ({
+        id: s.id,
+        openedAt: s.openedAt,
+        closedAt: s.closedAt,
+        openingBalance: s.openingBalance,
+        expectedBalance: s.expectedBalance,
+        closingBalance: s.closingBalance,
+        difference: s.difference,
+        notes: s.notes,
+        userName: s.user?.name || 'Usuario',
+        branchName: s.branch?.name || 'Principal'
+      })),
       todayStats: {
         totalSales: todaySales.length,
         totalRevenue: todayTotal,
         byPaymentMethod: todayByCurrency,
       },
+      recentSales: recentSales.map(s => ({
+        id: s.id,
+        createdAt: s.createdAt,
+        total: s.total,
+        userName: s.user?.name || 'Usuario',
+        clientName: s.client?.name || 'Cliente Genérico',
+        payments: s.payments.map((p: any) => ({
+          method: p.method,
+          amount: p.amount
+        }))
+      })),
       accountingStats: {
         recentBalance: accountingBalance,
         recentEntries: accountingEntries.slice(0, 5).map(e => ({
@@ -408,10 +447,20 @@ export class AiAgentService {
 - Efectivo esperado en caja: $${context.activeShift.expectedCash?.toFixed(2)}`
       : `\n## Turno: No hay turno abierto actualmente.`;
 
+    const closedShiftsInfo = context.recentClosedShifts && context.recentClosedShifts.length > 0
+      ? `\n## Historial de cierres de caja recientes (Turnos cerrados):
+${context.recentClosedShifts.map(s => `- Turno de ${s.userName} en ${s.branchName} | Abierto: ${new Date(s.openedAt).toLocaleString('es-VE')} | Cerrado: ${s.closedAt ? new Date(s.closedAt).toLocaleString('es-VE') : 'N/A'} | Fondo Inicial: $${s.openingBalance?.toFixed(2)} | Esperado: $${s.expectedBalance?.toFixed(2)} | Entregado: $${s.closingBalance?.toFixed(2)} | Diferencia: $${s.difference?.toFixed(2)} | Notas: ${s.notes || 'Sin observaciones'}`).join('\n')}`
+      : '\n## Historial de cierres de caja: No hay registros de cierres anteriores.';
+
     const todayInfo = `\n## Ventas de hoy:
 - Número de ventas: ${context.todayStats.totalSales}
 - Total facturado: $${context.todayStats.totalRevenue?.toFixed(2)}
 - Por método de pago: ${JSON.stringify(context.todayStats.byPaymentMethod, null, 2)}`;
+
+    const recentSalesInfo = context.recentSales && context.recentSales.length > 0
+      ? `\n## Historial de ventas anteriores (últimas 30):
+${context.recentSales.map(s => `- Venta | Fecha: ${new Date(s.createdAt).toLocaleString('es-VE')} | Cajero: ${s.userName} | Cliente: ${s.clientName} | Total: $${s.total?.toFixed(2)} | Métodos: ${s.payments.map((p: any) => `${p.method} ($${p.amount?.toFixed(2)})`).join(', ')}`).join('\n')}`
+      : '\n## Historial de ventas anteriores: No hay registros de ventas anteriores.';
 
     const accountingInfo = `\n## Balance contable reciente:
 - Balance: $${context.accountingStats.recentBalance?.toFixed(2)}
@@ -510,7 +559,9 @@ Categorías de egreso: GASTO_OPERATIVO, COMPRA_INVENTARIO, PAGO_NOMINA, OTRO_EGR
 Categorías de ingreso: INGRESO_OPERATIVO, OTRO_INGRESO
 ${knowledgeContext}
 ${shiftInfo}
+${closedShiftsInfo}
 ${todayInfo}
+${recentSalesInfo}
 ${accountingInfo}
 ${inventoryInfo}
 ${otherInfo}`;
