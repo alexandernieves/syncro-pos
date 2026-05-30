@@ -16,6 +16,9 @@ export const metadata: Metadata = {
   icons: {
     icon: "/syncro.png",
   },
+  other: {
+    google: "notranslate",
+  },
 };
 
 export const viewport: Viewport = {
@@ -37,13 +40,54 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="es" translate="no" className="notranslate" suppressHydrationWarning>
       <body
         suppressHydrationWarning
         className={cn(
-          "bg-background overscroll-none font-sans antialiased"
+          "bg-background overscroll-none font-sans antialiased notranslate"
         )}
       >
+        {/* Script to remove bis_skin_checked attribute added by Bitdefender extension to prevent React hydration mismatch */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                const removeBis = (el) => {
+                  if (el.nodeType === 1) {
+                    if (el.hasAttribute('bis_skin_checked')) {
+                      el.removeAttribute('bis_skin_checked');
+                    }
+                    const children = el.getElementsByTagName('*');
+                    for (let i = 0; i < children.length; i++) {
+                      if (children[i].hasAttribute('bis_skin_checked')) {
+                        children[i].removeAttribute('bis_skin_checked');
+                      }
+                    }
+                  }
+                };
+                removeBis(document.documentElement);
+                const observer = new MutationObserver((mutations) => {
+                  for (let i = 0; i < mutations.length; i++) {
+                    const m = mutations[i];
+                    if (m.type === 'attributes' && m.attributeName === 'bis_skin_checked') {
+                      m.target.removeAttribute('bis_skin_checked');
+                    } else if (m.type === 'childList') {
+                      for (let j = 0; j < m.addedNodes.length; j++) {
+                        removeBis(m.addedNodes[j]);
+                      }
+                    }
+                  }
+                });
+                observer.observe(document.documentElement, {
+                  attributes: true,
+                  childList: true,
+                  subtree: true,
+                  attributeFilter: ['bis_skin_checked']
+                });
+              })();
+            `
+          }}
+        />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

@@ -6,9 +6,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   images: {
     unoptimized: true,
   },
@@ -58,7 +55,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com data:",
               "img-src 'self' data: https: blob:",
-              "connect-src 'self' https: wss:",      // Allow API + WebSocket calls
+              "connect-src 'self' https: wss: http://localhost:9000 ws://localhost:9000",      // Allow API + WebSocket calls
               "media-src 'self' https: blob:",
               "frame-src 'none'",
               "object-src 'none'",

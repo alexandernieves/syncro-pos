@@ -31,6 +31,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { SyncroAdminModule } from './modules/syncro-admin/syncro-admin.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { UploadModule } from './modules/upload/upload.module';
+import { AiAgentModule } from './modules/ai-agent/ai-agent.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { UploadModule } from './modules/upload/upload.module';
     SyncroAdminModule,
     ChatModule,
     UploadModule,
+    AiAgentModule,
   ],
   controllers: [AppController],
   providers: [
