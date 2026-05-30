@@ -268,11 +268,19 @@ export class AiAgentService {
     }
   }
 
-  // ── Private helpers ───────────────────────────────────────────────────────────
-
   private async getBusinessContext(userId: string, businessId: string): Promise<BusinessContext> {
     const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // VET (Venezuela Time) is GMT-4. Adjust start of day to GMT-4.
+    const localTime = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+    const startOfDay = new Date(Date.UTC(
+      localTime.getUTCFullYear(),
+      localTime.getUTCMonth(),
+      localTime.getUTCDate(),
+      4, // 04:00:00 UTC = 00:00:00 VET (GMT-4)
+      0,
+      0,
+      0
+    ));
 
     const [activeShift, todaySales, accountingEntries, settings, products, clients, suppliers, branches] = await Promise.all([
       // Active shift for this user
