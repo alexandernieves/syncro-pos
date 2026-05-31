@@ -891,7 +891,9 @@ ${otherInfo}`;
     }
 
     this.logger.error('All OpenRouter models failed streaming');
-    return '⚠️ El asistente no está disponible en este momento. Por favor intenta de nuevo en unos segundos.';
+    const errorMessage = '⚠️ El asistente no está disponible en este momento. Por favor intenta de nuevo en unos segundos.';
+    onChunk(errorMessage);
+    return errorMessage;
   }
 
   private async callOpenRouter(systemPrompt: string, history: ChatMessage[], userMessage: string): Promise<string> {

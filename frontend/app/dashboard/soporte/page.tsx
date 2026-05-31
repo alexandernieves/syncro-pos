@@ -511,17 +511,15 @@ export default function SupportChatPage() {
                   setTimeout(scrollToBottom, 30);
                 }
                 if (parsed.done) {
-                  if (parsed.id) {
-                    const savedId = parsed.id;
-                    setAiMessages((prev) =>
-                      prev.map((m) =>
-                        m.id === finalId
-                          ? { ...m, id: savedId, content: parsed.message, action: parsed.action }
-                          : m
-                      )
-                    );
-                    finalId = savedId;
-                  }
+                  const savedId = parsed.id || finalId;
+                  setAiMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === finalId
+                        ? { ...m, id: savedId, content: parsed.message, action: parsed.action }
+                        : m
+                    )
+                  );
+                  finalId = savedId;
                   
                   // Speak response if voice response is enabled
                   if (aiVoiceResponseEnabled && parsed.message) {
