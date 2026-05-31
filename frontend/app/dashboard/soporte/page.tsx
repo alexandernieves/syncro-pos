@@ -473,11 +473,11 @@ export default function SupportChatPage() {
 
         const decoder = new TextDecoder();
         let assistantText = "";
-        let finalId = `temp-ai-${Date.now()}`;
+        const placeholderId = `temp-ai-${Date.now()}`;
 
         // Create the initial placeholder bubble
         const tempAiMsg = {
-          id: finalId,
+          id: placeholderId,
           role: "assistant",
           content: "",
           action: null,
@@ -505,21 +505,20 @@ export default function SupportChatPage() {
                   assistantText += parsed.chunk;
                   setAiMessages((prev) =>
                     prev.map((m) =>
-                      m.id === finalId ? { ...m, content: assistantText } : m
+                      m.id === placeholderId ? { ...m, content: assistantText } : m
                     )
                   );
                   setTimeout(scrollToBottom, 30);
                 }
                 if (parsed.done) {
-                  const savedId = parsed.id || finalId;
+                  const savedId = parsed.id || placeholderId;
                   setAiMessages((prev) =>
                     prev.map((m) =>
-                      m.id === finalId
+                      m.id === placeholderId
                         ? { ...m, id: savedId, content: parsed.message, action: parsed.action }
                         : m
                     )
                   );
-                  finalId = savedId;
                   
                   // Speak response if voice response is enabled
                   if (aiVoiceResponseEnabled && parsed.message) {
