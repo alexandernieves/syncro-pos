@@ -478,6 +478,9 @@ export default function POSPage() {
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [openingBalance, setOpeningBalance] = useState<string>("0");
+  const [showFondoBreakdown, setShowFondoBreakdown] = useState(false);
+  const [openingUsd, setOpeningUsd] = useState<string>("");
+  const [openingBs, setOpeningBs] = useState<string>("");
   const [isClosingShift, setIsClosingShift] = useState(false);
   const [closingBalance, setClosingBalance] = useState<string>("0");
   const [cashBreakdown, setCashBreakdown] = useState({ b1: 0, b5: 0, b10: 0, b20: 0, b50: 0, b100: 0 });
@@ -1746,6 +1749,73 @@ export default function POSPage() {
                     placeholder="0.00"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setShowFondoBreakdown(!showFondoBreakdown)}
+                  className="text-xs text-primary hover:underline flex items-center gap-1 font-medium transition-all"
+                >
+                  {showFondoBreakdown ? "✕ Ocultar desglose de efectivo" : "＋ Desglosar efectivo (Dólares y Bolívares)"}
+                </button>
+
+                {showFondoBreakdown && (
+                  <div className="p-3 border rounded-lg bg-muted/20 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="text-[10px] text-muted-foreground uppercase font-semibold flex justify-between">
+                      <span>Asistente de Fondo</span>
+                      <span>Tasa BCV: Bs {currentExchangeRate?.toFixed(2)}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="opening-usd" className="text-xs text-muted-foreground">Efectivo $</Label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                          <Input
+                            id="opening-usd"
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            className="pl-6 h-8 text-xs font-semibold"
+                            value={openingUsd}
+                            onChange={(e) => {
+                              setOpeningUsd(e.target.value);
+                              const usd = e.target.value;
+                              const bs = openingBs;
+                              const usdVal = Number(usd) || 0;
+                              const bsVal = Number(bs) || 0;
+                              const total = usdVal + (bsVal / (currentExchangeRate || 1));
+                              setOpeningBalance(total.toFixed(2));
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="opening-bs" className="text-xs text-muted-foreground">Efectivo Bs</Label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">Bs</span>
+                          <Input
+                            id="opening-bs"
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            className="pl-8 h-8 text-xs font-semibold"
+                            value={openingBs}
+                            onChange={(e) => {
+                              setOpeningBs(e.target.value);
+                              const usd = openingUsd;
+                              const bs = e.target.value;
+                              const usdVal = Number(usd) || 0;
+                              const bsVal = Number(bs) || 0;
+                              const total = usdVal + (bsVal / (currentExchangeRate || 1));
+                              setOpeningBalance(total.toFixed(2));
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
