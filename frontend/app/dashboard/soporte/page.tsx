@@ -29,6 +29,7 @@ import {
   IconThumbUp,
   IconThumbDown,
   IconCopy,
+  IconBell,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { ModeSwitcher } from "@/components/mode-switcher";
@@ -178,6 +179,13 @@ export default function SupportChatPage() {
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
   const [isStandalone, setIsStandalone] = useState(false);
   const [viewportHeight, setViewportHeight] = useState("100dvh");
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
 
   // AI Agent States
   const [chatType, setChatType] = useState<"human" | "ai">("human");
@@ -356,6 +364,58 @@ export default function SupportChatPage() {
     sessionStorage.removeItem("user");
     document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax";
     window.location.href = "/";
+  };
+
+  const urlBase64ToUint8Array = (base64String: string) => {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  };
+
+  const handleRequestNotificationPermission = async () => {
+    if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+      toast.error("Tu dispositivo no es compatible con notificaciones push.");
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      
+      if (permission === "granted") {
+        toast.success("¡Permiso concedido!");
+        
+        const registration = await navigator.serviceWorker.ready;
+        const res = await fetch(`${API}/push/vapid-key`);
+        if (!res.ok) throw new Error("No VAPID key");
+        const data = await res.json();
+        const publicKey = data.publicKey;
+
+        if (publicKey) {
+          const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey)
+          });
+
+          await fetch(`${API}/push/subscribe`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user?.id, subscription }),
+          });
+          toast.success("Notificaciones activadas con éxito.");
+        }
+      } else {
+        toast.error("Permiso de notificaciones denegado.");
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error("Error al activar notificaciones: " + e.message);
+    }
   };
 
   usePushNotifications(user?.id ?? null);
@@ -1522,7 +1582,29 @@ export default function SupportChatPage() {
             </div>
 
             {/* Messages scroll area with original Shadcn-style background */}
-            <div className="flex-1 relative overflow-hidden">
+            <div className="flex-1 relative overflow-hidden flex flex-col">
+
+              {/* Push notification invitation banner */}
+              {chatType === "ai" && mounted && notificationPermission === "default" && (
+                <div className="mx-5 mt-3 p-3 flex items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 backdrop-blur-md shadow-lg shrink-0 z-20">
+                  <div className="flex items-center gap-3">
+                    <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <IconBell size={16} className="text-primary animate-bounce" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-foreground">¿Deseas recibir avisos de la IA?</p>
+                      <p className="text-[10px] text-muted-foreground">Te enviaremos una notificación cuando la IA responda si sales de la app.</p>
+                    </div>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    onClick={handleRequestNotificationPermission} 
+                    className="h-8 text-[11px] font-black uppercase tracking-wider px-3 bg-primary text-primary-foreground hover:bg-primary/95 shrink-0 rounded-lg active:scale-95 transition-all"
+                  >
+                    Activar
+                  </Button>
+                </div>
+              )}
 
               {/* ── VOICE MODE OVERLAY ── */}
 
@@ -1541,7 +1623,7 @@ export default function SupportChatPage() {
                 </svg>
               </div>
 
-              <ScrollArea className="h-full">
+              <ScrollArea className="flex-1 h-full">
                 <div className="px-5 py-4 flex flex-col gap-3 relative">
                   {/* Date chip */}
                   <div className="self-center mb-4">
