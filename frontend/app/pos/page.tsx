@@ -1019,7 +1019,7 @@ export default function POSPage() {
         return;
       }
 
-      if (!openingBalance || Number(openingBalance) < 0) {
+      if (openingBalance === undefined || openingBalance === null || Number(openingBalance) < 0) {
         toast.error("Monto de apertura inválido");
         return;
       }

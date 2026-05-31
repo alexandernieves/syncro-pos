@@ -17,7 +17,7 @@ export class ShiftsController {
       throw new BadRequestException('ID de sucursal es requerido');
     }
     
-    if (!body.openingBalance || body.openingBalance < 0) {
+    if (body.openingBalance === undefined || body.openingBalance === null || Number(body.openingBalance) < 0) {
       throw new BadRequestException('Monto de apertura inválido');
     }
     
@@ -35,7 +35,7 @@ export class ShiftsController {
       throw new BadRequestException('ID de turno es requerido');
     }
     
-    if (!body.closingBalance || body.closingBalance < 0) {
+    if (body.closingBalance === undefined || body.closingBalance === null || Number(body.closingBalance) < 0) {
       throw new BadRequestException('Monto de cierre inválido');
     }
     
