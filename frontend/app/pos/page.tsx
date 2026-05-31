@@ -1398,6 +1398,7 @@ export default function POSPage() {
         setPromisedPaymentDate(new Date());
         setIsPaymentModalOpen(false);
         loadData(); // Refresh stock
+        checkShift(); // Refresh active shift expected totals
       } else {
         const err = await res.json();
         toast.error(err.message || "Error al procesar la venta");
@@ -1945,7 +1946,10 @@ export default function POSPage() {
             variant="ghost" 
             size="sm"
             className="text-destructive font-medium h-8"
-            onClick={() => setIsClosingShift(true)}
+            onClick={() => {
+              checkShift();
+              setIsClosingShift(true);
+            }}
           >
             <IconCash size={16} className="mr-2" /> Cerrar Turno
           </Button>

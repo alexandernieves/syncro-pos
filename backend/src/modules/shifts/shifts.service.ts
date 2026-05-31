@@ -17,7 +17,7 @@ export class ShiftsService {
       throw new BadRequestException('Ya existe un turno abierto para esta sucursal.');
     }
 
-    return this.prisma.shift.create({
+    await this.prisma.shift.create({
       data: {
         userId,
         branchId,
@@ -26,6 +26,8 @@ export class ShiftsService {
         openedAt: new Date(),
       }
     });
+
+    return this.getActive(userId);
   }
 
   async close(id: string, closingBalance: number) {
