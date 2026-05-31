@@ -284,6 +284,10 @@ body {
   }
 }
 
+html {
+  background-color: #09090b !important;
+}
+
 /* PWA Standalone root locking to prevent virtual keyboard scrolling */
 .pwa-standalone,
 .pwa-standalone body {
@@ -292,4 +296,5 @@ body {
   height: 100% !important;
   overflow: hidden !important;
   overscroll-behavior: none !important;
+  background-color: #09090b !important;
 }

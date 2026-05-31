@@ -62,6 +62,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const EMOJI_CATEGORIES = [
   { label: "Caras", emojis: ["😀", "😃", "😄", "😁", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕"] },
@@ -1386,33 +1392,17 @@ export default function SupportChatPage() {
                 )}
               </div>
               <div className="flex items-center gap-1">
-                {chatType === "ai" && (
+                {chatType === "human" ? (
                   <>
-                    {/* Voice Mode Link */}
-                    <Link href="/dashboard/soporte/voz">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-3 rounded-lg gap-1.5 text-xs font-bold transition-all text-muted-foreground hover:text-primary hover:bg-primary/10"
-                        title="Activar modo voz en tiempo real"
-                      >
-                        <IconMicrophone size={14} />
-                        Voz
-                      </Button>
-                    </Link>
-
-                    {/* History Modal */}
+                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground"><IconPhone size={16} /></Button>
+                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground"><IconVideo size={16} /></Button>
+                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground"><IconSearch size={16} /></Button>
+                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground"><IconDotsVertical size={16} /></Button>
+                  </>
+                ) : (
+                  <>
+                    {/* Dialog is rendered outside, with manual open state via isHistoryModalOpen */}
                     <Dialog open={isHistoryModalOpen} onOpenChange={setIsHistoryModalOpen}>
-                      <DialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                          title="Historial de Chats"
-                        >
-                          <IconHistory size={16} />
-                        </Button>
-                      </DialogTrigger>
                       <DialogContent className="max-w-md w-[90vw] bg-background/95 backdrop-blur-md border-border">
                         <DialogHeader>
                           <DialogTitle className="flex items-center justify-between">
@@ -1467,44 +1457,67 @@ export default function SupportChatPage() {
                       </DialogContent>
                     </Dialog>
 
-                    {/* TTS Response Toggle */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        const nextVal = !aiVoiceResponseEnabled;
-                        setAiVoiceResponseEnabled(nextVal);
-                        toast.success(nextVal ? "Respuestas por voz activadas" : "Respuestas por voz desactivadas");
-                        if (!nextVal) {
-                          if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
-                          if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-                          setAiSpeaking(false);
-                        }
-                      }}
-                      className={cn(
-                        "size-8 rounded-lg transition-all active:scale-95",
-                        aiVoiceResponseEnabled
-                          ? "text-primary bg-primary/10 hover:bg-primary/20"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                      )}
-                      title={aiVoiceResponseEnabled ? "Desactivar respuesta por voz" : "Activar respuesta por voz"}
-                    >
-                      {aiVoiceResponseEnabled ? <IconVolume size={18} className="animate-pulse" /> : <IconVolumeOff size={18} />}
-                    </Button>
+                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground"><IconSearch size={16} /></Button>
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleClearAiHistory}
-                      className="size-8 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
-                      title="Borrar historial"
-                    >
-                      <IconTrash size={16} />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="size-8 text-muted-foreground rounded-lg hover:bg-muted active:scale-95 transition-all">
+                          <IconDotsVertical size={16} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56 bg-background/95 backdrop-blur-md border border-border rounded-xl p-1.5 shadow-xl">
+                        
+                        <DropdownMenuItem asChild>
+                          <Link href="/dashboard/soporte/voz" className="flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-lg cursor-pointer text-muted-foreground hover:text-foreground">
+                            <IconMicrophone size={16} className="text-primary" />
+                            <span>Modo Voz (Tiempo real)</span>
+                          </Link>
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem 
+                          onClick={() => setIsHistoryModalOpen(true)}
+                          className="flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-lg cursor-pointer text-muted-foreground hover:text-foreground"
+                        >
+                          <IconHistory size={16} className="text-primary" />
+                          <span>Historial de Chats</span>
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            const nextVal = !aiVoiceResponseEnabled;
+                            setAiVoiceResponseEnabled(nextVal);
+                            toast.success(nextVal ? "Respuestas por voz activadas" : "Respuestas por voz desactivadas");
+                            if (!nextVal) {
+                              if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
+                              if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+                              setAiSpeaking(false);
+                            }
+                          }}
+                          className="flex items-center justify-between px-3 py-2 text-sm font-semibold rounded-lg cursor-pointer text-muted-foreground hover:text-foreground"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            {aiVoiceResponseEnabled ? <IconVolume size={16} className="text-primary" /> : <IconVolumeOff size={16} className="text-primary" />}
+                            <span>Respuesta por Voz</span>
+                          </div>
+                          <Badge variant="outline" className={cn("border-none text-[9px] font-black uppercase px-2 py-0.5 rounded-md", aiVoiceResponseEnabled ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground")}>
+                            {aiVoiceResponseEnabled ? "ON" : "OFF"}
+                          </Badge>
+                        </DropdownMenuItem>
+
+                        <div className="h-px bg-border my-1" />
+
+                        <DropdownMenuItem 
+                          onClick={handleClearAiHistory}
+                          className="flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-lg cursor-pointer text-rose-500 hover:bg-rose-500/10 focus:bg-rose-500/10 focus:text-rose-500"
+                        >
+                          <IconTrash size={16} />
+                          <span>Borrar historial</span>
+                        </DropdownMenuItem>
+
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </>
                 )}
-                <Button variant="ghost" size="icon" className="size-8 text-muted-foreground"><IconSearch size={16} /></Button>
-                <Button variant="ghost" size="icon" className="size-8 text-muted-foreground"><IconDotsVertical size={16} /></Button>
               </div>
             </div>
 
@@ -1841,21 +1854,6 @@ export default function SupportChatPage() {
             </div>
 
             {/* Input bar */}
-            {/* Quick action chips (AI chat only) */}
-            {chatType === "ai" && (
-              <div className="px-4 pt-2 pb-1 bg-background/80 backdrop-blur-sm shrink-0 flex gap-2 overflow-x-auto scrollbar-none border-t border-primary/5">
-                {quickActions.map((action, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleSendAi(action.text)}
-                    disabled={isAiLoading}
-                    className="shrink-0 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-[11px] font-bold text-primary hover:bg-primary/10 active:scale-95 transition-all shadow-xs"
-                  >
-                    {action.label}
-                  </button>
-                ))}
-              </div>
-            )}
 
             <div className="px-4 py-3 border-t bg-background/80 backdrop-blur-sm shrink-0 flex flex-col gap-1.5">
               <div className="flex items-center gap-2 w-full">

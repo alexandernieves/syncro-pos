@@ -40,7 +40,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" translate="no" className="notranslate" suppressHydrationWarning>
+    <html lang="es" translate="no" className="notranslate bg-[#09090b]" suppressHydrationWarning>
       <body
         suppressHydrationWarning
         className={cn(
