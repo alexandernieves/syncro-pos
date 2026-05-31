@@ -42,7 +42,7 @@ export class PushService {
       subscriptions.map((sub) =>
         webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          JSON.stringify({ ...payload, icon: payload.icon || '/logo.png' }),
+          JSON.stringify({ ...payload, icon: payload.icon || '/syncro.png' }),
         ),
       ),
     );

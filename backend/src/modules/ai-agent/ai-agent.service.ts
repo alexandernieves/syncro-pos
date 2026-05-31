@@ -98,7 +98,7 @@ export class AiAgentService {
 
     // Send push notification about AI response
     this.pushService.sendToUser(userId, {
-      title: '🤖 Syncro IA ha respondido',
+      title: 'Syncro IA ha respondido',
       body: message.length > 120 ? (message.substring(0, 117) + '...') : message,
       url: '/dashboard/soporte'
     }).catch(err => this.logger.warn(`Failed to send push notification: ${err.message}`));
@@ -167,7 +167,7 @@ export class AiAgentService {
 
       // Send push notification about AI response
       this.pushService.sendToUser(userId, {
-        title: '🤖 Syncro IA ha respondido',
+        title: 'Syncro IA ha respondido',
         body: message.length > 120 ? (message.substring(0, 117) + '...') : message,
         url: '/dashboard/soporte'
       }).catch(err => this.logger.warn(`Failed to send push notification in stream: ${err.message}`));
