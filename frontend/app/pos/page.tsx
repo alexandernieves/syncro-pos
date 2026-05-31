@@ -483,6 +483,8 @@ export default function POSPage() {
   const [openingBs, setOpeningBs] = useState<string>("");
   const [isClosingShift, setIsClosingShift] = useState(false);
   const [closingBalance, setClosingBalance] = useState<string>("0");
+  const [closeSummary, setCloseSummary] = useState<{ expected: number; reported: number; difference: number } | null>(null);
+  const [isCloseSummaryOpen, setIsCloseSummaryOpen] = useState(false);
   const [cashBreakdown, setCashBreakdown] = useState({ b1: 0, b5: 0, b10: 0, b20: 0, b50: 0, b100: 0 });
   const [posBatch, setPosBatch] = useState<string>("0");
   const [pagoMovilBatch, setPagoMovilBatch] = useState<string>("0");
@@ -1080,12 +1082,21 @@ export default function POSPage() {
       const totalPhysicalBsToUsd = (Number(cashBs) || 0) / currentExchangeRate;
       const finalClosingBalance = totalPhysicalUsd + totalPhysicalBsToUsd;
       
+      const expectedCash = activeShift.expectedTotals?.CASH || 0;
+      const differenceVal = finalClosingBalance - expectedCash;
+
       const res = await fetch(`${API}/shifts/close/${activeShift.id}`, {
         method: "POST",
         headers,
         body: JSON.stringify({ closingBalance: finalClosingBalance }),
       });
       if (res.ok) {
+        setCloseSummary({
+          expected: expectedCash,
+          reported: finalClosingBalance,
+          difference: differenceVal
+        });
+        setIsCloseSummaryOpen(true);
         setActiveShift(null);
         setIsClosingShift(false);
         toast.success("Caja cerrada correctamente");
@@ -3179,6 +3190,64 @@ export default function POSPage() {
             <Button variant="outline" onClick={() => setIsClosingShift(false)}>Cancelar</Button>
             <Button onClick={handleCloseShift} disabled={isClosingShift && processing} className="bg-primary hover:bg-primary/90 text-primary-foreground">
               {processing ? "Procesando..." : "Confirmar Arqueo y Cerrar Caja"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: CLOSE SHIFT SUMMARY (ARQUEO DE CAJA RESULTADO) */}
+      <Dialog open={isCloseSummaryOpen} onOpenChange={setIsCloseSummaryOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg text-emerald-500">
+              <IconCheck className="size-5" /> Caja Cerrada Exitosamente
+            </DialogTitle>
+            <DialogDescription>
+              Resumen del cuadre de caja de este turno de trabajo.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="p-4 rounded-xl bg-muted/50 border space-y-3">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Efectivo Esperado:</span>
+                <span className="font-semibold text-foreground">${closeSummary?.expected.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Efectivo Contado:</span>
+                <span className="font-semibold text-foreground">${closeSummary?.reported.toFixed(2)}</span>
+              </div>
+              
+              <Separator />
+              
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium">Diferencia:</span>
+                <span className={`text-base font-bold tabular-nums ${
+                  (closeSummary?.difference || 0) < -0.01 
+                    ? 'text-rose-500' 
+                    : (closeSummary?.difference || 0) > 0.01 
+                      ? 'text-emerald-500' 
+                      : 'text-foreground'
+                }`}>
+                  {((closeSummary?.difference || 0) < -0.01 ? '-$' : '$') + Math.abs(closeSummary?.difference || 0).toFixed(2)}
+                  <span className="text-[10px] ml-1 block text-right font-medium">
+                    {(closeSummary?.difference || 0) < -0.01 
+                      ? '(Faltante)' 
+                      : (closeSummary?.difference || 0) > 0.01 
+                        ? '(Sobrante)' 
+                        : '(Cuadrado Perfecto)'}
+                  </span>
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground text-center">
+              Este reporte ha sido guardado de forma segura y puede ser consultado en el historial de turnos del Dashboard de Contabilidad.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsCloseSummaryOpen(false)} className="w-full">
+              Entendido
             </Button>
           </DialogFooter>
         </DialogContent>

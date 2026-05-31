@@ -112,6 +112,7 @@ const data = {
       items: [
         { title: "Resumen", url: "/dashboard/contabilidad" },
         { title: "Gastos (Caja Chica)", url: "/dashboard/contabilidad/gastos" },
+        { title: "Cierres de Caja (Turnos)", url: "/dashboard/contabilidad/turnos" },
       ],
     },
     {
