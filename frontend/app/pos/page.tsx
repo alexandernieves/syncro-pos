@@ -736,6 +736,7 @@ export default function POSPage() {
 
   const { isOnline, syncPendingSales, pullRemoteData } = useSync();
 
+  const isDesktop = typeof window !== 'undefined' && 'electron' in window;
   const canAccessDashboard = user?.permissions?.includes("dashboard") || user?.role === "ownerpos" || user?.role === "admin";
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
   const currentExchangeRate = baseCurrency === "USD" ? bcvRate : bcvEurRate;

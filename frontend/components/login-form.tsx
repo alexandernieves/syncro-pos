@@ -66,6 +66,7 @@ export function LoginForm({
   const [isStandalone, setIsStandalone] = useState(false)
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
+  const isDesktop = typeof window !== "undefined" && "electron" in window
 
   // ── Unique IDs for this render — defeats browser autocomplete heuristics ───
   // useId() produces a stable but unique-per-mount string like ":r0:", ":r1:", etc.

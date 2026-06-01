@@ -74,6 +74,15 @@ async function bootstrap() {
         return callback(null, true);
       }
 
+      // Allow Electron production and local development origins
+      if (
+        origin === 'app://local' ||
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:')
+      ) {
+        return callback(null, true);
+      }
+
       callback(new Error(`CORS: origin '${origin}' not allowed`));
     },
     credentials: true,
