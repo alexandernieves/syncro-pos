@@ -18,7 +18,7 @@ import {
   IconShoppingCart, IconTrash, IconWallet, IconSearch, IconCash, IconCreditCard,
   IconPlus, IconMinus, IconUser, IconChevronRight, IconUserPlus, IconX, IconBox,
   IconArrowLeft, IconLogout, IconDeviceDesktop, IconDevices, IconCalculator, IconRefresh, IconReceiptTax,
-  IconEye, IconPencil, IconScan, IconCamera, IconBarcode, IconAlertCircle, IconCircleCheckFilled,
+  IconEye, IconPencil, IconScan, IconCamera, IconBarcode, IconAlertCircle, IconCircleCheckFilled, IconCheck,
   IconHexagon, IconWorld, IconBuilding, IconHistory, IconReceipt, IconFilter, IconArrowBackUp,
   IconPlayerPause, IconReceiptOff, IconList, IconFingerprint, IconCalendar as IconCalendarTabler, IconKeyboard,
   IconPackage, IconScale, IconLock, IconDiscount
