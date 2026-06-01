@@ -1903,17 +1903,17 @@ export default function POSPage() {
         }}
       />
 
-      <header className="h-14 bg-background border-b px-6 flex items-center justify-between sticky top-0 z-10 shrink-0 print:hidden">
-        <div className="flex items-center gap-4">
+      <header className="h-12 bg-background border-b px-3 flex items-center justify-between sticky top-0 z-10 shrink-0 print:hidden text-xs">
+        <div className="flex items-center gap-2">
           {canAccessDashboard && (
-            <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard")} className="h-8 w-8">
+            <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard")} className="h-7 w-7">
               <IconArrowLeft className="size-4" />
             </Button>
           )}
-          <div className="flex items-center gap-2">
-            <h1 className="font-bold text-lg tracking-tight">SYNCRO POS</h1>
+          <div className="flex items-center gap-1.5">
+            <h1 className="font-bold text-sm tracking-tight whitespace-nowrap">SYNCRO POS</h1>
             <Badge variant="outline" className={cn(
-              "hidden sm:inline-flex text-[10px] h-5 py-0 px-1.5 font-bold uppercase tracking-wider",
+              "hidden sm:inline-flex text-[9px] h-4 py-0 px-1 font-bold uppercase tracking-wider",
               isOnline ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border-rose-500/20"
             )}>
               {isOnline ? 'Online' : 'Offline'}
@@ -1921,20 +1921,20 @@ export default function POSPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
           <div className="hidden sm:flex flex-col items-end">
-            <p className="text-[10px] text-muted-foreground leading-none">Cajero</p>
-            <p className="text-xs font-semibold leading-none mt-1">{user?.name || "Administrador"}</p>
+            <p className="text-[9px] text-muted-foreground leading-none">Cajero</p>
+            <p className="text-[10px] font-semibold leading-none mt-0.5">{user?.name || "Administrador"}</p>
           </div>
           {settings?.bcvUpdateDate && (
-            <div className="hidden lg:flex flex-col items-end mr-1">
-              <p className="text-[10px] text-muted-foreground leading-none">Fecha Valor</p>
-              <p className="text-xs font-semibold text-[#79716b] leading-none mt-1">{settings.bcvUpdateDate}</p>
+            <div className="hidden xl:flex flex-col items-end mr-1">
+              <p className="text-[9px] text-muted-foreground leading-none">Fecha Valor</p>
+              <p className="text-[10px] font-semibold text-[#79716b] leading-none mt-0.5">{settings.bcvUpdateDate}</p>
             </div>
           )}
           <div className="flex items-center gap-1">
             <Select value={baseCurrency} onValueChange={(v: "USD" | "EUR") => setBaseCurrency(v)}>
-              <SelectTrigger className="h-8 w-[72px] text-[10px] font-bold border-[#79716b]/30 focus:ring-0">
+              <SelectTrigger className="h-7 w-[64px] text-[9px] font-bold border-[#79716b]/30 focus:ring-0">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1942,12 +1942,12 @@ export default function POSPage() {
                 <SelectItem value="EUR" className="text-xs font-semibold">EUR</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" className="h-8 border-[#79716b]/30 gap-2" onClick={handleSyncBcv} disabled={syncingBcv}>
-              <IconRefresh size={14} className={syncingBcv ? "animate-spin" : ""} />
-              <span className="text-[10px] font-bold">BCV: {currentExchangeRate.toFixed(2)}</span>
+            <Button variant="outline" size="sm" className="h-7 border-[#79716b]/30 gap-1 px-2" onClick={handleSyncBcv} disabled={syncingBcv}>
+              <IconRefresh size={12} className={syncingBcv ? "animate-spin" : ""} />
+              <span className="text-[9px] font-bold">BCV: {currentExchangeRate.toFixed(2)}</span>
             </Button>
           </div>
-          <Separator orientation="vertical" className="h-6 mx-1" />
+          <Separator orientation="vertical" className="h-5 mx-0.5" />
           <BranchSwitcher disabled={!!activeShift} />
           <div className="flex items-center gap-1">
             <ThemeSelector />
@@ -1956,13 +1956,13 @@ export default function POSPage() {
           <Button 
             variant="ghost" 
             size="sm"
-            className="text-destructive font-medium h-8"
+            className="text-destructive font-medium h-7 text-[10px] px-2"
             onClick={() => {
               checkShift();
               setIsClosingShift(true);
             }}
           >
-            <IconCash size={16} className="mr-2" /> Cerrar Turno
+            <IconCash size={14} className="mr-1" /> Cerrar Turno
           </Button>
         </div>
       </header>
@@ -1973,61 +1973,61 @@ export default function POSPage() {
         <div className="flex-1 flex flex-col gap-4 overflow-hidden">
           
           {/* BARRA DE CONTROLES SUPERIOR */}
-          <div className="flex items-center justify-between gap-4 shrink-0">
+          <div className="flex items-center justify-between gap-2 shrink-0">
             {/* Buscador (Solo en vista POS) */}
             <div className={cn(
-              "flex items-center gap-3 bg-background border rounded-md px-3 h-10 flex-1 shadow-sm transition-all",
+              "flex items-center gap-2 bg-background border rounded-md px-2 h-8 flex-1 shadow-sm transition-all",
               view === 'history' && "opacity-50 pointer-events-none grayscale"
             )}>
-              <IconSearch className="text-muted-foreground size-4 shrink-0" />
+              <IconSearch className="text-muted-foreground size-3.5 shrink-0" />
               <Input 
                 placeholder="Buscar productos por nombre o SKU..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="border-0 bg-transparent shadow-none focus-visible:ring-0 h-full p-0"
+                className="border-0 bg-transparent shadow-none focus-visible:ring-0 h-full p-0 text-xs"
                 disabled={view === 'history'}
               />
               {searchTerm && (
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSearchTerm("")}>
-                  <IconX size={14} />
+                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setSearchTerm("")}>
+                  <IconX size={12} />
                 </Button>
               )}
-              <div className="flex items-center gap-2 mr-2 ml-1">
+              <div className="flex items-center gap-1.5 mr-1 ml-0.5">
                 <Switch 
                   id="stock-filter" 
                   checked={showOnlyInStock} 
                   onCheckedChange={setShowOnlyInStock} 
-                  className="scale-75 data-[state=checked]:bg-primary"
+                  className="scale-65 data-[state=checked]:bg-primary"
                 />
-                <Label htmlFor="stock-filter" className="text-[10px] font-bold text-muted-foreground whitespace-nowrap cursor-pointer uppercase select-none">
+                <Label htmlFor="stock-filter" className="text-[9px] font-bold text-muted-foreground whitespace-nowrap cursor-pointer uppercase select-none">
                   Stock
                 </Label>
               </div>
-              <Separator orientation="vertical" className="h-4 mx-1" />
+              <Separator orientation="vertical" className="h-3 mx-0.5" />
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-8 w-8 text-primary hover:bg-primary/5" 
+                className="h-6 w-6 text-primary hover:bg-primary/5" 
                 onClick={() => setIsNumpadOpen(true)}
                 title="Teclado numérico"
               >
-                <IconKeyboard size={18} />
+                <IconKeyboard size={15} />
               </Button>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-8 w-8 text-primary hover:bg-primary/5" 
+                className="h-6 w-6 text-primary hover:bg-primary/5" 
                 onClick={() => setScannerOpen(true)}
                 title="Escanear con cámara"
               >
-                <IconScan size={18} />
+                <IconScan size={15} />
               </Button>
             </div>
 
             {/* Toggle Historial */}
             <Button 
               variant={view === "history" ? "secondary" : "outline"} 
-              className="h-10 px-4 gap-2 border shadow-sm shrink-0"
+              className="h-8 px-2 gap-1 border shadow-sm shrink-0"
               onClick={async () => {
                 if (view === 'pos') {
                   setView('history');
@@ -2048,45 +2048,45 @@ export default function POSPage() {
                 }
               }}
             >
-              <IconHistory size={18} className={view === "history" ? "text-primary" : ""} />
-              <span className="font-bold text-xs">Historial</span>
+              <IconHistory size={15} className={view === "history" ? "text-primary" : ""} />
+              <span className="font-bold text-[10px]">Historial</span>
             </Button>
 
             <Button 
               variant="outline"
-              className="h-10 px-4 gap-2 border shadow-sm shrink-0 border-blue-500/30 hover:bg-blue-500/5 text-blue-600"
+              className="h-8 px-2 gap-1 border shadow-sm shrink-0 border-blue-500/30 hover:bg-blue-500/5 text-blue-600"
               onClick={() => setIsCalculatorOpen(true)}
             >
-              <IconCalculator size={18} />
-              <span className="text-sm font-medium hidden md:inline">Calculadora</span>
+              <IconCalculator size={15} />
+              <span className="text-[10px] font-bold hidden md:inline">Calculadora</span>
             </Button>
 
             <Button 
               variant="outline"
-              className="h-10 px-4 gap-2 border shadow-sm shrink-0 border-amber-500/30 hover:bg-amber-500/5 text-amber-600"
+              className="h-8 px-2 gap-1 border shadow-sm shrink-0 border-amber-500/30 hover:bg-amber-500/5 text-amber-600"
               onClick={() => {
                 fetchWaitlist();
                 setIsWaitlistOpen(true);
               }}
             >
-              <IconAlertCircle size={18} />
-              <span className="text-sm font-medium hidden md:inline">Lista de Espera</span>
+              <IconAlertCircle size={15} />
+              <span className="text-[10px] font-bold hidden md:inline">Lista de Espera</span>
               {waitlist.length > 0 && (
-                <Badge className="ml-1 px-1 h-4 min-w-4 bg-amber-500 text-[10px] text-white">{waitlist.length}</Badge>
+                <Badge className="ml-0.5 px-0.5 h-3 min-w-3 bg-amber-500 text-[8px] text-white flex items-center justify-center font-bold">{waitlist.length}</Badge>
               )}
             </Button>
 
             <Button 
               variant="outline"
-              className="h-10 px-4 gap-2 border shadow-sm shrink-0 border-[#79716b]/20 hover:bg-muted/50 transition-all group text-foreground"
+              className="h-8 px-2 gap-1 border shadow-sm shrink-0 border-[#79716b]/20 hover:bg-muted/50 transition-all group text-foreground"
               onClick={() => setIsParkedModalOpen(true)}
             >
-              <div className="size-5 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                <IconPlayerPause size={12} />
+              <div className="size-4 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                <IconPlayerPause size={10} />
               </div>
-              <span className="text-sm font-medium hidden md:inline">Tickets en Pausa</span>
+              <span className="text-[10px] font-bold hidden md:inline">Tickets en Pausa</span>
               {parkedTickets.length > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">
                   {parkedTickets.length}
                 </span>
               )}
@@ -2262,14 +2262,14 @@ export default function POSPage() {
         </div>
 
         {/* SECCIÓN DERECHA: CARRITO Y PAGO */}
-        <div className="w-full lg:w-[380px] flex flex-col h-full bg-background border rounded-lg overflow-hidden shadow-sm shrink-0">
-          <div className="p-4 border-b bg-muted/10 shrink-0">
+        <div className="w-full lg:w-[360px] flex flex-col h-full bg-background border rounded-lg overflow-hidden shadow-sm shrink-0">
+          <div className="p-3 border-b bg-muted/10 shrink-0">
             <div className="flex justify-between items-start">
               <div>
-                <h2 className="text-sm font-bold flex items-center gap-2">
-                  <IconShoppingCart className="text-primary size-4" /> Ticket Actual
+                <h2 className="text-xs font-bold flex items-center gap-1.5">
+                  <IconShoppingCart className="text-primary size-3.5" /> Ticket Actual
                 </h2>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
+                <p className="text-[9px] text-muted-foreground mt-0.5">
                   {cart.length} productos • {new Date().toLocaleDateString()}
                 </p>
               </div>
@@ -2277,30 +2277,30 @@ export default function POSPage() {
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="h-8 w-8 text-blue-600 hover:bg-blue-500/5" 
+                  className="h-7 w-7 text-blue-600 hover:bg-blue-500/5" 
                   onClick={parkTicket}
                   title="Poner ticket en espera"
                 >
-                  <IconPlayerPause size={16} />
+                  <IconPlayerPause size={14} />
                 </Button>
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="h-8 w-8 text-destructive hover:bg-destructive/5" 
+                  className="h-7 w-7 text-destructive hover:bg-destructive/5" 
                   onClick={() => setCart([])}
                   title="Vaciar carrito"
                 >
-                  <IconTrash size={16} />
+                  <IconTrash size={14} />
                 </Button>
               </div>
             </div>
             
-            <Separator className="mt-4 mb-3" />
+            <Separator className="mt-2 mb-2" />
             
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <div className="flex justify-between items-center px-0.5">
-                <Label className="text-[10px] font-black uppercase text-[#79716b] tracking-widest">Identificación Cliente</Label>
-                <button className="text-primary text-[10px] font-bold hover:underline" onClick={() => setIsQuickClientOpen(true)}>
+                <Label className="text-[9px] font-black uppercase text-[#79716b] tracking-widest">Identificación Cliente</Label>
+                <button className="text-primary text-[9px] font-bold hover:underline" onClick={() => setIsQuickClientOpen(true)}>
                   + NUEVO
                 </button>
               </div>
@@ -2310,17 +2310,17 @@ export default function POSPage() {
                   value={clientDocSearch}
                   onChange={e => setClientDocSearch(e.target.value)}
                   onKeyDown={handleClientDocSearch}
-                  className="h-8 text-xs pr-8"
+                  className="h-7 text-xs pr-8"
                   disabled={searchingClient}
                 />
                 {searchingClient && (
                   <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                    <IconRefresh size={12} className="animate-spin text-muted-foreground" />
+                    <IconRefresh size={10} className="animate-spin text-muted-foreground" />
                   </div>
                 )}
               </div>
               <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                <SelectTrigger className="h-9 text-xs bg-muted/20 border-[#79716b]/30">
+                <SelectTrigger className="h-8 text-xs bg-muted/20 border-[#79716b]/30">
                   <SelectValue placeholder="Seleccionar Cliente" />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-[#79716b]/30">
@@ -2508,9 +2508,9 @@ export default function POSPage() {
             )}
           </div>
 
-          <div className="p-4 border-t bg-muted/5 shrink-0 space-y-4">
-            <div className="space-y-1.5 px-1">
-              <div className="flex justify-between text-xs font-medium text-muted-foreground group relative cursor-pointer" onClick={() => {
+          <div className="p-3 border-t bg-muted/5 shrink-0 space-y-2.5">
+            <div className="space-y-1 px-1">
+              <div className="flex justify-between text-[11px] font-medium text-muted-foreground group relative cursor-pointer" onClick={() => {
                 openPinVerification(() => {
                   setTargetDiscountId('GLOBAL');
                   setDiscountType('pct');
@@ -2519,36 +2519,36 @@ export default function POSPage() {
                 });
               }}>
                 <span className="flex items-center gap-1 border-b border-dashed border-muted-foreground/30 hover:border-emerald-500 hover:text-emerald-500 transition-colors">
-                  <IconDiscount size={12} /> Descuento Global
+                  <IconDiscount size={11} /> Descuento Global
                 </span>
                 <span className={cn("tabular-nums", totalDiscountAmt > 0 ? "text-emerald-500 font-bold" : "")}>
                   {totalDiscountAmt > 0 ? `-$${totalDiscountAmt.toFixed(2)}` : '$0.00'}
                 </span>
               </div>
-              <div className="flex justify-between text-xs font-medium text-muted-foreground">
+              <div className="flex justify-between text-[11px] font-medium text-muted-foreground">
                 <span>Subtotal (Neto)</span>
                 <span className="tabular-nums">${subtotalAfterGlobalDiscount.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-xs font-medium text-muted-foreground">
+              <div className="flex justify-between text-[11px] font-medium text-muted-foreground">
                 <span>IVA ({taxRate}%)</span>
                 <span className="tabular-nums">${taxAmount.toFixed(2)}</span>
               </div>
             </div>
-            <div className="flex justify-between items-center pt-2 border-t">
+            <div className="flex justify-between items-center pt-1.5 border-t">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-bold text-foreground">Total Checkout</span>
-                <span className="text-[10px] text-muted-foreground font-medium tabular-nums">~ Bs {(updatedTotal * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                <span className="text-[11px] font-bold text-foreground">Total Checkout</span>
+                <span className="text-[9px] text-muted-foreground font-medium tabular-nums">~ Bs {(updatedTotal * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
               </div>
-              <span className="text-2xl font-black tracking-tight tabular-nums">${updatedTotal.toFixed(2)}</span>
+              <span className="text-xl font-black tracking-tight tabular-nums">${updatedTotal.toFixed(2)}</span>
             </div>
             <Button 
                 size="lg" 
-                className="w-full h-12 font-semibold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md relative group overflow-hidden transition-all duration-200 rounded-lg" 
+                className="w-full h-10 font-semibold text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-md relative group overflow-hidden transition-all duration-200 rounded-lg" 
                 onClick={() => openPaymentModal("CASH")} 
                 disabled={cart.length === 0 || processing}
             >
-                <span className="relative flex items-center justify-center gap-2">
-                    <IconCash className="size-5" /> 
+                <span className="relative flex items-center justify-center gap-1.5">
+                    <IconCash className="size-4" /> 
                     Procesar Pago
                 </span>
             </Button>
