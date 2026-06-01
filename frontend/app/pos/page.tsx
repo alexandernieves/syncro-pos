@@ -1097,7 +1097,6 @@ export default function POSPage() {
           difference: differenceVal
         });
         setIsCloseSummaryOpen(true);
-        setActiveShift(null);
         setIsClosingShift(false);
         toast.success("Caja cerrada correctamente");
       } else {
@@ -3246,7 +3245,18 @@ export default function POSPage() {
             </p>
           </div>
           <DialogFooter>
-            <Button onClick={() => setIsCloseSummaryOpen(false)} className="w-full">
+            <Button 
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsCloseSummaryOpen(false);
+                setActiveShift(null);
+                setOpeningBalance("0");
+                setOpeningUsd("");
+                setOpeningBs("");
+              }} 
+              className="w-full"
+            >
               Entendido
             </Button>
           </DialogFooter>
