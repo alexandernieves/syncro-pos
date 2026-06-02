@@ -21,9 +21,8 @@
     "productName": "Syncro POS",
     "asar": true,
     "publish": {
-      "provider": "github",
-      "owner": "alexandernieves",
-      "repo": "syncro-pos"
+      "provider": "generic",
+      "url": "https://pos-frontend-a7ln.onrender.com/updates/"
     },
     "directories": {
       "output": "dist"
