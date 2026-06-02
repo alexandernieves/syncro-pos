@@ -100,7 +100,7 @@ export default function RootLayout({
               <ActiveThemeProvider>
                 {children}
                 <SessionMonitor timeoutMinutes={15} />
-                <Toaster position="top-right" />
+                <Toaster position="top-right" closeButton />
                 <script
                   dangerouslySetInnerHTML={{
                     __html: `
