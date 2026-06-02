@@ -65,6 +65,7 @@
     },
     "win": {
       "icon": "public/syncro.ico",
+      "artifactName": "Syncro-POS-Setup-${version}.${ext}",
       "target": [
         {
           "target": "nsis",
