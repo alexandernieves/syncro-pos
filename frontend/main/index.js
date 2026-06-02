@@ -1,4 +1,5 @@
-const { app, BrowserWindow, screen, protocol, net } = require('electron');
+const { app, BrowserWindow, screen, protocol, net, ipcMain } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const url = require('url');
 
@@ -9,10 +10,12 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, allowServiceWorkers: true } }
 ]);
 
+let mainWindow;
+
 function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: width,
     height: height,
     title: "Syncro POS",
@@ -63,6 +66,11 @@ app.whenReady().then(() => {
 
   createWindow();
 
+  // Iniciar verificación de actualizaciones automáticas en producción
+  if (!isDev) {
+    autoUpdater.checkForUpdatesAndNotify();
+  }
+
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -70,4 +78,15 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') app.quit();
+});
+
+// ── Auto-Updater Events & IPC ───────────────────────────────────────────────
+autoUpdater.on('update-downloaded', (info) => {
+  if (mainWindow) {
+    mainWindow.webContents.send('update-downloaded', info);
+  }
+});
+
+ipcMain.on('install-update', () => {
+  autoUpdater.quitAndInstall();
 });

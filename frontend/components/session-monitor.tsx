@@ -61,6 +61,32 @@ export function SessionMonitor({ timeoutMinutes = 30 }: SessionMonitorProps) {
     }
   }, [resetTimer])
 
+  useEffect(() => {
+    // Escuchar actualizaciones de Electron (si estamos corriendo en Electron)
+    if (typeof window !== "undefined" && "electron" in window) {
+      const electronObj = (window as any).electron;
+      if (electronObj && typeof electronObj.onUpdateDownloaded === "function") {
+        const cleanup = electronObj.onUpdateDownloaded((info: any) => {
+          toast.success("Nueva actualización lista", {
+            description: `Se ha descargado la versión ${info?.version || '1.0.x'}. Haz clic para reiniciar y actualizar.`,
+            action: {
+              label: "Actualizar",
+              onClick: () => {
+                if (typeof electronObj.installUpdate === "function") {
+                  electronObj.installUpdate();
+                }
+              }
+            },
+            duration: Infinity, // Mantener visible hasta tomar acción
+          });
+        });
+        return () => {
+          if (typeof cleanup === "function") cleanup();
+        };
+      }
+    }
+  }, []);
+
   // No renderiza nada visual, es un controlador lógico
-  return null
+  return null;
 }

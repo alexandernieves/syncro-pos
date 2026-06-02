@@ -20,6 +20,11 @@
     "appId": "com.syncro.pos",
     "productName": "Syncro POS",
     "asar": true,
+    "publish": {
+      "provider": "github",
+      "owner": "alexandernieves",
+      "repo": "syncro-pos"
+    },
     "directories": {
       "output": "dist"
     },
@@ -123,6 +128,7 @@
     "date-fns": "^4.1.0",
     "dexie": "^4.4.2",
     "dexie-react-hooks": "^4.4.0",
+    "electron-updater": "^6.8.3",
     "framer-motion": "^12.38.0",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.562.0",
