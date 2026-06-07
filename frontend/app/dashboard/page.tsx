@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { 
   IconTrendingUp, IconUsers, IconShoppingCart, IconPackage, IconCheck, IconExternalLink, 
   IconCash, IconCreditCard, IconTarget, IconBrandWhatsapp, IconTrendingDown, IconCalendar,
-  IconChevronLeft, IconChevronRight, IconChevronsLeft, IconChevronsRight
+  IconChevronLeft, IconChevronRight, IconChevronsLeft, IconChevronsRight, IconSearch, IconReceipt,
+  IconLoader2
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +33,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { 
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter 
+} from "@/components/ui/dialog";
 
 const API = API_URL;
 
@@ -39,27 +44,249 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
   const { formatPrice } = useCurrency();
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedSale, setSelectedSale] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [clientHistory, setClientHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
-  const totalPages = Math.max(1, Math.ceil(sales.length / pageSize));
+  // Global search state
+  const [globalSales, setGlobalSales] = useState<any[] | null>(null);
+  const [loadingGlobal, setLoadingGlobal] = useState(false);
+
+  // Fetch all sales when user initiates search to search globally
+  useEffect(() => {
+    const query = searchTerm.trim();
+    if (!query || globalSales !== null) return;
+
+    const fetchAllSales = async () => {
+      setLoadingGlobal(true);
+      try {
+        const token = localStorage.getItem("token");
+        const branchId = localStorage.getItem("currentBranchId") || "";
+        const res = await fetch(`${API}/sales?branchId=${branchId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const mappedSales = data.map((s: any) => ({
+            id: s.id,
+            client: s.client?.name || "Consumidor Final",
+            clientId: s.clientId,
+            clientDocument: s.client?.documentId || null,
+            total: s.total,
+            subtotal: s.subtotal,
+            taxAmount: s.taxAmount,
+            igtfAmount: s.igtfAmount,
+            discountAmt: s.discountAmt,
+            status: s.status || "COMPLETED",
+            branch: s.branch?.name || "N/A",
+            date: s.createdAt,
+            seller: s.user?.name || "Desconocido",
+            payments: (s.payments || []).map((p: any) => ({
+              method: p.method,
+              amount: p.amount
+            })),
+            items: (s.items || []).map((item: any) => ({
+              id: item.id,
+              name: item.variant?.product?.name || "Producto Desconocido",
+              variantName: item.variant?.name || "",
+              quantity: item.quantity,
+              price: item.price,
+              subtotal: item.subtotal
+            }))
+          }));
+          setGlobalSales(mappedSales);
+        }
+      } catch (err) {
+        console.error("Error loading global sales for search", err);
+        toast.error("Error al buscar en el historial global");
+      } finally {
+        setLoadingGlobal(false);
+      }
+    };
+
+    fetchAllSales();
+  }, [searchTerm, globalSales]);
+
+  // Fetch client history when selectedSale changes
+  useEffect(() => {
+    if (!selectedSale || !selectedSale.clientId) {
+      setClientHistory([]);
+      return;
+    }
+
+    const fetchClientHistory = async () => {
+      setLoadingHistory(true);
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API}/clients/${selectedSale.clientId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const clientData = await res.json();
+          const salesHistory = (clientData.sales || []).map((s: any) => ({
+            id: s.id,
+            client: clientData.name || "Consumidor Final",
+            clientId: s.clientId || clientData.id,
+            clientDocument: clientData.documentId || null,
+            total: s.total,
+            subtotal: s.subtotal,
+            taxAmount: s.taxAmount,
+            igtfAmount: s.igtfAmount,
+            discountAmt: s.discountAmt,
+            status: s.status || "COMPLETED",
+            branch: s.branch?.name || "N/A",
+            date: s.createdAt,
+            seller: s.user?.name || "Desconocido",
+            payments: s.payments.map((p: any) => ({
+              method: p.method,
+              amount: p.amount
+            })),
+            items: s.items.map((item: any) => ({
+              id: item.id,
+              name: item.variant?.product?.name || "Producto Desconocido",
+              variantName: item.variant?.name || "",
+              quantity: item.quantity,
+              price: item.price,
+              subtotal: item.subtotal
+            }))
+          }));
+          setClientHistory(salesHistory);
+        }
+      } catch (err) {
+        console.error("Error loading client history", err);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+
+    fetchClientHistory();
+  }, [selectedSale?.clientId]);
+
+  // Filter sales based on search query (global if query is active)
+  const filteredSales = React.useMemo(() => {
+    const query = searchTerm.toLowerCase().trim();
+    if (!query) return sales;
+    const sourceSales = globalSales || sales;
+    return sourceSales.filter((sale) => {
+      return (
+        sale.id?.toLowerCase().includes(query) ||
+        sale.client?.toLowerCase().includes(query) ||
+        (sale.clientDocument && sale.clientDocument.toLowerCase().includes(query))
+      );
+    });
+  }, [sales, globalSales, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSales.length / pageSize));
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [sales.length]);
+  }, [filteredSales.length]);
 
-  const paginatedSales = sales.slice(
+  const paginatedSales = filteredSales.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
 
+  const getPaymentMethodBadge = (payments: any[]) => {
+    if (!payments || payments.length === 0) {
+      return (
+        <Badge variant="outline" className="text-[9px] border-zinc-700/30 text-zinc-400 font-semibold uppercase">
+          Sin Pago
+        </Badge>
+      );
+    }
+
+    return (
+      <div className="flex flex-wrap gap-1">
+        {payments.map((p, idx) => {
+          let label = p.method;
+          let colorClass = "border-[#79716b]/20 text-[#79716b]";
+
+          switch (p.method) {
+            case "CASH":
+              label = "Efectivo";
+              colorClass = "border-emerald-500/20 bg-emerald-500/5 text-emerald-400";
+              break;
+            case "CARD":
+              label = "Tarjeta / Punto";
+              colorClass = "border-blue-500/20 bg-blue-500/5 text-blue-400";
+              break;
+            case "TRANSFER":
+              label = "Transferencia";
+              colorClass = "border-purple-500/20 bg-purple-500/5 text-purple-400";
+              break;
+            case "WALLET":
+              label = "Billetera";
+              colorClass = "border-cyan-500/20 bg-cyan-500/5 text-cyan-400";
+              break;
+            case "CREDIT":
+              label = "Fiado";
+              colorClass = "border-rose-500/20 bg-rose-500/5 text-rose-400";
+              break;
+            case "PAGO_MOVIL":
+              label = "Pago Móvil";
+              colorClass = "border-amber-500/20 bg-amber-500/5 text-amber-400";
+              break;
+            case "BINANCE":
+              label = "Binance";
+              colorClass = "border-yellow-500/20 bg-yellow-500/5 text-yellow-400";
+              break;
+            case "ZINLI":
+              label = "Zinli";
+              colorClass = "border-teal-500/20 bg-teal-500/5 text-teal-400";
+              break;
+            case "PAYPAL":
+              label = "Paypal";
+              colorClass = "border-blue-600/20 bg-blue-600/5 text-blue-300";
+              break;
+          }
+
+          return (
+            <Badge key={idx} variant="outline" className={cn("text-[9px] gap-1 px-1.5 h-5 font-semibold uppercase", colorClass)}>
+              {label}
+            </Badge>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const handleRowClick = (sale: any) => {
+    setSelectedSale(sale);
+    setIsModalOpen(true);
+  };
+
   return (
     <div className="space-y-3">
+      {/* Search Input for Advanced Filtering */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-1">
+        <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+          {searchTerm.trim() ? "Búsqueda en Historial Global" : "Historial de Ventas del Día"}
+        </h3>
+        <div className="relative w-full sm:w-72">
+          {loadingGlobal ? (
+            <IconLoader2 className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 animate-spin" size={15} />
+          ) : (
+            <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={15} />
+          )}
+          <Input 
+            placeholder="Buscar por cliente, cédula u orden..." 
+            className="pl-9 rounded-xl h-9 border-[#79716b]/20 bg-[#121110]/50 text-xs focus-visible:ring-emerald-500/50 text-white placeholder:text-zinc-500 focus:border-emerald-500/30 transition-all"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+      </div>
       <div className="rounded-xl border border-[#79716b]/10 bg-card overflow-hidden">
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow className="hover:bg-transparent border-[#79716b]/10 font-semibold uppercase tracking-tight text-[10px] text-[#79716b]">
               <TableHead className="w-[100px] h-10 px-4">Orden</TableHead>
               <TableHead className="h-10 px-4">Cliente</TableHead>
-              <TableHead className="h-10 px-4">Metodo</TableHead>
+              <TableHead className="h-10 px-4">Cajero</TableHead>
+              <TableHead className="h-10 px-4">Método</TableHead>
               <TableHead className="h-10 px-4 text-right">Total</TableHead>
               <TableHead className="h-10 px-4">Estado</TableHead>
               <TableHead className="h-10 px-4 text-right">Fecha</TableHead>
@@ -68,17 +295,29 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
           <TableBody>
             {paginatedSales.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-xs text-muted-foreground italic">No hay ventas registradas recientemente</TableCell>
+                <TableCell colSpan={7} className="h-24 text-center text-xs text-muted-foreground italic">No hay ventas registradas que coincidan con la búsqueda</TableCell>
               </TableRow>
             ) : (
               paginatedSales.map((sale) => (
-                <TableRow key={sale.id} className="hover:bg-muted/30 border-[#79716b]/5 transition-colors group">
+                <TableRow 
+                  key={sale.id} 
+                  onClick={() => handleRowClick(sale)}
+                  className="hover:bg-muted/30 border-[#79716b]/5 transition-colors group cursor-pointer"
+                >
                   <TableCell className="px-4 py-3 font-mono text-[10px] text-primary">{sale.id?.substring(0, 8) || 'N/A'}</TableCell>
-                  <TableCell className="px-4 py-3 text-xs font-bold text-white uppercase tracking-tight">{sale.client || 'Consumidor Final'}</TableCell>
-                  <TableCell className="px-4 py-3">
-                      <Badge variant="outline" className="text-[10px] gap-1.5 border-[#79716b]/20 text-[#79716b] font-semibold uppercase">
-                       <IconCash size={10} /> POS
-                     </Badge>
+                  <TableCell className="px-4 py-3 text-xs font-bold text-white uppercase tracking-tight">
+                    <div>
+                      <span>{sale.client || 'Consumidor Final'}</span>
+                      {sale.clientDocument && (
+                        <span className="block text-[9px] font-normal font-mono text-zinc-500 tracking-tight mt-0.5">{sale.clientDocument}</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-xs text-zinc-300 font-semibold">
+                    {sale.seller || 'Desconocido'}
+                  </TableCell>
+                  <TableCell className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    {getPaymentMethodBadge(sale.payments)}
                   </TableCell>
                   <TableCell className="px-4 py-3 text-right font-black tabular-nums text-white text-sm">
                     {formatPrice(sale.total)}
@@ -90,12 +329,14 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
                           sale.status === 'CANCELLED' ? "bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
                         )} />
                         <span className={cn(
-                          "text-[10px] font-semibold uppercase tracking-tight",
-                          sale.status === 'CANCELLED' ? "text-rose-500 animate-pulse" : "text-emerald-500"
-                        )}>{sale.status === 'CANCELLED' ? 'Cancelada' : 'Completada'}</span>
+                          "text-[9px] font-black uppercase tracking-tight",
+                          sale.status === 'CANCELLED' ? "text-rose-500" : "text-emerald-500"
+                        )}>{sale.status === 'CANCELLED' ? 'Anulada' : 'Completada'}</span>
                      </div>
                   </TableCell>
-                  <TableCell className="px-4 py-3 text-right text-[10px] text-muted-foreground font-medium uppercase">{new Date(sale.date).toLocaleString('es-VE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</TableCell>
+                  <TableCell className="px-4 py-3 text-right text-[10px] font-semibold text-zinc-400">
+                    {format(new Date(sale.date), "dd MMM., hh:mm a", { locale: es })}
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -103,10 +344,187 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
         </Table>
       </div>
 
+      {/* Detail Modal Dialog */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="rounded-2xl p-6 max-w-lg border-[#79716b]/20 bg-[#121110]! text-white">
+          <DialogHeader className="border-b border-[#79716b]/10 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                <IconReceipt size={20} />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold tracking-tight text-white">Detalle de la Orden</DialogTitle>
+                <DialogDescription className="text-zinc-500 text-[10px] uppercase font-mono tracking-wider mt-0.5">
+                  ID: {selectedSale?.id}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {/* Client & Date Info */}
+          <div className="grid grid-cols-2 gap-4 py-4 border-b border-[#79716b]/10 text-xs">
+            <div className="space-y-1">
+              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Cliente</span>
+              <div className="font-bold text-white uppercase">{selectedSale?.client || "Consumidor Final"}</div>
+              {selectedSale?.clientDocument && (
+                <div className="text-zinc-500 font-mono text-[10px]">{selectedSale.clientDocument}</div>
+              )}
+              {selectedSale?.seller && (
+                <div className="text-[10px] text-zinc-400 mt-2">
+                  <span className="font-semibold text-zinc-500 uppercase text-[9px] tracking-wider block">Cajero / Vendedor</span>
+                  <span className="font-bold text-zinc-200">{selectedSale.seller}</span>
+                </div>
+              )}
+            </div>
+            <div className="space-y-1 text-right">
+              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Fecha y Hora</span>
+              <div className="font-semibold text-zinc-300">
+                {selectedSale && format(new Date(selectedSale.date), "dd 'de' MMMM 'de' yyyy, hh:mm a", { locale: es })}
+              </div>
+              <div className="text-zinc-500 text-[10px] uppercase font-bold">Sucursal: {selectedSale?.branch || "N/A"}</div>
+            </div>
+          </div>
+
+          {/* Products List */}
+          <div className="py-4 space-y-3">
+            <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Productos Comprados</span>
+            <div className="rounded-xl border border-[#79716b]/10 overflow-hidden max-h-48 overflow-y-auto">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow className="hover:bg-transparent border-[#79716b]/10">
+                    <TableHead className="h-8 text-[9px] uppercase font-bold text-zinc-400">Producto</TableHead>
+                    <TableHead className="h-8 text-center text-[9px] uppercase font-bold text-zinc-400 w-[60px]">Cant.</TableHead>
+                    <TableHead className="h-8 text-right text-[9px] uppercase font-bold text-zinc-400 w-[85px]">P. Unit</TableHead>
+                    <TableHead className="h-8 text-right text-[9px] uppercase font-bold text-zinc-400 w-[90px]">Subtotal</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!selectedSale?.items || selectedSale.items.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-16 text-center text-xs text-zinc-500 italic">
+                        No hay productos registrados en esta venta
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    selectedSale.items.map((item: any, idx: number) => (
+                      <TableRow key={idx} className="hover:bg-muted/10 border-[#79716b]/5">
+                        <TableCell className="py-2 text-xs font-semibold text-zinc-200">
+                          {item.name}
+                          {item.variantName && (
+                            <span className="block text-[9px] font-normal text-zinc-500">
+                              Variante: {item.variantName}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-2 text-center text-xs text-zinc-300 font-mono">
+                          {item.quantity}
+                        </TableCell>
+                        <TableCell className="py-2 text-right text-xs text-zinc-300 font-mono">
+                          {formatPrice(item.price)}
+                        </TableCell>
+                        <TableCell className="py-2 text-right text-xs font-bold text-white font-mono">
+                          {formatPrice(item.subtotal)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          {/* Payment & Totals */}
+          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#79716b]/10">
+            <div className="space-y-2">
+              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider block">Método de Pago</span>
+              <div className="space-y-1">
+                {selectedSale?.payments && selectedSale.payments.length > 0 ? (
+                  selectedSale.payments.map((p: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-muted/20 border border-[#79716b]/5">
+                      <span className="text-zinc-400 font-medium">
+                        {p.method === "CASH" ? "Efectivo" :
+                         p.method === "CARD" ? "Tarjeta / Punto" :
+                         p.method === "TRANSFER" ? "Transferencia" :
+                         p.method === "WALLET" ? "Billetera" :
+                         p.method === "CREDIT" ? "Fiado" :
+                         p.method === "PAGO_MOVIL" ? "Pago Móvil" :
+                         p.method === "BINANCE" ? "Binance" :
+                         p.method === "ZINLI" ? "Zinli" :
+                         p.method === "PAYPAL" ? "Paypal" : p.method}
+                      </span>
+                      <span className="font-bold text-white font-mono">{formatPrice(p.amount)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-xs text-zinc-500 italic">No especificado</span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5 text-right text-xs">
+              <div className="flex justify-between text-zinc-500">
+                <span>Subtotal:</span>
+                <span className="font-mono text-zinc-300">{formatPrice(selectedSale?.subtotal || 0)}</span>
+              </div>
+              <div className="flex justify-between text-zinc-500">
+                <span>IVA:</span>
+                <span className="font-mono text-zinc-300">{formatPrice(selectedSale?.taxAmount || 0)}</span>
+              </div>
+              {selectedSale?.discountAmt > 0 && (
+                <div className="flex justify-between text-rose-400">
+                  <span>Descuento:</span>
+                  <span className="font-mono">-{formatPrice(selectedSale.discountAmt)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-[#79716b]/10 pt-2 text-sm font-black">
+                <span className="text-zinc-300">TOTAL:</span>
+                <span className="text-emerald-400 font-mono text-lg">{formatPrice(selectedSale?.total || 0)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Other Purchases Section */}
+          {selectedSale?.clientId && (
+            <div className="py-4 border-t border-[#79716b]/10 space-y-2.5">
+              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider block">
+                Historial de Compras del Cliente ({clientHistory.length})
+              </span>
+              {loadingHistory ? (
+                <div className="text-[11px] text-zinc-500 animate-pulse">Cargando historial...</div>
+              ) : clientHistory.length <= 1 ? (
+                <div className="text-[11px] text-zinc-500 italic">No se registran otras compras para este cliente.</div>
+              ) : (
+                <div className="flex flex-col gap-2 max-h-44 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+                  {clientHistory.map((histSale) => {
+                    const isCurrent = histSale.id === selectedSale.id;
+                    const dateFormatted = format(new Date(histSale.date), "dd 'de' MMMM 'de' yyyy, hh:mm a", { locale: es });
+                    return (
+                      <button
+                        key={histSale.id}
+                        onClick={() => setSelectedSale(histSale)}
+                        className={cn(
+                          "w-full text-left px-3.5 py-2.5 rounded-xl border text-[11px] font-bold transition-all uppercase tracking-tight cursor-pointer flex items-center justify-between",
+                          isCurrent
+                            ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                            : "bg-[#121110]/60 border-[#79716b]/20 hover:border-zinc-500 text-zinc-400 hover:text-white"
+                        )}
+                      >
+                        <span className="truncate font-semibold">{dateFormatted}</span>
+                        <span className="font-black text-right min-w-[75px]">{formatPrice(histSale.total)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Reusable Platform Pagination Footer */}
-      {sales.length > 0 && (
+      {filteredSales.length > 0 && (
         <div className="flex items-center justify-between px-4 py-3 text-xs text-muted-foreground bg-card/40 border border-[#79716b]/10 rounded-xl shadow-xs font-sans">
-          <span>{sales.length} venta{sales.length !== 1 ? 's' : ''} en total</span>
+          <span>{filteredSales.length} venta{filteredSales.length !== 1 ? 's' : ''} en total</span>
           <div className="flex items-center gap-6">
             {/* Rows per page selector */}
             <div className="flex items-center gap-2">

@@ -41,6 +41,16 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
@@ -513,14 +523,15 @@ export default function POSPage() {
 
   // Advanced Payment State
   const [addedPayments, setAddedPayments] = useState<any[]>([]);
+  const [showSplitPaymentForm, setShowSplitPaymentForm] = useState(false);
   const [tempPaymentMethod, setTempPaymentMethod] = useState<"CASH" | "CARD" | "TRANSFER" | "PAGO_MOVIL" | "BINANCE" | "ZINLI" | "PAYPAL" | "WALLET" | "CREDIT">("CASH");
   const [saveChangeToWallet, setSaveChangeToWallet] = useState(false);
-  const [printReceipt, setPrintReceipt] = useState(true);
+  const [printReceipt, setPrintReceipt] = useState(false);
   const [tempAmount, setTempAmount] = useState<string>("0");
   const [tempReference, setTempReference] = useState<string>("");
   const [syncingBcv, setSyncingBcv] = useState(false);
   const [settings, setSettings] = useState<any>(null);
-  const { currency, exchangeRate: bcvRate, eurExchangeRate: bcvEurRate, refreshRates } = useCurrency();
+  const { currency, exchangeRate: bcvRate, eurExchangeRate: bcvEurRate, refreshRates, formatPrice } = useCurrency();
   const [baseCurrency, setBaseCurrency] = useState<"USD" | "EUR">("USD");
   const [useWalletBalance, setUseWalletBalance] = useState(false);
   const [tempCurrency, setTempCurrency] = useState<"USD" | "VES">("USD");
@@ -543,6 +554,26 @@ export default function POSPage() {
   const [view, setView] = useState<'pos' | 'history'>('pos');
   const [salesHistory, setSalesHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySearchTerm, setHistorySearchTerm] = useState("");
+
+  const filteredSalesHistory = React.useMemo(() => {
+    const query = historySearchTerm.toLowerCase().trim();
+    if (!query) return salesHistory;
+    return salesHistory.filter((sale) => {
+      return (
+        sale.id?.toLowerCase().includes(query) ||
+        sale.client?.name?.toLowerCase().includes(query) ||
+        (sale.client?.documentId && sale.client.documentId.toLowerCase().includes(query)) ||
+        (typeof sale.client === "string" && sale.client.toLowerCase().includes(query))
+      );
+    });
+  }, [salesHistory, historySearchTerm]);
+
+  // Payment confirmation states
+  const [isConfirmPaymentOpen, setIsConfirmPaymentOpen] = useState(false);
+  const [paymentConfirmationSummary, setPaymentConfirmationSummary] = useState("");
+  const [paymentConfirmationWarning, setPaymentConfirmationWarning] = useState("");
+  const [paymentsToProcess, setPaymentsToProcess] = useState<any[] | null>(null);
 
   // Calculator State
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
@@ -706,6 +737,98 @@ export default function POSPage() {
   // Return Modal State
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [selectedSaleForReturn, setSelectedSaleForReturn] = useState<any>(null);
+
+  // Order Detail Modal State
+  const [selectedSale, setSelectedSale] = useState<any>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [clientHistory, setClientHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Helper to format raw sale objects from POS backend
+  const formatSaleObject = (s: any) => {
+    if (!s) return null;
+    return {
+      id: s.id,
+      client: s.client?.name || "Consumidor Final",
+      clientId: s.clientId,
+      clientDocument: s.client?.documentId || null,
+      total: s.total,
+      subtotal: s.subtotal,
+      taxAmount: s.taxAmount,
+      igtfAmount: s.igtfAmount,
+      discountAmt: s.discountAmt,
+      status: s.status || "COMPLETED",
+      branch: s.branch?.name || "N/A",
+      date: s.createdAt,
+      seller: s.user?.name || "Desconocido",
+      payments: (s.payments || []).map((p: any) => ({
+        method: p.method,
+        amount: p.amount
+      })),
+      items: (s.items || []).map((item: any) => ({
+        id: item.id,
+        name: item.variant?.product?.name || "Producto Desconocido",
+        variantName: item.variant?.name || "",
+        quantity: item.quantity,
+        price: item.price,
+        subtotal: item.subtotal
+      }))
+    };
+  };
+
+  // Fetch client history when selectedSale changes
+  useEffect(() => {
+    if (!selectedSale || !selectedSale.clientId) {
+      setClientHistory([]);
+      return;
+    }
+
+    const fetchClientHistory = async () => {
+      setLoadingHistory(true);
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API}/clients/${selectedSale.clientId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const clientData = await res.json();
+          const salesHistory = (clientData.sales || []).map((s: any) => ({
+            id: s.id,
+            client: clientData.name || "Consumidor Final",
+            clientId: s.clientId || clientData.id,
+            clientDocument: clientData.documentId || null,
+            total: s.total,
+            subtotal: s.subtotal,
+            taxAmount: s.taxAmount,
+            igtfAmount: s.igtfAmount,
+            discountAmt: s.discountAmt,
+            status: s.status || "COMPLETED",
+            branch: s.branch?.name || "N/A",
+            date: s.createdAt,
+            payments: s.payments.map((p: any) => ({
+              method: p.method,
+              amount: p.amount
+            })),
+            items: s.items.map((item: any) => ({
+              id: item.id,
+              name: item.variant?.product?.name || "Producto Desconocido",
+              variantName: item.variant?.name || "",
+              quantity: item.quantity,
+              price: item.price,
+              subtotal: item.subtotal
+            }))
+          }));
+          setClientHistory(salesHistory);
+        }
+      } catch (err) {
+        console.error("Error loading client history", err);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+
+    fetchClientHistory();
+  }, [selectedSale?.clientId]);
   const [returnQuantities, setReturnQuantities] = useState<Record<string, number>>({});
   const [returnReason, setReturnReason] = useState("");
   const [processingReturn, setProcessingReturn] = useState(false);
@@ -880,6 +1003,85 @@ export default function POSPage() {
     window.addEventListener("keydown", handleKeyPress);
     return () => window.removeEventListener("keydown", handleKeyPress);
   }, [barcodeBuffer, lastCharTime]);
+
+  // Calculaciones de Totales
+  const originalSubtotal = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+  const subtotalWithItemDiscounts = cart.reduce((acc, item) => {
+    let itemTotal = item.product.price * item.quantity;
+    if (item.discount) {
+      if (item.discount.type === 'pct') {
+        itemTotal -= itemTotal * (item.discount.value / 100);
+      } else {
+        itemTotal -= item.discount.value;
+      }
+    }
+    return acc + Math.max(0, itemTotal);
+  }, 0);
+
+  let globalDiscountAmt = 0;
+  if (globalDiscount) {
+    if (globalDiscount.type === 'pct') {
+      globalDiscountAmt = subtotalWithItemDiscounts * (globalDiscount.value / 100);
+    } else {
+      globalDiscountAmt = globalDiscount.value;
+    }
+  }
+
+  const subtotalAfterGlobalDiscount = Math.max(0, subtotalWithItemDiscounts - globalDiscountAmt);
+  const totalItemDiscounts = originalSubtotal - subtotalWithItemDiscounts;
+  const totalDiscountAmt = totalItemDiscounts + globalDiscountAmt;
+  
+  // Para propósitos de retrocompatibilidad con referencias a `subtotal`
+  const subtotal = originalSubtotal;
+
+  const updatedTotal = subtotalAfterGlobalDiscount + (subtotalAfterGlobalDiscount * (taxRate / 100));
+  const taxAmount = subtotalAfterGlobalDiscount * (taxRate / 100);
+  
+  // Calculate IGTF based on CASH payments added
+  const cashPaymentsTotal = addedPayments
+    .filter(p => p.method === "CASH")
+    .reduce((acc, p) => acc + p.amount, 0);
+  
+  const igtfRateVal = settings?.igtfRate !== undefined && settings?.igtfRate !== null ? Number(settings.igtfRate) : 3;
+  const igtfAmount = cashPaymentsTotal * (igtfRateVal / 100);
+  const totalBeforeWallet = updatedTotal + igtfAmount;
+  
+  // Calculate Wallet Deduction
+  const selectedClient = clients.find(c => (c.id || (c as any)._id) === selectedClientId);
+  const availableWallet = selectedClient?.walletBalance || 0;
+  const availableCredit = (selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0);
+  const walletDeduction = useWalletBalance ? Math.min(availableWallet, totalBeforeWallet) : 0;
+  
+  const finalTotalWithIgtf = totalBeforeWallet - walletDeduction;
+  const totalPaid = addedPayments.reduce((acc, p) => acc + p.amount, 0);
+  const remainingToPay = Math.max(0, finalTotalWithIgtf - totalPaid);
+  const changeDue = Math.max(0, totalPaid - finalTotalWithIgtf);
+  const changeDueBs = changeDue * currentExchangeRate;
+
+  // Auto-switch tempPaymentMethod and update tempAmount when addedPayments changes
+  useEffect(() => {
+    if (!isPaymentModalOpen) return;
+    
+    const allMethods = ["CASH", "CARD", "TRANSFER", "PAGO_MOVIL", "BINANCE", "ZINLI", "PAYPAL", "WALLET", "CREDIT"];
+    const addedMethods = addedPayments.map(p => p.method);
+    
+    // Automatically set the tempAmount to remaining to pay
+    setTempAmount(remainingToPay.toFixed(2));
+    
+    // Switch to first available method if current is already added
+    if (addedMethods.includes(tempPaymentMethod)) {
+      const available = allMethods.find(m => {
+        if (m === "PAGO_MOVIL" && !settings?.pagoMovilEnabled) return false;
+        if (m === "BINANCE" && !settings?.binanceEnabled) return false;
+        if (m === "ZINLI" && !settings?.zinliEnabled) return false;
+        if (m === "PAYPAL" && !settings?.paypalEnabled) return false;
+        return !addedMethods.includes(m);
+      });
+      if (available) {
+        setTempPaymentMethod(available as any);
+      }
+    }
+  }, [addedPayments, remainingToPay, isPaymentModalOpen, settings]);
 
   useEffect(() => {
     let html5QrCode: any = null;
@@ -1168,62 +1370,10 @@ export default function POSPage() {
     setCart(prev => prev.filter(item => item.product.id !== id));
   };
 
-  const originalSubtotal = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
-  const subtotalWithItemDiscounts = cart.reduce((acc, item) => {
-    let itemTotal = item.product.price * item.quantity;
-    if (item.discount) {
-      if (item.discount.type === 'pct') {
-        itemTotal -= itemTotal * (item.discount.value / 100);
-      } else {
-        itemTotal -= item.discount.value;
-      }
-    }
-    return acc + Math.max(0, itemTotal);
-  }, 0);
-
-  let globalDiscountAmt = 0;
-  if (globalDiscount) {
-    if (globalDiscount.type === 'pct') {
-      globalDiscountAmt = subtotalWithItemDiscounts * (globalDiscount.value / 100);
-    } else {
-      globalDiscountAmt = globalDiscount.value;
-    }
-  }
-
-  const subtotalAfterGlobalDiscount = Math.max(0, subtotalWithItemDiscounts - globalDiscountAmt);
-  const totalItemDiscounts = originalSubtotal - subtotalWithItemDiscounts;
-  const totalDiscountAmt = totalItemDiscounts + globalDiscountAmt;
-  
-  // Para propósitos de retrocompatibilidad con referencias a `subtotal`
-  const subtotal = originalSubtotal;
-
-  const updatedTotal = subtotalAfterGlobalDiscount + (subtotalAfterGlobalDiscount * (taxRate / 100));
-  const taxAmount = subtotalAfterGlobalDiscount * (taxRate / 100);
-  
-  // Calculate IGTF based on CASH payments added
-  const cashPaymentsTotal = addedPayments
-    .filter(p => p.method === "CASH")
-    .reduce((acc, p) => acc + p.amount, 0);
-  
-  const igtfRateVal = settings?.igtfRate !== undefined && settings?.igtfRate !== null ? Number(settings.igtfRate) : 3;
-  const igtfAmount = cashPaymentsTotal * (igtfRateVal / 100);
-  const totalBeforeWallet = updatedTotal + igtfAmount;
-  
-  // Calculate Wallet Deduction
-  const selectedClient = clients.find(c => (c.id || (c as any)._id) === selectedClientId);
-  const availableWallet = selectedClient?.walletBalance || 0;
-  const availableCredit = (selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0);
-  const walletDeduction = useWalletBalance ? Math.min(availableWallet, totalBeforeWallet) : 0;
-  
-  const finalTotalWithIgtf = totalBeforeWallet - walletDeduction;
-  const totalPaid = addedPayments.reduce((acc, p) => acc + p.amount, 0);
-  const remainingToPay = Math.max(0, finalTotalWithIgtf - totalPaid);
-  const changeDue = Math.max(0, totalPaid - finalTotalWithIgtf);
-  const changeDueBs = changeDue * currentExchangeRate;
-
   const openPaymentModal = (method: "CASH" | "CARD") => {
     setPaymentMethod(method);
     setAddedPayments([]); // Start fresh for mixed payment logic if needed, or just keep it
+    setShowSplitPaymentForm(false);
     setTempPaymentMethod(method);
     setTempAmount(finalTotalWithIgtf.toFixed(2));
     setIsPaymentModalOpen(true);
@@ -1452,7 +1602,8 @@ export default function POSPage() {
   };
 
   const handleCreateClient = async () => {
-    if (!newClient.name) return toast.error("El nombre es obligatorio");
+    if (!newClient.name.trim()) return toast.error("El nombre es obligatorio");
+    if (!newClient.documentId.trim()) return toast.error("La Cédula / RIF es obligatoria");
     setSavingClient(true);
     try {
       const res = await fetch(`${API}/clients`, {
@@ -2171,11 +2322,20 @@ export default function POSPage() {
                   </h2>
                   <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">Control de actividad de facturación</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-4">
+                   <div className="relative w-60">
+                     <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={13} />
+                     <Input 
+                       placeholder="Buscar por cliente o cédula..." 
+                       className="pl-7 h-7 text-[11px] w-full bg-background/50 border-muted-foreground/25 focus-visible:ring-emerald-500/50"
+                       value={historySearchTerm}
+                       onChange={(e) => setHistorySearchTerm(e.target.value)}
+                     />
+                   </div>
                    <Button variant="outline" size="sm" className="h-8 text-[10px] uppercase font-bold tracking-widest gap-2" onClick={() => setView('pos')}>
                       Volver al POS
                    </Button>
-                </div>
+                 </div>
               </div>
               
               <div className="flex-1 overflow-auto bg-muted/5">
@@ -2183,7 +2343,7 @@ export default function POSPage() {
                   <div className="p-6 space-y-4">
                     {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-md" />)}
                   </div>
-                ) : salesHistory.length === 0 ? (
+                ) : filteredSalesHistory.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-40 py-20">
                     <IconHistory size={48} stroke={1} className="mb-2" />
                     <p className="text-xs font-bold uppercase tracking-widest">Sin ventas registradas</p>
@@ -2196,14 +2356,22 @@ export default function POSPage() {
                           <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">ID Venta</th>
                           <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Fecha / Hora</th>
                           <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Cliente</th>
+                          <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Cajero</th>
                           <th className="p-4 text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Artículos</th>
                           <th className="p-4 text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Total USD</th>
                           <th className="p-4 text-center font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Estado</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y bg-background/50">
-                        {salesHistory.map((sale) => (
-                          <tr key={sale.id} className="hover:bg-muted/10 transition-colors group">
+                        {filteredSalesHistory.map((sale) => (
+                          <tr 
+                            key={sale.id} 
+                            className="hover:bg-muted/10 transition-colors group cursor-pointer"
+                            onClick={() => {
+                              setSelectedSale(formatSaleObject(sale));
+                              setIsDetailModalOpen(true);
+                            }}
+                          >
                             <td className="p-4">
                               <code className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded uppercase">
                                 #{sale.id.slice(-6)}
@@ -2226,12 +2394,15 @@ export default function POSPage() {
                                 </div>
                               </div>
                             </td>
+                            <td className="p-4 text-xs font-semibold text-zinc-300">
+                              {sale.user?.name || "Desconocido"}
+                            </td>
                             <td className="p-4 text-right">
                                <div className="inline-flex flex-col items-end">
                                   <span className="font-bold text-[10px] px-1.5 py-0.5 rounded-full bg-muted/50 border text-muted-foreground">
                                     {sale.items?.length || 0} ITEMS
                                   </span>
-                               </div>
+                                </div>
                             </td>
                             <td className="p-4 text-right font-black text-xs tabular-nums text-foreground/90">
                               ${sale.total?.toFixed(2)}
@@ -2243,7 +2414,10 @@ export default function POSPage() {
                                   variant="ghost" 
                                   size="icon" 
                                   className="h-8 w-8 text-amber-500 hover:bg-amber-500/10 hover:text-amber-600 transition-colors"
-                                  onClick={() => openReturnModal(sale)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openReturnModal(sale);
+                                  }}
                                   title="Procesar Devolución"
                                 >
                                   <IconArrowBackUp size={18} />
@@ -2657,250 +2831,342 @@ export default function POSPage() {
                   </div>
 
                   {/* Payment Entry Form: Dynamic Grid based on method */}
-                  <div className="grid grid-cols-12 gap-3 items-start">
-                    <div className={cn(tempPaymentMethod === "CASH" ? "col-span-4" : tempPaymentMethod === "CREDIT" ? "col-span-6" : "col-span-3")}>
-                      <Select value={tempPaymentMethod} onValueChange={(v: any) => setTempPaymentMethod(v)}>
-                        <SelectTrigger className="h-10 rounded-md font-medium text-[13px] border-border/60">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="CASH">Efectivo</SelectItem>
-                          <SelectItem value="CARD">Tarjeta (Punto)</SelectItem>
-                          <SelectItem value="TRANSFER">Transferencia</SelectItem>
-                          {settings?.pagoMovilEnabled && <SelectItem value="PAGO_MOVIL">Pago Móvil</SelectItem>}
-                          {settings?.binanceEnabled && <SelectItem value="BINANCE">Binance Pay</SelectItem>}
-                          {settings?.zinliEnabled && <SelectItem value="ZINLI">Zinli</SelectItem>}
-                          {settings?.paypalEnabled && <SelectItem value="PAYPAL">PayPal</SelectItem>}
-                          <SelectItem value="WALLET">Monedero</SelectItem>
-                          <SelectItem value="CREDIT">Crédito / Fiado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      
-                      {tempPaymentMethod === "CREDIT" && (
-                        <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-500">
-                          <div className="space-y-2 px-1">
-                            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.15em] ml-0.5">
-                              Fecha Promesa de Pago
-                            </label>
-                            <Popover>
-                              <PopoverTrigger asChild disabled={selectedClientId === "consumidor-final"}>
-                                <Button
-                                  variant="outline"
-                                  className={cn(
-                                    "w-full h-10 justify-start text-left font-bold text-[13px] rounded-lg border-border/40 bg-muted/20 hover:bg-muted/30 hover:border-primary/30 transition-all duration-300 shadow-sm px-3",
-                                    (!promisedPaymentDate || selectedClientId === "consumidor-final") && "text-muted-foreground"
-                                  )}
-                                >
-                                  <div className="size-7 rounded-md bg-primary/10 flex items-center justify-center mr-2.5 text-primary shrink-0">
-                                    <IconCalendarTabler size={16} stroke={2.5} />
-                                  </div>
-                                  <span className="flex-1 whitespace-nowrap overflow-hidden">
-                                    {selectedClientId === "consumidor-final" 
-                                      ? "Seleccione un cliente para fiar" 
-                                      : promisedPaymentDate ? format(promisedPaymentDate, "PPP", { locale: es }) : "Seleccionar fecha"}
-                                  </span>
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-2xl overflow-hidden" align="end">
-                                <div className="bg-gradient-to-br from-card to-muted/50 p-1">
-                                  <Calendar
-                                    mode="single"
-                                    selected={promisedPaymentDate}
-                                    onSelect={setPromisedPaymentDate}
-                                    initialFocus
-                                    locale={es}
-                                    className="rounded-xl border-none"
-                                  />
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                            {selectedClientId !== "consumidor-final" ? (
-                              <p className="text-[10px] text-muted-foreground/60 italic ml-1 flex items-center gap-1">
-                                 <IconAlertCircle size={10} /> El sistema notificará automáticamente este día.
-                              </p>
-                            ) : (
-                              <p className="text-[10px] text-destructive font-bold italic ml-1 flex items-center gap-1">
-                                 <IconAlertCircle size={10} /> No se puede fiar al Consumidor Final.
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {tempPaymentMethod === "WALLET" && selectedClientId !== "consumidor-final" && (
-                        <div className="mt-1 flex items-center gap-1.5 px-1 animate-in fade-in slide-in-from-top-1 duration-300">
-                          <div className="size-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                          <span className="text-[9px] font-bold text-blue-600 tracking-tight uppercase">Saldo: ${availableWallet.toFixed(2)}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {tempPaymentMethod !== "CASH" && tempPaymentMethod !== "CREDIT" && (
-                      <div className="col-span-3">
-                        <Input 
-                          className="h-10 rounded-md text-[13px] font-medium border-border/60"
-                          value={tempReference}
-                          onChange={(e) => setTempReference(e.target.value)}
-                          placeholder="Referencia"
-                        />
-                      </div>
-                    )}
-
-                    {tempPaymentMethod !== "CREDIT" && (
-                      <div className={cn(tempPaymentMethod === "CASH" ? "col-span-6" : "col-span-4", "relative group")}>
-                        <button 
-                          type="button"
-                          onClick={() => setTempCurrency(tempCurrency === "USD" ? "VES" : "USD")}
-                          className={cn(
-                            "absolute left-1.5 top-1.5 size-7 rounded flex items-center justify-center text-[11px] font-bold transition-all z-10 shadow-sm",
-                            tempCurrency === "USD" ? "bg-primary text-primary-foreground" : "bg-emerald-500 text-white"
+                  {remainingToPay > 0.001 && (addedPayments.length === 0 || showSplitPaymentForm) && (
+                    <>
+                      <div className="grid grid-cols-12 gap-3 items-start animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className={cn(tempPaymentMethod === "CASH" ? "col-span-4" : tempPaymentMethod === "CREDIT" ? "col-span-6" : "col-span-3")}>
+                          <Select value={tempPaymentMethod} onValueChange={(v: any) => setTempPaymentMethod(v)}>
+                            <SelectTrigger className="h-10 rounded-md font-medium text-[13px] border-border/60">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="CASH" disabled={addedPayments.some(p => p.method === "CASH")}>Efectivo</SelectItem>
+                              <SelectItem value="CARD" disabled={addedPayments.some(p => p.method === "CARD")}>Tarjeta (Punto)</SelectItem>
+                              <SelectItem value="TRANSFER" disabled={addedPayments.some(p => p.method === "TRANSFER")}>Transferencia</SelectItem>
+                              {settings?.pagoMovilEnabled && <SelectItem value="PAGO_MOVIL" disabled={addedPayments.some(p => p.method === "PAGO_MOVIL")}>Pago Móvil</SelectItem>}
+                              {settings?.binanceEnabled && <SelectItem value="BINANCE" disabled={addedPayments.some(p => p.method === "BINANCE")}>Binance Pay</SelectItem>}
+                              {settings?.zinliEnabled && <SelectItem value="ZINLI" disabled={addedPayments.some(p => p.method === "ZINLI")}>Zinli</SelectItem>}
+                              {settings?.paypalEnabled && <SelectItem value="PAYPAL" disabled={addedPayments.some(p => p.method === "PAYPAL")}>PayPal</SelectItem>}
+                              <SelectItem value="WALLET" disabled={addedPayments.some(p => p.method === "WALLET")}>Monedero</SelectItem>
+                              <SelectItem value="CREDIT" disabled={addedPayments.some(p => p.method === "CREDIT")}>Crédito / Fiado</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          
+                          {tempPaymentMethod === "CREDIT" && (
+                            <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-500">
+                              <div className="space-y-2 px-1">
+                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.15em] ml-0.5">
+                                  Fecha Promesa de Pago
+                                </label>
+                                <Popover>
+                                  <PopoverTrigger asChild disabled={selectedClientId === "consumidor-final"}>
+                                    <Button
+                                      variant="outline"
+                                      className={cn(
+                                        "w-full h-10 justify-start text-left font-bold text-[13px] rounded-lg border-border/40 bg-muted/20 hover:bg-muted/30 hover:border-primary/30 transition-all duration-300 shadow-sm px-3",
+                                        (!promisedPaymentDate || selectedClientId === "consumidor-final") && "text-muted-foreground"
+                                      )}
+                                    >
+                                      <div className="size-7 rounded-md bg-primary/10 flex items-center justify-center mr-2.5 text-primary shrink-0">
+                                        <IconCalendarTabler size={16} stroke={2.5} />
+                                      </div>
+                                      <span className="flex-1 whitespace-nowrap overflow-hidden">
+                                        {selectedClientId === "consumidor-final" 
+                                          ? "Seleccione un cliente para fiar" 
+                                          : promisedPaymentDate ? format(promisedPaymentDate, "PPP", { locale: es }) : "Seleccionar fecha"}
+                                      </span>
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-2xl overflow-hidden" align="end">
+                                    <div className="bg-gradient-to-br from-card to-muted/50 p-1">
+                                      <Calendar
+                                        mode="single"
+                                        selected={promisedPaymentDate}
+                                        onSelect={setPromisedPaymentDate}
+                                        initialFocus
+                                        locale={es}
+                                        className="rounded-xl border-none"
+                                      />
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                                {selectedClientId !== "consumidor-final" ? (
+                                  <p className="text-[10px] text-muted-foreground/60 italic ml-1 flex items-center gap-1">
+                                     <IconAlertCircle size={10} /> El sistema notificará automáticamente este día.
+                                  </p>
+                                ) : (
+                                  <p className="text-[10px] text-destructive font-bold italic ml-1 flex items-center gap-1">
+                                     <IconAlertCircle size={10} /> No se puede fiar al Consumidor Final.
+                                  </p>
+                                )}
+                              </div>
+                            </div>
                           )}
-                        >
-                          {tempCurrency === "USD" ? "$" : "Bs"}
-                        </button>
-                        <Input 
-                          type="number" 
-                          className="pl-10 h-10 rounded-md text-[13px] font-semibold border-border/60 tracking-tight"
-                          value={tempAmount}
-                          onChange={(e) => setTempAmount(e.target.value)}
-                          placeholder="0.00"
-                          onFocus={(e) => e.target.select()}
-                        />
-                      </div>
-                    )}
-
-                    {tempPaymentMethod === "CREDIT" && selectedClient && (selectedClient.currentDebt || 0) > 0 && (
-                      <div className="col-span-6 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-                         <div className="flex items-center gap-2">
-                            <IconHistory className="text-amber-600 size-5" />
-                            <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-500 tracking-tight">Deuda Previa Abierta</span>
-                         </div>
-                         <div className="flex flex-col text-right">
-                            <span className="text-[10px] font-bold text-amber-600/80 uppercase">Libreta Actual</span>
-                            <span className="text-sm font-black text-amber-600 tabular-nums">${(selectedClient.currentDebt || 0).toFixed(2)}</span>
-                         </div>
-                      </div>
-                    )}
-
-                    {tempPaymentMethod !== "CREDIT" && (
-                      <div className="col-span-2">
-                        <Button 
-                          className="w-full h-10 rounded-md text-xs font-semibold" 
-                          onClick={() => {
-                            const amountNum = Number(tempAmount);
-                            if (isNaN(amountNum) || amountNum <= 0) return;
-                            let usdAmount = amountNum;
-                            let vesAmount = amountNum * currentExchangeRate;
-                            if (tempCurrency === "VES") {
-                              usdAmount = amountNum / currentExchangeRate;
-                              vesAmount = amountNum;
-                            }
-                            setAddedPayments([...addedPayments, {
-                              method: tempPaymentMethod,
-                              amount: usdAmount,
-                              amountLocal: vesAmount,
-                              exchangeRate: currentExchangeRate,
-                              reference: tempReference
-                            }]);
-                            setTempAmount("0");
-                            setTempReference("");
-                          }}
-                        >
-                          Añadir
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  {tempPaymentMethod === "PAGO_MOVIL" && (
-                    <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-                       <div className="flex items-center gap-2">
-                          <IconDevices className="text-blue-500 size-5" />
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 hidden sm:block">Datos Pago Móvil</span>
-                       </div>
-                       <div className="flex gap-4">
-                          <div className="flex flex-col text-right">
-                             <span className="text-[9px] font-bold text-muted-foreground uppercase">Banco</span>
-                             <span className="text-xs font-semibold">{settings?.pagoMovilBank || "-"}</span>
-                          </div>
-                          <div className="flex flex-col text-right">
-                             <span className="text-[9px] font-bold text-muted-foreground uppercase">Cédula/RIF</span>
-                             <span className="text-xs font-semibold">{settings?.pagoMovilId || "-"}</span>
-                          </div>
-                          <div className="flex flex-col text-right">
-                             <span className="text-[9px] font-bold text-muted-foreground uppercase">Teléfono</span>
-                             <span className="text-xs font-semibold">{settings?.pagoMovilPhone || "-"}</span>
-                          </div>
-                       </div>
-                    </div>
-                  )}
-
-                  {tempPaymentMethod === "BINANCE" && (
-                    <div className="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-                       <div className="flex items-center gap-2">
-                          <IconHexagon className="text-yellow-600 size-5" />
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-yellow-600 hidden sm:block">Datos Binance Pay</span>
-                       </div>
-                       <div className="flex gap-4">
-                          <div className="flex flex-col text-right">
-                             <span className="text-[9px] font-bold text-muted-foreground uppercase">Binance ID</span>
-                             <span className="text-xs font-semibold">{settings?.binanceId || "-"}</span>
-                          </div>
-                          <div className="flex flex-col text-right">
-                             <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo</span>
-                             <span className="text-xs font-semibold">{settings?.binanceEmail || "-"}</span>
-                          </div>
-                       </div>
-                    </div>
-                  )}
-
-                  {tempPaymentMethod === "ZINLI" && (
-                    <div className="p-3 bg-purple-500/5 border border-purple-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-                       <div className="flex items-center gap-2">
-                          <IconWorld className="text-purple-600 size-5" />
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-purple-600 hidden sm:block">Datos Zinli</span>
-                       </div>
-                       <div className="flex gap-4">
-                          <div className="flex flex-col text-right">
-                             <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo Zinli</span>
-                             <span className="text-xs font-semibold">{settings?.zinliEmail || "-"}</span>
-                          </div>
-                       </div>
-                    </div>
-                  )}
-
-                  {tempPaymentMethod === "PAYPAL" && (
-                    <div className="p-3 bg-blue-700/5 border border-blue-700/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-                       <div className="flex items-center gap-2">
-                          <IconBuilding className="text-blue-800 size-5" />
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-blue-800 hidden sm:block">Datos PayPal</span>
-                       </div>
-                       <div className="flex gap-4">
-                          <div className="flex flex-col text-right">
-                             <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo PayPal</span>
-                             <span className="text-xs font-semibold">{settings?.paypalEmail || "-"}</span>
-                          </div>
-                       </div>
-                    </div>
-                  )}
-
-                  {/* List of Added Payments */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {addedPayments.map((p, i) => (
-                      <div key={i} className="flex justify-between items-center p-2.5 rounded-md border border-border/60 bg-muted/10 text-[12px] shadow-sm">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-muted-foreground">{p.method}</span>
-                          {p.reference && <span className="text-[10px] text-muted-foreground opacity-70">Ref: {p.reference}</span>}
+                          
+                          {tempPaymentMethod === "WALLET" && selectedClientId !== "consumidor-final" && (
+                            <div className="mt-1 flex items-center gap-1.5 px-1 animate-in fade-in slide-in-from-top-1 duration-300">
+                              <div className="size-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                              <span className="text-[9px] font-bold text-blue-600 tracking-tight uppercase">Saldo: ${availableWallet.toFixed(2)}</span>
+                            </div>
+                          )}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold tabular-nums text-foreground">${p.amount.toFixed(2)}</span>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-muted-foreground hover:text-destructive" onClick={() => setAddedPayments(addedPayments.filter((_, idx) => idx !== i))}>
-                            <IconX size={14} />
-                          </Button>
-                        </div>
+
+                        {tempPaymentMethod !== "CASH" && tempPaymentMethod !== "CREDIT" && (
+                          <div className="col-span-3">
+                            <Input 
+                              className="h-10 rounded-md text-[13px] font-medium border-border/60"
+                              value={tempReference}
+                              onChange={(e) => setTempReference(e.target.value)}
+                              placeholder="Referencia"
+                            />
+                          </div>
+                        )}
+
+                        {tempPaymentMethod !== "CREDIT" && (
+                          <div className={cn(tempPaymentMethod === "CASH" ? "col-span-6" : "col-span-4", "relative group")}>
+                            <button 
+                              type="button"
+                              onClick={() => setTempCurrency(tempCurrency === "USD" ? "VES" : "USD")}
+                              className={cn(
+                                "absolute left-1.5 top-1.5 size-7 rounded flex items-center justify-center text-[11px] font-bold transition-all z-10 shadow-sm",
+                                tempCurrency === "USD" ? "bg-primary text-primary-foreground" : "bg-emerald-500 text-white"
+                              )}
+                            >
+                              {tempCurrency === "USD" ? "$" : "Bs"}
+                            </button>
+                            <Input 
+                              type="number" 
+                              className="pl-10 h-10 rounded-md text-[13px] font-semibold border-border/60 tracking-tight"
+                              value={tempAmount}
+                              onChange={(e) => setTempAmount(e.target.value)}
+                              placeholder="0.00"
+                              onFocus={(e) => e.target.select()}
+                            />
+                          </div>
+                        )}
+
+                        {tempPaymentMethod === "CREDIT" && selectedClient && (selectedClient.currentDebt || 0) > 0 && (
+                          <div className="col-span-6 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                             <div className="flex items-center gap-2">
+                                <IconHistory className="text-amber-600 size-5" />
+                                <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-500 tracking-tight">Deuda Previa Abierta</span>
+                             </div>
+                             <div className="flex flex-col text-right">
+                                <span className="text-[10px] font-bold text-amber-600/80 uppercase">Libreta Actual</span>
+                                <span className="text-sm font-black text-amber-600 tabular-nums">${(selectedClient.currentDebt || 0).toFixed(2)}</span>
+                             </div>
+                          </div>
+                        )}
+
+                        {tempPaymentMethod !== "CREDIT" && (
+                          <div className="col-span-2">
+                            <Button 
+                              className="w-full h-10 rounded-md text-xs font-semibold" 
+                              onClick={() => {
+                                const amountNum = Number(tempAmount);
+                                if (isNaN(amountNum) || amountNum <= 0) return;
+                                let usdAmount = amountNum;
+                                let vesAmount = amountNum * currentExchangeRate;
+                                if (tempCurrency === "VES") {
+                                  usdAmount = amountNum / currentExchangeRate;
+                                  vesAmount = amountNum;
+                                }
+                                setAddedPayments([...addedPayments, {
+                                  method: tempPaymentMethod,
+                                  amount: usdAmount,
+                                  amountLocal: vesAmount,
+                                  exchangeRate: currentExchangeRate,
+                                  reference: tempReference
+                                }]);
+                                setTempAmount("0");
+                                setTempReference("");
+                                setShowSplitPaymentForm(false);
+                              }}
+                            >
+                              Añadir
+                            </Button>
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
+
+                      {tempPaymentMethod === "PAGO_MOVIL" && (
+                        <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                           <div className="flex items-center gap-2">
+                              <IconDevices className="text-blue-500 size-5" />
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 hidden sm:block">Datos Pago Móvil</span>
+                           </div>
+                           <div className="flex gap-4">
+                              <div className="flex flex-col text-right">
+                                 <span className="text-[9px] font-bold text-muted-foreground uppercase">Banco</span>
+                                 <span className="text-xs font-semibold">{settings?.pagoMovilBank || "-"}</span>
+                              </div>
+                              <div className="flex flex-col text-right">
+                                 <span className="text-[9px] font-bold text-muted-foreground uppercase">Cédula/RIF</span>
+                                 <span className="text-xs font-semibold">{settings?.pagoMovilId || "-"}</span>
+                              </div>
+                              <div className="flex flex-col text-right">
+                                 <span className="text-[9px] font-bold text-muted-foreground uppercase">Teléfono</span>
+                                 <span className="text-xs font-semibold">{settings?.pagoMovilPhone || "-"}</span>
+                              </div>
+                           </div>
+                        </div>
+                      )}
+
+                      {tempPaymentMethod === "BINANCE" && (
+                        <div className="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                           <div className="flex items-center gap-2">
+                              <IconHexagon className="text-yellow-600 size-5" />
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-yellow-600 hidden sm:block">Datos Binance Pay</span>
+                           </div>
+                           <div className="flex gap-4">
+                              <div className="flex flex-col text-right">
+                                 <span className="text-[9px] font-bold text-muted-foreground uppercase">Binance ID</span>
+                                 <span className="text-xs font-semibold">{settings?.binanceId || "-"}</span>
+                              </div>
+                              <div className="flex flex-col text-right">
+                                 <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo</span>
+                                 <span className="text-xs font-semibold">{settings?.binanceEmail || "-"}</span>
+                              </div>
+                           </div>
+                        </div>
+                      )}
+
+                      {tempPaymentMethod === "ZINLI" && (
+                        <div className="p-3 bg-purple-500/5 border border-purple-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                           <div className="flex items-center gap-2">
+                              <IconWorld className="text-purple-600 size-5" />
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-purple-600 hidden sm:block">Datos Zinli</span>
+                           </div>
+                           <div className="flex gap-4">
+                              <div className="flex flex-col text-right">
+                                 <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo Zinli</span>
+                                 <span className="text-xs font-semibold">{settings?.zinliEmail || "-"}</span>
+                              </div>
+                           </div>
+                        </div>
+                      )}
+
+                      {tempPaymentMethod === "PAYPAL" && (
+                        <div className="p-3 bg-blue-700/5 border border-blue-700/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                           <div className="flex items-center gap-2">
+                              <IconBuilding className="text-blue-800 size-5" />
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-blue-800 hidden sm:block">Datos PayPal</span>
+                           </div>
+                           <div className="flex gap-4">
+                              <div className="flex flex-col text-right">
+                                 <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo PayPal</span>
+                                 <span className="text-xs font-semibold">{settings?.paypalEmail || "-"}</span>
+                              </div>
+                           </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* List of Added Payments (Locked Rows) */}
+                  {addedPayments.length > 0 && (
+                    <div className="space-y-3">
+                      {addedPayments.map((p, i) => {
+                        const isCash = p.method === "CASH";
+                        const isCredit = p.method === "CREDIT";
+                        const hasRef = !isCash && !isCredit;
+                        
+                        const methodNames: Record<string, string> = {
+                          CASH: "Efectivo",
+                          CARD: "Tarjeta (Punto)",
+                          TRANSFER: "Transferencia",
+                          PAGO_MOVIL: "Pago Móvil",
+                          BINANCE: "Binance Pay",
+                          ZINLI: "Zinli",
+                          PAYPAL: "PayPal",
+                          WALLET: "Monedero",
+                          CREDIT: "Crédito / Fiado"
+                        };
+
+                        return (
+                          <div key={i} className="grid grid-cols-12 gap-3 items-center p-3 rounded-lg border border-border/50 bg-muted/20 relative group transition-all duration-300">
+                            {/* Payment Method Select (Locked/Disabled) */}
+                            <div className={cn(isCash ? "col-span-4" : isCredit ? "col-span-6" : "col-span-3")}>
+                              <Select value={p.method} disabled>
+                                <SelectTrigger className="h-10 rounded-md font-semibold text-[13px] border-border/60 bg-muted/30 text-foreground/80 opacity-95 cursor-not-allowed">
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    <IconLock size={12} className="text-muted-foreground shrink-0" />
+                                    <SelectValue />
+                                  </div>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value={p.method}>{methodNames[p.method] || p.method}</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {/* Reference Input (Locked/Disabled) */}
+                            {hasRef && (
+                              <div className="col-span-3">
+                                <Input 
+                                  className="h-10 rounded-md text-[13px] font-medium border-border/60 bg-muted/30 text-foreground/80 opacity-95 cursor-not-allowed"
+                                  value={p.reference || ""}
+                                  disabled
+                                  placeholder="Referencia"
+                                />
+                              </div>
+                            )}
+
+                            {/* Amount Input (Locked/Disabled) */}
+                            {!isCredit && (
+                              <div className={cn(isCash ? "col-span-6" : "col-span-4", "relative")}>
+                                <span className="absolute left-3 top-2.5 text-[11px] font-bold text-muted-foreground/80">$</span>
+                                <Input 
+                                  className="pl-6 h-10 rounded-md text-[13px] font-semibold border-border/60 bg-muted/30 text-foreground/80 opacity-95 cursor-not-allowed tracking-tight"
+                                  value={p.amount.toFixed(2)}
+                                  disabled
+                                />
+                              </div>
+                            )}
+
+                            {isCredit && (
+                              <div className="col-span-4 flex items-center justify-end px-2">
+                                <span className="text-[11px] font-bold text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                                  Por Cobrar en Libreta
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Delete Button */}
+                            <div className="col-span-2 flex justify-end">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-10 w-full rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors border border-dashed border-border/60 hover:border-destructive/30"
+                                onClick={() => {
+                                  setAddedPayments(addedPayments.filter((_, idx) => idx !== i));
+                                  setShowSplitPaymentForm(false);
+                                }}
+                                title="Eliminar este pago"
+                              >
+                                <IconTrash size={16} />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Add Another Payment Method Button */}
+                  {remainingToPay > 0.001 && addedPayments.length > 0 && !showSplitPaymentForm && (
+                    <div className="animate-in fade-in zoom-in-95 duration-300">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full py-6 border-dashed border-primary/30 hover:border-primary text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2 rounded-xl font-bold text-xs tracking-wider uppercase"
+                        onClick={() => setShowSplitPaymentForm(true)}
+                      >
+                        <IconPlus size={16} />
+                        Agregar otro método de pago
+                      </Button>
+                    </div>
+                  )}
 
                   {/* Status Display Area */}
                   <div className="pt-2">
@@ -2944,6 +3210,15 @@ export default function POSPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Switch to enable/disable printing receipt */}
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-muted/40 border transition-all duration-300">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-semibold text-foreground/80">Imprimir Recibo al Finalizar</span>
+                      <span className="text-[11px] text-muted-foreground font-medium">Abrir el diálogo de impresión automáticamente al registrar la venta</span>
+                    </div>
+                    <Switch checked={printReceipt} onCheckedChange={setPrintReceipt} />
+                  </div>
                 </div>
               </div>
 
@@ -2957,19 +3232,45 @@ export default function POSPage() {
                       toast.error("No se puede fiar al Consumidor Final.");
                       return;
                     }
-                    if (tempPaymentMethod === 'CREDIT' && addedPayments.length === 0) {
-                      const creditPayment = {
+                    
+                    // Build summary of payments
+                    let paymentsToUse = [...addedPayments];
+                    if (remainingToPay > 0.01 && tempPaymentMethod === 'CREDIT') {
+                      paymentsToUse.push({
                         method: "CREDIT",
                         amount: remainingToPay,
                         amountLocal: remainingToPay * currentExchangeRate,
                         exchangeRate: currentExchangeRate,
                         reference: "",
                         promisedPaymentDate
-                      };
-                      processSale([creditPayment]);
-                    } else {
-                      processSale();
+                      });
                     }
+
+                    const summary = paymentsToUse.map(p => {
+                      const name = p.method === "CASH" ? "EFECTIVO" : p.method === "CARD" ? "TARJETA" : p.method === "TRANSFER" ? "TRANSFERENCIA" : p.method === "WALLET" ? "MONEDERO" : p.method === "CREDIT" ? "CRÉDITO / FIADO" : p.method;
+                      return `${name} ($${p.amount.toFixed(2)} USD)`;
+                    }).join(" + ");
+
+                    // Warning details
+                    let warning = "";
+                    if (selectedClientId !== "consumidor-final") {
+                      const creditPayments = paymentsToUse.filter(p => p.method === 'CREDIT');
+                      const nonCreditPayments = paymentsToUse.filter(p => p.method !== 'CREDIT');
+                      
+                      const creditTotal = creditPayments.reduce((sum, p) => sum + p.amount, 0);
+                      const nonCreditTotal = nonCreditPayments.reduce((sum, p) => sum + p.amount, 0);
+
+                      if (creditTotal > 0 && nonCreditTotal > 0) {
+                        warning = `Se registrará un cobro inmediato de $${nonCreditTotal.toFixed(2)} USD y se sumará $${creditTotal.toFixed(2)} USD a la Libreta (Fiado) de ${selectedClient?.name || "cliente"}.`;
+                      } else if (nonCreditTotal > 0) {
+                        warning = `Se registrará cobro inmediato para ${selectedClient?.name || "cliente"} en lugar de sumarlo a su Libreta (Fiado).`;
+                      }
+                    }
+
+                    setPaymentsToProcess(paymentsToUse);
+                    setPaymentConfirmationSummary(summary);
+                    setPaymentConfirmationWarning(warning);
+                    setIsConfirmPaymentOpen(true);
                   }}
                 >
                   {processing ? (
@@ -2983,6 +3284,64 @@ export default function POSPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* DIALOG: CONFIRMAR FINALIZAR VENTA */}
+      <AlertDialog open={isConfirmPaymentOpen} onOpenChange={setIsConfirmPaymentOpen}>
+        <AlertDialogContent className="max-w-md border-none shadow-2xl rounded-2xl p-0 overflow-hidden bg-card text-foreground">
+          <AlertDialogHeader className="p-6 pb-2 text-center flex flex-col items-center">
+            <div className="size-12 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mb-3">
+              <IconReceipt size={24} />
+            </div>
+            <AlertDialogTitle className="text-xl font-bold tracking-tight">¿Confirmar Método de Pago?</AlertDialogTitle>
+          </AlertDialogHeader>
+
+          <div className="px-6 py-4 space-y-5 text-center">
+            {/* Huge Payment Method */}
+            <div className="space-y-1">
+              <div className={cn(
+                "font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-tight break-words leading-none",
+                (() => {
+                  const name = paymentConfirmationSummary.split(" + ").map(p => p.split(" (")[0]).join(" + ");
+                  if (name.length > 15) return "text-3xl";
+                  if (name.length > 9) return "text-4xl";
+                  return "text-6xl";
+                })()
+              )}>
+                {paymentConfirmationSummary.split(" + ").map(p => p.split(" (")[0]).join(" + ")}
+              </div>
+            </div>
+
+            {/* Total Amount in smaller font */}
+            <div className="py-2.5 px-4 rounded-xl bg-muted/40 border border-border/40 flex justify-between items-center text-sm font-semibold text-muted-foreground">
+              <span>Monto Total:</span>
+              <span className="text-lg font-black text-foreground font-mono">
+                ${finalTotalWithIgtf.toFixed(2)} USD
+              </span>
+            </div>
+
+
+          </div>
+
+          <AlertDialogFooter className="p-6 pt-2 flex sm:flex-row flex-col gap-3">
+            <AlertDialogCancel className="w-full sm:flex-1 rounded-xl h-12 font-bold text-sm border-border hover:bg-muted transition-colors mt-0">
+              Revisar Pago
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                setIsConfirmPaymentOpen(false);
+                if (paymentsToProcess) {
+                  processSale(paymentsToProcess);
+                } else {
+                  processSale();
+                }
+              }}
+              className="w-full sm:flex-1 rounded-xl h-12 px-8 font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/10 border-none transition-colors"
+            >
+              Registrar Venta
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* DIALOG: ABONAR A DEUDA */}
       <Dialog open={isPaymentModalAbonoOpen} onOpenChange={setIsPaymentModalAbonoOpen}>
@@ -3534,6 +3893,183 @@ export default function POSPage() {
               {processingReturn ? "PROCESANDO..." : "CONFIRMAR DEVOLUCIÓN"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: ORDER DETAILS & CLIENT HISTORY */}
+      <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
+        <DialogContent className="rounded-2xl p-6 max-w-lg border-[#79716b]/20 bg-[#121110]! text-white">
+          <DialogHeader className="border-b border-[#79716b]/10 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                <IconReceipt size={20} />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold tracking-tight text-white">Detalle de la Orden</DialogTitle>
+                <DialogDescription className="text-zinc-500 text-[10px] uppercase font-mono tracking-wider mt-0.5">
+                  ID: {selectedSale?.id}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {/* Client & Date Info */}
+          <div className="grid grid-cols-2 gap-4 py-4 border-b border-[#79716b]/10 text-xs">
+            <div className="space-y-1">
+              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Cliente</span>
+              <div className="font-bold text-white uppercase">{selectedSale?.client || "Consumidor Final"}</div>
+              {selectedSale?.clientDocument && (
+                <div className="text-zinc-500 font-mono text-[10px]">{selectedSale.clientDocument}</div>
+              )}
+              {selectedSale?.seller && (
+                <div className="text-[10px] text-zinc-400 mt-2">
+                  <span className="font-semibold text-zinc-500 uppercase text-[9px] tracking-wider block">Cajero / Vendedor</span>
+                  <span className="font-bold text-zinc-200">{selectedSale.seller}</span>
+                </div>
+              )}
+            </div>
+            <div className="space-y-1 text-right">
+              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Fecha y Hora</span>
+              <div className="font-semibold text-zinc-300">
+                {selectedSale && format(new Date(selectedSale.date), "dd 'de' MMMM 'de' yyyy, hh:mm a", { locale: es })}
+              </div>
+              <div className="text-zinc-500 text-[10px] uppercase font-bold">Sucursal: {selectedSale?.branch || "N/A"}</div>
+            </div>
+          </div>
+
+          {/* Products List */}
+          <div className="py-4 space-y-3">
+            <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Productos Comprados</span>
+            <div className="rounded-xl border border-[#79716b]/10 overflow-hidden max-h-48 overflow-y-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-muted/30 border-b border-[#79716b]/10">
+                  <tr>
+                    <th className="h-8 p-2 text-[9px] uppercase font-bold text-zinc-400">Producto</th>
+                    <th className="h-8 p-2 text-center text-[9px] uppercase font-bold text-zinc-400 w-[60px]">Cant.</th>
+                    <th className="h-8 p-2 text-right text-[9px] uppercase font-bold text-zinc-400 w-[85px]">P. Unit</th>
+                    <th className="h-8 p-2 text-right text-[9px] uppercase font-bold text-zinc-400 w-[90px]">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#79716b]/5">
+                  {!selectedSale?.items || selectedSale.items.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="h-16 text-center text-xs text-zinc-500 italic p-2">
+                        No hay productos registrados en esta venta
+                      </td>
+                    </tr>
+                  ) : (
+                    selectedSale.items.map((item: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-muted/10">
+                        <td className="p-2 text-xs font-semibold text-zinc-200">
+                          {item.name}
+                          {item.variantName && (
+                            <span className="block text-[9px] font-normal text-zinc-500">
+                              Variante: {item.variantName}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-2 text-center text-xs text-zinc-300 font-mono">
+                          {item.quantity}
+                        </td>
+                        <td className="p-2 text-right text-xs text-zinc-300 font-mono">
+                          {formatPrice(item.price)}
+                        </td>
+                        <td className="p-2 text-right text-xs font-bold text-white font-mono">
+                          {formatPrice(item.subtotal)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Payment & Totals */}
+          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#79716b]/10">
+            <div className="space-y-2">
+              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider block">Método de Pago</span>
+              <div className="space-y-1">
+                {selectedSale?.payments && selectedSale.payments.length > 0 ? (
+                  selectedSale.payments.map((p: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-muted/20 border border-[#79716b]/5">
+                      <span className="text-zinc-400 font-medium">
+                        {p.method === "CASH" ? "Efectivo" :
+                         p.method === "CARD" ? "Tarjeta / Punto" :
+                         p.method === "TRANSFER" ? "Transferencia" :
+                         p.method === "WALLET" ? "Billetera" :
+                         p.method === "CREDIT" ? "Fiado" :
+                         p.method === "PAGO_MOVIL" ? "Pago Móvil" :
+                         p.method === "BINANCE" ? "Binance" :
+                         p.method === "ZINLI" ? "Zinli" :
+                         p.method === "PAYPAL" ? "Paypal" : p.method}
+                      </span>
+                      <span className="font-bold text-white font-mono">{formatPrice(p.amount)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-xs text-zinc-500 italic">No especificado</span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5 text-right text-xs">
+              <div className="flex justify-between text-zinc-500">
+                <span>Subtotal:</span>
+                <span className="font-mono text-zinc-300">{formatPrice(selectedSale?.subtotal || 0)}</span>
+              </div>
+              <div className="flex justify-between text-zinc-500">
+                <span>IVA:</span>
+                <span className="font-mono text-zinc-300">{formatPrice(selectedSale?.taxAmount || 0)}</span>
+              </div>
+              {selectedSale?.discountAmt > 0 && (
+                <div className="flex justify-between text-rose-400">
+                  <span>Descuento:</span>
+                  <span className="font-mono">-{formatPrice(selectedSale.discountAmt)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-[#79716b]/10 pt-2 text-sm font-black">
+                <span className="text-zinc-300">TOTAL:</span>
+                <span className="text-emerald-400 font-mono text-lg">{formatPrice(selectedSale?.total || 0)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Other Purchases Section */}
+          {selectedSale?.clientId && (
+            <div className="py-4 border-t border-[#79716b]/10 space-y-2.5">
+              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider block">
+                Historial de Compras del Cliente ({clientHistory.length})
+              </span>
+              {loadingHistory ? (
+                <div className="text-[11px] text-zinc-500 animate-pulse">Cargando historial...</div>
+              ) : clientHistory.length <= 1 ? (
+                <div className="text-[11px] text-zinc-500 italic">No se registran otras compras para este cliente.</div>
+              ) : (
+                <div className="flex flex-col gap-2 max-h-44 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+                  {clientHistory.map((histSale) => {
+                    const isCurrent = histSale.id === selectedSale.id;
+                    const dateFormatted = format(new Date(histSale.date), "dd 'de' MMMM 'de' yyyy, hh:mm a", { locale: es });
+                    return (
+                      <button
+                        key={histSale.id}
+                        onClick={() => setSelectedSale(histSale)}
+                        className={cn(
+                          "w-full text-left px-3.5 py-2.5 rounded-xl border text-[11px] font-bold transition-all uppercase tracking-tight cursor-pointer flex items-center justify-between",
+                          isCurrent
+                            ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                            : "bg-[#121110]/60 border-[#79716b]/20 hover:border-zinc-500 text-zinc-400 hover:text-white"
+                        )}
+                      >
+                        <span className="truncate font-semibold">{dateFormatted}</span>
+                        <span className="font-black text-right min-w-[75px]">{formatPrice(histSale.total)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

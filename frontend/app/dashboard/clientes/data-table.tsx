@@ -52,6 +52,8 @@ interface DataTableProps<TData, TValue> {
   data: TData[]
   filterPlaceholder?: string
   filterColumn?: string
+  searchTerm?: string
+  onSearchChange?: (val: string) => void
 }
 
 export function DataTable<TData, TValue>({
@@ -59,6 +61,8 @@ export function DataTable<TData, TValue>({
   data,
   filterPlaceholder = "Filtrar...",
   filterColumn,
+  searchTerm,
+  onSearchChange,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -87,7 +91,16 @@ export function DataTable<TData, TValue>({
     <div className="w-full space-y-4 font-sans">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-            {filterColumn && (
+            {onSearchChange !== undefined ? (
+                <div className="relative">
+                    <Input
+                        placeholder={filterPlaceholder}
+                        value={searchTerm ?? ""}
+                        onChange={(event) => onSearchChange(event.target.value)}
+                        className="h-8 w-[150px] lg:w-[300px] text-xs px-3"
+                    />
+                </div>
+            ) : filterColumn && (
                 <div className="relative">
                     <Input
                         placeholder={filterPlaceholder}

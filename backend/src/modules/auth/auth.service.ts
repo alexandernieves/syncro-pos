@@ -93,6 +93,39 @@ export class AuthService {
     };
   }
 
+  // ── Client Login (PWA Portal) ──────────────────────────────────────────────
+  async clientLogin(documentId: string) {
+    const client = await this.prisma.client.findFirst({
+      where: {
+        documentId: {
+          equals: documentId,
+          mode: 'insensitive',
+        },
+      },
+    });
+
+    if (!client) {
+      throw new UnauthorizedException('Cliente no encontrado');
+    }
+
+    const payload = {
+      sub: client.id,
+      role: 'client',
+      name: client.name,
+      businessId: client.businessId,
+    };
+
+    return {
+      access_token: this.jwtService.sign(payload),
+      client: {
+        id: client.id,
+        name: client.name,
+        documentId: client.documentId,
+        businessId: client.businessId,
+      },
+    };
+  }
+
   // ── Register ───────────────────────────────────────────────────────────────
   async register(userData: any) {
     // 1. Create the business

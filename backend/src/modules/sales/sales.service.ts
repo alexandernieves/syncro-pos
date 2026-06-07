@@ -22,8 +22,8 @@ export class SalesService {
       return await this.prisma.$transaction(async (tx) => {
       // 0. Get current settings for taxes
       const settings = await tx.setting.findFirst();
-      const taxRate = settings?.taxRate || 16;
-      const igtfRate = settings?.igtfRate || 3;
+      const taxRate = settings?.taxRate ?? 16;
+      const igtfRate = settings?.igtfRate ?? 3;
 
       let netSubtotal = 0;
       const saleItemsData = [];
@@ -302,7 +302,21 @@ export class SalesService {
     }
     return this.prisma.sale.findMany({
       where,
-      include: { items: { include: { variant: true } }, user: true, branch: true },
+      include: { 
+        items: { 
+          include: { 
+            variant: { 
+              include: { 
+                product: true 
+              } 
+            } 
+          } 
+        }, 
+        user: true, 
+        branch: true,
+        client: true,
+        payments: true
+      },
       orderBy: { createdAt: 'desc' }
     });
   }
@@ -408,7 +422,7 @@ export class SalesService {
 
         // Fetch settings for proper tax calculation
         const settings = await tx.setting.findFirst();
-        const taxRate = settings?.taxRate || 16;
+        const taxRate = settings?.taxRate ?? 16;
         const taxAmount = netSubtotal * (taxRate / 100);
         const total = netSubtotal + taxAmount; 
 

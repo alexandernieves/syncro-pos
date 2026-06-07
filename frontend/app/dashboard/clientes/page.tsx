@@ -67,6 +67,19 @@ export default function ClientsPage() {
   const [loading, setLoading] = useState(true);
   const { pullRemoteData } = useSync();
 
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredClients = React.useMemo(() => {
+    const query = searchTerm.toLowerCase().trim();
+    if (!query) return clients;
+    return clients.filter((client) => {
+      return (
+        client.name.toLowerCase().includes(query) ||
+        (client.documentId && client.documentId.toLowerCase().includes(query))
+      );
+    });
+  }, [clients, searchTerm]);
+
   // Credit Management State
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
@@ -160,6 +173,8 @@ export default function ClientsPage() {
     }
   };
   const handleSaveClient = async () => {
+    if (!formData.name.trim()) return toast.error("El nombre es obligatorio");
+    if (!formData.documentId.trim()) return toast.error("La Cédula / RIF es obligatoria");
     setIsSaving(true);
     try {
       const token = localStorage.getItem("token");
@@ -471,8 +486,9 @@ export default function ClientsPage() {
                 ) : (
                     <DataTable 
                         columns={columns} 
-                        data={clients} 
-                        filterColumn="name" 
+                        data={filteredClients} 
+                        searchTerm={searchTerm}
+                        onSearchChange={setSearchTerm}
                         filterPlaceholder="Filtrar por nombre o RIF..." 
                     />
                 )}

@@ -140,7 +140,21 @@ export class DashboardService {
         }
       },
       orderBy: { createdAt: 'desc' },
-      include: { client: true, user: true, branch: true }
+      include: { 
+        client: true, 
+        user: true, 
+        branch: true,
+        payments: true,
+        items: {
+          include: {
+            variant: {
+              include: {
+                product: true
+              }
+            }
+          }
+        }
+      }
     });
 
     // Check if there is an active shift for this user in this branch to light the live pulsing indicator
@@ -176,10 +190,29 @@ export class DashboardService {
       recentSales: daySales.map(s => ({
         id: s.id,
         client: s.client?.name || "Consumidor Final",
+        clientId: s.clientId,
+        clientDocument: s.client?.documentId || null,
         total: s.total,
+        subtotal: s.subtotal,
+        taxAmount: s.taxAmount,
+        igtfAmount: s.igtfAmount,
+        discountAmt: s.discountAmt,
         status: s.status || "COMPLETED",
         branch: s.branch?.name || "N/A",
-        date: s.createdAt
+        date: s.createdAt,
+        seller: s.user?.name || "Desconocido",
+        payments: s.payments.map(p => ({
+          method: p.method,
+          amount: p.amount
+        })),
+        items: s.items.map(item => ({
+          id: item.id,
+          name: item.variant?.product?.name || "Producto Desconocido",
+          variantName: item.variant?.name || "",
+          quantity: item.quantity,
+          price: item.price,
+          subtotal: item.subtotal
+        }))
       }))
     };
   }

@@ -1,14 +1,15 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { API_URL } from "@/lib/constants"
+import { API_URL } from "@/lib/constants";
 import { 
   Card, CardContent, CardHeader, CardTitle, CardDescription 
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
-  IconUser, IconHistory, IconCash, IconAlertCircle, IconCheck, IconSearch, IconCreditCard, IconPlus, IconX
+  IconUser, IconHistory, IconCash, IconAlertCircle, IconCheck, IconSearch, 
+  IconCreditCard, IconPlus, IconX, IconCoins, IconInfoCircle
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -23,15 +24,31 @@ const API = API_URL;
 
 export default function CreditosPage() {
   const [clients, setClients] = useState<any[]>([]);
+  const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClient, setSelectedClient] = useState<any>(null);
+  
+  // Abono Modal States (Multi-currency)
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentNotes, setPaymentNotes] = useState("");
+  const [paymentCurrency, setPaymentCurrency] = useState<"USD" | "VES" | "COP">("USD");
+  const [paidAmountRaw, setPaidAmountRaw] = useState("");
+  const [customRate, setCustomRate] = useState("");
+
+  // Cargo (Fiar) Modal States
   const [chargeOpen, setChargeOpen] = useState(false);
   const [chargeAmount, setChargeAmount] = useState("");
   const [chargeNotes, setChargeNotes] = useState("");
+  
+  // Préstamo Modal States
+  const [loanOpen, setLoanOpen] = useState(false);
+  const [loanAmount, setLoanAmount] = useState("");
+  const [loanInterest, setLoanInterest] = useState("10");
+  const [loanInstallments, setLoanInstallments] = useState("4");
+  const [loanPeriod, setLoanPeriod] = useState<"WEEKLY" | "BIWEEKLY" | "MONTHLY">("WEEKLY");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Historial Completo Modal States
@@ -42,6 +59,7 @@ export default function CreditosPage() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
   const [historyTypeFilter, setHistoryTypeFilter] = useState<"ALL" | "DEBT" | "PAYMENT">("ALL");
+  
   const [clientsPage, setClientsPage] = useState(1);
   const [clientsPageSize, setClientsPageSize] = useState(12);
 
@@ -53,12 +71,22 @@ export default function CreditosPage() {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
+      
+      // Load Clients
       const res = await fetch(`${API}/clients`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
-        setClients(data); // Guardar todos los clientes
+        setClients(data);
+      }
+
+      // Load Settings for exchange rates
+      const settingsRes = await fetch(`${API}/settings`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (settingsRes.ok) {
+        setSettings(await settingsRes.json());
       }
     } catch (error) {
       toast.error("Error al cargar créditos");
@@ -71,8 +99,24 @@ export default function CreditosPage() {
     loadData();
   }, [loadData]);
 
-  // Si no hay búsqueda activa, solo mostramos clientes con saldo pendiente.
-  // Si busca, buscamos entre todos los clientes registrados para permitir abrirles cuenta desde aquí.
+  // Dynamic currency conversion logic
+  useEffect(() => {
+    if (!paymentOpen) return;
+    if (paymentCurrency === "USD") {
+      setPaymentAmount(paidAmountRaw);
+      setCustomRate("");
+    } else {
+      const defaultRate = paymentCurrency === "VES" ? (settings?.exchangeRate || 40) : 4000;
+      const rate = parseFloat(customRate) || defaultRate;
+      if (rate > 0 && paidAmountRaw) {
+        const usdValue = (parseFloat(paidAmountRaw) / rate).toFixed(2);
+        setPaymentAmount(usdValue);
+      } else {
+        setPaymentAmount("");
+      }
+    }
+  }, [paymentCurrency, paidAmountRaw, customRate, paymentOpen, settings]);
+
   const filteredClients = clients.filter(c => {
     const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           c.documentId?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -88,6 +132,10 @@ export default function CreditosPage() {
   const handleOpenPayment = (client: any) => {
     setSelectedClient(client);
     setPaymentAmount(client.currentDebt.toString());
+    setPaidAmountRaw(client.currentDebt.toString());
+    setPaymentCurrency("USD");
+    setCustomRate("");
+    setPaymentNotes("");
     setPaymentOpen(true);
   };
 
@@ -96,6 +144,15 @@ export default function CreditosPage() {
     setChargeAmount("");
     setChargeNotes("");
     setChargeOpen(true);
+  };
+
+  const handleOpenLoan = (client: any) => {
+    setSelectedClient(client);
+    setLoanAmount("");
+    setLoanInterest("10");
+    setLoanInstallments("4");
+    setLoanPeriod("WEEKLY");
+    setLoanOpen(true);
   };
 
   const handleOpenHistory = async (client: any) => {
@@ -131,6 +188,10 @@ export default function CreditosPage() {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem("token");
+      const calculatedRate = paymentCurrency !== "USD" 
+        ? (parseFloat(customRate) || (paymentCurrency === "VES" ? settings?.exchangeRate : 4000))
+        : undefined;
+
       const res = await fetch(`${API}/clients/${selectedClient.id}/payment`, {
         method: "POST",
         headers: {
@@ -139,7 +200,10 @@ export default function CreditosPage() {
         },
         body: JSON.stringify({
           amount: parseFloat(paymentAmount),
-          notes: paymentNotes || "Abono a deuda"
+          notes: paymentNotes || "Abono a deuda",
+          paidCurrency: paymentCurrency,
+          paidAmount: parseFloat(paidAmountRaw) || parseFloat(paymentAmount),
+          exchangeRate: calculatedRate
         })
       });
 
@@ -194,7 +258,45 @@ export default function CreditosPage() {
     }
   };
 
-  // Paginación y filtrado local del historial en el modal
+  const handleRegisterLoan = async () => {
+    if (!loanAmount || parseFloat(loanAmount) <= 0) {
+      toast.error("Monto de préstamo inválido");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/clients/${selectedClient.id}/loans`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          amount: parseFloat(loanAmount),
+          interestRate: parseFloat(loanInterest),
+          installmentsCount: parseInt(loanInstallments),
+          period: loanPeriod
+        })
+      });
+
+      if (res.ok) {
+        toast.success("Préstamo registrado y cuotas generadas");
+        setLoanOpen(false);
+        loadData();
+      } else {
+        const err = await res.json();
+        toast.error(err.message || "Error al crear préstamo");
+      }
+    } catch (error) {
+      toast.error("Error de conexión");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Historial Local pagination & filter
   const filteredHistoryTransactions = historyTransactions.filter((t: any) => {
     const concept = (t.notes || (t.type === 'DEBT' ? 'Cargo de deuda' : 'Abono')).toLowerCase();
     const amountStr = t.amount.toString();
@@ -253,7 +355,7 @@ export default function CreditosPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredClients.slice((clientsPage - 1) * clientsPageSize, clientsPage * clientsPageSize).map((c) => (
-            <Card key={c.id} className="overflow-hidden shadow-sm dark:shadow-none border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-950/40 backdrop-blur-md rounded-2xl group transition-all duration-300 hover:border-zinc-300 dark:hover:border-zinc-700/80">
+            <Card key={c.id} className={`overflow-hidden shadow-sm dark:shadow-none border ${c.isSuspended ? 'border-rose-500/30 dark:border-rose-500/20 bg-rose-500/[0.01]' : 'border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-950/40'} backdrop-blur-md rounded-2xl group transition-all duration-300 hover:border-zinc-300 dark:hover:border-zinc-700/80`}>
               {/* CARD HEADER */}
               <CardHeader className="pb-4 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50/20 dark:bg-zinc-950/20">
                 <div className="flex items-center justify-between">
@@ -262,15 +364,25 @@ export default function CreditosPage() {
                       {c.name.charAt(0)}
                     </div>
                     <div>
-                      <CardTitle className="text-base font-bold text-zinc-800 dark:text-zinc-100 tracking-tight truncate max-w-[150px]">{c.name}</CardTitle>
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-base font-bold text-zinc-800 dark:text-zinc-100 tracking-tight truncate max-w-[130px]">{c.name}</CardTitle>
+                        {c.isSuspended && (
+                          <Badge className="bg-rose-500 text-white border-none hover:bg-rose-500 text-[9px] h-4 px-1.5 font-bold uppercase">Mora</Badge>
+                        )}
+                      </div>
                       <CardDescription className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono tracking-tight mt-0.5">{c.documentId || "Cédula S/D"}</CardDescription>
                     </div>
                   </div>
-                  <Badge className={c.creditScore >= 70 
-                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-500/10" 
-                    : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 hover:bg-amber-500/10"}>
-                    Score: {c.creditScore || 100}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge className={c.creditScore >= 70 
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-500/10" 
+                      : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 hover:bg-amber-500/10"}>
+                      Score: {c.creditScore || 100}
+                    </Badge>
+                    <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 flex items-center gap-0.5">
+                      <IconCoins size={10} className="text-yellow-500" /> {c.accumulatedPoints || 0} pts
+                    </span>
+                  </div>
                 </div>
               </CardHeader>
               
@@ -311,20 +423,28 @@ export default function CreditosPage() {
                     </span>
                   </div>
                 </div>
-                {/* Historial de Libreta */}
-                <div className="pt-1.5">
+
+                {/* ACTION BUTTONS */}
+                <div className="flex gap-2">
                   <Button 
                     variant="outline"
                     onClick={() => handleOpenHistory(c)}
-                    className="w-full rounded-xl h-11 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900/40 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 transition-all font-bold text-xs flex items-center justify-center gap-2 hover:shadow-sm"
+                    className="flex-1 rounded-xl h-10 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900/40 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 transition-all font-bold text-xs flex items-center justify-center gap-1.5 hover:shadow-sm"
                   >
-                    <IconHistory size={16} className="text-zinc-400 dark:text-zinc-500" />
-                    Ver Historial Completo
+                    <IconHistory size={14} className="text-zinc-400 dark:text-zinc-500" />
+                    Historial
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => handleOpenLoan(c)}
+                    className="flex-1 rounded-xl h-10 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900/40 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 transition-all font-bold text-xs flex items-center justify-center gap-1.5 hover:shadow-sm"
+                  >
+                    <IconPlus size={14} className="text-zinc-400" />
+                    Préstamo
                   </Button>
                 </div>
 
-                {/* TWIN BUTTONS */}
-                <div className="flex gap-2.5 pt-2">
+                <div className="flex gap-2 pt-1">
                   {c.currentDebt > 0 && (
                     <Button 
                       onClick={() => handleOpenPayment(c)} 
@@ -342,67 +462,68 @@ export default function CreditosPage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        {filteredClients.length > 0 && (
-          <div className="flex items-center justify-between border-t border-zinc-150 dark:border-zinc-800 pt-5 mt-4 text-xs text-zinc-500 font-medium">
-            <span>{filteredClients.length} cliente(s)</span>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span>Filas por página</span>
-                <select
-                  value={clientsPageSize}
-                  onChange={e => { setClientsPageSize(Number(e.target.value)); setClientsPage(1); }}
-                  className="h-8 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-semibold px-2 cursor-pointer outline-none focus:ring-2 focus:ring-primary/30 text-zinc-700 dark:text-zinc-300"
-                >
-                  {[6, 12, 24, 48].map(s => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
-              <span>Página <strong className="text-zinc-700 dark:text-zinc-300">{clientsPage}</strong> de {totalClientsPages}</span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setClientsPage(1)}
-                  disabled={clientsPage === 1}
-                  className="size-8 flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-zinc-600 dark:text-zinc-400"
-                  title="Primera página"
-                >
-                  <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M2 7.5L7.5 2M2 7.5L7.5 13M2 7.5H13M8.5 2L14 7.5M8.5 13L14 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </button>
-                <button
-                  onClick={() => setClientsPage(p => Math.max(1, p - 1))}
-                  disabled={clientsPage === 1}
-                  className="size-8 flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-zinc-600 dark:text-zinc-400"
-                  title="Anterior"
-                >
-                  <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M9 11L5 7.5L9 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </button>
-                <button
-                  onClick={() => setClientsPage(p => Math.min(totalClientsPages, p + 1))}
-                  disabled={clientsPage === totalClientsPages}
-                  className="size-8 flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-zinc-600 dark:text-zinc-400"
-                  title="Siguiente"
-                >
-                  <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M6 4L10 7.5L6 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </button>
-                <button
-                  onClick={() => setClientsPage(totalClientsPages)}
-                  disabled={clientsPage === totalClientsPages}
-                  className="size-8 flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-zinc-600 dark:text-zinc-400"
-                  title="Última página"
-                >
-                  <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M13 7.5L7.5 2M13 7.5L7.5 13M13 7.5H2M6.5 2L1 7.5M6.5 13L1 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </button>
+          {/* PAGINATION */}
+          {filteredClients.length > 0 && (
+            <div className="flex items-center justify-between border-t border-zinc-150 dark:border-zinc-800 pt-5 mt-4 text-xs text-zinc-500 font-medium">
+              <span>{filteredClients.length} cliente(s)</span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span>Filas por página</span>
+                  <select
+                    value={clientsPageSize}
+                    onChange={e => { setClientsPageSize(Number(e.target.value)); setClientsPage(1); }}
+                    className="h-8 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-semibold px-2 cursor-pointer outline-none focus:ring-2 focus:ring-primary/30 text-zinc-700 dark:text-zinc-300"
+                  >
+                    {[6, 12, 24, 48].map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+                <span>Página <strong className="text-zinc-700 dark:text-zinc-300">{clientsPage}</strong> de {totalClientsPages}</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setClientsPage(1)}
+                    disabled={clientsPage === 1}
+                    className="size-8 flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-zinc-600 dark:text-zinc-400"
+                    title="Primera página"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M2 7.5L7.5 2M2 7.5L7.5 13M2 7.5H13M8.5 2L14 7.5M8.5 13L14 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
+                  <button
+                    onClick={() => setClientsPage(p => Math.max(1, p - 1))}
+                    disabled={clientsPage === 1}
+                    className="size-8 flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-zinc-600 dark:text-zinc-400"
+                    title="Anterior"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M9 11L5 7.5L9 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
+                  <button
+                    onClick={() => setClientsPage(p => Math.min(totalClientsPages, p + 1))}
+                    disabled={clientsPage === totalClientsPages}
+                    className="size-8 flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-zinc-600 dark:text-zinc-400"
+                    title="Siguiente"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M6 4L10 7.5L6 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
+                  <button
+                    onClick={() => setClientsPage(totalClientsPages)}
+                    disabled={clientsPage === totalClientsPages}
+                    className="size-8 flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-zinc-600 dark:text-zinc-400"
+                    title="Última página"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 15 15" fill="none"><path d="M13 7.5L7.5 2M13 7.5L7.5 13M13 7.5H2M6.5 2L1 7.5M6.5 13L1 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
         </>
       )}
 
-      {/* Modal Abono */}
+      {/* Modal Abono (Multi-currency support) */}
       <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
         <DialogContent className="rounded-2xl p-6 max-w-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-200">
           <DialogHeader>
@@ -414,33 +535,79 @@ export default function CreditosPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label className="text-zinc-500 dark:text-zinc-400 text-xs font-semibold uppercase tracking-wider">Monto a abonar ($)</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xl font-black text-zinc-400 dark:text-zinc-500">$</span>
+          <div className="grid gap-4 py-3">
+            {/* Currency selector */}
+            <div className="space-y-1">
+              <Label className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-wider">Moneda de Pago</Label>
+              <select
+                value={paymentCurrency}
+                onChange={(e: any) => {
+                  setPaymentCurrency(e.target.value);
+                  setPaidAmountRaw("");
+                  setPaymentAmount("");
+                  setCustomRate("");
+                }}
+                className="w-full h-10 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-sm font-semibold px-3 cursor-pointer outline-none text-zinc-750 dark:text-zinc-300 focus:ring-2 focus:ring-emerald-500/20"
+              >
+                <option value="USD">Dólares (USD)</option>
+                <option value="VES">Bolívares (VES)</option>
+                <option value="COP">Pesos Colombianos (COP)</option>
+              </select>
+            </div>
+
+            {/* Custom exchange rate (if VES or COP) */}
+            {paymentCurrency !== "USD" && (
+              <div className="space-y-1">
+                <Label className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-wider">Tasa de Cambio</Label>
                 <Input 
                   type="number" 
-                  className="rounded-xl h-12 pl-8 text-2xl font-black text-center text-emerald-500 dark:text-emerald-400 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 focus-visible:ring-emerald-500 focus-visible:ring-offset-0" 
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="rounded-xl h-10 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-sm focus-visible:ring-emerald-500" 
+                  placeholder={paymentCurrency === "VES" ? `Tasa BCV: ${settings?.exchangeRate || 40}` : "Tasa estimada: 4000"}
+                  value={customRate}
+                  onChange={(e) => setCustomRate(e.target.value)}
                 />
               </div>
-              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 text-right">Deuda actual: ${selectedClient?.currentDebt.toFixed(2)}</p>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-zinc-500 dark:text-zinc-400 text-xs font-semibold uppercase tracking-wider">Notas / Concepto</Label>
+            )}
+
+            {/* Amount Paid in Raw Currency */}
+            <div className="space-y-1">
+              <Label className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
+                Monto Recibido ({paymentCurrency})
+              </Label>
               <Input 
-                placeholder="Ej. Abono en efectivo / Pago móvil" 
-                className="rounded-xl h-11 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-sm focus-visible:ring-zinc-300 dark:focus-visible:ring-zinc-700 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
+                type="number" 
+                className="rounded-xl h-11 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-lg font-bold text-center text-zinc-950 dark:text-zinc-100 focus-visible:ring-emerald-500" 
+                value={paidAmountRaw}
+                onChange={(e) => setPaidAmountRaw(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+
+            {/* Calculated USD equivalent (if VES or COP) */}
+            {paymentCurrency !== "USD" && (
+              <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/10 flex justify-between items-center">
+                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1">
+                  <IconInfoCircle size={12} /> Equivalente en Dólares
+                </span>
+                <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+                  ${paymentAmount || "0.00"} USD
+                </span>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <Label className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-wider">Concepto / Notas</Label>
+              <Input 
+                placeholder="Ej. Pago móvil provincial / Efectivo" 
+                className="rounded-xl h-10 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-sm focus-visible:ring-emerald-500 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400"
                 value={paymentNotes}
                 onChange={(e) => setPaymentNotes(e.target.value)}
               />
             </div>
           </div>
 
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setPaymentOpen(false)} className="rounded-xl h-11 border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 bg-transparent">Cancelar</Button>
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="outline" onClick={() => setPaymentOpen(false)} className="rounded-xl h-11 border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 bg-transparent">Cancelar</Button>
             <Button 
               onClick={handleRegisterPayment} 
               disabled={isSubmitting}
@@ -482,7 +649,7 @@ export default function CreditosPage() {
             <div className="space-y-2">
               <Label className="text-zinc-500 dark:text-zinc-400 text-xs font-semibold uppercase tracking-wider">Concepto / Notas del Fiado</Label>
               <Input 
-                placeholder="Ej. Se llevó 1 refresco y harina" 
+                placeholder="Ej. Se llevó refresco y harina" 
                 className="rounded-xl h-11 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-sm focus-visible:ring-zinc-300 dark:focus-visible:ring-zinc-700 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
                 value={chargeNotes}
                 onChange={(e) => setChargeNotes(e.target.value)}
@@ -491,13 +658,112 @@ export default function CreditosPage() {
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setChargeOpen(false)} className="rounded-xl h-11 border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 bg-transparent">Cancelar</Button>
+            <Button variant="outline" onClick={() => setChargeOpen(false)} className="rounded-xl h-11 border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 bg-transparent">Cancelar</Button>
             <Button 
               onClick={handleRegisterCharge} 
               disabled={isSubmitting}
               className="rounded-xl h-11 flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/20 border-none animate-all"
             >
               {isSubmitting ? "Procesando..." : "Confirmar Fiado"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Crear Préstamo (Cash Loan) */}
+      <Dialog open={loanOpen} onOpenChange={setLoanOpen}>
+        <DialogContent className="rounded-2xl p-6 max-w-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-200">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-primary">
+              <IconCoins size={20} className="text-yellow-500" /> Aprobar Préstamo
+            </DialogTitle>
+            <DialogDescription className="text-zinc-500 dark:text-zinc-500 text-xs mt-1">
+              Desembolsa dinero en efectivo USD a <strong className="text-zinc-700 dark:text-zinc-300">{selectedClient?.name}</strong> y divide la deuda en cuotas.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3.5 py-3">
+            <div className="space-y-1">
+              <Label className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-wider">Monto Solicitado ($ USD)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-black text-zinc-400">$</span>
+                <Input 
+                  type="number" 
+                  className="rounded-xl h-11 pl-8 text-lg font-black bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 focus-visible:ring-primary" 
+                  value={loanAmount}
+                  onChange={(e) => setLoanAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-wider">Tasa de Interés (%)</Label>
+                <Input 
+                  type="number" 
+                  className="rounded-xl h-10 bg-zinc-50 dark:bg-zinc-900 border-zinc-200" 
+                  value={loanInterest}
+                  onChange={(e) => setLoanInterest(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-wider">Número de Cuotas</Label>
+                <Input 
+                  type="number" 
+                  className="rounded-xl h-10 bg-zinc-50 dark:bg-zinc-900 border-zinc-200" 
+                  value={loanInstallments}
+                  onChange={(e) => setLoanInstallments(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-wider">Frecuencia de Pago</Label>
+              <select
+                value={loanPeriod}
+                onChange={(e: any) => setLoanPeriod(e.target.value)}
+                className="w-full h-10 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-semibold px-3 cursor-pointer outline-none text-zinc-750 dark:text-zinc-300"
+              >
+                <option value="WEEKLY">Semanal</option>
+                <option value="BIWEEKLY">Quincenal</option>
+                <option value="MONTHLY">Mensual</option>
+              </select>
+            </div>
+
+            {/* Calculations info */}
+            {parseFloat(loanAmount) > 0 && (
+              <div className="p-3.5 rounded-xl bg-zinc-100 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800/80 text-[10px] space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-zinc-500 font-bold uppercase">Interés a cobrar:</span>
+                  <span className="font-extrabold text-zinc-700 dark:text-zinc-300">
+                    ${(parseFloat(loanAmount) * (parseFloat(loanInterest) / 100)).toFixed(2)} USD
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500 font-bold uppercase">Total a devolver:</span>
+                  <span className="font-extrabold text-zinc-700 dark:text-zinc-300">
+                    ${(parseFloat(loanAmount) * (1 + parseFloat(loanInterest) / 100)).toFixed(2)} USD
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-zinc-200 dark:border-zinc-800 pt-1 mt-1 font-semibold text-xs">
+                  <span className="text-zinc-500 font-bold uppercase">Monto por cuota:</span>
+                  <span className="font-black text-primary">
+                    ${((parseFloat(loanAmount) * (1 + parseFloat(loanInterest) / 100)) / parseInt(loanInstallments)).toFixed(2)} USD
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="outline" onClick={() => setLoanOpen(false)} className="rounded-xl h-11 border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 bg-transparent">Cancelar</Button>
+            <Button 
+              onClick={handleRegisterLoan} 
+              disabled={isSubmitting}
+              className="rounded-xl h-11 flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/20 border-none animate-all"
+            >
+              {isSubmitting ? "Procesando..." : "Confirmar Préstamo"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -405,12 +405,16 @@ model Client {
   creditScore           Float               @default(50)
   totalPaymentsCount    Int                 @default(0)
   latePaymentsCount     Int                 @default(0)
+  accumulatedPoints     Int                 @default(0)
+  isSuspended           Boolean             @default(false)
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
   businessId            String?
   business              Business?           @relation(fields: [businessId], references: [id])
   creditTransactions    CreditTransaction[]
   sales                 Sale[]
+  loans                 Loan[]
+  redeemedRewards       RedeemedReward[]
 }
 
 model CreditTransaction {
@@ -740,4 +744,69 @@ model AiFeedback {
   createdAt    DateTime  @default(now())
   businessId   String?
   business     Business? @relation(fields: [businessId], references: [id])
+}
+
+model Loan {
+  id                String            @id @default(uuid())
+  clientId          String
+  amount            Float
+  interestRate      Float
+  totalToPay        Float
+  remainingBalance  Float
+  installmentsCount Int
+  status            LoanStatus        @default(PENDING)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  client            Client            @relation(fields: [clientId], references: [id])
+  installments      LoanInstallment[]
+}
+
+model LoanInstallment {
+  id                String            @id @default(uuid())
+  loanId            String
+  installmentNumber Int
+  dueDate           DateTime
+  amount            Float
+  paidAmount        Float             @default(0)
+  status            InstallmentStatus @default(PENDING)
+  paidAt            DateTime?
+  
+  loan              Loan              @relation(fields: [loanId], references: [id], onDelete: Cascade)
+}
+
+model Reward {
+  id              String            @id @default(uuid())
+  businessId      String
+  name            String
+  description     String?
+  pointsCost      Int
+  stock           Int               @default(0)
+  image           String?
+  createdAt       DateTime          @default(now())
+  
+  redeemedRewards RedeemedReward[]
+}
+
+model RedeemedReward {
+  id              String            @id @default(uuid())
+  clientId        String
+  rewardId        String
+  pointsSpent     Int
+  createdAt       DateTime          @default(now())
+  
+  client          Client            @relation(fields: [clientId], references: [id])
+  reward          Reward            @relation(fields: [rewardId], references: [id])
+}
+
+enum LoanStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum InstallmentStatus {
+  PENDING
+  PAID
+  OVERDUE
 }

@@ -32,6 +32,15 @@ export class AuthController {
     return this.authService.login(user);
   }
 
+  // ── Client Portal Login ───────────────────────────────────────────────────
+  @Post('client-login')
+  async clientLogin(@Body('documentId') documentId: string) {
+    if (!documentId) {
+      throw new BadRequestException('El número de documento es requerido');
+    }
+    return this.authService.clientLogin(documentId);
+  }
+
   // ── Register ──────────────────────────────────────────────────────────────
   // Moderate rate-limit: max 3 registrations per hour per IP
   @Throttle({ default: { limit: 3, ttl: 3600000 } })
