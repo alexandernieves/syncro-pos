@@ -42,6 +42,7 @@ export default function GastosPage() {
   const [loading, setLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [totalExpenses, setTotalExpenses] = useState(0);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -119,8 +120,7 @@ export default function GastosPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar este registro de gasto?")) return;
+  const executeDelete = async (id: string) => {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`${API}/expenses/${id}`, {
@@ -193,7 +193,7 @@ export default function GastosPage() {
                         <div className="text-sm font-black text-destructive">
                           -${g.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(g.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                        <Button variant="ghost" size="icon" onClick={() => setDeleteId(g.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive">
                           <IconTrash size={16} />
                         </Button>
                       </div>
@@ -261,6 +261,41 @@ export default function GastosPage() {
               className="rounded-xl h-12 px-8 bg-primary shadow-lg shadow-primary/30"
             >
               {isSubmitting ? "Registrando..." : "Guardar Gasto"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Confirmar Eliminar Gasto */}
+      <Dialog open={!!deleteId} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
+        <DialogContent className="rounded-3xl p-6 sm:max-w-md bg-background border border-border shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-destructive">
+              <IconTrash size={22} /> Confirmar Eliminación
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground pt-1.5">
+              ¿Estás seguro de que deseas eliminar este registro de gasto? Esta acción es irreversible y afectará el balance de caja chica.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => setDeleteId(null)} 
+              className="rounded-xl h-11 border-border text-foreground hover:bg-muted"
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={async () => {
+                if (deleteId) {
+                  await executeDelete(deleteId);
+                  setDeleteId(null);
+                }
+              }} 
+              className="rounded-xl h-11 bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/20 font-bold"
+            >
+              Confirmar
             </Button>
           </DialogFooter>
         </DialogContent>

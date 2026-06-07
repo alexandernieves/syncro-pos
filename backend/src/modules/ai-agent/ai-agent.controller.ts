@@ -40,6 +40,45 @@ export class AiAgentController {
   }
 
   /**
+   * Pin or unpin an AI chat session
+   */
+  @Post('sessions/pin')
+  async pinSession(
+    @Req() req: any,
+    @Body('sessionId') sessionId: string,
+    @Body('isPinned') isPinned: boolean,
+  ) {
+    const userId = req.user?.id || req.user?.sub;
+    const businessId = req.user?.businessId;
+    return this.aiAgentService.pinSession(businessId, userId, sessionId, isPinned);
+  }
+
+  /**
+   * Archive or unarchive an AI chat session
+   */
+  @Post('sessions/archive')
+  async archiveSession(
+    @Req() req: any,
+    @Body('sessionId') sessionId: string,
+    @Body('isArchived') isArchived: boolean,
+  ) {
+    const userId = req.user?.id || req.user?.sub;
+    const businessId = req.user?.businessId;
+    return this.aiAgentService.archiveSession(businessId, userId, sessionId, isArchived);
+  }
+
+  /**
+   * Delete an AI chat session
+   */
+  @Delete('sessions')
+  async deleteSession(@Req() req: any, @Query('sessionId') sessionId: string) {
+    const userId = req.user?.id || req.user?.sub;
+    const businessId = req.user?.businessId;
+    await this.aiAgentService.deleteSession(businessId, userId, sessionId);
+    return { success: true };
+  }
+
+  /**
    * Send a message to the AI agent and receive a response
    */
   @Post('chat')

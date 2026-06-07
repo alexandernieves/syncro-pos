@@ -30,6 +30,11 @@ import {
   IconThumbDown,
   IconCopy,
   IconBell,
+  IconPin,
+  IconPinFilled,
+  IconArchive,
+  IconArchiveOff,
+  IconInbox,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { ModeSwitcher } from "@/components/mode-switcher";
@@ -203,6 +208,7 @@ export default function SupportChatPage() {
   const [sessionId, setSessionId] = useState<string>("default");
   const [sessions, setSessions] = useState<any[]>([]);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [historyTab, setHistoryTab] = useState<"active" | "archived">("active");
   const [commentingMsgId, setCommentingMsgId] = useState<string | null>(null);
   const [feedbackComment, setFeedbackComment] = useState("");
 
@@ -979,6 +985,87 @@ export default function SupportChatPage() {
     }
   };
 
+  const handlePinSession = async (sId: string, isPinned: boolean) => {
+    try {
+      const isPwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+      const token = isPwa ? sessionStorage.getItem("token") : localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      };
+
+      const res = await fetch(`${API}/ai-agent/sessions/pin`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ sessionId: sId, isPinned })
+      });
+      if (res.ok) {
+        toast.success(isPinned ? "Conversación pineada" : "Conversación despineada");
+        fetchSessions();
+      }
+    } catch {
+      toast.error("Error al modificar estado de pin");
+    }
+  };
+
+  const handleArchiveSession = async (sId: string, isArchived: boolean) => {
+    try {
+      const isPwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+      const token = isPwa ? sessionStorage.getItem("token") : localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      };
+
+      const res = await fetch(`${API}/ai-agent/sessions/archive`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ sessionId: sId, isArchived })
+      });
+      if (res.ok) {
+        toast.success(isArchived ? "Conversación archivada" : "Conversación desarchivada");
+        fetchSessions();
+      }
+    } catch {
+      toast.error("Error al archivar conversación");
+    }
+  };
+
+  const handleDeleteSession = async (sId: string) => {
+    if (!confirm("¿Estás seguro de que deseas eliminar este chat permanentemente?")) return;
+    try {
+      const isPwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+      const token = isPwa ? sessionStorage.getItem("token") : localStorage.getItem("token");
+      const headers = { Authorization: `Bearer ${token}` };
+
+      const res = await fetch(`${API}/ai-agent/sessions?sessionId=${sId}`, { method: "DELETE", headers });
+      if (res.ok) {
+        toast.success("Chat eliminado correctamente.");
+        const updated = await fetchSessions();
+        if (sessionId === sId) {
+          if (updated && updated.length > 0) {
+            const firstActive = updated.find((s: any) => !s.isArchived);
+            if (firstActive) {
+              setSessionId(firstActive.id);
+              setAiMessages([]);
+              fetchAiHistory(firstActive.id);
+            } else {
+              setSessionId(updated[0].id);
+              setAiMessages([]);
+              fetchAiHistory(updated[0].id);
+            }
+          } else {
+            const newId = `session-${Date.now()}`;
+            setSessionId(newId);
+            setAiMessages([]);
+          }
+        }
+      }
+    } catch {
+      toast.error("Error al eliminar chat");
+    }
+  };
+
   const fetchConversation = async (businessId: string) => {
     try {
       const res = await fetch(`${API}/chat/business/${businessId}`);
@@ -1481,36 +1568,125 @@ export default function SupportChatPage() {
                             </Button>
                           </DialogTitle>
                         </DialogHeader>
-                        <ScrollArea className="max-h-[60vh] mt-4 pr-3">
-                          {sessions.length === 0 ? (
+
+                        {/* Tabs Container */}
+                        <div className="flex border-b border-border mt-3 mb-2">
+                          <button
+                            onClick={() => setHistoryTab("active")}
+                            className={cn(
+                              "flex-1 pb-2 text-xs font-bold transition-all border-b-2 text-center",
+                              historyTab === "active"
+                                ? "border-primary text-primary"
+                                : "border-transparent text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            Chats Activos
+                          </button>
+                          <button
+                            onClick={() => setHistoryTab("archived")}
+                            className={cn(
+                              "flex-1 pb-2 text-xs font-bold transition-all border-b-2 text-center",
+                              historyTab === "archived"
+                                ? "border-primary text-primary"
+                                : "border-transparent text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            Chats Archivados
+                          </button>
+                        </div>
+
+                        <ScrollArea className="max-h-[60vh] mt-2 pr-3">
+                          {sessions.filter(s => historyTab === "active" ? !s.isArchived : s.isArchived).length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                              <IconMessageCircle size={32} className="mb-2 opacity-20" />
-                              <p className="text-sm">No hay chats anteriores.</p>
+                              {historyTab === "active" ? (
+                                <>
+                                  <IconMessageCircle size={32} className="mb-2 opacity-20" />
+                                  <p className="text-sm">No hay chats activos anteriores.</p>
+                                </>
+                              ) : (
+                                <>
+                                  <IconInbox size={32} className="mb-2 opacity-20" />
+                                  <p className="text-sm">No hay chats archivados.</p>
+                                </>
+                              )}
                             </div>
                           ) : (
                             <div className="flex flex-col gap-2">
-                              {sessions.map(s => (
-                                <button
-                                  key={s.id}
-                                  onClick={() => {
-                                    setSessionId(s.id);
-                                    setAiMessages([]);
-                                    fetchAiHistory(s.id);
-                                    setIsHistoryModalOpen(false);
-                                  }}
-                                  className={cn(
-                                    "flex flex-col text-left p-3 rounded-xl border transition-all text-sm",
-                                    sessionId === s.id
-                                      ? "bg-primary/10 border-primary/20 text-foreground"
-                                      : "bg-background border-border hover:bg-muted text-muted-foreground"
-                                  )}
-                                >
-                                  <span className="font-medium line-clamp-1">{s.title}</span>
-                                  <span className="text-xs opacity-60 mt-1">
-                                    {format(new Date(s.createdAt), "dd MMM yyyy, h:mm a")}
-                                  </span>
-                                </button>
-                              ))}
+                              {sessions
+                                .filter(s => historyTab === "active" ? !s.isArchived : s.isArchived)
+                                .map(s => (
+                                  <div
+                                    key={s.id}
+                                    className={cn(
+                                      "group relative flex items-center justify-between p-3 rounded-xl border transition-all text-sm",
+                                      sessionId === s.id
+                                        ? "bg-primary/10 border-primary/20 text-foreground"
+                                        : "bg-background border-border hover:bg-muted text-muted-foreground"
+                                    )}
+                                  >
+                                    <button
+                                      onClick={() => {
+                                        setSessionId(s.id);
+                                        setAiMessages([]);
+                                        fetchAiHistory(s.id);
+                                        setIsHistoryModalOpen(false);
+                                      }}
+                                      className="flex-1 text-left min-w-0 pr-2"
+                                    >
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        {s.isPinned && (
+                                          <IconPinFilled size={12} className="text-primary shrink-0 rotate-45" />
+                                        )}
+                                        <span className="font-semibold text-foreground line-clamp-1">{s.title}</span>
+                                      </div>
+                                      <span className="text-[10px] text-muted-foreground block mt-1">
+                                        {format(new Date(s.createdAt), "dd MMM yyyy, h:mm a", { locale: es })}
+                                      </span>
+                                    </button>
+
+                                    {/* Action Buttons Row */}
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {/* Pin/Unpin */}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handlePinSession(s.id, !s.isPinned);
+                                        }}
+                                        title={s.isPinned ? "Despinear chat" : "Pinear chat"}
+                                        className={cn(
+                                          "p-1.5 rounded-lg transition-all hover:bg-primary/15 active:scale-90",
+                                          s.isPinned ? "text-primary bg-primary/10" : "text-muted-foreground/60 hover:text-primary"
+                                        )}
+                                      >
+                                        {s.isPinned ? <IconPinFilled size={14} className="rotate-45" /> : <IconPin size={14} />}
+                                      </button>
+
+                                      {/* Archive/Unarchive */}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleArchiveSession(s.id, !s.isArchived);
+                                        }}
+                                        title={s.isArchived ? "Mover a activos" : "Archivar chat"}
+                                        className="p-1.5 rounded-lg text-muted-foreground/60 transition-all hover:bg-primary/15 hover:text-primary active:scale-90"
+                                      >
+                                        {s.isArchived ? <IconArchiveOff size={14} /> : <IconArchive size={14} />}
+                                      </button>
+
+                                      {/* Delete */}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteSession(s.id);
+                                        }}
+                                        title="Eliminar chat"
+                                        className="p-1.5 rounded-lg text-muted-foreground/60 transition-all hover:bg-rose-500/10 hover:text-rose-500 active:scale-90"
+                                      >
+                                        <IconTrash size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
                             </div>
                           )}
                         </ScrollArea>
@@ -1721,7 +1897,11 @@ export default function SupportChatPage() {
                                     <span className="font-bold text-foreground">
                                       {msg.action.type === 'register_expense' ? 'Egreso (-)' : 
                                        msg.action.type === 'register_income' ? 'Ingreso (+)' : 
-                                       msg.action.type === 'close_shift' ? 'Cierre de Turno' : 'Orden de Compra'}
+                                       msg.action.type === 'close_shift' ? 'Cierre de Turno' : 
+                                       msg.action.type === 'create_category' ? 'Crear Categoría' :
+                                       msg.action.type === 'create_supplier' ? 'Crear Proveedor' :
+                                       msg.action.type === 'edit_product' ? 'Editar Producto' : 
+                                       msg.action.type === 'reconcile_inventory' ? 'Auditoría de Inventario' : 'Orden de Compra'}
                                     </span>
                                   </p>
                                   {msg.action.data?.amount && (
@@ -1741,6 +1921,79 @@ export default function SupportChatPage() {
                                       <span>Artículos:</span>
                                       <span className="font-semibold text-foreground uppercase text-[10px]">{msg.action.data.items.length} items</span>
                                     </p>
+                                  )}
+                                  {msg.action.type === 'create_category' && (
+                                    <>
+                                      <p className="flex justify-between">
+                                        <span>Nombre:</span>
+                                        <span className="font-semibold text-foreground">{msg.action.data.name}</span>
+                                      </p>
+                                      {msg.action.data.description && (
+                                        <p className="text-[10px] text-muted-foreground text-left mt-1 italic">
+                                          {msg.action.data.description}
+                                        </p>
+                                      )}
+                                    </>
+                                  )}
+                                  {msg.action.type === 'create_supplier' && (
+                                    <>
+                                      <p className="flex justify-between">
+                                        <span>Nombre:</span>
+                                        <span className="font-semibold text-foreground">{msg.action.data.name}</span>
+                                      </p>
+                                      {msg.action.data.contactName && (
+                                        <p className="flex justify-between">
+                                          <span>Contacto:</span>
+                                          <span className="font-semibold text-foreground">{msg.action.data.contactName}</span>
+                                        </p>
+                                      )}
+                                      {msg.action.data.phone && (
+                                        <p className="flex justify-between">
+                                          <span>Teléfono:</span>
+                                          <span className="font-semibold text-foreground">{msg.action.data.phone}</span>
+                                        </p>
+                                      )}
+                                    </>
+                                  )}
+                                  {msg.action.type === 'edit_product' && (
+                                    <div className="space-y-1 mt-1 border-t border-dashed pt-1">
+                                      {msg.action.data.name && (
+                                        <p className="flex justify-between">
+                                          <span>Nombre:</span>
+                                          <span className="font-semibold text-foreground truncate max-w-[120px]">{msg.action.data.name}</span>
+                                        </p>
+                                      )}
+                                      {msg.action.data.price !== undefined && (
+                                        <p className="flex justify-between">
+                                          <span>Precio:</span>
+                                          <span className="font-semibold text-foreground">${Number(msg.action.data.price).toFixed(2)}</span>
+                                        </p>
+                                      )}
+                                      {msg.action.data.cost !== undefined && (
+                                        <p className="flex justify-between">
+                                          <span>Costo:</span>
+                                          <span className="font-semibold text-foreground">${Number(msg.action.data.cost).toFixed(2)}</span>
+                                        </p>
+                                      )}
+                                      {msg.action.data.stock !== undefined && (
+                                        <p className="flex justify-between">
+                                          <span>Stock:</span>
+                                          <span className="font-semibold text-foreground">{msg.action.data.stock}</span>
+                                        </p>
+                                      )}
+                                      {msg.action.data.barcode && (
+                                        <p className="flex justify-between">
+                                          <span>Barras:</span>
+                                          <span className="font-semibold text-foreground">{msg.action.data.barcode}</span>
+                                        </p>
+                                      )}
+                                      {msg.action.data.imageSearchQuery && (
+                                        <p className="flex justify-between">
+                                          <span>Buscar Imagen:</span>
+                                          <span className="font-semibold text-primary italic truncate max-w-[120px]">{msg.action.data.imageSearchQuery}</span>
+                                        </p>
+                                      )}
+                                    </div>
                                   )}
                                   {msg.action.type === 'close_shift' && (
                                     <>
@@ -1763,6 +2016,17 @@ export default function SupportChatPage() {
                                         </>
                                       )}
                                     </>
+                                  )}
+                                  {msg.action.type === 'reconcile_inventory' && msg.action.data?.items && (
+                                    <div className="space-y-1.5 mt-1 border-t border-dashed border-border/40 pt-2 max-h-[150px] overflow-y-auto pr-1">
+                                      <p className="text-[10px] font-bold text-foreground mb-1 uppercase tracking-wider">Productos Contados:</p>
+                                      {msg.action.data.items.map((item: any, idx: number) => (
+                                        <div key={idx} className="flex justify-between items-center text-[11px] py-1 border-b border-muted/20 last:border-0">
+                                          <span className="text-muted-foreground truncate max-w-[150px]" title={item.name}>{item.name}</span>
+                                          <span className="font-bold text-foreground bg-primary/10 px-1.5 py-0.5 rounded text-[10px]">{item.quantity} u</span>
+                                        </div>
+                                      ))}
+                                    </div>
                                   )}
                                 </div>
                                 {msg.actionConfirmed === true ? (

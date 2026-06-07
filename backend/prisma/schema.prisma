@@ -116,13 +116,14 @@ model Inventory {
 }
 
 model Category {
-  id         String    @id @default(uuid())
-  name       String
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  businessId String?
-  business   Business? @relation(fields: [businessId], references: [id])
-  products   Product[]
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  businessId  String?
+  business    Business? @relation(fields: [businessId], references: [id])
+  products    Product[]
 
   @@unique([businessId, name])
 }
@@ -715,6 +716,8 @@ model AiChatSession {
   businessId String
   userId     String
   title      String          @default("Nuevo Chat")
+  isArchived Boolean         @default(false)
+  isPinned   Boolean         @default(false)
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
   messages   AiChatMessage[]

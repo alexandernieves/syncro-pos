@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmbeddingsService } from './embeddings.service';
+import { UploadsService } from '../uploads/uploads.service';
 
 interface BusinessContext {
   activeShift: any;
@@ -11,6 +12,7 @@ interface BusinessContext {
   accountingStats: any;
   settings: any;
   products: any[];
+  categories: any[];
   clients: any[];
   suppliers: any[];
   branches: any[];
@@ -32,9 +34,10 @@ interface AgentResponse {
 }
 
 interface AgentAction {
-  type: 'register_expense' | 'register_income' | 'create_purchase_order' | 'close_shift' | 'info';
+  type: 'register_expense' | 'register_income' | 'create_purchase_order' | 'close_shift' | 'create_category' | 'create_supplier' | 'edit_product' | 'reconcile_inventory' | 'info';
   label: string;
   data: Record<string, any>;
+  createdIds?: Record<string, any>;
 }
 
 import { NotificationsService } from '../notifications/notifications.service';
@@ -51,6 +54,7 @@ export class AiAgentService {
     private readonly config: ConfigService,
     private readonly notificationsService: NotificationsService,
     private readonly pushService: PushService,
+    private readonly uploadsService: UploadsService,
   ) {
     this.openrouterApiKey = this.config.get<string>('OPENROUTER_API_KEY') || '';
   }
@@ -184,14 +188,37 @@ export class AiAgentService {
   async getSessions(businessId: string, userId: string) {
     return this.prisma.aiChatSession.findMany({
       where: { businessId, userId },
-      orderBy: { updatedAt: 'desc' },
-      select: { id: true, title: true, createdAt: true, updatedAt: true }
+      orderBy: [
+        { isPinned: 'desc' },
+        { updatedAt: 'desc' }
+      ],
+      select: { id: true, title: true, isArchived: true, isPinned: true, createdAt: true, updatedAt: true }
     });
   }
 
   async createSession(businessId: string, userId: string, title?: string) {
     return this.prisma.aiChatSession.create({
       data: { businessId, userId, title: title || 'Nuevo Chat' }
+    });
+  }
+
+  async pinSession(businessId: string, userId: string, sessionId: string, isPinned: boolean) {
+    return this.prisma.aiChatSession.update({
+      where: { id: sessionId, businessId, userId },
+      data: { isPinned }
+    });
+  }
+
+  async archiveSession(businessId: string, userId: string, sessionId: string, isArchived: boolean) {
+    return this.prisma.aiChatSession.update({
+      where: { id: sessionId, businessId, userId },
+      data: { isArchived }
+    });
+  }
+
+  async deleteSession(businessId: string, userId: string, sessionId: string) {
+    return this.prisma.aiChatSession.delete({
+      where: { id: sessionId, businessId, userId }
     });
   }
 
@@ -236,6 +263,51 @@ export class AiAgentService {
   async confirmAction(userId: string, businessId: string, branchId: string, action: AgentAction, msgId?: string): Promise<{ success: boolean; message: string }> {
     try {
       switch (action.type) {
+        case 'reconcile_inventory': {
+          const { items } = action.data;
+
+          await this.prisma.$transaction(async (tx) => {
+            for (const item of items) {
+              const currentInv = await tx.inventory.findUnique({
+                where: { variantId_branchId: { variantId: item.variantId, branchId } }
+              });
+
+              const currentQty = currentInv?.quantity || 0;
+              const diff = item.quantity - currentQty;
+
+              if (diff === 0) continue;
+
+              await tx.inventory.upsert({
+                where: { variantId_branchId: { variantId: item.variantId, branchId } },
+                update: { quantity: item.quantity },
+                create: { variantId: item.variantId, branchId, quantity: item.quantity }
+              });
+
+              await tx.inventoryMovement.create({
+                data: {
+                  variantId: item.variantId,
+                  branchId,
+                  type: 'ADJUSTMENT',
+                  quantity: diff,
+                  reason: 'audit'
+                }
+              });
+
+              await tx.productVariant.update({
+                where: { id: item.variantId },
+                data: { stock: { increment: diff } }
+              });
+            }
+          });
+
+          if (msgId) {
+            await this.prisma.aiChatMessage.update({
+              where: { id: msgId },
+              data: { actionConfirmed: true }
+            });
+          }
+          return { success: true, message: `✅ Auditoría de inventario finalizada con éxito. ${items.length} artículos conciliados.` };
+        }
         case 'register_expense': {
           const [accountingEntry, expense] = await this.prisma.$transaction([
             this.prisma.accountingEntry.create({
@@ -400,6 +472,203 @@ export class AiAgentService {
           }
           return { success: true, message: `✅ Turno cerrado exitosamente. Diferencia: $${difference.toFixed(2)}` };
         }
+        case 'create_category': {
+          const { name, description } = action.data;
+
+          const existingCategory = await this.prisma.category.findFirst({
+            where: {
+              name: { equals: name, mode: 'insensitive' },
+              businessId
+            }
+          });
+
+          if (existingCategory) {
+            // Update the category description if one is specified
+            if (description) {
+              await this.prisma.category.update({
+                where: { id: existingCategory.id },
+                data: { description }
+              });
+            }
+            if (msgId) {
+              await this.prisma.aiChatMessage.update({
+                where: { id: msgId },
+                data: { actionConfirmed: true }
+              });
+            }
+            return { success: true, message: `✅ La categoría "${name}" ya existía. Descripción actualizada.` };
+          }
+
+          const category = await this.prisma.category.create({
+            data: {
+              name,
+              description: description || null,
+              businessId
+            }
+          });
+          if (msgId) {
+            await this.prisma.aiChatMessage.update({
+              where: { id: msgId },
+              data: { actionConfirmed: true }
+            });
+          }
+          return { success: true, message: `✅ Categoría "${name}" creada exitosamente.` };
+        }
+        case 'create_supplier': {
+          const { name, phone, email, contactName } = action.data;
+
+          const existingSupplier = await this.prisma.supplier.findFirst({
+            where: {
+              name: { equals: name, mode: 'insensitive' },
+              businessId
+            }
+          });
+
+          if (existingSupplier) {
+            const updated = await this.prisma.supplier.update({
+              where: { id: existingSupplier.id },
+              data: {
+                phone: phone || existingSupplier.phone,
+                email: email || existingSupplier.email,
+                contactName: contactName || existingSupplier.contactName
+              }
+            });
+            if (msgId) {
+              await this.prisma.aiChatMessage.update({
+                where: { id: msgId },
+                data: { actionConfirmed: true }
+              });
+            }
+            return { success: true, message: `✅ Proveedor "${name}" ya existía. Datos actualizados exitosamente.` };
+          }
+
+          const supplier = await this.prisma.supplier.create({
+            data: {
+              name,
+              phone: phone || null,
+              email: email || null,
+              contactName: contactName || null,
+              businessId
+            }
+          });
+          if (msgId) {
+            await this.prisma.aiChatMessage.update({
+              where: { id: msgId },
+              data: { actionConfirmed: true }
+            });
+          }
+          return { success: true, message: `✅ Proveedor "${name}" creado exitosamente.` };
+        }
+        case 'edit_product': {
+          const { productId, name, description, categoryId, supplierId, isWeighable, image, imageSearchQuery, price, cost, stock, minStock, barcode } = action.data;
+          
+          let imageUrlToUse = image;
+
+          if (imageSearchQuery) {
+            try {
+              this.logger.log(`Performing web image search for: ${imageSearchQuery}`);
+              const mainUrl = `https://duckduckgo.com/?q=${encodeURIComponent(imageSearchQuery)}`;
+              const mainRes = await fetch(mainUrl, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                }
+              });
+              const mainHtml = await mainRes.text();
+              let vqd: string | null = null;
+              const vqdMatch = mainHtml.match(/vqd=([a-zA-Z0-9-]+)/) || mainHtml.match(/'vqd':\s*'([^']+)'/) || mainHtml.match(/"vqd":\s*"([^"]+)"/);
+              if (vqdMatch) {
+                vqd = vqdMatch[1];
+              }
+
+              if (!vqd) {
+                const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(imageSearchQuery)}`;
+                const htmlRes = await fetch(searchUrl, {
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                  }
+                });
+                const responseHtml = await htmlRes.text();
+                const vqdFormMatch = responseHtml.match(/name="vqd" value="([^"]+)"/);
+                if (vqdFormMatch) {
+                  vqd = vqdFormMatch[1];
+                }
+              }
+
+              if (vqd) {
+                const searchImagesUrl = `https://duckduckgo.com/i.js?l=wt-wt&o=json&q=${encodeURIComponent(imageSearchQuery)}&vqd=${vqd}&f=,,,`;
+                const imagesRes = await fetch(searchImagesUrl, {
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Referer': 'https://duckduckgo.com/',
+                  }
+                });
+
+                if (imagesRes.ok) {
+                  const searchData = await imagesRes.json();
+                  const firstResult = searchData.results?.[0];
+                  if (firstResult && firstResult.image) {
+                    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+                    const email = user?.email || 'ai-agent@syncropos.com';
+                    const uploadedUrl = await this.uploadsService.uploadFromUrl(firstResult.image, email);
+                    imageUrlToUse = uploadedUrl;
+                  }
+                }
+              }
+            } catch (err: any) {
+              this.logger.error(`Error during automated image search/upload: ${err.message}`);
+            }
+          }
+
+          const updateData: any = {};
+          if (name !== undefined) updateData.name = name;
+          if (description !== undefined) updateData.description = description;
+          if (categoryId !== undefined) updateData.categoryId = categoryId === '' ? null : categoryId;
+          if (supplierId !== undefined) updateData.supplierId = supplierId === '' ? null : supplierId;
+          if (isWeighable !== undefined) updateData.isWeighable = isWeighable;
+          if (imageUrlToUse !== undefined) updateData.image = imageUrlToUse;
+
+          await this.prisma.product.update({
+            where: { id: productId },
+            data: updateData,
+          });
+
+          // Update variant details
+          const firstVariant = await this.prisma.productVariant.findFirst({
+            where: { productId },
+          });
+
+          if (firstVariant) {
+            const variantUpdateData: any = {};
+            if (price !== undefined) variantUpdateData.price = Number(price);
+            if (cost !== undefined) variantUpdateData.cost = cost === '' ? null : Number(cost);
+            if (stock !== undefined) variantUpdateData.stock = Number(stock);
+            if (minStock !== undefined) variantUpdateData.minStock = Number(minStock);
+            if (barcode !== undefined) variantUpdateData.barcode = barcode === '' ? null : barcode;
+
+            await this.prisma.productVariant.update({
+              where: { id: firstVariant.id },
+              data: variantUpdateData,
+            });
+
+            // Update branch stock inventory
+            if (branchId && stock !== undefined) {
+              await this.prisma.inventory.upsert({
+                where: { variantId_branchId: { variantId: firstVariant.id, branchId } },
+                update: { quantity: Number(stock) },
+                create: { variantId: firstVariant.id, branchId, quantity: Number(stock) },
+              });
+            }
+          }
+
+          if (msgId) {
+            await this.prisma.aiChatMessage.update({
+              where: { id: msgId },
+              data: { actionConfirmed: true }
+            });
+          }
+
+          return { success: true, message: `✅ Producto editado exitosamente.` };
+        }
         default:
           return { success: false, message: 'Acción no reconocida' };
       }
@@ -438,7 +707,7 @@ export class AiAgentService {
       targetBranchId = firstBranch?.id;
     }
 
-    const [recentClosedShifts, todaySales, recentSales, accountingEntries, settings, products, clients, suppliers, branches, allBranchVariants] = await Promise.all([
+    const [recentClosedShifts, todaySales, recentSales, accountingEntries, settings, products, clients, suppliers, branches, allBranchVariants, categories] = await Promise.all([
       // Recent closed shifts
       this.prisma.shift.findMany({
         where: { branch: { businessId }, status: 'CLOSED' },
@@ -455,15 +724,28 @@ export class AiAgentService {
         },
         include: { payments: true }
       }),
-      // Recent sales summary (last 30) for history audits
+      // Recent sales summary (last 50) with items for history audits
       this.prisma.sale.findMany({
         where: {
           branch: { businessId },
           status: { not: 'CANCELLED' }
         },
         orderBy: { createdAt: 'desc' },
-        take: 30,
-        include: { payments: true, user: true, client: true }
+        take: 50,
+        include: {
+          payments: true,
+          user: true,
+          client: true,
+          items: {
+            include: {
+              variant: {
+                include: {
+                  product: true
+                }
+              }
+            }
+          }
+        }
       }),
       // Accounting totals
       this.prisma.accountingEntry.findMany({
@@ -485,12 +767,12 @@ export class AiAgentService {
             }
           }
         },
-        take: 150
+        take: 400
       }),
-      // Clients (limit 50)
+      // Clients (limit 100)
       this.prisma.client.findMany({
         where: { businessId },
-        take: 50
+        take: 100
       }),
       // Suppliers (limit 50)
       this.prisma.supplier.findMany({
@@ -512,6 +794,11 @@ export class AiAgentService {
             where: { branchId: targetBranchId }
           } : true
         }
+      }),
+      // Categories (limit 100)
+      this.prisma.category.findMany({
+        where: { businessId },
+        take: 100
       })
     ]);
 
@@ -598,6 +885,10 @@ export class AiAgentService {
         payments: s.payments.map((p: any) => ({
           method: p.method,
           amount: p.amount
+        })),
+        items: s.items.map((i: any) => ({
+          productName: i.variant?.product?.name || 'Producto',
+          quantity: i.quantity
         }))
       })),
       accountingStats: {
@@ -614,7 +905,10 @@ export class AiAgentService {
         businessName: settings.businessName,
       } : null,
       products: products.map(p => ({
+        id: p.id,
         name: p.name,
+        categoryId: p.categoryId,
+        supplierId: p.supplierId,
         isWeighable: p.isWeighable,
         variants: p.variants.map((v: any) => {
           let vStock = v.stock;
@@ -630,10 +924,12 @@ export class AiAgentService {
             price: v.price,
             cost: v.cost || 0,
             stock: vStock,
-            minStock: v.minStock
+            minStock: v.minStock,
+            barcode: v.barcode
           };
         })
       })),
+      categories: categories.map(c => ({ id: c.id, name: c.name })),
       clients: clients.map(c => ({ name: c.name, document: c.documentId, phone: c.phone })),
       suppliers: suppliers.map(s => ({ id: s.id, name: s.name, contact: s.contactName, status: s.status })),
       branches: branches.map(b => ({ name: b.name, location: b.location })),
@@ -671,8 +967,8 @@ ${context.recentClosedShifts.map(s => `- Turno de ${s.userName} en ${s.branchNam
 - Por método de pago: ${JSON.stringify(context.todayStats.byPaymentMethod, null, 2)}`;
 
     const recentSalesInfo = context.recentSales && context.recentSales.length > 0
-      ? `\n## Historial de ventas anteriores (últimas 30):
-${context.recentSales.map(s => `- Venta | Fecha: ${new Date(s.createdAt).toLocaleString('es-VE')} | Cajero: ${s.userName} | Cliente: ${s.clientName} | Total: $${s.total?.toFixed(2)} | Métodos: ${s.payments.map((p: any) => `${p.method} ($${p.amount?.toFixed(2)})`).join(', ')}`).join('\n')}`
+      ? `\n## Historial de ventas anteriores (últimas 50):
+${context.recentSales.map(s => `- Venta | Fecha: ${new Date(s.createdAt).toLocaleString('es-VE')} | Cajero: ${s.userName} | Cliente: ${s.clientName} | Total: $${s.total?.toFixed(2)} | Métodos: ${s.payments.map((p: any) => `${p.method} ($${p.amount?.toFixed(2)})`).join(', ')} | Artículos: ${s.items.map((i: any) => `${i.productName} (${i.quantity} uds)`).join(', ')}`).join('\n')}`
       : '\n## Historial de ventas anteriores: No hay registros de ventas anteriores.';
 
     const accountingInfo = `\n## Balance contable reciente:
@@ -680,8 +976,8 @@ ${context.recentSales.map(s => `- Venta | Fecha: ${new Date(s.createdAt).toLocal
 - Últimos movimientos: ${context.accountingStats.recentEntries?.map((e: any) => `${e.type === 'INCOME' ? '+' : '-'}$${e.amount} (${e.description})`).join(', ')}`;
 
     const inventoryInfo = context.products && context.products.length > 0 
-      ? `\n## Inventario (Muestra):
-${context.products.slice(0, 50).map(p => `- ${p.name}: ${p.variants.map((v: any) => `${v.name} (ID: ${v.id}, Stock: ${v.stock})`).join(' | ')}`).join('\n')}`
+      ? `\n## Inventario (Catálogo Completo):
+${context.products.slice(0, 400).map(p => `- ${p.name} (ID: ${p.id}, CategoryID: ${p.categoryId || 'null'}, SupplierID: ${p.supplierId || 'null'}): ${p.variants.map((v: any) => `${v.name} (ID: ${v.id}, Price: $${v.price}, Cost: $${v.cost}, Stock: ${v.stock}, Barcode: ${v.barcode || 'null'})`).join(' | ')}`).join('\n')}`
       : '\n## Inventario: Sin productos registrados.';
 
     const lowStockInfo = context.lowStockStats && context.lowStockStats.totalLowStock > 0
@@ -691,12 +987,22 @@ ${context.products.slice(0, 50).map(p => `- ${p.name}: ${p.variants.map((v: any)
 ${context.lowStockStats.criticalItems.map(item => `- ${item.productName}${item.variantName !== 'Default' && item.variantName !== 'Default variant' && item.variantName !== '' ? ` (${item.variantName})` : ''}: Stock actual: ${item.stock} | Stock mínimo requerido: ${item.minStock}`).join('\n')}`
       : '\n## Alertas de Bajo Stock: Todos los productos de la sucursal superan el stock mínimo.';
 
+    const categoriesInfo = context.categories && context.categories.length > 0
+      ? `\n## Categorías (Muestra):
+${context.categories.slice(0, 40).map(c => `- ID: ${c.id} | ${c.name}`).join('\n')}`
+      : '\n## Categorías: No hay categorías registradas.';
+
+    const clientsInfo = context.clients && context.clients.length > 0
+      ? `\n## Clientes y Cuentas por Cobrar (Saldos y Límites de Crédito):
+${context.clients.map(c => `- Cliente: ${c.name} | Cédula/RIF: ${c.documentId || 'N/A'} | Teléfono: ${c.phone || 'N/A'} | Deuda (Cuentas por Cobrar): $${c.currentDebt?.toFixed(2)} | Monedero (A favor): $${c.walletBalance?.toFixed(2)} | Límite de Crédito: $${c.creditLimit?.toFixed(2)}${c.isSuspended ? ' (SUSPENDIDO)' : ''}`).join('\n')}`
+      : '\n## Clientes: No hay clientes registrados.';
+
     const otherInfo = `\n## Sucursales:
 ${context.branches.map(b => `- ${b.name} (Ubicación: ${b.location || 'N/A'})`).join('\n')}
 ## Proveedores (Muestra):
-${context.suppliers.slice(0, 10).map(s => `- ID: ${s.id} | ${s.name} (${s.status})`).join('\n')}
-## Clientes (Muestra):
-${context.clients.slice(0, 10).map(c => `- ${c.name}`).join('\n')}`;
+${context.suppliers.slice(0, 15).map(s => `- ID: ${s.id} | ${s.name} (${s.status})`).join('\n')}
+${clientsInfo}
+${categoriesInfo}`;
 
     return `Eres "Syncro IA", el asistente financiero inteligente de Syncro POS, un sistema de punto de venta para negocios venezolanos.
 
@@ -704,21 +1010,22 @@ Tu misión es:
 1. Ayudar al usuario a entender y ejecutar el cuadre y cierre de caja paso a paso
 2. Explicar cómo registrar ingresos y egresos en el módulo de Contabilidad
 3. Responder preguntas sobre el estado financiero del negocio con datos reales
-4. Enseñar conceptos de administración de caja de forma simple y clara
+4. Permitir la creación de categorías, proveedores y edición de productos (precios, costos, proveedores, etc.) mediante acciones sugeridas
+5. Enseñar conceptos de administración de caja de forma simple y clara
 
 ## Reglas de comportamiento:
 - Responde SIEMPRE en español venezolano, amigable y profesional
 - Usa números concretos de los datos reales del negocio (turno, ventas, balance)
-- Si el usuario quiere registrar algo, genera una acción JSON estructurada para confirmación
+- Si el usuario quiere registrar, crear o modificar algo, genera una acción JSON estructurada para confirmación
 - NUNCA uses emojis ni caracteres especiales (sin ✅ ❌ 💰 📊 ni similares) — tus respuestas deben ser texto limpio legible en voz alta
 - No uses asteriscos ni markdown de formato; escribe en texto plano con puntos o guiones para listas
 - Sé conciso pero completo
-- Si el usuario te pide registrar algo (ej: "registra este gasto", "crea una orden", "cierra la caja"), genera la acción JSON pero NUNCA le digas "he registrado" o "he cerrado". Dile siempre algo como: "Claro, preparé la acción. Por favor haz clic en Confirmar en la tarjeta para proceder."
-- Nunca ejecutes acciones sin confirmación explícita del usuario, la acción solo pre-llena los datos para que el usuario confirme.
-- IMPORTANTE PARA CIERRE DE CAJA: Si el usuario te pide cerrar la caja o cuadrar turno, primero verifica si ya te proporcionó el monto de efectivo que contó físicamente en la gaveta en su mensaje anterior (por ejemplo, si te dijo "tengo 0", "no hay efectivo", o especificó un valor numérico exacto). Si NO te ha dado el monto físico, pregúntale: "¿Cuánto dinero en efectivo (billetes y monedas) contaste físicamente en la gaveta?". Si SÍ te dio el monto, NO le vuelvas a preguntar; procede inmediatamente a preparar la acción 'close_shift' utilizando ese valor como dinero reportado.
+- Si el usuario te pide hacer algo (ej: "crea una categoría", "edita este producto", "busca una imagen para este producto"), genera la acción JSON pero NUNCA le digas "he registrado" o "he modificado". Dile siempre algo como: "Claro, preparé la acción. Por favor haz clic en Confirmar en la tarjeta para proceder."
+- Nunca ejecutes acciones sin confirmación explícita del usuario.
+- IMPORTANTE PARA CIERRE DE CAJA: Si el usuario te pide cerrar la caja o cuadrar turno, primero verifica si ya te proporcionó el monto de efectivo que contó físicamente en su gaveta. Si no lo ha hecho, pregúntale: ¿Cuánto dinero en efectivo contaste físicamente en la gaveta?
 
 ## Formato de acciones (cuando el usuario quiere ejecutar algo):
-Si detectas que el usuario te está pidiendo registrar un egreso o gasto (por ejemplo: "compré una coca cola por 5", "pagué 20 de luz", "saqué de la caja chica para X"), INCLUYE al FINAL de tu respuesta EXACTAMENTE este bloque JSON, adaptando los datos:
+Si detectas que el usuario te está pidiendo registrar un egreso o gasto:
 \`\`\`action
 {
   "type": "register_expense",
@@ -731,7 +1038,7 @@ Si detectas que el usuario te está pidiendo registrar un egreso o gasto (por ej
 }
 \`\`\`
 
-Si el usuario quiere registrar un ingreso extraordinario que no sea venta (ej: "un inversor inyectó 100", "metí 50 extra a la caja"):
+Si el usuario quiere registrar un ingreso extraordinario:
 \`\`\`action
 {
   "type": "register_income",
@@ -744,7 +1051,7 @@ Si el usuario quiere registrar un ingreso extraordinario que no sea venta (ej: "
 }
 \`\`\`
 
-Si el usuario quiere crear una Orden de Compra para pedir mercancía a un proveedor (ej: "pídele a Polar 10 cervezas Solera y 5 Polar Pilsen"):
+Si el usuario quiere crear una Orden de Compra para pedir mercancía a un proveedor:
 Debes buscar los UUIDs (ID) exactos en la lista de Proveedores e Inventario que se te proporciona. NO inventes IDs.
 \`\`\`action
 {
@@ -754,15 +1061,13 @@ Debes buscar los UUIDs (ID) exactos en la lista de Proveedores e Inventario que 
     "supplierId": "uuid-del-proveedor",
     "notes": "Pedido automático vía IA",
     "items": [
-      { "variantId": "uuid-de-la-variante-solera", "quantity": 10, "cost": 0 },
-      { "variantId": "uuid-de-la-variante-pilsen", "quantity": 5, "cost": 0 }
+      { "variantId": "uuid-de-la-variante", "quantity": 10, "cost": 0 }
     ]
   }
 }
 \`\`\`
 
-Si el usuario te dice cuánto efectivo contó para CERRAR LA CAJA (ej: "conté 150 dólares, cierra la caja"):
-Es obligatorio que en la acción incluyas el 'expectedCash' que tienes en tu contexto actual para que la interfaz lo pueda comparar.
+Si el usuario quiere cerrar la caja:
 \`\`\`action
 {
   "type": "close_shift",
@@ -774,7 +1079,73 @@ Es obligatorio que en la acción incluyas el 'expectedCash' que tienes en tu con
 }
 \`\`\`
 
-Tipos de acción disponibles: "register_expense", "register_income", "create_purchase_order", "close_shift"
+Si el usuario quiere crear una CATEGORÍA (ej: "crea la categoría Golosinas"):
+\`\`\`action
+{
+  "type": "create_category",
+  "label": "Crear categoría: Golosinas",
+  "data": {
+    "name": "Golosinas",
+    "description": "Dulces y golosinas variadas"
+  }
+}
+\`\`\`
+
+Si el usuario quiere crear un PROVEEDOR (ej: "crea el proveedor Distribuidora Andina"):
+\`\`\`action
+{
+  "type": "create_supplier",
+  "label": "Crear proveedor: Distribuidora Andina",
+  "data": {
+    "name": "Distribuidora Andina",
+    "phone": "+584123456789",
+    "email": "contacto@andina.com",
+    "contactName": "Andrés Bello"
+  }
+}
+\`\`\`
+
+Si el usuario quiere EDITAR UN PRODUCTO (ej: "cambia el precio del Colgate a 2.50", "cambia la categoría de la Coca Cola", "busca una imagen en internet para el Colgate y pónsela"):
+Busca el ID exacto del producto y opcionalmente su variante en el Inventario.
+Si te pide buscar una imagen en internet para el producto, incluye "imageSearchQuery" con la frase de búsqueda (por ejemplo, el nombre del producto), y el backend la buscará, la descargará, la subirá a S3 y la asociará automáticamente.
+\`\`\`action
+{
+  "type": "edit_product",
+  "label": "Editar producto: Colgate Kids 38ml",
+  "data": {
+    "productId": "uuid-del-producto-a-editar",
+    "name": "Colgate Kids 38ml",
+    "description": "Nueva descripción",
+    "categoryId": "uuid-de-la-categoria-nueva-o-null",
+    "supplierId": "uuid-del-proveedor-nuevo-o-null",
+    "isWeighable": false,
+    "image": "url-directa-si-la-tienes",
+    "imageSearchQuery": "Colgate Kids 38ml",
+    "price": 2.50,
+    "cost": 1.10,
+    "stock": 29,
+    "minStock": 5,
+    "barcode": "7891024034095"
+  }
+}
+\`\`\`
+
+Si el usuario reporta el conteo físico de inventario para hacer una conciliación/auditoría (ej: "conté 15 unidades de topper torta y 8 de jarra, finaliza la auditoría"):
+Busca los UUIDs (ID) exactos de las variantes del Inventario correspondientes. Incluye el nombre (name) del producto para mostrar en la interfaz de confirmación.
+\`\`\`action
+{
+  "type": "reconcile_inventory",
+  "label": "Auditoría de inventario: Topper Torta (15 uds), Jarra (8 uds)",
+  "data": {
+    "items": [
+      { "variantId": "uuid-de-la-variante-1", "quantity": 15, "name": "Topper Torta" },
+      { "variantId": "uuid-de-la-variante-2", "quantity": 8, "name": "Jarra 1.5 lts" }
+    ]
+  }
+}
+\`\`\`
+
+Tipos de acción disponibles: "register_expense", "register_income", "create_purchase_order", "close_shift", "create_category", "create_supplier", "edit_product", "reconcile_inventory"
 Categorías de egreso: GASTO_OPERATIVO, COMPRA_INVENTARIO, PAGO_NOMINA, OTRO_EGRESO
 Categorías de ingreso: INGRESO_OPERATIVO, OTRO_INGRESO
 ${knowledgeContext}

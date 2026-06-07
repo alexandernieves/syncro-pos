@@ -169,6 +169,15 @@ export default function ProductosPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const editFileInputRef = React.useRef<HTMLInputElement>(null);
+  const editCameraInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Image Search States
+  const [isImageSearchOpen, setIsImageSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchingImages, setSearchingImages] = useState(false);
+  const [uploadingSearchImage, setUploadingSearchImage] = useState(false);
+  const [selectedSearchImageUrl, setSelectedSearchImageUrl] = useState<string | null>(null);
 
   // Barcode Dialog State
   const [barcodePromptOpen, setBarcodePromptOpen] = useState(false);
@@ -295,6 +304,61 @@ export default function ProductosPage() {
     } finally {
       setUploadingImage(false);
       if (editFileInputRef.current) editFileInputRef.current.value = "";
+      if (editCameraInputRef.current) editCameraInputRef.current.value = "";
+    }
+  };
+
+  const handleSearchImages = async (query: string) => {
+    if (!query.trim()) return;
+    setSearchingImages(true);
+    setSearchResults([]);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/products/search-images?q=${encodeURIComponent(query)}`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSearchResults(data);
+      } else {
+        toast.error("Error al buscar imágenes en Internet");
+      }
+    } catch (e) {
+      toast.error("Error de conexión al buscar imágenes");
+    } finally {
+      setSearchingImages(false);
+    }
+  };
+
+  const handleSelectSearchImage = async (imageUrl: string) => {
+    setUploadingSearchImage(true);
+    setSelectedSearchImageUrl(imageUrl);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/products/upload-by-url`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ imageUrl })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setEditImage(data.url);
+        toast.success("Imagen de Internet vinculada con éxito");
+        setIsImageSearchOpen(false);
+      } else {
+        toast.error("Error al descargar e importar la imagen");
+      }
+    } catch (e) {
+      toast.error("Error de conexión al importar imagen");
+    } finally {
+      setUploadingSearchImage(false);
+      setSelectedSearchImageUrl(null);
     }
   };
 
@@ -1519,8 +1583,8 @@ export default function ProductosPage() {
                   <div className="space-y-6 animate-in fade-in duration-300">
                     <div className="flex items-center justify-between pb-4 border-b border-border/60">
                       <div>
-                        <h2 className="text-xl font-black">Editar Producto</h2>
-                        <p className="text-xs text-muted-foreground mt-0.5">Modifica los detalles generales y variantes.</p>
+                        <SheetTitle className="text-xl font-black">Editar Producto</SheetTitle>
+                        <SheetDescription className="text-xs text-muted-foreground mt-0.5">Modifica los detalles generales y variantes.</SheetDescription>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button 
@@ -1644,6 +1708,14 @@ export default function ProductosPage() {
                               accept="image/*" 
                               onChange={handleEditImageUpload} 
                             />
+                            <input 
+                              type="file" 
+                              ref={editCameraInputRef} 
+                              className="hidden" 
+                              accept="image/*" 
+                              capture="environment"
+                              onChange={handleEditImageUpload} 
+                            />
                             {uploadingImage ? (
                               <div className="space-y-2">
                                 <div className="size-6 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
@@ -1665,6 +1737,36 @@ export default function ProductosPage() {
                                 <p className="text-[10px] text-muted-foreground">PNG, JPG o WEBP</p>
                               </>
                             )}
+                          </div>
+
+                          <div className="flex flex-col gap-2 mt-2">
+                            {/* Search Internet Button */}
+                            <Button 
+                              type="button"
+                              variant="outline" 
+                              className="w-full text-xs font-bold gap-1.5 h-9 rounded-xl border-primary/20 hover:bg-primary/5 text-primary"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSearchQuery(editName);
+                                setIsImageSearchOpen(true);
+                                handleSearchImages(editName);
+                              }}
+                            >
+                              <IconSearch size={14} /> Buscar en Internet
+                            </Button>
+
+                            {/* Take Photo Button */}
+                            <Button 
+                              type="button"
+                              variant="outline" 
+                              className="w-full text-xs font-bold gap-1.5 h-9 rounded-xl border-primary/20 hover:bg-primary/5 text-primary"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                editCameraInputRef.current?.click();
+                              }}
+                            >
+                              <IconCamera size={14} /> Tomar Foto
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -2468,6 +2570,127 @@ export default function ProductosPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 🔵 MODAL: BUSCAR IMAGEN EN INTERNET */}
+      <Dialog open={isImageSearchOpen} onOpenChange={setIsImageSearchOpen}>
+        <DialogContent className="sm:max-w-2xl border-none shadow-2xl rounded-2xl overflow-hidden bg-card text-foreground">
+          <DialogHeader className="p-6 pb-2">
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <IconSearch className="text-primary size-5" /> Buscar Imagen en Internet
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Busca una imagen libre de derechos para este producto e impórtala a tu catálogo en AWS S3.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-6 py-4 space-y-5">
+            {/* Search Input Bar */}
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSearchImages(searchQuery);
+              }}
+              className="flex gap-2"
+            >
+              <Input 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Nombre del producto a buscar..."
+                className="h-10 text-sm font-bold bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all flex-1"
+              />
+              <Button 
+                type="submit" 
+                disabled={searchingImages}
+                className="h-10 px-5 rounded-xl text-xs font-bold bg-primary text-primary-foreground shadow-sm shadow-primary/20 flex items-center gap-1.5"
+              >
+                {searchingImages ? (
+                  <>
+                    <div className="size-3.5 rounded-full border border-primary-foreground border-t-transparent animate-spin" />
+                    <span>Buscando...</span>
+                  </>
+                ) : (
+                  <>
+                    <IconSearch size={14} />
+                    <span>Buscar</span>
+                  </>
+                )}
+              </Button>
+            </form>
+
+            {/* Results Grid */}
+            <div className="min-h-[280px] max-h-[360px] overflow-y-auto pr-1">
+              {searchingImages ? (
+                // Skeletons
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {Array.from({ length: 8 }).map((_, idx) => (
+                    <div key={idx} className="h-28 bg-muted/40 rounded-xl animate-pulse" />
+                  ))}
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center space-y-2">
+                  <div className="size-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground opacity-60">
+                    <IconPackage size={24} />
+                  </div>
+                  <p className="text-sm font-semibold text-muted-foreground">No se encontraron imágenes</p>
+                  <p className="text-xs text-muted-foreground/50">Intenta cambiar los términos de búsqueda</p>
+                </div>
+              ) : (
+                // Image Grid
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {searchResults.map((item, idx) => {
+                    const isSelected = selectedSearchImageUrl === item.image;
+                    return (
+                      <div 
+                        key={idx}
+                        onClick={() => {
+                          if (!uploadingSearchImage) {
+                            handleSelectSearchImage(item.image);
+                          }
+                        }}
+                        className={cn(
+                          "relative h-28 rounded-xl border border-border/50 bg-muted/10 overflow-hidden cursor-pointer group hover:scale-[1.02] hover:border-primary/40 transition-all duration-300 shadow-sm",
+                          uploadingSearchImage && !isSelected && "opacity-40 cursor-not-allowed"
+                        )}
+                        title={item.title}
+                      >
+                        <img 
+                          src={item.thumbnail} 
+                          alt={item.title} 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        {/* Overlay with info */}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 text-left">
+                          <p className="text-[8px] text-white/60 font-semibold truncate leading-none mb-1">{item.width}x{item.height}</p>
+                          <p className="text-[9px] text-white font-bold truncate leading-none">{item.title}</p>
+                        </div>
+                        
+                        {/* Loading state overlay */}
+                        {uploadingSearchImage && isSelected && (
+                          <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-1.5 z-10">
+                            <div className="size-5 rounded-full border border-primary border-t-transparent animate-spin" />
+                            <p className="text-[8px] font-bold text-primary uppercase tracking-widest">Importando...</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="p-6 pt-2 bg-muted/10 border-t flex gap-2">
+            <Button 
+              variant="ghost" 
+              onClick={() => setIsImageSearchOpen(false)}
+              className="w-full h-10 rounded-xl font-bold text-xs text-muted-foreground hover:bg-muted"
+              disabled={uploadingSearchImage}
+            >
+              Cancelar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
