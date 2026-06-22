@@ -10,29 +10,31 @@ datasource db {
 }
 
 model Business {
-  id            String         @id @default(uuid())
-  name          String
-  status        String         @default("ACTIVE")
-  subscription  String         @default("BASIC")
-  logo          String?
-  ruc           String?
-  email         String?
-  phone         String?
-  address       String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  auditLogs     AuditLog[]
-  branches      Branch[]
-  categories    Category[]
-  clients       Client[]
-  conversations Conversation[]
-  expenses      Expense[]
-  products      Product[]
-  sales         Sale[]
-  settings      Setting[]
-  suppliers     Supplier[]
-  users         User[]
-  feedbacks     AiFeedback[]
+  id                 String              @id @default(uuid())
+  name               String
+  status             String              @default("ACTIVE")
+  subscription       String              @default("BASIC")
+  logo               String?
+  ruc                String?
+  email              String?
+  phone              String?
+  address            String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  feedbacks          AiFeedback[]
+  auditLogs          AuditLog[]
+  branches           Branch[]
+  categories         Category[]
+  clients            Client[]
+  conversations      Conversation[]
+  deliveryOrders     DeliveryOrder[]
+  expenses           Expense[]
+  paymentSubmissions PaymentSubmission[]
+  products           Product[]
+  sales              Sale[]
+  settings           Setting[]
+  suppliers          Supplier[]
+  users              User[]
 }
 
 model Conversation {
@@ -118,10 +120,10 @@ model Inventory {
 model Category {
   id          String    @id @default(uuid())
   name        String
-  description String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   businessId  String?
+  description String?
   business    Business? @relation(fields: [businessId], references: [id])
   products    Product[]
 
@@ -170,9 +172,9 @@ model Branch {
   country            String?
   isMain             Boolean             @default(false)
   state              String?
-  phone              String?
-  email              String?
   businessId         String?
+  email              String?
+  phone              String?
   accountingEntries  AccountingEntry[]
   business           Business?           @relation(fields: [businessId], references: [id])
   expenses           Expense[]
@@ -228,57 +230,59 @@ model PushSubscription {
 }
 
 model Setting {
-  id                       String    @id @default(uuid())
-  businessName             String    @default("Syncro POS")
-  businessAddress          String?
-  businessPhone            String?
-  businessEmail            String?
-  businessIcon             String?
-  ruc                      String?   @default("")
-  address                  String?   @default("")
-  phone                    String?   @default("")
-  email                    String?   @default("")
-  website                  String?   @default("")
-  country                  String?   @default("Venezuela")
-  currency                 String    @default("USD")
-  exchangeRate             Float     @default(1)
-  exchangeRateEur          Float     @default(1)
-  bcvUpdateDate            String?
-  exchangeRateDashboard    Float     @default(1)
-  exchangeRateDashboardEur Float     @default(1)
-  bcvUpdateDateDashboard   String?
-  taxRate                  Float     @default(16)
-  taxEnabled               Boolean   @default(true)
-  igtfRate                 Float     @default(3)
-  receiptFooter            String?   @default("Gracias por su compra. Vuelva pronto.")
-  pagoMovilBank            String?
-  pagoMovilId              String?
-  pagoMovilPhone           String?
-  pagoMovilEnabled         Boolean?  @default(false)
-  binanceId                String?
-  binanceEmail             String?
-  binanceEnabled           Boolean?  @default(false)
-  zinliEmail               String?
-  zinliEnabled             Boolean?  @default(false)
-  paypalEmail              String?
-  paypalEnabled            Boolean?  @default(false)
-  requireClient            Boolean   @default(false)
-  printOnSale              Boolean   @default(true)
-  lowStockAlert            Int       @default(5)
-  allowNegativeStock       Boolean   @default(false)
-  defaultPrinter           String?   @default("")
-  paperWidth               Int       @default(80)
-  copiesPerSale            Int       @default(1)
-  paymentMethods           Json?
-  discountPin              String?
-  pinPermissions           Json?
-  salesGoal                Float     @default(10000)
-  showSalesGoal            Boolean   @default(true)
-  showNetMargin            Boolean   @default(true)
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime  @updatedAt
-  businessId               String?
-  business                 Business? @relation(fields: [businessId], references: [id])
+  id                          String    @id @default(uuid())
+  businessName                String    @default("Syncro POS")
+  businessAddress             String?
+  businessPhone               String?
+  businessEmail               String?
+  businessIcon                String?
+  ruc                         String?   @default("")
+  address                     String?   @default("")
+  phone                       String?   @default("")
+  email                       String?   @default("")
+  website                     String?   @default("")
+  country                     String?   @default("Venezuela")
+  currency                    String    @default("USD")
+  exchangeRate                Float     @default(1)
+  exchangeRateEur             Float     @default(1)
+  bcvUpdateDate               String?
+  exchangeRateDashboard       Float     @default(1)
+  exchangeRateDashboardEur    Float     @default(1)
+  bcvUpdateDateDashboard      String?
+  taxRate                     Float     @default(16)
+  taxEnabled                  Boolean   @default(true)
+  igtfRate                    Float     @default(3)
+  receiptFooter               String?   @default("Gracias por su compra. Vuelva pronto.")
+  pagoMovilBank               String?
+  pagoMovilId                 String?
+  pagoMovilPhone              String?
+  pagoMovilEnabled            Boolean?  @default(false)
+  binanceId                   String?
+  binanceEmail                String?
+  binanceEnabled              Boolean?  @default(false)
+  zinliEmail                  String?
+  zinliEnabled                Boolean?  @default(false)
+  paypalEmail                 String?
+  paypalEnabled               Boolean?  @default(false)
+  requireClient               Boolean   @default(false)
+  printOnSale                 Boolean   @default(true)
+  lowStockAlert               Int       @default(5)
+  allowNegativeStock          Boolean   @default(false)
+  defaultPrinter              String?   @default("")
+  paperWidth                  Int       @default(80)
+  copiesPerSale               Int       @default(1)
+  paymentMethods              Json?
+  discountPin                 String?
+  pinPermissions              Json?
+  salesGoal                   Float     @default(10000)
+  showSalesGoal               Boolean   @default(true)
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+  businessId                  String?
+  showNetMargin               Boolean   @default(true)
+  syncroCreditFrequencyDays   Int       @default(15)
+  syncroCreditMaxInstallments Int       @default(3)
+  business                    Business? @relation(fields: [businessId], references: [id])
 }
 
 model Sale {
@@ -376,46 +380,55 @@ model SaleItem {
 }
 
 model InventoryMovement {
-  id          String         @id @default(uuid())
-  variantId   String
-  branchId    String
-  type        MovementType
-  quantity    Int
-  reason      String
-  referenceId String?
-  createdAt   DateTime       @default(now())
-  branch      Branch         @relation(fields: [branchId], references: [id])
-  variant     ProductVariant @relation(fields: [variantId], references: [id])
+  id            String         @id @default(uuid())
+  variantId     String
+  branchId      String
+  type          MovementType
+  quantity      Int
+  reason        String
+  referenceId   String?
+  createdAt     DateTime       @default(now())
+  newStock      Int            @default(0)
+  previousStock Int            @default(0)
+  branch        Branch         @relation(fields: [branchId], references: [id])
+  variant       ProductVariant @relation(fields: [variantId], references: [id])
 }
 
 model Client {
-  id                    String              @id @default(uuid())
-  name                  String
-  documentId            String?
-  email                 String?
-  phone                 String?
-  address               String?
-  isActive              Boolean             @default(true)
-  walletBalance         Float               @default(0)
-  creditLimit           Float               @default(0)
-  currentDebt           Float               @default(0)
-  downPaymentPercentage Float               @default(50)
-  paymentCycleDays      Int                 @default(15)
-  lastPaymentDate       DateTime?
-  nextPaymentDate       DateTime?
-  creditScore           Float               @default(50)
-  totalPaymentsCount    Int                 @default(0)
-  latePaymentsCount     Int                 @default(0)
-  accumulatedPoints     Int                 @default(0)
-  isSuspended           Boolean             @default(false)
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-  businessId            String?
-  business              Business?           @relation(fields: [businessId], references: [id])
-  creditTransactions    CreditTransaction[]
-  sales                 Sale[]
-  loans                 Loan[]
-  redeemedRewards       RedeemedReward[]
+  id                          String              @id @default(uuid())
+  name                        String
+  documentId                  String?
+  email                       String?
+  phone                       String?
+  address                     String?
+  isActive                    Boolean             @default(true)
+  walletBalance               Float               @default(0)
+  creditLimit                 Float               @default(0)
+  currentDebt                 Float               @default(0)
+  downPaymentPercentage       Float               @default(50)
+  paymentCycleDays            Int                 @default(15)
+  lastPaymentDate             DateTime?
+  nextPaymentDate             DateTime?
+  creditScore                 Float               @default(50)
+  totalPaymentsCount          Int                 @default(0)
+  latePaymentsCount           Int                 @default(0)
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @updatedAt
+  businessId                  String?
+  accumulatedPoints           Int                 @default(0)
+  isSuspended                 Boolean             @default(false)
+  activationCode              String?
+  activationCodeExpires       DateTime?
+  password                    String?
+  syncroCreditFrequencyDays   Int?
+  syncroCreditMaxInstallments Int?
+  business                    Business?           @relation(fields: [businessId], references: [id])
+  creditTransactions          CreditTransaction[]
+  deliveryOrders              DeliveryOrder[]
+  loans                       Loan[]
+  paymentSubmissions          PaymentSubmission[]
+  redeemedRewards             RedeemedReward[]
+  sales                       Sale[]
 }
 
 model CreditTransaction {
@@ -629,6 +642,150 @@ model Notification {
   user      User?    @relation("UserNotifications", fields: [userId], references: [id])
 }
 
+model SavedProfile {
+  id           String   @id @default(uuid())
+  clientId     String
+  email        String
+  name         String
+  role         String?
+  businessName String?
+  lastLogin    DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([clientId, email])
+}
+
+model KnowledgeChunk {
+  id        String   @id @default(uuid())
+  content   String
+  topic     String
+  embedding String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AiChatSession {
+  id         String          @id @default(uuid())
+  businessId String
+  userId     String
+  title      String          @default("Nuevo Chat")
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  isArchived Boolean         @default(false)
+  isPinned   Boolean         @default(false)
+  messages   AiChatMessage[]
+}
+
+model AiChatMessage {
+  id              String         @id @default(uuid())
+  businessId      String
+  userId          String
+  role            String
+  content         String
+  createdAt       DateTime       @default(now())
+  sessionId       String?        @default("default")
+  actionConfirmed Boolean?       @default(false)
+  actionJson      String?
+  session         AiChatSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model AiFeedback {
+  id         String    @id @default(uuid())
+  messageId  String?
+  prompt     String
+  response   String
+  rating     String
+  comment    String?
+  createdAt  DateTime  @default(now())
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id])
+}
+
+model Loan {
+  id                String            @id @default(uuid())
+  clientId          String
+  amount            Float
+  interestRate      Float
+  totalToPay        Float
+  remainingBalance  Float
+  installmentsCount Int
+  status            LoanStatus        @default(PENDING)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  client            Client            @relation(fields: [clientId], references: [id])
+  installments      LoanInstallment[]
+}
+
+model LoanInstallment {
+  id                String            @id @default(uuid())
+  loanId            String
+  installmentNumber Int
+  dueDate           DateTime
+  amount            Float
+  paidAmount        Float             @default(0)
+  status            InstallmentStatus @default(PENDING)
+  paidAt            DateTime?
+  loan              Loan              @relation(fields: [loanId], references: [id], onDelete: Cascade)
+}
+
+model Reward {
+  id              String           @id @default(uuid())
+  businessId      String
+  name            String
+  description     String?
+  pointsCost      Int
+  stock           Int              @default(0)
+  image           String?
+  createdAt       DateTime         @default(now())
+  redeemedRewards RedeemedReward[]
+}
+
+model RedeemedReward {
+  id          String   @id @default(uuid())
+  clientId    String
+  rewardId    String
+  pointsSpent Int
+  createdAt   DateTime @default(now())
+  client      Client   @relation(fields: [clientId], references: [id])
+  reward      Reward   @relation(fields: [rewardId], references: [id])
+}
+
+model PaymentSubmission {
+  id              String   @id @default(uuid())
+  clientId        String
+  businessId      String
+  loanId          String?
+  debtId          String
+  amount          Float
+  receiptUrl      String
+  referenceNumber String?
+  status          String   @default("PENDING")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model DeliveryOrder {
+  id         String   @id @default(uuid())
+  clientId   String
+  businessId String
+  branchId   String?
+  products   Json
+  total      Float
+  lat        Float
+  lng        Float
+  address    String?
+  status     String   @default("PENDING")
+  phone      String?
+  clientName String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
 enum SupplierStatus {
   ACTIVE
   BLOCKED
@@ -686,126 +843,12 @@ enum TransferStatus {
   CANCELLED
 }
 
-model SavedProfile {
-  id           String   @id @default(uuid())
-  clientId     String
-  email        String
-  name         String
-  role         String?
-  businessName String?
-  lastLogin    DateTime @default(now())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@unique([clientId, email])
-}
-
-// ── AI Agent — RAG Knowledge Base ────────────────────────────────────────────
-model KnowledgeChunk {
-  id        String   @id @default(uuid())
-  content   String   // Full text of the knowledge chunk
-  topic     String   // e.g. "cuadre_caja", "registro_egreso"
-  embedding String?  // JSON-serialized float[] from embedding model
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-// ── AI Agent — Conversation History ──────────────────────────────────────────
-model AiChatSession {
-  id         String          @id @default(uuid())
-  businessId String
-  userId     String
-  title      String          @default("Nuevo Chat")
-  isArchived Boolean         @default(false)
-  isPinned   Boolean         @default(false)
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
-  messages   AiChatMessage[]
-}
-
-model AiChatMessage {
-  id              String   @id @default(uuid())
-  businessId      String
-  userId          String
-  sessionId       String?  @default("default")
-  role            String   // "user" | "assistant"
-  content         String
-  actionJson      String?  @db.Text
-  actionConfirmed Boolean? @default(false)
-  createdAt       DateTime @default(now())
-
-  session         AiChatSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-}
-
-model AiFeedback {
-  id           String    @id @default(uuid())
-  messageId    String?
-  prompt       String
-  response     String
-  rating       String    // 'LIKE' or 'DISLIKE'
-  comment      String?
-  createdAt    DateTime  @default(now())
-  businessId   String?
-  business     Business? @relation(fields: [businessId], references: [id])
-}
-
-model Loan {
-  id                String            @id @default(uuid())
-  clientId          String
-  amount            Float
-  interestRate      Float
-  totalToPay        Float
-  remainingBalance  Float
-  installmentsCount Int
-  status            LoanStatus        @default(PENDING)
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  
-  client            Client            @relation(fields: [clientId], references: [id])
-  installments      LoanInstallment[]
-}
-
-model LoanInstallment {
-  id                String            @id @default(uuid())
-  loanId            String
-  installmentNumber Int
-  dueDate           DateTime
-  amount            Float
-  paidAmount        Float             @default(0)
-  status            InstallmentStatus @default(PENDING)
-  paidAt            DateTime?
-  
-  loan              Loan              @relation(fields: [loanId], references: [id], onDelete: Cascade)
-}
-
-model Reward {
-  id              String            @id @default(uuid())
-  businessId      String
-  name            String
-  description     String?
-  pointsCost      Int
-  stock           Int               @default(0)
-  image           String?
-  createdAt       DateTime          @default(now())
-  
-  redeemedRewards RedeemedReward[]
-}
-
-model RedeemedReward {
-  id              String            @id @default(uuid())
-  clientId        String
-  rewardId        String
-  pointsSpent     Int
-  createdAt       DateTime          @default(now())
-  
-  client          Client            @relation(fields: [clientId], references: [id])
-  reward          Reward            @relation(fields: [rewardId], references: [id])
-}
-
 enum LoanStatus {
   PENDING
   PAID
   OVERDUE
+  REQUESTED
+  APPROVED_PENDING_DISBURSEMENT
 }
 
 enum InstallmentStatus {

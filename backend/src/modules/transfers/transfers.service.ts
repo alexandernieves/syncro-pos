@@ -119,7 +119,9 @@ export class TransfersService {
             type: 'OUT',
             quantity: item.quantity,
             reason: 'Transferencia (Salida)',
-            referenceId: transfer.id
+            referenceId: transfer.id,
+            previousStock: sourceInv.quantity,
+            newStock: sourceInv.quantity - item.quantity
           }
         });
       }
@@ -153,6 +155,9 @@ export class TransfersService {
           }
         });
 
+        const prevQty = destInv ? destInv.quantity : 0;
+        const newQty = prevQty + item.quantity;
+
         if (destInv) {
           await tx.inventory.update({
             where: { id: destInv.id },
@@ -176,7 +181,9 @@ export class TransfersService {
             type: 'IN',
             quantity: item.quantity,
             reason: 'Transferencia (Entrada)',
-            referenceId: transfer.id
+            referenceId: transfer.id,
+            previousStock: prevQty,
+            newStock: newQty
           }
         });
       }
@@ -200,6 +207,18 @@ export class TransfersService {
 
       // 2. Return stock to source branch
       for (const item of transfer.items) {
+        const sourceInv = await tx.inventory.findUnique({
+          where: {
+            variantId_branchId: {
+              variantId: item.variantId,
+              branchId: transfer.sourceBranchId
+            }
+          }
+        });
+
+        const prevQty = sourceInv ? sourceInv.quantity : 0;
+        const newQty = prevQty + item.quantity;
+
         await tx.inventory.update({
           where: {
             variantId_branchId: {
@@ -218,7 +237,9 @@ export class TransfersService {
             type: 'IN',
             quantity: item.quantity,
             reason: 'Transferencia Cancelada (Retorno)',
-            referenceId: transfer.id
+            referenceId: transfer.id,
+            previousStock: prevQty,
+            newStock: newQty
           }
         });
       }

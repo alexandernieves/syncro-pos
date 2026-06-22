@@ -44,6 +44,13 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   }, []);
 
   useEffect(() => {
+    // Do NOT run dashboard notifications in the PWA portal context
+    const isPortal = typeof window !== "undefined" && window.location.pathname.startsWith("/portal");
+    if (isPortal) {
+      setLoading(false);
+      return;
+    }
+
     const token = localStorage.getItem("token");
     if (!token) {
       setLoading(false);
@@ -60,9 +67,13 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       setNotifications(prev => [notification, ...prev]);
       setUnreadCount(prev => prev + 1);
       
-      toast(notification.title, {
-        description: notification.message,
-      });
+      // Only show toast if we are still in the dashboard context
+      const stillInDashboard = !window.location.pathname.startsWith("/portal");
+      if (stillInDashboard) {
+        toast(notification.title, {
+          description: notification.message,
+        });
+      }
     });
 
     setSocket(newSocket);

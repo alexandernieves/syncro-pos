@@ -1,13 +1,44 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { HistoryService } from '../history/history.service';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 
 @Injectable()
 export class ProductsService {
   constructor(
     private prisma: PrismaService,
     private historyService: HistoryService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
+
+  private async invalidateProductsCache(businessId?: string | null, productId?: string | null) {
+    try {
+      console.log(`[Cache] Invalidating products cache for business: ${businessId || 'all'}, product: ${productId || 'all'}`);
+      const store = (this.cacheManager as any).store;
+      if (store && typeof (store as any).keys === 'function') {
+        const keys = await (store as any).keys();
+        for (const key of keys) {
+          if (key.startsWith('products:all:') || key.startsWith('products:one:')) {
+            if (!businessId || key.includes(businessId) || (productId && key.includes(productId))) {
+              await this.cacheManager.del(key);
+              console.log(`[Cache] Evicted key: ${key}`);
+            }
+          }
+        }
+      } else {
+        if (businessId) {
+          await this.cacheManager.del(`products:all:${businessId}:none`);
+          if (productId) {
+            await this.cacheManager.del(`products:one:${productId}:${businessId}`);
+            await this.cacheManager.del(`products:one:${productId}:none`);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error('[Cache] Error invalidating cache:', err.message);
+    }
+  }
 
   async create(data: any, userId?: string) {
     let { variants, ...productData } = data;
@@ -85,6 +116,7 @@ export class ProductsService {
       }
     }
 
+    await this.invalidateProductsCache(product.businessId);
     return product;
   }
 
@@ -216,15 +248,17 @@ export class ProductsService {
         }
       }
 
-      return this.prisma.product.findUnique({
+      const result = await this.prisma.product.findUnique({
         where: { id: updatedProduct.id },
         include: { variants: true }
       });
+      await this.invalidateProductsCache(data.businessId || result?.businessId);
+      return result;
     }
 
     // Original Flow: Create new product
     const finalSku = sku || `QC-${Date.now()}`;
-    return this.prisma.product.create({
+    const product = await this.prisma.product.create({
       data: {
         name: data.name,
         description: data.description || null,
@@ -253,9 +287,23 @@ export class ProductsService {
         variants: true
       }
     });
+
+    await this.invalidateProductsCache(data.businessId || product.businessId);
+    return product;
   }
 
   async findAll(businessId?: string, branchId?: string) {
+    const cacheKey = `products:all:${businessId || 'none'}:${branchId || 'none'}`;
+    try {
+      const cached = await this.cacheManager.get<any[]>(cacheKey);
+      if (cached) {
+        console.log(`[Cache] Cache hit for key: ${cacheKey}`);
+        return cached;
+      }
+    } catch (err: any) {
+      console.error('[Cache] Error reading from cache store:', err.message);
+    }
+
     const where: any = {};
     if (businessId) {
       where.businessId = businessId;
@@ -275,7 +323,7 @@ export class ProductsService {
       orderBy: { createdAt: 'desc' }
     });
 
-    return products.map(p => {
+    const mapped = products.map(p => {
       // Calculate total stock across variants (filtered by branch if provided)
       const totalStock = p.variants.reduce((acc, v) => {
         let vStock = v.stock;
@@ -325,9 +373,29 @@ export class ProductsService {
         status: alerts.includes('CRITICAL') ? 'CRITICAL' : alerts.includes('LOW') ? 'LOW' : 'NORMAL'
       };
     });
+
+    try {
+      await this.cacheManager.set(cacheKey, mapped, 5 * 60 * 1000);
+      console.log(`[Cache] Cached products catalog listing: ${cacheKey}`);
+    } catch (err: any) {
+      console.error('[Cache] Error saving to cache store:', err.message);
+    }
+
+    return mapped;
   }
 
   async findOne(id: string, businessId?: string) {
+    const cacheKey = `products:one:${id}:${businessId || 'none'}`;
+    try {
+      const cached = await this.cacheManager.get<any>(cacheKey);
+      if (cached) {
+        console.log(`[Cache] Cache hit for key: ${cacheKey}`);
+        return cached;
+      }
+    } catch (err: any) {
+      console.error('[Cache] Error reading from cache store:', err.message);
+    }
+
     const where: any = { id };
     if (businessId) {
       where.businessId = businessId;
@@ -349,6 +417,14 @@ export class ProductsService {
       }
     });
     if (!product) throw new NotFoundException('Producto no encontrado');
+
+    try {
+      await this.cacheManager.set(cacheKey, product, 5 * 60 * 1000);
+      console.log(`[Cache] Cached product details: ${cacheKey}`);
+    } catch (err: any) {
+      console.error('[Cache] Error saving to cache store:', err.message);
+    }
+
     return product;
   }
 
@@ -370,7 +446,7 @@ export class ProductsService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const updatedProduct = await tx.product.update({
         where: { id },
         data: productData,
@@ -430,6 +506,9 @@ export class ProductsService {
 
       return updatedProduct;
     });
+
+    await this.invalidateProductsCache(businessId || updated.businessId, id);
+    return updated;
   }
 
   async remove(id: string, userId?: string, businessId?: string) {
@@ -453,6 +532,7 @@ export class ProductsService {
         }
       }
 
+      await this.invalidateProductsCache(businessId || result.businessId, id);
       return result;
     } catch (error: any) {
       console.error('[ProductsService] Error deleting product:', error.message);
@@ -465,7 +545,7 @@ export class ProductsService {
 
   async getStats(id: string, businessId?: string) {
     const product = await this.findOne(id, businessId);
-    const variantIds = product.variants.map(v => v.id);
+    const variantIds = product.variants.map((v: any) => v.id);
 
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);

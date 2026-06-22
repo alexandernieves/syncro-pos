@@ -18,6 +18,8 @@ export interface LocalClient {
   walletBalance?: number;
   creditLimit?: number;
   currentDebt?: number;
+  hasAccount?: boolean;
+  isSuspended?: boolean;
 }
 
 export interface PendingSale {

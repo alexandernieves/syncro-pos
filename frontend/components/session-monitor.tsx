@@ -39,6 +39,10 @@ export function SessionMonitor({ timeoutMinutes = 30 }: SessionMonitorProps) {
   }, [handleLogout, timeoutMinutes])
 
   useEffect(() => {
+    // Do NOT run session monitoring in the PWA portal context
+    const isPortal = typeof window !== "undefined" && window.location.pathname.startsWith("/portal");
+    if (isPortal) return;
+
     // Eventos que reinician el contador de inactividad
     const events = ["mousedown", "mousemove", "keydown", "scroll", "touchstart"]
     

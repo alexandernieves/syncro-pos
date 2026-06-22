@@ -149,6 +149,9 @@ export default function ConfiguracionPage() {
     allowNegativeStock: false,
   });
 
+  const [syncroCreditMaxInstallments, setSyncroCreditMaxInstallments] = useState(3);
+  const [syncroCreditFrequencyDays, setSyncroCreditFrequencyDays] = useState(15);
+
   const [dashboardConfig, setDashboardConfig] = useState({
     salesGoal: "10000",
     showSalesGoal: true,
@@ -311,6 +314,8 @@ export default function ConfiguracionPage() {
             if (data.pinPermissions) {
               setPinPermissions(typeof data.pinPermissions === 'string' ? JSON.parse(data.pinPermissions) : data.pinPermissions);
             }
+            setSyncroCreditMaxInstallments(data.syncroCreditMaxInstallments ?? 3);
+            setSyncroCreditFrequencyDays(data.syncroCreditFrequencyDays ?? 15);
             setDashboardConfig({
               salesGoal: String(data.salesGoal || "10000"),
               showSalesGoal: data.showSalesGoal !== undefined ? data.showSalesGoal : true,
@@ -381,6 +386,8 @@ export default function ConfiguracionPage() {
         paypalEnabled: paypal.enabled,
         discountPin: discountPin || null,
         pinPermissions: pinPermissions, 
+        syncroCreditMaxInstallments: Number(syncroCreditMaxInstallments) || 3,
+        syncroCreditFrequencyDays: Number(syncroCreditFrequencyDays) || 15,
         salesGoal: Number(dashboardConfig.salesGoal) || 10000,
         showSalesGoal: !!dashboardConfig.showSalesGoal,
         showNetMargin: !!dashboardConfig.showNetMargin,
@@ -855,6 +862,48 @@ export default function ConfiguracionPage() {
                 </div>
               </CardContent>
             </Card>
+
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle className="text-base font-bold flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                  <IconDevices size={18} />
+                  Configuración de SyncroCredit (Crédito Digital PWA)
+                </CardTitle>
+                <CardDescription>
+                  Establece los límites y frecuencia predeterminada de cuotas para el cobro digital de créditos.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 divide-y divide-border/60">
+                <div className="flex justify-between items-center py-2">
+                  <div>
+                    <p className="font-medium text-sm">Frecuencia de Cuotas (Días)</p>
+                    <p className="text-xs text-muted-foreground">Cada cuántos días el cliente debe realizar un abono (ej: 15 días)</p>
+                  </div>
+                  <Input 
+                    type="number" 
+                    value={syncroCreditFrequencyDays} 
+                    onChange={e => setSyncroCreditFrequencyDays(Number(e.target.value))} 
+                    className="w-24 text-center font-mono font-bold" 
+                    min={1}
+                  />
+                </div>
+
+                <div className="flex justify-between items-center py-3">
+                  <div>
+                    <p className="font-medium text-sm">Máximo de Cuotas Habilitadas</p>
+                    <p className="text-xs text-muted-foreground">Número máximo de cuotas que el cliente puede elegir al pagar en la PWA (ej: 3 cuotas)</p>
+                  </div>
+                  <Input 
+                    type="number" 
+                    value={syncroCreditMaxInstallments} 
+                    onChange={e => setSyncroCreditMaxInstallments(Number(e.target.value))} 
+                    className="w-24 text-center font-mono font-bold" 
+                    min={1}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
             <Button className="self-start gap-2" onClick={() => handleSave("Punto de Venta")}><IconDeviceFloppy size={16}/>Guardar</Button>
           </div>
         )}

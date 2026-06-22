@@ -69,7 +69,10 @@ export default function MovimientosPage() {
         label: movement.type
       }),
       type: JSON.stringify({
-        product: movement.product
+        product: {
+          name: movement.variant?.product?.name,
+          sku: movement.variant?.sku
+        }
       }),
       status: JSON.stringify({
         quantity: movement.quantity,
@@ -85,6 +88,28 @@ export default function MovimientosPage() {
       reviewer: "actions"
     }));
   }, [movements]);
+
+  const filterMovimientosData = React.useCallback((data: any[], activeTab: string) => {
+    if (activeTab === "outline") return data;
+    
+    const tabTypeMap: Record<string, string> = {
+      "past-performance": "IN",
+      "key-personnel": "OUT",
+      "focus-documents": "ADJUSTMENT"
+    };
+    
+    const targetType = tabTypeMap[activeTab];
+    if (!targetType) return data;
+    
+    return data.filter(item => {
+      try {
+        const headerObj = JSON.parse(item.header || "{}");
+        return headerObj.type === targetType;
+      } catch {
+        return false;
+      }
+    });
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -123,6 +148,7 @@ export default function MovimientosPage() {
                     keyPersonnel: "Salidas",
                     focusDocuments: "Ajustes Críticos"
                 }}
+                filterData={filterMovimientosData}
             />
         )}
       </div>

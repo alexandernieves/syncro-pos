@@ -94,7 +94,7 @@ export class AuthService {
   }
 
   // ── Client Login (PWA Portal) ──────────────────────────────────────────────
-  async clientLogin(documentId: string) {
+  async clientLogin(documentId: string, password?: string) {
     const client = await this.prisma.client.findFirst({
       where: {
         documentId: {
@@ -106,6 +106,22 @@ export class AuthService {
 
     if (!client) {
       throw new UnauthorizedException('Cliente no encontrado');
+    }
+
+    if (client.isSuspended) {
+      throw new UnauthorizedException('Tu cuenta ha sido pausada temporalmente. Por favor comunícate con el comercio.');
+    }
+
+    if (client.password) {
+      if (!password) {
+        throw new UnauthorizedException('La contraseña es requerida');
+      }
+      const isPasswordValid = await bcrypt.compare(password, client.password);
+      if (!isPasswordValid) {
+        throw new UnauthorizedException('Contraseña incorrecta');
+      }
+    } else {
+      throw new UnauthorizedException('Esta cuenta requiere registrar una contraseña antes de acceder');
     }
 
     const payload = {
@@ -122,6 +138,84 @@ export class AuthService {
         name: client.name,
         documentId: client.documentId,
         businessId: client.businessId,
+      },
+    };
+  }
+
+  // ── Client Check Status (PWA Portal) ───────────────────────────────────────
+  async clientCheckStatus(documentId: string) {
+    const client = await this.prisma.client.findFirst({
+      where: {
+        documentId: {
+          equals: documentId,
+          mode: 'insensitive',
+        },
+      },
+    });
+
+    if (!client) {
+      throw new UnauthorizedException('Cliente no encontrado');
+    }
+
+    if (client.isSuspended) {
+      throw new UnauthorizedException('Tu cuenta ha sido pausada temporalmente. Por favor comunícate con el comercio.');
+    }
+
+    return {
+      exists: true,
+      hasPassword: !!client.password,
+      name: client.name,
+    };
+  }
+
+  // ── Client Register Password (PWA Portal) ──────────────────────────────────
+  async clientRegisterPassword(documentId: string, activationCode: string, pass: string) {
+    const client = await this.prisma.client.findFirst({
+      where: {
+        documentId: {
+          equals: documentId,
+          mode: 'insensitive',
+        },
+      },
+    });
+
+    if (!client) {
+      throw new UnauthorizedException('Cliente no encontrado');
+    }
+
+    if (!client.activationCode || client.activationCode !== activationCode) {
+      throw new UnauthorizedException('Código de activación inválido');
+    }
+
+    if (client.activationCodeExpires && new Date() > client.activationCodeExpires) {
+      throw new UnauthorizedException('El código de activación ha expirado');
+    }
+
+    const hashedPassword = await bcrypt.hash(pass, 10);
+
+    const updatedClient = await this.prisma.client.update({
+      where: { id: client.id },
+      data: {
+        password: hashedPassword,
+        activationCode: null,
+        activationCodeExpires: null,
+      },
+    });
+
+    const payload = {
+      sub: updatedClient.id,
+      role: 'client',
+      name: updatedClient.name,
+      businessId: updatedClient.businessId,
+    };
+
+    return {
+      access_token: this.jwtService.sign(payload),
+      client: {
+        id: updatedClient.id,
+        name: updatedClient.name,
+        documentId: updatedClient.documentId,
+        businessId: updatedClient.businessId,
       },
     };
   }

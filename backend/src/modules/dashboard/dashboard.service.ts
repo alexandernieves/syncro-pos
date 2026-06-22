@@ -1,11 +1,51 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class DashboardService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+  ) {}
+
+  /** Invalidate all dashboard cache keys for a given business */
+  async invalidateDashboardCache(businessId: string) {
+    try {
+      const store = (this.cacheManager as any).store;
+      if (store && typeof (store as any).keys === 'function') {
+        const keys: string[] = await (store as any).keys();
+        for (const key of keys) {
+          if (key.startsWith(`dashboard:`) && key.includes(businessId)) {
+            await this.cacheManager.del(key);
+            console.log(`[Cache] Evicted dashboard key: ${key}`);
+          }
+        }
+      } else {
+        // Fallback: just clear all dashboard keys for the business by pattern
+        await this.cacheManager.del(`dashboard:salesDates:${businessId}`);
+        console.log(`[Cache] Cleared dashboard cache for business: ${businessId}`);
+      }
+    } catch (err: any) {
+      console.error('[Cache] Error invalidating dashboard cache:', err.message);
+    }
+  }
 
   async getStats(businessId: string, branchId?: string, userId?: string, dateParam?: string) {
+    // Stats are very dynamic (change with every sale), use a SHORT TTL of 30 seconds
+    // so we still get a snappy UX while keeping data reasonably fresh
+    const cacheKey = `dashboard:stats:${businessId}:${branchId || 'all'}:${userId || 'none'}:${dateParam || 'today'}`;
+    try {
+      const cached = await this.cacheManager.get<any>(cacheKey);
+      if (cached) {
+        console.log(`[Cache] Dashboard stats hit: ${cacheKey}`);
+        return cached;
+      }
+    } catch (err: any) {
+      console.error('[Cache] Error reading dashboard stats cache:', err.message);
+    }
+
     const whereClause: any = {};
     if (branchId) {
       whereClause.branchId = branchId;
@@ -172,7 +212,7 @@ export class DashboardService {
       }
     }
 
-    return {
+    const result = {
       revenue: revenueValue,
       salesCount: totalSales,
       clientsCount: totalClients, 
@@ -215,9 +255,30 @@ export class DashboardService {
         }))
       }))
     };
+
+    try {
+      // Cache stats for 30 seconds — frequent enough to feel live, but avoids hammering the DB
+      await this.cacheManager.set(cacheKey, result, 30 * 1000);
+      console.log(`[Cache] Cached dashboard stats: ${cacheKey}`);
+    } catch (err: any) {
+      console.error('[Cache] Error writing dashboard stats cache:', err.message);
+    }
+
+    return result;
   }
 
   async getSalesDates(businessId: string, branchId?: string) {
+    const cacheKey = `dashboard:salesDates:${businessId}:${branchId || 'all'}`;
+    try {
+      const cached = await this.cacheManager.get<string[]>(cacheKey);
+      if (cached) {
+        console.log(`[Cache] Sales dates cache hit: ${cacheKey}`);
+        return cached;
+      }
+    } catch (err: any) {
+      console.error('[Cache] Error reading sales dates cache:', err.message);
+    }
+
     const whereClause: any = {};
     if (branchId) {
       whereClause.branchId = branchId;
@@ -238,7 +299,15 @@ export class DashboardService {
       datesSet.add(key);
     });
 
-    return Array.from(datesSet);
+    const dates = Array.from(datesSet);
+
+    try {
+      await this.cacheManager.set(cacheKey, dates, 5 * 60 * 1000); // 5 min TTL
+      console.log(`[Cache] Cached sales dates: ${cacheKey}`);
+    } catch (err: any) {
+      console.error('[Cache] Error writing sales dates cache:', err.message);
+    }
+
+    return dates;
   }
 }
-

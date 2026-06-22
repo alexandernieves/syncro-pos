@@ -1,12 +1,41 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class SettingsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+  ) {}
+
+  private cacheKey(businessId: string) {
+    return `settings:${businessId}`;
+  }
+
+  async invalidateSettingsCache(businessId: string) {
+    try {
+      await this.cacheManager.del(this.cacheKey(businessId));
+      console.log(`[Cache] Evicted settings cache for business: ${businessId}`);
+    } catch (err: any) {
+      console.error('[Cache] Error invalidating settings cache:', err.message);
+    }
+  }
 
   async getSettings(businessId: string) {
     if (!businessId) return null;
+
+    const key = this.cacheKey(businessId);
+    try {
+      const cached = await this.cacheManager.get<any>(key);
+      if (cached) {
+        console.log(`[Cache] Settings cache hit: ${key}`);
+        return cached;
+      }
+    } catch (err: any) {
+      console.error('[Cache] Error reading settings cache:', err.message);
+    }
     
     let settings = await this.prisma.setting.findFirst({
       where: { businessId }
@@ -17,6 +46,14 @@ export class SettingsService {
       settings = await this.prisma.setting.create({
         data: { businessId }
       });
+    }
+
+    try {
+      // Settings rarely change — cache for 15 minutes
+      await this.cacheManager.set(key, settings, 15 * 60 * 1000);
+      console.log(`[Cache] Cached settings: ${key}`);
+    } catch (err: any) {
+      console.error('[Cache] Error writing settings cache:', err.message);
     }
 
     return settings;
@@ -40,6 +77,7 @@ export class SettingsService {
       'requireClient', 'printOnSale', 'lowStockAlert', 'allowNegativeStock',
       'defaultPrinter', 'paperWidth', 'copiesPerSale',
       'paymentMethods', 'discountPin', 'pinPermissions',
+      'syncroCreditMaxInstallments', 'syncroCreditFrequencyDays',
       'salesGoal', 'showSalesGoal', 'showNetMargin',
       'exchangeRate', 'exchangeRateEur', 'bcvUpdateDate',
       'exchangeRateDashboard', 'exchangeRateDashboardEur', 'bcvUpdateDateDashboard'
@@ -53,10 +91,13 @@ export class SettingsService {
     }
 
     try {
-      return await this.prisma.setting.update({
+      const result = await this.prisma.setting.update({
         where: { id: settings.id },
         data: filteredData
       });
+      // Invalidate cache so next read gets fresh data
+      await this.invalidateSettingsCache(businessId);
+      return result;
     } catch (error) {
       console.error("ERROR AL ACTUALIZAR CONFIGURACIÓN:", error);
       throw error;

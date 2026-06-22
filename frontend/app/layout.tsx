@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Quicksand, Caveat } from "next/font/google";
 
 import "./globals.css";
 
@@ -8,6 +9,18 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 import { ActiveThemeProvider } from "@/components/active-theme";
 import { Toaster } from "sonner";
 import { CurrencyProvider } from "@/context/CurrencyContext";
+
+const quicksand = Quicksand({
+  subsets: ["latin"],
+  variable: "--font-quicksand",
+  display: "swap",
+});
+
+const caveat = Caveat({
+  subsets: ["latin"],
+  variable: "--font-caveat",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "SYNCRO POS",
@@ -40,7 +53,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" translate="no" className="notranslate bg-[#09090b]" suppressHydrationWarning>
+    <html lang="es" translate="no" className={cn("notranslate bg-[#09090b]", quicksand.variable, caveat.variable)} suppressHydrationWarning>
       <body
         suppressHydrationWarning
         className={cn(

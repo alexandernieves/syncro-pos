@@ -38,4 +38,45 @@ export class SalesController {
     const businessId = req.user?.businessId;
     return this.salesService.returnItems(id, returnData, userId, businessId);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('pending-credit')
+  async createPendingPurchase(@Body() body: any, @Req() req: any) {
+    const userId = req.user?.sub || req.user?.id;
+    const businessId = req.user?.businessId;
+    const { clientId, amount, cartData } = body;
+    const cartDataWithUser = { ...cartData, userId };
+    return this.salesService.createPendingPurchase(clientId, amount, businessId, cartDataWithUser);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('pending-credit/status/:pinCode')
+  async getPendingPurchaseStatus(@Param('pinCode') pinCode: string) {
+    return this.salesService.getPendingPurchaseStatus(pinCode);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('pending-credit/reject/:pinCode')
+  async rejectPendingPurchase(@Param('pinCode') pinCode: string) {
+    return this.salesService.rejectPendingPurchase(pinCode);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('pending-credit/:pinCode')
+  async getPendingPurchaseDetails(@Param('pinCode') pinCode: string, @Req() req: any) {
+    const clientId = req.user?.id || req.user?.sub;
+    return this.salesService.getPendingPurchaseDetails(pinCode, clientId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('pending-credit/:pinCode/approve')
+  async approvePendingPurchase(
+    @Param('pinCode') pinCode: string,
+    @Body('installmentsCount') installmentsCount: number,
+    @Body('frequencyDays') frequencyDays: number,
+    @Req() req: any,
+  ) {
+    const clientId = req.user?.id || req.user?.sub;
+    return this.salesService.approvePendingPurchase(pinCode, clientId, installmentsCount, frequencyDays);
+  }
 }

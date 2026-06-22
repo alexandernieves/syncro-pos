@@ -20,6 +20,13 @@ import { AuthService } from './auth.service';
 export class AuthController {
   constructor(private authService: AuthService) {}
 
+  @Get('debug-db')
+  debugDb() {
+    return {
+      databaseUrl: process.env.DATABASE_URL,
+    };
+  }
+
   // ── Login ─────────────────────────────────────────────────────────────────
   // Strict rate-limit: max 5 attempts per 15 minutes per IP
   @Throttle({ default: { limit: 5, ttl: 900000 } })
@@ -34,11 +41,34 @@ export class AuthController {
 
   // ── Client Portal Login ───────────────────────────────────────────────────
   @Post('client-login')
-  async clientLogin(@Body('documentId') documentId: string) {
+  async clientLogin(
+    @Body('documentId') documentId: string,
+    @Body('password') password?: string,
+  ) {
     if (!documentId) {
       throw new BadRequestException('El número de documento es requerido');
     }
-    return this.authService.clientLogin(documentId);
+    return this.authService.clientLogin(documentId, password);
+  }
+
+  @Post('client-check-status')
+  async clientCheckStatus(@Body('documentId') documentId: string) {
+    if (!documentId) {
+      throw new BadRequestException('El número de documento es requerido');
+    }
+    return this.authService.clientCheckStatus(documentId);
+  }
+
+  @Post('client-register-password')
+  async clientRegisterPassword(
+    @Body('documentId') documentId: string,
+    @Body('activationCode') activationCode: string,
+    @Body('password') password: string,
+  ) {
+    if (!documentId || !activationCode || !password) {
+      throw new BadRequestException('Todos los campos son requeridos');
+    }
+    return this.authService.clientRegisterPassword(documentId, activationCode, password);
   }
 
   // ── Register ──────────────────────────────────────────────────────────────

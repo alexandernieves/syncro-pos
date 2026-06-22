@@ -101,6 +101,8 @@ export class SupplierReturnsService {
           quantity: -quantity, // Negative for returns
           reason: `Devolución a ${supplier.name}: ${reason}`,
           referenceId: supplierReturn.id,
+          previousStock: inventory.quantity,
+          newStock: inventory.quantity - quantity
         }
       });
 

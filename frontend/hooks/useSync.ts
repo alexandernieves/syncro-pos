@@ -125,7 +125,9 @@ export function useSync() {
             documentId: c.documentId,
             walletBalance: c.walletBalance || 0,
             creditLimit: c.creditLimit || 0,
-            currentDebt: c.currentDebt || 0
+            currentDebt: c.currentDebt || 0,
+            hasAccount: c.hasAccount || false,
+            isSuspended: c.isSuspended || false
           })));
         });
       }

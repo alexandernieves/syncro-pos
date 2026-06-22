@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { API_URL } from "@/lib/constants"
 import { 
   Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription, CardAction 
@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
-  IconUserPlus, IconSearch, IconUser, IconMail, IconPhone, IconMapPin, IconFilter, IconArrowRight, IconUsersGroup, IconDotsVertical, IconBriefcase, IconCalendar, IconLayoutColumns, IconPlus, IconTrendingUp, IconTrendingDown, IconCheck, IconCash, IconCreditCard, IconHistory, IconQrcode, IconDownload, IconPrinter, IconReceipt, IconAlertCircle, IconClock
+  IconUserPlus, IconSearch, IconUser, IconMail, IconPhone, IconMapPin, IconFilter, IconArrowRight, IconUsersGroup, IconDotsVertical, IconBriefcase, IconCalendar, IconLayoutColumns, IconPlus, IconTrendingUp, IconTrendingDown, IconCheck, IconX, IconCash, IconCreditCard, IconHistory, IconQrcode, IconDownload, IconPrinter, IconReceipt, IconAlertCircle, IconClock, IconCopy, IconDeviceMobile, IconBuildingBank, IconEye, IconPhoto
 } from "@tabler/icons-react";
 import { QRCodeCanvas } from "qrcode.react";
 import { toast } from "sonner";
@@ -62,6 +62,18 @@ type Client = {
   nextPaymentDate?: string;
 };
 
+type PaymentSubmission = {
+  id: string;
+  amount: number;
+  referenceNumber: string;
+  receiptUrl: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+  client: { id: string; name: string; documentId: string; phone: string };
+  debtType: string;
+  debtId: string;
+};
+
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +98,13 @@ export default function ClientsPage() {
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
+  // Pago Móvil Submissions State
+  const [submissions, setSubmissions] = useState<PaymentSubmission[]>([]);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<PaymentSubmission | null>(null);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     documentId: "",
@@ -96,8 +115,58 @@ export default function ClientsPage() {
   const [newLimit, setNewLimit] = useState<string>("0");
   const [downPayment, setDownPayment] = useState<string>("50");
   const [cycle, setCycle] = useState<string>("15");
+  const [maxInstallments, setMaxInstallments] = useState<string>("");
+  const [frequencyDays, setFrequencyDays] = useState<string>("");
   const [paymentAmount, setPaymentAmount] = useState<string>("0");
   const [isSaving, setIsSaving] = useState(false);
+
+  // PWA Activation Code State
+  const [activationCode, setActivationCode] = useState<string>("");
+  const [isActivationModalOpen, setIsActivationModalOpen] = useState(false);
+  const [activationCreditLimit, setActivationCreditLimit] = useState<string>("100");
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+
+  const handleOpenActivationModal = (client: Client) => {
+    setSelectedClient(client);
+    setActivationCreditLimit((client.creditLimit || 100).toString());
+    setActivationCode("");
+    setIsActivationModalOpen(true);
+  };
+
+  const handleGenerateActivationCode = async () => {
+    if (!selectedClient) return;
+    setIsGeneratingCode(true);
+    try {
+      const token = localStorage.getItem("token");
+
+      // 1. Update credit limit before generating code
+      const limitVal = parseFloat(activationCreditLimit);
+      if (!isNaN(limitVal) && limitVal > 0) {
+        await fetch(`${API}/clients/${selectedClient.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify({ creditLimit: limitVal })
+        });
+      }
+
+      // 2. Generate activation code
+      const res = await fetch(`${API}/clients/${selectedClient.id}/activation-code`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setActivationCode(data.activationCode);
+        load(); // Refresh list to show updated credit limit
+      } else {
+        toast.error("Error al generar el código de activación");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setIsGeneratingCode(false);
+    }
+  };
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -116,9 +185,73 @@ export default function ClientsPage() {
     }
   }, []);
 
+  const loadSubmissions = useCallback(async () => {
+    setSubmissionsLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/clients/submissions`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setSubmissions(await res.json());
+      }
+    } catch {
+      toast.error("Error al cargar abonos");
+    } finally {
+      setSubmissionsLoading(false);
+    }
+  }, []);
+
+  const handleApproveSubmission = async (id: string) => {
+    setIsProcessing(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/clients/submissions/${id}/approve`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success("✅ Abono aprobado y acreditado al cliente");
+        setIsReceiptModalOpen(false);
+        loadSubmissions();
+        load();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Error al aprobar el abono");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRejectSubmission = async (id: string) => {
+    setIsProcessing(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/clients/submissions/${id}/reject`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success("Abono rechazado");
+        setIsReceiptModalOpen(false);
+        loadSubmissions();
+      } else {
+        toast.error("Error al rechazar el abono");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   useEffect(() => {
     load();
-  }, [load]);
+    loadSubmissions();
+  }, [load, loadSubmissions]);
 
   const totalSalesValue = clients.reduce((acc, c) => acc + (c.sales?.reduce((sum: number, s: any) => sum + (s.total || 0), 0) || 0), 0);
   const totalSalesCount = clients.reduce((acc, c) => acc + (c.sales?.length || 0), 0);
@@ -144,7 +277,9 @@ export default function ClientsPage() {
         body: JSON.stringify({ 
           creditLimit: parseFloat(newLimit),
           downPaymentPercentage: parseFloat(downPayment),
-          paymentCycleDays: parseInt(cycle)
+          paymentCycleDays: parseInt(cycle),
+          syncroCreditMaxInstallments: maxInstallments ? parseInt(maxInstallments) : null,
+          syncroCreditFrequencyDays: frequencyDays ? parseInt(frequencyDays) : null
         }),
       });
 
@@ -348,6 +483,8 @@ export default function ClientsPage() {
                       setNewLimit(row.original.creditLimit.toString());
                       setDownPayment((row.original as any).downPaymentPercentage?.toString() || "50");
                       setCycle((row.original as any).paymentCycleDays?.toString() || "15");
+                      setMaxInstallments((row.original as any).syncroCreditMaxInstallments?.toString() || "");
+                      setFrequencyDays((row.original as any).syncroCreditFrequencyDays?.toString() || "");
                       setIsCreditModalOpen(true);
                   }}>
                       Gestionar crédito
@@ -357,6 +494,11 @@ export default function ClientsPage() {
                       setIsQRModalOpen(true);
                   }}>
                       Generar QR de Acceso
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs" onClick={() => {
+                      handleOpenActivationModal(row.original);
+                  }}>
+                      Generar Código PWA
                   </DropdownMenuItem>
                   <DropdownMenuItem className="text-xs" onClick={() => {
                       setSelectedClient(row.original);
@@ -460,7 +602,14 @@ export default function ClientsPage() {
         <div className="flex items-center justify-between px-4 lg:px-6">
           <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1">
             <TabsTrigger value="perfiles">Cartera de Clientes</TabsTrigger>
-
+            <TabsTrigger value="abonos" className="relative" onClick={loadSubmissions}>
+              Abonos por Validar
+              {submissions.filter(s => s.status === 'PENDING').length > 0 && (
+                <span className="ml-2 inline-flex items-center justify-center size-4 rounded-full bg-amber-500 text-white text-[9px] font-black">
+                  {submissions.filter(s => s.status === 'PENDING').length}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
           
           <div className="flex items-center gap-2">
@@ -495,8 +644,87 @@ export default function ClientsPage() {
             </div>
         </TabsContent>
 
-
-        
+        {/* === ABONOS POR VALIDAR TAB === */}
+        <TabsContent value="abonos" className="px-4 lg:px-6 space-y-4">
+          {submissionsLoading ? (
+            <Skeleton className="h-[400px] w-full rounded-2xl" />
+          ) : submissions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 gap-4 opacity-40">
+              <div className="size-16 rounded-2xl bg-muted flex items-center justify-center">
+                <IconBuildingBank size={32} className="text-muted-foreground" />
+              </div>
+              <div className="text-center space-y-1">
+                <p className="font-bold text-sm">Sin abonos pendientes</p>
+                <p className="text-xs text-muted-foreground">Aquí aparecerán los comprobantes de Pago Móvil enviados por tus clientes</p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border overflow-hidden bg-card shadow-xs">
+              {/* Table Header */}
+              <div className="grid grid-cols-[1fr_1fr_120px_130px_110px] gap-4 px-5 py-3 bg-muted/40 border-b">
+                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Cliente</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Referencia / Fecha</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-right">Monto</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center">Estado</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-right">Acción</span>
+              </div>
+              <div className="divide-y divide-border/50">
+                {submissions.map((sub) => (
+                  <div key={sub.id} className="grid grid-cols-[1fr_1fr_120px_130px_110px] gap-4 px-5 py-4 items-center hover:bg-muted/20 transition-colors">
+                    {/* Client */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="size-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600 font-black text-[10px] border border-amber-500/20 shrink-0">
+                        {sub.client.name.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold truncate tracking-tight">{sub.client.name}</p>
+                        <p className="text-[10px] font-mono text-muted-foreground">{sub.client.documentId}</p>
+                      </div>
+                    </div>
+                    {/* Reference + Date */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs font-bold font-mono text-foreground">{sub.referenceNumber || '—'}</span>
+                      <span className="text-[10px] text-muted-foreground">{new Date(sub.createdAt).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                    </div>
+                    {/* Amount */}
+                    <div className="text-right">
+                      <span className="text-sm font-black tabular-nums text-emerald-600">${sub.amount.toFixed(2)}</span>
+                    </div>
+                    {/* Status Badge */}
+                    <div className="flex justify-center">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide border ${
+                        sub.status === 'PENDING' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
+                        sub.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                        'bg-rose-500/10 text-rose-600 border-rose-500/20'
+                      }`}>
+                        <span className={`size-1.5 rounded-full ${
+                          sub.status === 'PENDING' ? 'bg-amber-500 animate-pulse' :
+                          sub.status === 'APPROVED' ? 'bg-emerald-500' : 'bg-rose-500'
+                        }`} />
+                        {sub.status === 'PENDING' ? 'Pendiente' : sub.status === 'APPROVED' ? 'Aprobado' : 'Rechazado'}
+                      </span>
+                    </div>
+                    {/* Action */}
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1.5 text-xs font-bold rounded-lg"
+                        onClick={() => {
+                          setSelectedSubmission(sub);
+                          setIsReceiptModalOpen(true);
+                        }}
+                      >
+                        <IconEye size={13} />
+                        Ver Comprobante
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </TabsContent>
 
       </Tabs>
 
@@ -560,6 +788,29 @@ export default function ClientsPage() {
                     type="number" 
                     value={cycle} 
                     onChange={(e) => setCycle(e.target.value)}
+                    className="h-11 rounded-xl bg-muted/30 border-none font-bold text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">Cuotas Máximas</label>
+                  <Input 
+                    type="number" 
+                    placeholder="Por defecto"
+                    value={maxInstallments} 
+                    onChange={(e) => setMaxInstallments(e.target.value)}
+                    className="h-11 rounded-xl bg-muted/30 border-none font-bold text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">Frecuencia Cuotas (Días)</label>
+                  <Input 
+                    type="number" 
+                    placeholder="Por defecto"
+                    value={frequencyDays} 
+                    onChange={(e) => setFrequencyDays(e.target.value)}
                     className="h-11 rounded-xl bg-muted/30 border-none font-bold text-sm"
                   />
                 </div>
@@ -656,6 +907,86 @@ export default function ClientsPage() {
               <p className="text-[9px] text-zinc-600 text-center font-medium italic leading-relaxed px-4">
                   Escanea este código para consultar tu límite de crédito, deuda actual y pagar tus cuotas desde el portal.
               </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* PWA Activation Code Modal */}
+      <Dialog open={isActivationModalOpen} onOpenChange={setIsActivationModalOpen}>
+        <DialogContent className="max-w-sm border border-border/80 bg-background/95 backdrop-blur-md shadow-2xl rounded-2xl p-6 overflow-hidden text-foreground">
+          <div className="flex flex-col items-center text-center gap-4 mt-2">
+              <div className="size-12 rounded-full bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 flex items-center justify-center border border-amber-500/25 shadow-inner">
+                  <IconDeviceMobile size={22} />
+              </div>
+              
+              <div className="space-y-1">
+                  <DialogTitle className="text-lg font-bold tracking-tight">Activar Cuenta PWA</DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground max-w-[280px] mx-auto">
+                      Define el crédito disponible y genera el código de activación para el cliente.
+                  </DialogDescription>
+              </div>
+
+              <div className="border-t border-border/50 w-full pt-3 pb-1 space-y-1">
+                  <p className="text-[10px] text-muted-foreground uppercase font-black tracking-wider">Cliente</p>
+                  <h4 className="text-sm font-extrabold text-foreground">{selectedClient?.name}</h4>
+                  <p className="text-[10px] font-mono text-muted-foreground bg-muted/50 px-2 py-0.5 rounded border border-border/40 inline-block mt-0.5">{selectedClient?.documentId}</p>
+              </div>
+
+              {/* Credit Limit Input */}
+              <div className="w-full space-y-2">
+                  <label className="text-[11px] font-black text-muted-foreground uppercase tracking-wider text-left w-full block">
+                      Crédito a Habilitar (USD)
+                  </label>
+                  <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-black text-muted-foreground">$</span>
+                      <Input
+                          type="number"
+                          min="0"
+                          step="10"
+                          value={activationCreditLimit}
+                          onChange={(e) => setActivationCreditLimit(e.target.value)}
+                          className="pl-8 h-12 text-xl font-black text-center rounded-xl bg-muted/30 border-border/60 focus-visible:ring-amber-500/30"
+                          placeholder="100"
+                      />
+                  </div>
+                  <p className="text-[9px] text-muted-foreground italic text-left">
+                      Este monto define cuánto puede comprar a crédito este cliente. El radial se llenará según su uso.
+                  </p>
+              </div>
+
+              {/* Code Display (shown after generation) */}
+              {activationCode ? (
+                  <>
+                      <div className="py-4 px-6 bg-muted/30 rounded-xl border border-border/80 w-full text-center shadow-inner">
+                          <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Código de Activación</p>
+                          <span className="text-3xl font-black font-mono tracking-[0.3em] pl-[0.3em] text-amber-600 dark:text-amber-400">
+                              {activationCode}
+                          </span>
+                      </div>
+                      <div className="w-full">
+                          <Button 
+                            className="w-full h-11 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-xs gap-2 shadow-sm transition-all active:scale-[0.98]"
+                            onClick={() => {
+                                navigator.clipboard.writeText(activationCode);
+                                toast.success("Código copiado al portapapeles");
+                            }}
+                          >
+                              <IconCopy size={16} /> Copiar Código
+                          </Button>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground leading-normal px-2">
+                          Entrega este código al cliente. Expira en <strong className="text-foreground">24 horas</strong>.
+                      </p>
+                  </>
+              ) : (
+                  <Button 
+                    className="w-full h-11 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs gap-2 shadow-sm transition-all active:scale-[0.98] border-none"
+                    onClick={handleGenerateActivationCode}
+                    disabled={isGeneratingCode}
+                  >
+                      <IconDeviceMobile size={16} /> {isGeneratingCode ? "Generando..." : "Generar Código"}
+                  </Button>
+              )}
           </div>
         </DialogContent>
       </Dialog>
@@ -800,6 +1131,110 @@ export default function ClientsPage() {
               Cerrar Perfil
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* === RECEIPT PREVIEW MODAL === */}
+      <Dialog open={isReceiptModalOpen} onOpenChange={setIsReceiptModalOpen}>
+        <DialogContent className="max-w-lg border-none shadow-2xl rounded-[2rem] p-0 overflow-hidden bg-background">
+          {/* Header */}
+          <div className="flex items-center gap-3 p-6 border-b bg-gradient-to-r from-amber-500/10 to-transparent">
+            <div className="size-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/20">
+              <IconBuildingBank size={20} />
+            </div>
+            <div>
+              <DialogTitle className="text-base font-bold tracking-tight">Comprobante de Pago Móvil</DialogTitle>
+              <DialogDescription className="text-[11px] font-medium text-amber-600/80">Revisión y validación de abono</DialogDescription>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-5">
+            {/* Client info */}
+            {selectedSubmission && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-xl bg-muted/40 border space-y-1">
+                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest block">Cliente</span>
+                    <p className="text-sm font-bold truncate">{selectedSubmission.client.name}</p>
+                    <p className="text-[10px] font-mono text-muted-foreground">{selectedSubmission.client.documentId}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-muted/40 border space-y-1">
+                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest block">Monto del Abono</span>
+                    <p className="text-2xl font-black tabular-nums text-emerald-600">${selectedSubmission.amount.toFixed(2)}</p>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-muted/40 border flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest block">N° de Referencia</span>
+                    <span className="text-sm font-bold font-mono">{selectedSubmission.referenceNumber || 'No indicado'}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest block">Enviado</span>
+                    <span className="text-xs font-medium">{new Date(selectedSubmission.createdAt).toLocaleString('es-VE', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                  </div>
+                </div>
+
+                {/* Receipt Image */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Captura del Comprobante</span>
+                  {selectedSubmission.receiptUrl ? (
+                    <div className="rounded-2xl overflow-hidden border-2 border-dashed border-muted-foreground/20 bg-muted/30 relative">
+                      <img
+                        src={selectedSubmission.receiptUrl.startsWith('http') ? selectedSubmission.receiptUrl : `${API_URL.replace('/api', '')}${selectedSubmission.receiptUrl}`}
+                        alt="Comprobante de pago"
+                        className="w-full max-h-64 object-contain"
+                      />
+                      <a
+                        href={selectedSubmission.receiptUrl.startsWith('http') ? selectedSubmission.receiptUrl : `${API_URL.replace('/api', '')}${selectedSubmission.receiptUrl}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-black/60 text-white text-[10px] font-bold hover:bg-black/80 transition-colors"
+                      >
+                        <IconPhoto size={12} /> Ver completo
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border-2 border-dashed border-muted-foreground/20 bg-muted/30 p-10 flex flex-col items-center gap-2 opacity-50">
+                      <IconPhoto size={28} className="text-muted-foreground" />
+                      <p className="text-xs font-bold text-muted-foreground">Sin captura adjunta</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                {selectedSubmission.status === 'PENDING' && (
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <Button
+                      variant="outline"
+                      className="h-12 rounded-xl font-bold text-xs border-rose-500/30 text-rose-600 hover:bg-rose-500/10 gap-2"
+                      onClick={() => handleRejectSubmission(selectedSubmission.id)}
+                      disabled={isProcessing}
+                    >
+                      <IconX size={16} />
+                      {isProcessing ? 'Procesando...' : 'Rechazar'}
+                    </Button>
+                    <Button
+                      className="h-12 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 gap-2"
+                      onClick={() => handleApproveSubmission(selectedSubmission.id)}
+                      disabled={isProcessing}
+                    >
+                      <IconCheck size={16} />
+                      {isProcessing ? 'Aplicando...' : 'Aprobar Abono'}
+                    </Button>
+                  </div>
+                )}
+
+                {selectedSubmission.status !== 'PENDING' && (
+                  <div className={`p-3 rounded-xl text-center text-xs font-bold ${
+                    selectedSubmission.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
+                  }`}>
+                    {selectedSubmission.status === 'APPROVED' ? '✅ Este abono ya fue aprobado y acreditado' : '❌ Este abono fue rechazado'}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -289,7 +289,9 @@ export class AiAgentService {
                   branchId,
                   type: 'ADJUSTMENT',
                   quantity: diff,
-                  reason: 'audit'
+                  reason: 'audit',
+                  previousStock: currentQty,
+                  newStock: item.quantity
                 }
               });
 

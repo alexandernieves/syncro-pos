@@ -203,6 +203,8 @@ export class PurchaseOrdersService {
             quantity: newStock,
             reason: `Recepción OC #${(purchaseOrder as any).number || purchaseOrder.id.substring(0, 8)}`,
             referenceId: purchaseOrder.id,
+            previousStock: currentStock,
+            newStock: currentStock + newStock
           }
         });
       }

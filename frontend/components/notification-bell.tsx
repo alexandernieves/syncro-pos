@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
+import Link from "next/link";
 import { 
   Popover, PopoverContent, PopoverTrigger 
 } from "@/components/ui/popover";
@@ -16,6 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
 export function NotificationBell() {
+  const [open, setOpen] = useState(false);
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
   const getIcon = (type: string) => {
@@ -28,7 +30,7 @@ export function NotificationBell() {
   };
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800">
           <IconBell size={20} />
@@ -94,8 +96,16 @@ export function NotificationBell() {
         </ScrollArea>
         
         <div className="p-3 border-t text-center">
-          <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground font-medium h-8">
-            Ver todas las notificaciones
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="w-full text-xs text-muted-foreground font-medium h-8" 
+            asChild
+            onClick={() => setOpen(false)}
+          >
+            <Link href="/dashboard/notificaciones">
+              Ver todas las notificaciones
+            </Link>
           </Button>
         </div>
       </PopoverContent>

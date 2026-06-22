@@ -886,7 +886,7 @@ export default function ProductosPage() {
           >
             <div className="bg-muted size-12 rounded-lg overflow-hidden flex items-center justify-center border shrink-0 group-hover/row:border-primary/50 transition-colors">
               {p.image ? (
-                <img src={p.image} alt={p.name} className="size-full object-cover" />
+                <img src={p.image} alt={p.name} loading="lazy" decoding="async" className="size-full object-cover" />
               ) : (
                 <IconPackage size={24} className="text-muted-foreground" />
               )}
@@ -1253,7 +1253,7 @@ export default function ProductosPage() {
                       {/* Product image */}
                       <div className="aspect-square bg-muted flex items-center justify-center overflow-hidden relative">
                         {p.image ? (
-                          <img src={p.image} alt={p.name} className="size-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                          <img src={p.image} alt={p.name} loading="lazy" decoding="async" className="size-full object-cover group-hover:scale-105 transition-transform duration-500" />
                         ) : (
                           <IconPackage size={40} className="text-muted-foreground/30" stroke={1.2} />
                         )}

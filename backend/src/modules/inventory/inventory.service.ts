@@ -44,7 +44,9 @@ export class InventoryService {
           branchId,
           type: MovementType.IN,
           quantity,
-          reason: 'restock'
+          reason: 'restock',
+          previousStock: inventory.quantity - quantity,
+          newStock: inventory.quantity
         }
       });
 
@@ -100,7 +102,9 @@ export class InventoryService {
             branchId,
             type: MovementType.ADJUSTMENT,
             quantity: diff,
-            reason: 'audit'
+            reason: 'audit',
+            previousStock: currentQty,
+            newStock: item.quantity
           }
         });
 

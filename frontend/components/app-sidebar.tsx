@@ -120,6 +120,11 @@ const data = {
       url: "/dashboard/historial",
       icon: IconHistory,
     },
+    {
+      title: "Delivery",
+      url: "/dashboard/deliveries",
+      icon: IconTruck,
+    },
   ],
   navSecondary: [
     {

@@ -354,6 +354,7 @@ interface UniversalTableProps<TData> {
     keyPersonnel?: React.ReactNode
     focusDocuments?: React.ReactNode
   }
+  filterData?: (data: TData[], activeTab: string) => TData[]
   hideHeader?: boolean
   hideAddButton?: boolean
 }
@@ -364,14 +365,24 @@ export function UniversalTable<TData extends { id: string | number }>({
   updateData,
   tabs = {},
   customTabsContent = {},
+  filterData,
   hideHeader = false,
   hideAddButton = false,
 }: UniversalTableProps<TData>) {
-  const [data, setData] = React.useState(() => initialData)
+  const [activeTab, setActiveTab] = React.useState("outline")
+
+  const filteredData = React.useMemo(() => {
+    if (filterData) {
+      return filterData(initialData, activeTab)
+    }
+    return initialData
+  }, [initialData, activeTab, filterData])
+
+  const [data, setData] = React.useState(() => filteredData)
   
   React.useEffect(() => {
-    setData(initialData);
-  }, [initialData]);
+    setData(filteredData);
+  }, [filteredData]);
 
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] =
@@ -384,6 +395,11 @@ export function UniversalTable<TData extends { id: string | number }>({
     pageIndex: 0,
     pageSize: 10,
   })
+
+  React.useEffect(() => {
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+  }, [activeTab])
+
   const sortableId = React.useId()
   const sensors = useSensors(
     useSensor(MouseSensor, {}),
@@ -435,9 +451,143 @@ export function UniversalTable<TData extends { id: string | number }>({
     }
   }
 
+  const renderTableContent = () => (
+    <>
+      <div className="overflow-hidden rounded-lg border">
+        <DndContext
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis]}
+          onDragEnd={handleDragEnd}
+          sensors={sensors}
+          id={sortableId}
+        >
+          <Table>
+            <TableHeader className="bg-muted sticky top-0 z-10">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id} className="hover:bg-transparent border-none">
+                  {headerGroup.headers.map((header) => {
+                    return (
+                      <TableHead key={header.id} colSpan={header.colSpan} className="text-white font-normal text-[11px] uppercase tracking-wider py-4">
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                      </TableHead>
+                    )
+                  })}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody className="**:data-[slot=table-cell]:first:w-8">
+              {table.getRowModel().rows?.length ? (
+                <SortableContext
+                  items={dataIds}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {table.getRowModel().rows.map((row) => (
+                    <DraggableRow key={row.id} row={row} />
+                  ))}
+                </SortableContext>
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-24 text-center"
+                  >
+                    Sin resultados.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </DndContext>
+      </div>
+      <div className="flex items-center justify-between px-4">
+        <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
+          {table.getFilteredSelectedRowModel().rows.length} of{" "}
+          {table.getFilteredRowModel().rows.length} row(s) selected.
+        </div>
+        <div className="flex w-full items-center gap-8 lg:w-fit">
+          <div className="hidden items-center gap-2 lg:flex">
+            <Label htmlFor="rows-per-page" className="text-sm font-medium">
+              Filas por página
+            </Label>
+            <Select
+              value={`${table.getState().pagination.pageSize}`}
+              onValueChange={(value) => {
+                table.setPageSize(Number(value))
+              }}
+            >
+              <SelectTrigger size="sm" className="w-20" id="rows-per-page">
+                <SelectValue
+                  placeholder={table.getState().pagination.pageSize}
+                />
+              </SelectTrigger>
+              <SelectContent side="top">
+                {[10, 20, 30, 40, 50].map((pageSize) => (
+                  <SelectItem key={pageSize} value={`${pageSize}`}>
+                    {pageSize}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex w-fit items-center justify-center text-sm font-medium">
+            Página {table.getState().pagination.pageIndex + 1} de{" "}
+            {table.getPageCount()}
+          </div>
+          <div className="ml-auto flex items-center gap-2 lg:ml-0">
+            <Button
+              variant="outline"
+              className="hidden h-8 w-8 p-0 lg:flex"
+              onClick={() => table.setPageIndex(0)}
+              disabled={!table.getCanPreviousPage()}
+            >
+              <span className="sr-only">Go to first page</span>
+              <IconChevronsLeft />
+            </Button>
+            <Button
+              variant="outline"
+              className="size-8"
+              size="icon"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              <span className="sr-only">Go to previous page</span>
+              <IconChevronLeft />
+            </Button>
+            <Button
+              variant="outline"
+              className="size-8"
+              size="icon"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              <span className="sr-only">Go to next page</span>
+              <IconChevronRight />
+            </Button>
+            <Button
+              variant="outline"
+              className="hidden size-8 lg:flex"
+              size="icon"
+              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+              disabled={!table.getCanNextPage()}
+            >
+              <span className="sr-only">Go to last page</span>
+              <IconChevronsRight />
+            </Button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <Tabs
-      defaultValue="outline"
+      value={activeTab}
+      onValueChange={setActiveTab}
       className="w-full flex-col justify-start gap-6"
     >
       {!hideHeader && (
@@ -445,7 +595,7 @@ export function UniversalTable<TData extends { id: string | number }>({
           <Label htmlFor="view-selector" className="sr-only">
             View
           </Label>
-          <Select defaultValue="outline">
+          <Select value={activeTab} onValueChange={setActiveTab}>
             <SelectTrigger
               className="flex w-fit @4xl/main:hidden"
               size="sm"
@@ -517,155 +667,25 @@ export function UniversalTable<TData extends { id: string | number }>({
         value="outline"
         className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
       >
-        <div className="overflow-hidden rounded-lg border">
-          <DndContext
-            collisionDetection={closestCenter}
-            modifiers={[restrictToVerticalAxis]}
-            onDragEnd={handleDragEnd}
-            sensors={sensors}
-            id={sortableId}
-          >
-            <Table>
-              <TableHeader className="bg-muted sticky top-0 z-10">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id} className="hover:bg-transparent border-none">
-                    {headerGroup.headers.map((header) => {
-                      return (
-                        <TableHead key={header.id} colSpan={header.colSpan} className="text-white font-normal text-[11px] uppercase tracking-wider py-4">
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                        </TableHead>
-                      )
-                    })}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody className="**:data-[slot=table-cell]:first:w-8">
-                {table.getRowModel().rows?.length ? (
-                  <SortableContext
-                    items={dataIds}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {table.getRowModel().rows.map((row) => (
-                      <DraggableRow key={row.id} row={row} />
-                    ))}
-                  </SortableContext>
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={columns.length}
-                      className="h-24 text-center"
-                    >
-                      Sin resultados.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </DndContext>
-        </div>
-        <div className="flex items-center justify-between px-4">
-          <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
-            {table.getFilteredSelectedRowModel().rows.length} of{" "}
-            {table.getFilteredRowModel().rows.length} row(s) selected.
-          </div>
-          <div className="flex w-full items-center gap-8 lg:w-fit">
-            <div className="hidden items-center gap-2 lg:flex">
-              <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                Filas por página
-              </Label>
-              <Select
-                value={`${table.getState().pagination.pageSize}`}
-                onValueChange={(value) => {
-                  table.setPageSize(Number(value))
-                }}
-              >
-                <SelectTrigger size="sm" className="w-20" id="rows-per-page">
-                  <SelectValue
-                    placeholder={table.getState().pagination.pageSize}
-                  />
-                </SelectTrigger>
-                <SelectContent side="top">
-                  {[10, 20, 30, 40, 50].map((pageSize) => (
-                    <SelectItem key={pageSize} value={`${pageSize}`}>
-                      {pageSize}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex w-fit items-center justify-center text-sm font-medium">
-              Página {table.getState().pagination.pageIndex + 1} de{" "}
-              {table.getPageCount()}
-            </div>
-            <div className="ml-auto flex items-center gap-2 lg:ml-0">
-              <Button
-                variant="outline"
-                className="hidden h-8 w-8 p-0 lg:flex"
-                onClick={() => table.setPageIndex(0)}
-                disabled={!table.getCanPreviousPage()}
-              >
-                <span className="sr-only">Go to first page</span>
-                <IconChevronsLeft />
-              </Button>
-              <Button
-                variant="outline"
-                className="size-8"
-                size="icon"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              >
-                <span className="sr-only">Go to previous page</span>
-                <IconChevronLeft />
-              </Button>
-              <Button
-                variant="outline"
-                className="size-8"
-                size="icon"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-              >
-                <span className="sr-only">Go to next page</span>
-                <IconChevronRight />
-              </Button>
-              <Button
-                variant="outline"
-                className="hidden size-8 lg:flex"
-                size="icon"
-                onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                disabled={!table.getCanNextPage()}
-              >
-                <span className="sr-only">Go to last page</span>
-                <IconChevronsRight />
-              </Button>
-            </div>
-          </div>
-        </div>
+        {renderTableContent()}
       </TabsContent>
       <TabsContent
         value="past-performance"
-        className="flex flex-col px-4 lg:px-6"
+        className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
       >
-        {customTabsContent.pastPerformance || (
-          <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
-        )}
+        {customTabsContent.pastPerformance || renderTableContent()}
       </TabsContent>
-      <TabsContent value="key-personnel" className="flex flex-col px-4 lg:px-6">
-        {customTabsContent.keyPersonnel || (
-          <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
-        )}
+      <TabsContent
+        value="key-personnel"
+        className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
+      >
+        {customTabsContent.keyPersonnel || renderTableContent()}
       </TabsContent>
       <TabsContent
         value="focus-documents"
-        className="flex flex-col px-4 lg:px-6"
+        className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
       >
-        {customTabsContent.focusDocuments || (
-          <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
-        )}
+        {customTabsContent.focusDocuments || renderTableContent()}
       </TabsContent>
     </Tabs>
   )

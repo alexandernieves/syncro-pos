@@ -39,7 +39,7 @@ const nextConfig: NextConfig = {
           // Restrict browser features
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(self), geolocation=(), interest-cohort=()",
+            value: "camera=(), microphone=(self), geolocation=(self), interest-cohort=()",
           },
           // HSTS — force HTTPS for 1 year
           {
@@ -51,11 +51,13 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'",   // unsafe-inline needed for Next.js hydration
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "script-src 'self' 'unsafe-inline' https://api.mapbox.com",   // unsafe-inline needed for Next.js hydration, api.mapbox.com for map scripts
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.mapbox.com",
               "font-src 'self' https://fonts.gstatic.com data:",
-              "img-src 'self' data: https: blob:",
-              "connect-src 'self' https: wss: http://localhost:9000 ws://localhost:9000",      // Allow API + WebSocket calls
+              "img-src 'self' data: https: blob: https://*.mapbox.com",
+              "connect-src 'self' https: wss: http://localhost:9000 ws://localhost:9000 https://*.mapbox.com",      // Allow API + WebSocket + Mapbox calls
+              "worker-src 'self' blob:",
+              "child-src 'self' blob:",
               "media-src 'self' https: blob:",
               "frame-src 'none'",
               "object-src 'none'",

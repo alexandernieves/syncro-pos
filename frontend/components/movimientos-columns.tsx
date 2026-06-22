@@ -148,14 +148,30 @@ export const movimientosColumns: ColumnDef<z.infer<typeof movimientosSchema>>[] 
     header: "Variación",
     cell: ({ row }) => {
       const movementData = JSON.parse(row.original.status || '{}');
-      const quantity = movementData.quantity || 0;
+      const rawQuantity = movementData.quantity || 0;
       const type = movementData.type || 'OUT';
-      const prefix = type === "OUT" ? "-" : "+";
-      const isNegative = type === "OUT";
+      
+      let isNegative = false;
+      let displayQuantity = rawQuantity;
+      
+      if (type === "OUT") {
+        isNegative = true;
+        displayQuantity = -Math.abs(rawQuantity);
+      } else if (type === "IN") {
+        isNegative = false;
+        displayQuantity = Math.abs(rawQuantity);
+      } else {
+        isNegative = rawQuantity < 0;
+        displayQuantity = rawQuantity;
+      }
+      
+      const formattedValue = isNegative 
+        ? `${displayQuantity} UNI` 
+        : `+${displayQuantity} UNI`;
       
       return (
         <div className={`font-light text-sm tabular-nums ${isNegative ? "text-rose-600" : "text-emerald-600"}`}>
-          {prefix}{quantity} UNI
+          {formattedValue}
         </div>
       );
     },
