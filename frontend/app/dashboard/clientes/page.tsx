@@ -756,7 +756,7 @@ export default function ClientsPage() {
               <div className="p-3 rounded-xl bg-muted/50 border space-y-1">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Cupo Disponible</span>
                 <div className="text-xl font-bold text-emerald-600 tabular-nums">
-                    ${((selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0)).toFixed(2)}
+                    {selectedClient?.creditLimit === 0 ? "Sin Límite" : `$${((selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0)).toFixed(2)}`}
                 </div>
               </div>
             </div>
@@ -1079,7 +1079,7 @@ export default function ClientsPage() {
               <div>
                 <DialogTitle className="text-xl font-bold">{selectedClient?.name}</DialogTitle>
                 <DialogDescription className="text-xs uppercase tracking-widest font-semibold">
-                  {selectedClient?.documentId} • Límite: ${selectedClient?.creditLimit.toFixed(2)}
+                  {selectedClient?.documentId} • Límite: {selectedClient?.creditLimit === 0 ? "Libreta Tradicional / Sin Límite" : `$${selectedClient?.creditLimit.toFixed(2)}`}
                 </DialogDescription>
               </div>
             </div>

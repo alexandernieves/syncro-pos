@@ -19,7 +19,7 @@ export class ClientsService {
   }
 
   async create(data: any) {
-    if (data.creditLimit === undefined || data.creditLimit === null || data.creditLimit === 0) {
+    if (data.creditLimit === undefined || data.creditLimit === null) {
       data.creditLimit = 100;
     }
     const client = await this.prisma.client.create({ data });
@@ -127,17 +127,19 @@ export class ClientsService {
       let newDownPayment = client.downPaymentPercentage;
       let newLimit = client.creditLimit;
 
-      if (newScore >= 95) {
-        newDownPayment = 20; // Super VIP
-        newLimit = client.creditLimit * 1.10; // 10% increase
-      } else if (newScore >= 85) {
-        newDownPayment = 30;
-        newLimit = client.creditLimit * 1.05; // 5% increase
-      } else if (newScore >= 70) {
-        newDownPayment = 40;
-      } else {
-        newDownPayment = 50; // Return to standard
-        newLimit = Math.min(100, newLimit); // Cap limit at 100 for Level 1
+      if (client.creditLimit > 0) {
+        if (newScore >= 95) {
+          newDownPayment = 20; // Super VIP
+          newLimit = client.creditLimit * 1.10; // 10% increase
+        } else if (newScore >= 85) {
+          newDownPayment = 30;
+          newLimit = client.creditLimit * 1.05; // 5% increase
+        } else if (newScore >= 70) {
+          newDownPayment = 40;
+        } else {
+          newDownPayment = 50; // Return to standard
+          newLimit = Math.min(100, newLimit); // Cap limit at 100 for Level 1
+        }
       }
 
       // Calculate new debt

@@ -3773,7 +3773,9 @@ export default function POSPage() {
                       <div className="flex items-center justify-between p-2 rounded-lg bg-muted/50 border border-border/60">
                         <div className="flex flex-col">
                           <span className="text-[10px] font-bold text-muted-foreground uppercase leading-none">Límite de Crédito</span>
-                          <span className="text-xs font-black mt-1">${selectedClient?.creditLimit || 0}</span>
+                          <span className="text-xs font-black mt-1">
+                            {selectedClient?.creditLimit === 0 ? "Sin Límite (Libreta Tradicional)" : `$${selectedClient?.creditLimit || 0}`}
+                          </span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <Button

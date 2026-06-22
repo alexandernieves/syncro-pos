@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   IconUser, IconHistory, IconCash, IconAlertCircle, IconCheck, IconSearch,
   IconCreditCard, IconInfoCircle, IconArrowLeft, IconCalendar,
-  IconReceipt, IconShoppingCart
+  IconReceipt, IconShoppingCart, IconSettings
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,34 @@ function CreditRadialCard({ client }: { client: any }) {
   const debt = client.currentDebt || 0;
   const available = Math.max(0, limit - debt);
   const pct = limit > 0 ? Math.round((available / limit) * 100) : 0;
+
+  if (limit === 0) {
+    return (
+      <div className="flex items-center gap-4 py-3 border-b border-zinc-100 dark:border-zinc-900">
+        <div className="mx-auto size-[90px] shrink-0 flex items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500">
+          <IconReceipt size={32} className="opacity-90 animate-pulse" />
+        </div>
+        <div className="flex-1 space-y-2">
+          <div>
+            <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Crédito Disponible</p>
+            <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">
+              Sin Límite
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-[8px] font-bold text-zinc-400 uppercase">Límite</p>
+              <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-md uppercase tracking-tight">Tradicional</span>
+            </div>
+            <div>
+              <p className="text-[8px] font-bold text-zinc-400 uppercase">Usado</p>
+              <p className="text-xs font-bold text-rose-600 dark:text-rose-400">${debt.toFixed(2)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const chartConfig: ChartConfig = {
     available: { label: "Disponible", color: available > 0 ? "hsl(142 71% 45%)" : "hsl(0 72% 51%)" },
@@ -95,6 +123,13 @@ export default function CreditosPage() {
   const [customRate, setCustomRate] = useState("");
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Limit Modal
+  const [limitOpen, setLimitOpen] = useState(false);
+  const [limitAmount, setLimitAmount] = useState("");
+  const [isTraditional, setIsTraditional] = useState(false);
+  const [selectedClientForLimit, setSelectedClientForLimit] = useState<any>(null);
+  const [isUpdatingLimit, setIsUpdatingLimit] = useState(false);
 
   // History Modal
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -210,6 +245,55 @@ export default function CreditosPage() {
     setCustomRate("");
     setPaymentNotes("");
     setPaymentOpen(true);
+  };
+
+  const handleOpenLimitModal = (client: any) => {
+    setSelectedClientForLimit(client);
+    setIsTraditional(client.creditLimit === 0);
+    setLimitAmount(client.creditLimit > 0 ? client.creditLimit.toString() : "100");
+    setLimitOpen(true);
+  };
+
+  const handleUpdateLimit = async () => {
+    if (!selectedClientForLimit) return;
+    const finalLimit = isTraditional ? 0 : parseFloat(limitAmount);
+    if (!isTraditional && (isNaN(finalLimit) || finalLimit < 0)) {
+      toast.error("Por favor ingresa un límite válido");
+      return;
+    }
+    
+    // Check if limit is less than current debt
+    if (finalLimit > 0 && finalLimit < selectedClientForLimit.currentDebt) {
+      toast.error(`El límite no puede ser menor a la deuda actual ($${selectedClientForLimit.currentDebt.toFixed(2)})`);
+      return;
+    }
+
+    setIsUpdatingLimit(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/clients/${selectedClientForLimit.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          creditLimit: finalLimit
+        })
+      });
+      if (res.ok) {
+        toast.success("Límite de crédito actualizado");
+        setLimitOpen(false);
+        loadData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Error al actualizar límite");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setIsUpdatingLimit(false);
+    }
   };
 
   const handleRegisterPayment = async () => {
@@ -335,8 +419,8 @@ export default function CreditosPage() {
                           <CardDescription className="text-[11px] text-zinc-400 font-mono mt-0.5">{c.documentId || "Cédula S/D"}</CardDescription>
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
-                      {(() => {
+                      <div className="flex flex-col items-end gap-1.5">
+                        {(() => {
                           const stars = Math.round((c.creditScore || 0) / 20);
                           const color = stars >= 4 ? "text-emerald-500" : stars >= 2 ? "text-amber-400" : "text-rose-400";
                           return (
@@ -348,6 +432,13 @@ export default function CreditosPage() {
                             </div>
                           );
                         })()}
+                        <button
+                          onClick={() => handleOpenLimitModal(c)}
+                          className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-all flex items-center justify-center"
+                          title="Gestionar Límite"
+                        >
+                          <IconSettings size={15} />
+                        </button>
                       </div>
                     </div>
                   </CardHeader>
@@ -821,6 +912,62 @@ export default function CreditosPage() {
               className="flex-1 rounded-xl h-11 bg-emerald-600 hover:bg-emerald-500 text-white font-bold border-none"
             >
               {isSubmitting ? "Procesando..." : "Confirmar Abono"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── MODAL GESTIONAR LÍMITE ──────────────────────────────────────── */}
+      <Dialog open={limitOpen} onOpenChange={setLimitOpen}>
+        <DialogContent className="rounded-2xl p-6 max-w-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-200">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-zinc-800 dark:text-zinc-100">
+              <IconSettings size={20} className="text-zinc-500" /> Gestionar Límite de Crédito
+            </DialogTitle>
+            <DialogDescription className="text-xs mt-1">
+              Configura el límite para <strong>{selectedClientForLimit?.name}</strong>. Deuda actual: <strong className="text-rose-500">${selectedClientForLimit?.currentDebt?.toFixed(2)}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="flex items-center space-x-2 rounded-xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-900 p-3">
+              <input
+                type="checkbox"
+                id="isTraditional"
+                checked={isTraditional}
+                onChange={(e) => setIsTraditional(e.target.checked)}
+                className="size-4 rounded border-zinc-300 dark:border-zinc-800 accent-emerald-500 cursor-pointer"
+              />
+              <Label htmlFor="isTraditional" className="text-xs font-bold text-zinc-700 dark:text-zinc-300 cursor-pointer flex-1">
+                Sin límite de crédito (Libreta Tradicional)
+              </Label>
+            </div>
+
+            {!isTraditional && (
+              <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Límite Autorizado ($ USD)</Label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-400">$</span>
+                  <Input
+                    type="number"
+                    className="rounded-xl h-11 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-sm pl-7 font-semibold"
+                    placeholder="100.00"
+                    value={limitAmount}
+                    onChange={(e) => setLimitAmount(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" onClick={() => setLimitOpen(false)} className="rounded-xl h-11 border-zinc-200 dark:border-zinc-800 bg-transparent flex-1">Cancelar</Button>
+            <Button
+              onClick={handleUpdateLimit}
+              disabled={isUpdatingLimit}
+              className="flex-1 rounded-xl h-11 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold border-none"
+            >
+              {isUpdatingLimit ? "Guardando..." : "Guardar Cambios"}
             </Button>
           </div>
         </DialogContent>
