@@ -19,9 +19,33 @@ export class UploadsService {
     this.bucketName = this.configService.get<string>('AWS_BUCKET_NAME') || '';
   }
 
+  private async optimizeImage(fileBuffer: Buffer, mimetype: string): Promise<{ buffer: Buffer; mimetype: string; extension: string }> {
+    if (mimetype.startsWith('image/') && mimetype !== 'image/gif') {
+      try {
+        const sharp = require('sharp');
+        const optimizedBuffer = await sharp(fileBuffer)
+          .resize({ width: 800, withoutEnlargement: true })
+          .webp({ quality: 80 })
+          .toBuffer();
+        return {
+          buffer: optimizedBuffer,
+          mimetype: 'image/webp',
+          extension: 'webp',
+        };
+      } catch (err: any) {
+        console.error('[UploadsService] Error optimizing image with sharp:', err.message);
+      }
+    }
+    let ext = 'jpg';
+    if (mimetype.includes('png')) ext = 'png';
+    else if (mimetype.includes('webp')) ext = 'webp';
+    else if (mimetype.includes('gif')) ext = 'gif';
+    return { buffer: fileBuffer, mimetype, extension: ext };
+  }
+
   async uploadFile(file: Express.Multer.File, userEmail: string): Promise<string> {
-    const fileExtension = file.originalname.split('.').pop();
-    const fileName = `${uuidv4()}.${fileExtension}`;
+    const { buffer, mimetype, extension } = await this.optimizeImage(file.buffer, file.mimetype);
+    const fileName = `${uuidv4()}.${extension}`;
     
     // Try S3 upload first
     try {
@@ -31,12 +55,17 @@ export class UploadsService {
       const command = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: key,
-        Body: file.buffer,
-        ContentType: file.mimetype,
+        Body: buffer,
+        ContentType: mimetype,
       });
 
       await this.s3Client.send(command);
-      const region = this.configService.get<string>('AWS_REGION');
+      const region = this.configService.get<string>('AWS_REGION') || 'us-east-1';
+      
+      const cdnUrl = this.configService.get<string>('CDN_URL');
+      if (cdnUrl) {
+        return `${cdnUrl.replace(/\/$/, '')}/${key}`;
+      }
       const s3Url = `https://${this.bucketName}.s3.${region}.amazonaws.com/${key}`;
       
       console.log('S3 upload successful:', s3Url);
@@ -56,7 +85,7 @@ export class UploadsService {
       
       // Save file locally
       const localFilePath = path.join(uploadsDir, fileName);
-      fs.writeFileSync(localFilePath, file.buffer);
+      fs.writeFileSync(localFilePath, buffer);
       
       // Return local URL (this would need to be served by the backend)
       const localUrl = `${this.configService.get<string>('API_URL') || 'http://localhost:9000'}/uploads/${userEmail}/${fileName}`;
@@ -82,11 +111,8 @@ export class UploadsService {
       
       // Determine mimetype and extension
       const contentType = response.headers.get('content-type') || 'image/jpeg';
-      let extension = 'jpg';
-      if (contentType.includes('png')) extension = 'png';
-      else if (contentType.includes('webp')) extension = 'webp';
-      else if (contentType.includes('gif')) extension = 'gif';
-
+      
+      const { buffer: optimizedBuffer, mimetype, extension } = await this.optimizeImage(buffer, contentType);
       const fileName = `${uuidv4()}.${extension}`;
       const folderPath = `${userEmail}/product_images`;
       const key = `${folderPath}/${fileName}`;
@@ -96,12 +122,17 @@ export class UploadsService {
         const command = new PutObjectCommand({
           Bucket: this.bucketName,
           Key: key,
-          Body: buffer,
-          ContentType: contentType,
+          Body: optimizedBuffer,
+          ContentType: mimetype,
         });
 
         await this.s3Client.send(command);
         const region = this.configService.get<string>('AWS_REGION') || 'us-east-1';
+        
+        const cdnUrl = this.configService.get<string>('CDN_URL');
+        if (cdnUrl) {
+          return `${cdnUrl.replace(/\/$/, '')}/${key}`;
+        }
         const s3Url = `https://${this.bucketName}.s3.${region}.amazonaws.com/${key}`;
         console.log('S3 download-and-upload successful:', s3Url);
         return s3Url;
@@ -117,7 +148,7 @@ export class UploadsService {
         }
         
         const localFilePath = path.join(uploadsDir, fileName);
-        fs.writeFileSync(localFilePath, buffer);
+        fs.writeFileSync(localFilePath, optimizedBuffer);
         
         const localUrl = `${this.configService.get<string>('API_URL') || 'http://localhost:9000'}/uploads/${userEmail}/${fileName}`;
         console.log('Local fallback upload successful:', localUrl);
