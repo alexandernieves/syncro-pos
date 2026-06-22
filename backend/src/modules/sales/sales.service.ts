@@ -173,10 +173,13 @@ export class SalesService {
           const client = await tx.client.findUnique({ where: { id: clientId } });
           if (!client) throw new BadRequestException('Cliente no encontrado');
 
-          // Validate Credit Limit
-          const availableCredit = (client.creditLimit || 0) - (client.currentDebt || 0);
-          if (availableCredit < p.amount - 0.01) {
-            throw new BadRequestException(`Crédito insuficiente. Disponible: $${availableCredit.toFixed(2)} USD`);
+          // Validate Credit Limit ONLY if the client has registered (has password/account in PWA)
+          const isSyncoCreditUser = !!client.password;
+          if (isSyncoCreditUser) {
+            const availableCredit = (client.creditLimit || 0) - (client.currentDebt || 0);
+            if (availableCredit < p.amount - 0.01) {
+              throw new BadRequestException(`Crédito insuficiente. Disponible: $${availableCredit.toFixed(2)} USD`);
+            }
           }
 
           // Update Client Debt and Schedule

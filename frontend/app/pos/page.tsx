@@ -661,7 +661,7 @@ export default function POSPage() {
       const limit = selectedClient?.creditLimit || 0;
       const debt = selectedClient?.currentDebt || 0;
       const available = limit - debt;
-      const isBlocked = available <= 0.01 && debt > 0;
+      const isBlocked = selectedClient?.hasAccount && (available <= 0.01 && debt > 0);
       if (isBlocked && tempPaymentMethod === 'CREDIT') {
         setTempPaymentMethod('CASH');
       }
@@ -674,7 +674,7 @@ export default function POSPage() {
       const client = clients.find(c => (c.id || (c as any)._id) === selectedClientId);
       if (client) {
         const available = (client.creditLimit || 0) - (client.currentDebt || 0);
-        if (available <= 0.01 && (client.currentDebt || 0) > 0) {
+        if (client.hasAccount && available <= 0.01 && (client.currentDebt || 0) > 0) {
           toast.warning(
             `El cliente ${client.name} tiene el cupo de crédito agotado y deudas activas. No se le permite fiar, por favor realice un abono a su deuda.`,
             { duration: 5000 }
@@ -2890,7 +2890,7 @@ export default function POSPage() {
                       {/* Current Debt & Abono */}
                       {(c.currentDebt || 0) > 0 && (() => {
                         const available = (c.creditLimit || 0) - (c.currentDebt || 0);
-                        const isBlocked = available <= 0.01;
+                        const isBlocked = c.hasAccount && (available <= 0.01);
                         return (
                           <div className={cn(
                             "flex flex-col gap-2 p-3 rounded-xl border",
@@ -3216,10 +3216,10 @@ export default function POSPage() {
                                 value="CREDIT"
                                 disabled={
                                   addedPayments.some(p => p.method === "CREDIT") ||
-                                  ((selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0) <= 0.01 && (selectedClient?.currentDebt || 0) > 0)
+                                  (selectedClient?.hasAccount && ((selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0) <= 0.01 && (selectedClient?.currentDebt || 0) > 0))
                                 }
                               >
-                                {((selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0) <= 0.01 && (selectedClient?.currentDebt || 0) > 0)
+                                {(selectedClient?.hasAccount && ((selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0) <= 0.01 && (selectedClient?.currentDebt || 0) > 0))
                                   ? "Crédito / Fiado (Bloqueado)"
                                   : "Crédito / Fiado"
                                 }

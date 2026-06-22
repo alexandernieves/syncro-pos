@@ -97,12 +97,17 @@ export class ClientsService {
   }
 
   async update(id: string, data: any, businessId?: string) {
-    await this.findOne(id, businessId);
-    const client = await this.prisma.client.update({
+    const client = await this.findOne(id, businessId);
+    if (data.creditLimit !== undefined && data.creditLimit > 0) {
+      if (data.creditLimit < client.currentDebt) {
+        throw new BadRequestException(`El límite de crédito ($${data.creditLimit} USD) no puede ser menor a la de deuda actual del cliente ($${client.currentDebt.toFixed(2)} USD)`);
+      }
+    }
+    const updatedClient = await this.prisma.client.update({
       where: { id },
       data
     });
-    return this.sanitizeClient(client);
+    return this.sanitizeClient(updatedClient);
   }
 
   async registerPayment(clientId: string, data: { amount: number; notes?: string; paidCurrency?: string; paidAmount?: number; exchangeRate?: number }, businessId?: string) {
@@ -810,7 +815,12 @@ export class ClientsService {
     const activationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const activationCodeExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    await this.findOne(clientId, businessId);
+    const client = await this.findOne(clientId, businessId);
+    if (creditLimit !== undefined && creditLimit > 0) {
+      if (creditLimit < client.currentDebt) {
+        throw new BadRequestException(`El límite de crédito ($${creditLimit} USD) no puede ser menor a la de deuda actual del cliente ($${client.currentDebt.toFixed(2)} USD)`);
+      }
+    }
     await this.prisma.client.update({
       where: { id: clientId },
       data: {

@@ -300,6 +300,9 @@ export default function ClientsPage() {
         load();
         setIsCreditModalOpen(false);
         setPaymentAmount("0");
+      } else {
+        const err = await resLimit.json().catch(() => ({}));
+        toast.error(err.message || "Error al actualizar crédito");
       }
     } catch (error) {
       toast.error("Error al actualizar crédito");
