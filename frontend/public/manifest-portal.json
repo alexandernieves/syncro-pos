@@ -9,13 +9,18 @@
   "scope": "/portal",
   "icons": [
     {
-      "src": "/syncro.png",
+      "src": "/syncrocredit.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/syncro.png",
+      "src": "/syncrocredit.png",
       "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/syncrocredit.png",
+      "sizes": "1254x1254",
       "type": "image/png"
     }
   ]
