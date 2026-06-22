@@ -1,7 +1,21 @@
+"use client"
+
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { LoginForm } from "@/components/login-form"
 import { ModeSwitcher } from "@/components/mode-switcher"
 
 export default function Home() {
+  const router = useRouter()
+
+  useEffect(() => {
+    const clientToken = localStorage.getItem("client_token")
+    const adminToken = localStorage.getItem("token")
+    if (clientToken && !adminToken) {
+      router.push("/portal")
+    }
+  }, [router])
+
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-6 md:p-10 relative">
       <div className="absolute top-4 right-4 z-50">

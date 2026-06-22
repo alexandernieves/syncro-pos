@@ -1,0 +1,22 @@
+{
+  "name": "Syncro Credit",
+  "short_name": "SyncroCredit",
+  "description": "Gestiona tus créditos y realiza pagos en línea",
+  "start_url": "/portal?pwa=true",
+  "display": "standalone",
+  "background_color": "#faf9f5",
+  "theme_color": "#faf9f5",
+  "scope": "/portal",
+  "icons": [
+    {
+      "src": "/syncro.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/syncro.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
