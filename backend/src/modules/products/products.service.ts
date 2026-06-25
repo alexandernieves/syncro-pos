@@ -12,12 +12,32 @@ export class ProductsService {
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
-  private async invalidateProductsCache(businessId?: string | null, productId?: string | null) {
+  public async invalidateProductsCache(businessId?: string | null, productId?: string | null) {
     try {
       console.log(`[Cache] Invalidating products cache for business: ${businessId || 'all'}, product: ${productId || 'all'}`);
+      let keys: string[] = [];
+
+      // 1. Check traditional cache-manager store
       const store = (this.cacheManager as any).store;
       if (store && typeof (store as any).keys === 'function') {
-        const keys = await (store as any).keys();
+        keys = await (store as any).keys();
+      } 
+      // 2. Check NestJS cache-manager v5 (Keyv wrapper stores)
+      else if (Array.isArray((this.cacheManager as any).stores)) {
+        for (const s of (this.cacheManager as any).stores) {
+          if (typeof s.keys === 'function') {
+            const storeKeys = await s.keys();
+            keys.push(...storeKeys);
+          } else if (s._store && typeof s._store.keys === 'function') {
+            const mapKeys = Array.from(s._store.keys()) as string[];
+            const prefix = (s.opts?.namespace || s._namespace || 'keyv') + ':';
+            const cleaned = mapKeys.map(k => k.startsWith(prefix) ? k.substring(prefix.length) : k);
+            keys.push(...cleaned);
+          }
+        }
+      }
+
+      if (keys.length > 0) {
         for (const key of keys) {
           if (key.startsWith('products:all:') || key.startsWith('products:one:')) {
             if (!businessId || key.includes(businessId) || (productId && key.includes(productId))) {

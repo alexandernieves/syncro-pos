@@ -2,12 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MovementType } from '@prisma/client';
 import { HistoryService } from '../history/history.service';
+import { ProductsService } from '../products/products.service';
 
 @Injectable()
 export class InventoryService {
   constructor(
     private prisma: PrismaService,
     private historyService: HistoryService,
+    private productsService: ProductsService,
   ) {}
 
   async findAll(branchId?: string) {
@@ -28,6 +30,11 @@ export class InventoryService {
 
   async restock(data: { variantId: string, branchId: string, quantity: number }, userId?: string) {
     const { variantId, branchId, quantity } = data;
+
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId }
+    });
+    const businessId = branch?.businessId;
 
     const result = await this.prisma.$transaction(async (tx) => {
       // 1. Update or create inventory record
@@ -69,13 +76,22 @@ export class InventoryService {
         });
     }
 
+    if (businessId) {
+      await this.productsService.invalidateProductsCache(businessId);
+    }
+
     return result;
   }
 
   async reconcile(data: { branchId: string, items: { variantId: string, quantity: number }[] }, userId?: string) {
     const { branchId, items } = data;
 
-    return this.prisma.$transaction(async (tx) => {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId }
+    });
+    const businessId = branch?.businessId;
+
+    const result = await this.prisma.$transaction(async (tx) => {
       const results = [];
       for (const item of items) {
         // 1. Get current inventory
@@ -129,6 +145,12 @@ export class InventoryService {
 
       return results;
     });
+
+    if (businessId) {
+      await this.productsService.invalidateProductsCache(businessId);
+    }
+
+    return result;
   }
 
   async syncMaster(branchId: string, userId?: string) {
@@ -140,11 +162,12 @@ export class InventoryService {
     if (!branch?.isMain) {
       throw new Error("Solo se puede sincronizar el catálogo maestro desde la sucursal principal.");
     }
+    const businessId = branch?.businessId;
 
     // 2. Get all variants
     const variants = await this.prisma.productVariant.findMany();
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       let createdCount = 0;
       for (const variant of variants) {
         // Check if inventory record exists
@@ -176,5 +199,11 @@ export class InventoryService {
 
       return { createdCount };
     });
+
+    if (businessId) {
+      await this.productsService.invalidateProductsCache(businessId);
+    }
+
+    return result;
   }
 }

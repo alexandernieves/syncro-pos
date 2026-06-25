@@ -2,8 +2,8 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentMethod, MovementType } from '@prisma/client';
 import { HistoryService } from '../history/history.service';
-
 import { NotificationsService } from '../notifications/notifications.service';
+import { ProductsService } from '../products/products.service';
 
 interface PendingPurchase {
   id: string;
@@ -26,6 +26,7 @@ export class SalesService {
     private prisma: PrismaService,
     private historyService: HistoryService,
     private notificationsService: NotificationsService,
+    private productsService: ProductsService,
   ) {}
 
   async create(data: any, userId: string, skipLoanCreation = false) {
@@ -360,6 +361,14 @@ export class SalesService {
         this.logger.error('Error logging audit action:', e);
       }
 
+      if (result.branch?.businessId) {
+        try {
+          await this.productsService.invalidateProductsCache(result.branch.businessId);
+        } catch (e) {
+          this.logger.error('Error invalidating products cache:', e);
+        }
+      }
+
       try {
         await this.notificationsService.create({
           type: 'SALE',
@@ -433,17 +442,22 @@ export class SalesService {
   async returnItems(saleId: string, data: any, userId: string, businessId?: string) {
     const { items, reason } = data; // items is an array of { variantId, quantity }
 
+    let finalBusinessId: string | null = businessId || null;
+
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const saleReturn = await this.prisma.$transaction(async (tx) => {
         // 1. Validate Sale
         const sale = await tx.sale.findFirst({
           where: {
             id: saleId,
             ...(businessId ? { branch: { businessId } } : {})
           },
-          include: { items: true, returns: { include: { items: true } } }
+          include: { items: true, returns: { include: { items: true } }, branch: true }
         });
         if (!sale) throw new BadRequestException(`Venta ${saleId} no encontrada`);
+        if (!finalBusinessId && sale.branch?.businessId) {
+          finalBusinessId = sale.branch.businessId;
+        }
 
         let netSubtotal = 0;
         const returnItemsData = [];
@@ -563,6 +577,16 @@ export class SalesService {
 
         return saleReturn;
       });
+
+      if (finalBusinessId) {
+        try {
+          await this.productsService.invalidateProductsCache(finalBusinessId);
+        } catch (e) {
+          this.logger.error('Error invalidating products cache:', e);
+        }
+      }
+
+      return saleReturn;
     } catch (error: any) {
       this.logger.error('CRITICAL RETURN ERROR:', error);
       throw new BadRequestException(error.message || 'Error occurred during return creation');
