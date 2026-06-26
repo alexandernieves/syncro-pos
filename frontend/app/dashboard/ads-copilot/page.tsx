@@ -31,6 +31,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Orb, AgentState } from "@/components/ui/orb";
 import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useThemeConfig } from "@/components/active-theme";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -222,6 +223,8 @@ export default function AdsCopilotPage() {
   const [speechRecognition, setSpeechRecognition] = useState<any>(null);
   const [micMediaStream, setMicMediaStream] = useState<MediaStream | null>(null);
   const [aiSpeaking, setAiSpeaking] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceName, setSelectedVoiceName] = useState<string>("default");
 
   // References
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -246,10 +249,46 @@ export default function AdsCopilotPage() {
     fetchSessions();
     return () => {
       stopScreenSharing();
-      stopVoiceListening();
+      stopVoiceListening(null, null, "keep");
       if (autopilotTimerRef.current) clearInterval(autopilotTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+
+    const updateVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const spanishVoices = voices.filter(v => v.lang.startsWith("es"));
+      setAvailableVoices(spanishVoices);
+
+      const savedVoice = localStorage.getItem("syncro_ads_tts_voice");
+      if (savedVoice) {
+        setSelectedVoiceName(savedVoice);
+      } else {
+        const colombianVoice = spanishVoices.find(v => v.lang.toLowerCase().includes("co"));
+        if (colombianVoice) {
+          setSelectedVoiceName(colombianVoice.name);
+          localStorage.setItem("syncro_ads_tts_voice", colombianVoice.name);
+        } else {
+          setSelectedVoiceName("default");
+        }
+      }
+    };
+
+    updateVoices();
+    window.speechSynthesis.onvoiceschanged = updateVoices;
+
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (selectedVoiceName && selectedVoiceName !== "default") {
+      localStorage.setItem("syncro_ads_tts_voice", selectedVoiceName);
+    }
+  }, [selectedVoiceName]);
 
   const requestNotificationPermission = async () => {
     if (typeof window !== "undefined" && "Notification" in window) {
@@ -823,14 +862,25 @@ export default function AdsCopilotPage() {
     utterance.rate = 1.05;
     utterance.pitch = 1.0;
 
-    // Find best Spanish voice
     const voices = window.speechSynthesis.getVoices();
-    const preferredNames = ["google español", "siri", "monica", "paulina", "jorge"];
-    let spanishVoice = voices.find(v => v.lang.startsWith("es") && preferredNames.some(name => v.name.toLowerCase().includes(name)));
-    if (!spanishVoice) {
-      spanishVoice = voices.find(v => v.lang.startsWith("es")) || voices[0] || null;
+    let chosenVoice: SpeechSynthesisVoice | null = null;
+
+    if (selectedVoiceName && selectedVoiceName !== "default") {
+      chosenVoice = voices.find(v => v.name === selectedVoiceName) || null;
     }
-    if (spanishVoice) utterance.voice = spanishVoice;
+
+    if (!chosenVoice) {
+      const preferredNames = ["colombia", "google español", "siri", "monica", "paulina", "jorge"];
+      chosenVoice = voices.find(v => v.lang.startsWith("es") && preferredNames.some(name => v.name.toLowerCase().includes(name))) || null;
+      if (!chosenVoice) {
+        chosenVoice = voices.find(v => v.lang.startsWith("es")) || voices[0] || null;
+      }
+    }
+
+    if (chosenVoice) {
+      utterance.voice = chosenVoice;
+      utterance.lang = chosenVoice.lang;
+    }
 
     utterance.onstart = () => setAiSpeaking(true);
     utterance.onend = () => setAiSpeaking(false);
@@ -1634,21 +1684,46 @@ export default function AdsCopilotPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between border-t pt-4">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-bold flex items-center gap-1.5">
-                    Respuestas por Voz (TTS)
-                  </Label>
-                  <p className="text-[10px] text-muted-foreground">Escucha los consejos en tiempo real</p>
+              <div className="flex flex-col gap-3 border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-bold flex items-center gap-1.5">
+                      Respuestas por Voz (TTS)
+                    </Label>
+                    <p className="text-[10px] text-muted-foreground">Escucha los consejos en tiempo real</p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={() => setVoiceEnabled(!voiceEnabled)} 
+                    className={`h-9 w-9 rounded-lg ${voiceEnabled ? "border-primary/20 bg-primary/10 text-primary" : "text-muted-foreground"}`}
+                  >
+                    {voiceEnabled ? <IconVolume size={18} /> : <IconVolumeOff size={18} />}
+                  </Button>
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  onClick={() => setVoiceEnabled(!voiceEnabled)} 
-                  className={`h-9 w-9 rounded-lg ${voiceEnabled ? "border-primary/20 bg-primary/10 text-primary" : "text-muted-foreground"}`}
-                >
-                  {voiceEnabled ? <IconVolume size={18} /> : <IconVolumeOff size={18} />}
-                </Button>
+                {voiceEnabled && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Seleccionar Voz</Label>
+                    <Select value={selectedVoiceName} onValueChange={setSelectedVoiceName}>
+                      <SelectTrigger className="w-full h-8 text-xs bg-background/50 border-primary/20 focus:ring-1 focus:ring-primary/30">
+                        <SelectValue placeholder="Voz por defecto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default" className="text-xs">
+                          Voz por defecto del sistema
+                        </SelectItem>
+                        {availableVoices.map((voice) => {
+                          const isColombian = voice.lang.toLowerCase().includes("co");
+                          return (
+                            <SelectItem key={voice.name} value={voice.name} className="text-xs">
+                              {voice.name} ({voice.lang}) {isColombian ? "🇨🇴" : ""}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
