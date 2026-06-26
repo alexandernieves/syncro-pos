@@ -64,6 +64,7 @@ import {
   IconEyeOff,
   IconBrandWhatsapp,
   IconLock,
+  IconDownload,
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -230,6 +231,45 @@ export default function ConfiguracionPage() {
   const accumulatedBlobsRef = useRef<Blob[]>([]);
 
   const API = API_URL;
+
+  const downloadAsTxt = (title: string, content: string) => {
+    const element = document.createElement("a");
+    const file = new Blob([content], { type: "text/plain;charset=utf-8" });
+    element.href = URL.createObjectURL(file);
+    const safeTitle = title
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+    element.download = `${safeTitle || "leccion"}.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    toast.success(`Lección "${title}" descargada`);
+  };
+
+  const downloadAllAsTxt = () => {
+    if (adsDocs.length === 0) return;
+    let combinedContent = "";
+    adsDocs.forEach((doc) => {
+      combinedContent += `========================================\n`;
+      combinedContent += `TÍTULO: ${doc.title}\n`;
+      combinedContent += `FECHA: ${new Date(doc.createdAt).toLocaleDateString()}\n`;
+      combinedContent += `CARACTERES: ${doc.content.length}\n`;
+      combinedContent += `========================================\n\n`;
+      combinedContent += `${doc.content}\n\n\n`;
+    });
+    const element = document.createElement("a");
+    const file = new Blob([combinedContent], { type: "text/plain;charset=utf-8" });
+    element.href = URL.createObjectURL(file);
+    element.download = `respaldo-entrenamiento-ia-${new Date().toISOString().split("T")[0]}.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    toast.success("Respaldo completo de lecciones descargado");
+  };
 
   const fetchAdsDocs = async () => {
     setAdsDocsLoading(true);
@@ -2514,9 +2554,22 @@ export default function ConfiguracionPage() {
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-bold">Lecciones Registradas en el Cerebro de la IA</CardTitle>
-                <CardDescription>Documentos de transcripción que la IA lee para guiarte en Meta Ads.</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div className="space-y-1">
+                  <CardTitle className="text-base font-bold">Lecciones Registradas en el Cerebro de la IA</CardTitle>
+                  <CardDescription>Documentos de transcripción que la IA lee para guiarte en Meta Ads.</CardDescription>
+                </div>
+                {adsDocs.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 border-primary/30 hover:bg-primary/10 h-9"
+                    onClick={downloadAllAsTxt}
+                  >
+                    <IconDownload size={15} />
+                    Respaldar Todo (TXT)
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 {adsDocsLoading ? (
@@ -2542,12 +2595,22 @@ export default function ConfiguracionPage() {
                             variant="ghost" 
                             size="icon" 
                             className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 w-8"
+                            onClick={() => downloadAsTxt(doc.title, doc.content)}
+                            title="Descargar Lección (TXT)"
+                          >
+                            <IconDownload size={15} />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 w-8"
                             onClick={() => {
                               setEditingDoc(doc);
                               setEditDocTitle(doc.title);
                               setEditDocContent(doc.content);
                               setEditDocDialogOpen(true);
                             }}
+                            title="Editar Lección"
                           >
                             <IconPencil size={15} />
                           </Button>
@@ -2556,6 +2619,7 @@ export default function ConfiguracionPage() {
                             size="icon" 
                             className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8"
                             onClick={() => deleteAdsDoc(doc.id)}
+                            title="Eliminar Lección"
                           >
                             <IconTrash size={15} />
                           </Button>
