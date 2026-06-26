@@ -18,6 +18,7 @@ import {
 } from "@tabler/icons-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { WhatsAppAudioPlayer } from "@/components/ui/whatsapp-audio-player";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -164,10 +165,22 @@ export default function SyncroAdminChatPage() {
     setIsRecording(false);
   };
 
-  const renderContent = (msg: any) => {
+  const renderContent = (msg: any, isMe: boolean) => {
     if (msg.type === "IMAGE") return <img src={msg.fileUrl} alt="" className="rounded-xl max-w-xs" />;
     if (msg.type === "VIDEO") return <video src={msg.fileUrl} controls className="rounded-xl max-w-xs" />;
-    if (msg.type === "AUDIO") return <audio src={msg.fileUrl} controls className="w-56" />;
+    if (msg.type === "AUDIO" || msg.type === "audio") {
+      const timestamp = new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const fallbackInitials = activeConv?.business?.name?.substring(0, 2).toUpperCase() ?? "??";
+      return (
+        <WhatsAppAudioPlayer
+          src={msg.fileUrl}
+          isMe={isMe}
+          timestamp={timestamp}
+          isRead={msg.isRead}
+          senderFallback={!isMe ? fallbackInitials : undefined}
+        />
+      );
+    }
     return <span className="leading-relaxed">{msg.text}</span>;
   };
 
@@ -338,11 +351,13 @@ export default function SyncroAdminChatPage() {
                           ? "bg-primary text-primary-foreground rounded-br-sm"
                           : "bg-card border rounded-bl-sm"
                       )}>
-                        {renderContent(msg)}
-                        <div className={cn("flex items-center gap-1 mt-1 text-[10px]", isMe ? "text-primary-foreground/60 justify-end" : "text-muted-foreground")}>
-                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          {isMe && (msg.isRead ? <IconChecks size={12} className="text-blue-300" /> : <IconCheck size={12} />)}
-                        </div>
+                        {renderContent(msg, isMe)}
+                        {msg.type !== "AUDIO" && msg.type !== "audio" && (
+                          <div className={cn("flex items-center gap-1 mt-1 text-[10px]", isMe ? "text-primary-foreground/60 justify-end" : "text-muted-foreground")}>
+                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            {isMe && (msg.isRead ? <IconChecks size={12} className="text-blue-300" /> : <IconCheck size={12} />)}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

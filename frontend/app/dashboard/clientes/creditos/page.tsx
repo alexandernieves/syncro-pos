@@ -183,9 +183,9 @@ export default function CreditosPage() {
     }
   }, [paymentCurrency, paidAmountRaw, customRate, paymentOpen, settings]);
 
-  // Only show clients with actual credit (limit > 0 OR debt > 0)
+  // Only show clients with active debt (outstanding balance)
   const filteredClients = clients.filter(c => {
-    const hasCredit = (c.creditLimit > 0) || (c.currentDebt > 0);
+    const hasCredit = c.currentDebt > 0;
     if (!hasCredit) return false;
     if (searchTerm.trim() === "") return true;
     return (
@@ -363,7 +363,7 @@ export default function CreditosPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Cuentas por Cobrar (Fiado)</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Clientes con crédito activo — límite autorizado o deuda pendiente.</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Clientes con deudas pendientes o saldo utilizado.</p>
         </div>
         <div className="relative w-full md:w-80">
           <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />

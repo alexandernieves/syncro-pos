@@ -35,6 +35,8 @@ model Business {
   settings           Setting[]
   suppliers          Supplier[]
   users              User[]
+  whatsAppChats      WhatsAppChat[]
+  adsKnowledgeDocuments AdsKnowledgeDocument[]
 }
 
 model Conversation {
@@ -187,6 +189,8 @@ model Branch {
   purchaseOrders     PurchaseOrder[]
   sales              Sale[]
   shifts             Shift[]
+  aiChatSessions        AiChatSession[]
+  adsKnowledgeDocuments AdsKnowledgeDocument[]
 
   @@unique([businessId, name])
 }
@@ -217,6 +221,7 @@ model User {
   returns           SaleReturn[]
   shifts            Shift[]
   business          Business?           @relation(fields: [businessId], references: [id])
+  whatsAppChats     WhatsAppChat[]
 }
 
 model PushSubscription {
@@ -282,6 +287,8 @@ model Setting {
   showNetMargin               Boolean   @default(true)
   syncroCreditFrequencyDays   Int       @default(15)
   syncroCreditMaxInstallments Int       @default(3)
+  whatsappBotEnabled          Boolean   @default(false)
+  whatsappAuthorizedPhones    String[]  @default([])
   business                    Business? @relation(fields: [businessId], references: [id])
 }
 
@@ -429,6 +436,7 @@ model Client {
   paymentSubmissions          PaymentSubmission[]
   redeemedRewards             RedeemedReward[]
   sales                       Sale[]
+  whatsAppChats               WhatsAppChat[]
 }
 
 model CreditTransaction {
@@ -674,7 +682,10 @@ model AiChatSession {
   updatedAt  DateTime        @updatedAt
   isArchived Boolean         @default(false)
   isPinned   Boolean         @default(false)
+  type       String          @default("GENERAL") // "GENERAL" or "ADS_COPILOT"
   messages   AiChatMessage[]
+  branchId   String?
+  branch     Branch?         @relation(fields: [branchId], references: [id], onDelete: Cascade)
 }
 
 model AiChatMessage {
@@ -700,6 +711,19 @@ model AiFeedback {
   createdAt  DateTime  @default(now())
   businessId String?
   business   Business? @relation(fields: [businessId], references: [id])
+}
+
+model AdsKnowledgeDocument {
+  id         String   @id @default(uuid())
+  businessId String
+  title      String
+  content    String   @db.Text
+  sourceType String   @default("VIDEO_TRANSCRIPT") // "VIDEO_TRANSCRIPT", "PDF_DOCUMENT", "MANUAL_TEXT"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId   String?
+  branch     Branch?  @relation(fields: [branchId], references: [id], onDelete: Cascade)
 }
 
 model Loan {
@@ -855,4 +879,57 @@ enum InstallmentStatus {
   PENDING
   PAID
   OVERDUE
+}
+
+model WhatsAppChat {
+  id            String            @id @default(uuid())
+  phone         String
+  name          String?
+  clientId      String?
+  client        Client?           @relation(fields: [clientId], references: [id])
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  messages      WhatsAppMessage[]
+  businessId    String?
+  business      Business?         @relation(fields: [businessId], references: [id])
+  assignedTo    String?
+  user          User?             @relation(fields: [assignedTo], references: [id])
+  isPinned      Boolean           @default(false)
+  isArchived    Boolean           @default(false)
+  isRestricted  Boolean           @default(false)
+  isFavorite    Boolean           @default(false)
+  isMuted       Boolean           @default(false)
+  isUnread      Boolean           @default(false)
+  isBlocked     Boolean           @default(false)
+  lists         String[]          @default([])
+  avatarUrl     String?
+  whatsappBotSessionActive Boolean           @default(false)
+
+  @@unique([phone, businessId])
+}
+
+model WhatsAppMessage {
+  id             String       @id @default(uuid())
+  chatId         String
+  chat           WhatsAppChat @relation(fields: [chatId], references: [id])
+  senderType     String
+  agentId        String?
+  text           String?
+  type           String
+  mediaUrl       String?
+  status         String
+  whatsappMsgId  String?
+  createdAt      DateTime     @default(now())
+}
+
+model WhatsAppPendingAction {
+  id         String   @id @default(uuid())
+  chatId     String?
+  phone      String
+  businessId String
+  userId     String   // ID del usuario dueño (para confirmAction)
+  branchId   String   // sucursal activa del usuario
+  actionJson String   // JSON del AgentAction
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime // TTL: 10 minutos
 }

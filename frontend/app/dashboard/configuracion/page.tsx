@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { API_URL } from "@/lib/constants"
 import { clearAuthSession } from "@/lib/auth-helpers";
 
@@ -60,9 +60,10 @@ import {
   IconHexagon,
   IconChevronDown,
   IconAlertTriangle,
-  IconLock,
   IconEye,
   IconEyeOff,
+  IconBrandWhatsapp,
+  IconLock,
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -81,6 +82,8 @@ const SECTIONS = [
   { id: "usuarios", label: "Usuarios y Roles", icon: IconShieldLock },
   { id: "sucursales", label: "Sucursales", icon: IconMapPin },
   { id: "sesiones", label: "Sesión y Seguridad", icon: IconFingerprint },
+  { id: "whatsapp", label: "WhatsApp Bot", icon: IconBrandWhatsapp },
+  { id: "ads_copilot", label: "Entrenamiento Ads IA", icon: IconHexagon },
 ];
 
 const VENEZUELA_STATES = [
@@ -158,6 +161,17 @@ export default function ConfiguracionPage() {
     showNetMargin: true,
   });
 
+  const [whatsappBotEnabled, setWhatsappBotEnabled] = useState(false);
+  const [whatsappAuthorizedPhones, setWhatsappAuthorizedPhones] = useState<string[]>([]);
+  const [newPhoneInput, setNewPhoneInput] = useState("");
+
+  // WhatsApp connection state
+  const [waStatus, setWaStatus] = useState<'LOADING' | 'CONNECTED' | 'DISCONNECTED' | 'ERROR'>('LOADING');
+  const [waQr, setWaQr] = useState<string | null>(null);
+  const [waConnectedPhone, setWaConnectedPhone] = useState<string | null>(null);
+  const [waQrLoading, setWaQrLoading] = useState(false);
+  const waPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const [printConfig, setPrintConfig] = useState({
     defaultPrinter: "",
     paperWidth: "80",
@@ -200,7 +214,241 @@ export default function ConfiguracionPage() {
   });
   const [isPinPermissionsModalOpen, setIsPinPermissionsModalOpen] = useState(false);
 
+  // --- Ads Copilot States ---
+  const [adsDocs, setAdsDocs] = useState<any[]>([]);
+  const [adsDocsLoading, setAdsDocsLoading] = useState(false);
+  const [lessonTitle, setLessonTitle] = useState("");
+  const [liveTranscription, setLiveTranscription] = useState("");
+  const [recording, setRecording] = useState(false);
+  const [adsTrainingMode, setAdsTrainingMode] = useState<"record" | "manual">("record");
+  const [editingDoc, setEditingDoc] = useState<any>(null);
+  const [editDocDialogOpen, setEditDocDialogOpen] = useState(false);
+  const [editDocTitle, setEditDocTitle] = useState("");
+  const [editDocContent, setEditDocContent] = useState("");
+  const mediaRecorderRef = useRef<any>(null);
+  const streamRef = useRef<any>(null);
+  const accumulatedBlobsRef = useRef<Blob[]>([]);
+
   const API = API_URL;
+
+  const fetchAdsDocs = async () => {
+    setAdsDocsLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const branchId = localStorage.getItem("currentBranchId") || "";
+      const res = await fetch(`${API}/ai-agent/ads-copilot/documents${branchId ? `?branchId=${branchId}` : ""}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAdsDocs(data || []);
+      }
+    } catch (e) {
+      console.error("Error fetching ads docs:", e);
+    } finally {
+      setAdsDocsLoading(false);
+    }
+  };
+
+  const startRecording = async () => {
+    if (!lessonTitle.trim()) {
+      toast.error("Por favor ingresa un título para la lección");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        }
+      });
+
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length === 0) {
+        stream.getTracks().forEach((t: any) => t.stop());
+        toast.error("¡Error!: No seleccionaste la casilla 'Compartir audio de la pestaña/sistema'. Vuelve a intentarlo.");
+        return;
+      }
+
+      streamRef.current = stream;
+      setRecording(true);
+      setLiveTranscription("");
+
+      const audioStream = new MediaStream(audioTracks);
+      stream.getVideoTracks().forEach((track: any) => track.stop());
+
+      const mediaRecorder = new MediaRecorder(audioStream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
+      mediaRecorderRef.current = mediaRecorder;
+      accumulatedBlobsRef.current = [];
+
+      let chunkIndex = 1;
+      mediaRecorder.ondataavailable = async (event) => {
+        if (event.data && event.data.size > 0) {
+          accumulatedBlobsRef.current.push(event.data);
+          const combinedBlob = new Blob(accumulatedBlobsRef.current, {
+            type: 'audio/webm;codecs=opus'
+          });
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+            const base64data = reader.result as string;
+            try {
+              const token = localStorage.getItem("token");
+              const res = await fetch(`${API}/ai-agent/ads-copilot/transcribe-chunk`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                  audio: base64data,
+                  format: "webm"
+                })
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.text) {
+                  setLiveTranscription(data.text);
+                  toast.success(`Fragmento de video ${chunkIndex++} procesado`);
+                } else if (data.error) {
+                  console.error("Error transcribiendo fragmento:", data.error);
+                  toast.error(`Error en fragmento ${chunkIndex++}: ${data.error}`);
+                }
+              } else {
+                toast.error(`Error del servidor al procesar fragmento ${chunkIndex++}`);
+              }
+            } catch (e) {
+              console.error("Error transcribiendo fragmento:", e);
+            }
+          };
+          reader.readAsDataURL(combinedBlob);
+        }
+      };
+
+      // Record in chunks of 15 seconds
+      mediaRecorder.start(15000);
+      toast.success("Captura de audio iniciada. ¡Reproduce el video en la pestaña compartida!");
+
+      audioTracks[0].onended = () => {
+        stopRecording();
+      };
+
+    } catch (err: any) {
+      console.error(err);
+      toast.error("No se pudo iniciar la captura de pantalla: " + err.message);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track: any) => track.stop());
+      streamRef.current = null;
+    }
+    setRecording(false);
+    toast.info("Grabación de video detenida.");
+  };
+
+  const saveLesson = async () => {
+    if (!lessonTitle.trim()) {
+      toast.error("Por favor ingresa un título para la lección");
+      return;
+    }
+    if (!liveTranscription.trim()) {
+      toast.error("No hay texto transcrito para guardar");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/ai-agent/ads-copilot/documents`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: lessonTitle.trim(),
+          content: liveTranscription.trim(),
+          sourceType: "VIDEO_TRANSCRIPT",
+          branchId: localStorage.getItem("currentBranchId") || null
+        })
+      });
+
+      if (res.ok) {
+        toast.success("Lección guardada con éxito en el cerebro de la IA");
+        setLessonTitle("");
+        setLiveTranscription("");
+        fetchAdsDocs();
+      } else {
+        toast.error("Error al guardar la lección");
+      }
+    } catch (err) {
+      toast.error("Error de conexión");
+    }
+  };
+
+  const deleteAdsDoc = async (id: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/ai-agent/ads-copilot/documents?id=${id}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success("Lección eliminada de la base de conocimientos");
+        fetchAdsDocs();
+      } else {
+        toast.error("Error al eliminar la lección");
+      }
+    } catch (e) {
+      toast.error("Error de conexión");
+    }
+  };
+
+  const updateAdsDoc = async () => {
+    if (!editingDoc) return;
+    if (!editDocTitle.trim()) {
+      toast.error("Por favor ingresa un título");
+      return;
+    }
+    if (!editDocContent.trim()) {
+      toast.error("Por favor ingresa el contenido");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/ai-agent/ads-copilot/documents/${editingDoc.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: editDocTitle.trim(),
+          content: editDocContent.trim()
+        })
+      });
+
+      if (res.ok) {
+        toast.success("Lección modificada con éxito");
+        setEditDocDialogOpen(false);
+        setEditingDoc(null);
+        fetchAdsDocs();
+      } else {
+        toast.error("Error al modificar la lección");
+      }
+    } catch (err) {
+      toast.error("Error de conexión al servidor");
+    }
+  };
 
   const fetchBranches = async () => {
     try {
@@ -316,6 +564,8 @@ export default function ConfiguracionPage() {
             }
             setSyncroCreditMaxInstallments(data.syncroCreditMaxInstallments ?? 3);
             setSyncroCreditFrequencyDays(data.syncroCreditFrequencyDays ?? 15);
+            setWhatsappBotEnabled(data.whatsappBotEnabled || false);
+            setWhatsappAuthorizedPhones(data.whatsappAuthorizedPhones || []);
             setDashboardConfig({
               salesGoal: String(data.salesGoal || "10000"),
               showSalesGoal: data.showSalesGoal !== undefined ? data.showSalesGoal : true,
@@ -350,48 +600,141 @@ export default function ConfiguracionPage() {
 
   useEffect(() => {
     console.log("ConfiguracionPage Section:", activeSection);
+    if (activeSection === "ads_copilot") {
+      fetchAdsDocs();
+    }
+  }, [activeSection]);
+
+  const fetchWaStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/whatsapp/bot-status`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (!res.ok) { setWaStatus('ERROR'); return; }
+      const data = await res.json();
+      if (data.connected) {
+        setWaStatus('CONNECTED');
+        setWaQr(null);
+        const phoneMatch = data.state?.match(/(\d{7,15})/);
+        if (phoneMatch) setWaConnectedPhone(phoneMatch[1]);
+      } else {
+        setWaStatus('DISCONNECTED');
+      }
+    } catch { setWaStatus('ERROR'); }
+  }, []);
+
+  const fetchWaQr = useCallback(async () => {
+    setWaQrLoading(true);
+    try {
+      const res = await fetch(`${API}/whatsapp/bot-qr`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (!res.ok) { setWaStatus('ERROR'); return; }
+      const data = await res.json();
+      if (data.status === 'CONNECTED') {
+        setWaStatus('CONNECTED');
+        setWaQr(null);
+        if (waPollingRef.current) clearInterval(waPollingRef.current);
+        waPollingRef.current = setInterval(fetchWaStatus, 5000);
+      } else if (data.status === 'QR' && data.qr) {
+        setWaStatus('DISCONNECTED');
+        setWaQr(data.qr);
+      } else {
+        setWaStatus('ERROR');
+      }
+    } catch { setWaStatus('ERROR'); }
+    finally { setWaQrLoading(false); }
+  }, [fetchWaStatus]);
+
+  const disconnectWa = useCallback(async () => {
+    try {
+      await fetch(`${API}/whatsapp/bot-logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      setWaStatus('DISCONNECTED');
+      setWaQr(null);
+      setWaConnectedPhone(null);
+      toast.success('WhatsApp desconectado');
+      fetchWaQr();
+    } catch { toast.error('Error al desconectar'); }
+  }, [fetchWaQr]);
+
+  // Poll for QR / status when WhatsApp section is active
+  useEffect(() => {
+    if (activeSection !== 'whatsapp') {
+      if (waPollingRef.current) { clearInterval(waPollingRef.current); waPollingRef.current = null; }
+      return;
+    }
+    fetchWaStatus().then((res: any) => {
+      // if not connected, immediately fetch QR
+      if (waStatus !== 'CONNECTED') fetchWaQr();
+    });
+    // Poll status every 4 seconds while section is open
+    waPollingRef.current = setInterval(async () => {
+      const statusRes = await fetch(`${API}/whatsapp/bot-status`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      }).then(r => r.json()).catch(() => ({ connected: false }));
+      if (statusRes.connected) {
+        setWaStatus('CONNECTED');
+        setWaQr(null);
+        if (waPollingRef.current) { clearInterval(waPollingRef.current); waPollingRef.current = null; }
+      }
+    }, 4000);
+    return () => { if (waPollingRef.current) { clearInterval(waPollingRef.current); waPollingRef.current = null; } };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection]);
 
   const handleSave = async (section: string) => {
     try {
-      const payload = {
-        businessName: negocio.businessName,
-        businessIcon: negocio.businessIcon,
-        ruc: negocio.ruc,
-        address: negocio.address,
-        phone: negocio.phone,
-        email: negocio.email,
-        website: negocio.website,
-        currency: negocio.currency,
-        country: negocio.country,
-        taxRate: Number(iva.rate),
-        taxEnabled: iva.enabled,
-        igtfRate: Number(iva.igtfRate),
-        receiptFooter,
-        paymentMethods: paymentMethods.map(({ name, enabled }) => ({ name, enabled })),
-        requireClient: posConfig.requireClient,
-        printOnSale: posConfig.printOnSale,
-        lowStockAlert: Number(posConfig.lowStockAlert) || 5,
-        allowNegativeStock: posConfig.allowNegativeStock,
-        pagoMovilBank: pagoMovil.bank,
-        pagoMovilId: pagoMovil.id,
-        pagoMovilPhone: pagoMovil.phone,
-        pagoMovilEnabled: pagoMovil.enabled,
-        binanceId: binance.binanceId,
-        binanceEmail: binance.email,
-        binanceEnabled: binance.enabled,
-        zinliEmail: zinli.email,
-        zinliEnabled: zinli.enabled,
-        paypalEmail: paypal.email,
-        paypalEnabled: paypal.enabled,
-        discountPin: discountPin || null,
-        pinPermissions: pinPermissions, 
-        syncroCreditMaxInstallments: Number(syncroCreditMaxInstallments) || 3,
-        syncroCreditFrequencyDays: Number(syncroCreditFrequencyDays) || 15,
-        salesGoal: Number(dashboardConfig.salesGoal) || 10000,
-        showSalesGoal: !!dashboardConfig.showSalesGoal,
-        showNetMargin: !!dashboardConfig.showNetMargin,
-      };
+      let payload: any = {};
+
+      if (section === "WhatsApp") {
+        payload = {
+          whatsappBotEnabled,
+          whatsappAuthorizedPhones,
+        };
+      } else {
+        // General settings payload (all non-WhatsApp fields)
+        payload = {
+          businessName: negocio.businessName,
+          businessIcon: negocio.businessIcon,
+          ruc: negocio.ruc,
+          address: negocio.address,
+          phone: negocio.phone,
+          email: negocio.email,
+          website: negocio.website,
+          currency: negocio.currency,
+          country: negocio.country,
+          taxRate: Number(iva.rate),
+          taxEnabled: iva.enabled,
+          igtfRate: Number(iva.igtfRate),
+          receiptFooter,
+          paymentMethods: paymentMethods.map(({ name, enabled }) => ({ name, enabled })),
+          requireClient: posConfig.requireClient,
+          printOnSale: posConfig.printOnSale,
+          lowStockAlert: Number(posConfig.lowStockAlert) || 5,
+          allowNegativeStock: posConfig.allowNegativeStock,
+          pagoMovilBank: pagoMovil.bank,
+          pagoMovilId: pagoMovil.id,
+          pagoMovilPhone: pagoMovil.phone,
+          pagoMovilEnabled: pagoMovil.enabled,
+          binanceId: binance.binanceId,
+          binanceEmail: binance.email,
+          binanceEnabled: binance.enabled,
+          zinliEmail: zinli.email,
+          zinliEnabled: zinli.enabled,
+          paypalEmail: paypal.email,
+          paypalEnabled: paypal.enabled,
+          discountPin: discountPin || null,
+          pinPermissions: pinPermissions, 
+          syncroCreditMaxInstallments: Number(syncroCreditMaxInstallments) || 3,
+          syncroCreditFrequencyDays: Number(syncroCreditFrequencyDays) || 15,
+          salesGoal: Number(dashboardConfig.salesGoal) || 10000,
+          showSalesGoal: !!dashboardConfig.showSalesGoal,
+          showNetMargin: !!dashboardConfig.showNetMargin,
+        };
+      }
 
       const res = await fetch(`${API}/settings`, {
         method: "PUT",
@@ -1797,6 +2140,435 @@ export default function ConfiguracionPage() {
           </div>
         )}
 
+        {/* ─── WHATSAPP BOT ─── */}
+        {activeSection === "whatsapp" && (
+          <div className="max-w-2xl flex flex-col gap-6">
+            <div>
+              <h2 className="text-xl font-bold">Asistente IA en WhatsApp</h2>
+              <p className="text-sm text-muted-foreground">
+                Conecta tu número de WhatsApp personal y activa a Syncro IA escribiendo <strong>syncroai</strong>. Escribe <strong>salir</strong> para volver a la conversación normal.
+              </p>
+            </div>
+
+            {/* ── CONEXIÓN QR ────────────────────────── */}
+            <Card className="overflow-hidden">
+              <div className="px-6 pt-5 pb-3 border-b flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`size-10 rounded-xl flex items-center justify-center ${
+                    waStatus === 'CONNECTED' ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground'
+                  }`}>
+                    <IconBrandWhatsapp size={22} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">Conexión de WhatsApp</p>
+                    <p className="text-xs text-muted-foreground">
+                      {waStatus === 'CONNECTED'
+                        ? `Conectado${waConnectedPhone ? ` · +${waConnectedPhone}` : ''}`
+                        : waStatus === 'LOADING'
+                        ? '⏳ Verificando estado...'
+                        : waStatus === 'ERROR'
+                        ? '⚠️ No se pudo conectar con Evolution API'
+                        : '🔴 No conectado — escanea el QR para vincular tu WhatsApp'}
+                    </p>
+                  </div>
+                </div>
+                {waStatus === 'CONNECTED' && (
+                  <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={disconnectWa}>
+                    Desconectar
+                  </Button>
+                )}
+              </div>
+
+              <CardContent className="p-6">
+                {waStatus === 'CONNECTED' ? (
+                  <div className="flex flex-col items-center gap-4 py-4">
+                    <div className="size-20 rounded-full bg-green-500/10 flex items-center justify-center">
+                      <IconBrandWhatsapp size={40} className="text-green-500" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-green-600">WhatsApp conectado correctamente</p>
+                      {waConnectedPhone && <p className="text-sm text-muted-foreground mt-1">Número: +{waConnectedPhone}</p>}
+                      <p className="text-xs text-muted-foreground mt-3 max-w-sm mx-auto">
+                        Ahora puedes escribirte desde cualquier chat y escribir <strong>syncroai</strong> para activar la IA. Escribe <strong>salir</strong> para desactivarla.
+                      </p>
+                    </div>
+                  </div>
+                ) : waStatus === 'ERROR' ? (
+                  <div className="flex flex-col items-center gap-3 py-6">
+                    <p className="text-sm text-muted-foreground text-center">No se pudo conectar con Evolution API. Verifica que esté corriendo en <code className="bg-muted px-1 rounded text-xs">http://127.0.0.1:8080</code>.</p>
+                    <Button variant="outline" size="sm" onClick={fetchWaQr} disabled={waQrLoading}>
+                      Reintentar
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="relative">
+                      {waQr ? (
+                        <div className="p-3 bg-white rounded-2xl shadow-md border">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={waQr.startsWith('data:') ? waQr : `data:image/png;base64,${waQr}`}
+                            alt="QR WhatsApp"
+                            width={200}
+                            height={200}
+                            className="rounded-lg"
+                          />
+                        </div>
+                      ) : (
+                        <div className="size-[200px] bg-muted rounded-2xl flex items-center justify-center">
+                          <div className="animate-spin rounded-full size-10 border-4 border-primary border-t-transparent" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-center flex flex-col gap-1">
+                      <p className="font-semibold text-sm">Escanea este código QR</p>
+                      <p className="text-xs text-muted-foreground">Abre WhatsApp → ⋮ Menú → Dispositivos vinculados → Vincular dispositivo</p>
+                      <p className="text-xs text-muted-foreground">El QR expira en 60 segundos.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={fetchWaQr} disabled={waQrLoading}>
+                      {waQrLoading ? 'Generando...' : '↺ Refrescar QR'}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+
+
+            {/* ── Configuración del Bot ────────────────── */}
+            <Card>
+              <CardContent className="p-6 flex flex-col gap-6">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-xl bg-green-500/10 flex items-center justify-center text-green-600">
+                      <IconBrandWhatsapp size={24} />
+                    </div>
+                    <div>
+                      <p className="font-bold">Activar Bot de IA</p>
+                      <p className="text-xs text-muted-foreground">La IA responderá de forma automática a los números autorizados</p>
+                    </div>
+                  </div>
+                  <Switch 
+                    checked={whatsappBotEnabled}
+                    onCheckedChange={setWhatsappBotEnabled}
+                  />
+                </div>
+
+                <Separator />
+
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <Label className="text-sm font-bold">Números de Teléfono Autorizados</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Solo estos números pueden activar la IA escribiendo <strong>syncroai</strong>. Usa formato con código de área (ej: 584121234567).
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <IconPhone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <Input 
+                        className="pl-9"
+                        placeholder="Ej. 584121234567"
+                        value={newPhoneInput}
+                        onChange={e => setNewPhoneInput(e.target.value.replace(/[^0-9+]/g, ""))}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (newPhoneInput.trim()) {
+                              const cleaned = newPhoneInput.trim();
+                              if (!whatsappAuthorizedPhones.includes(cleaned)) {
+                                setWhatsappAuthorizedPhones([...whatsappAuthorizedPhones, cleaned]);
+                              }
+                              setNewPhoneInput("");
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        if (newPhoneInput.trim()) {
+                          const cleaned = newPhoneInput.trim();
+                          if (!whatsappAuthorizedPhones.includes(cleaned)) {
+                            setWhatsappAuthorizedPhones([...whatsappAuthorizedPhones, cleaned]);
+                          }
+                          setNewPhoneInput("");
+                        }
+                      }}
+                    >
+                      <IconPlus size={16} className="mr-1" /> Añadir
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-col gap-2 mt-2">
+                    {whatsappAuthorizedPhones.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic p-3 border border-dashed rounded-lg text-center">
+                        No hay números autorizados. Agrega el tuyo para poder activar la IA.
+                      </p>
+                    ) : (
+                      <div className="border rounded-lg divide-y bg-background/50">
+                        {whatsappAuthorizedPhones.map((phoneStr, idx) => (
+                          <div key={idx} className="flex justify-between items-center p-3 hover:bg-muted/30 transition-colors">
+                            <span className="font-medium text-sm flex items-center gap-2">
+                              <span className="size-2 rounded-full bg-green-500 animate-pulse" />
+                              {phoneStr}
+                            </span>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8"
+                              onClick={() => setWhatsappAuthorizedPhones(whatsappAuthorizedPhones.filter(p => p !== phoneStr))}
+                            >
+                              <IconTrash size={15} />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Button className="self-start gap-2" onClick={() => handleSave("WhatsApp")}>
+              <IconDeviceFloppy size={16}/> Guardar Configuración de WhatsApp
+            </Button>
+          </div>
+        )}
+
+        {/* ─── ADS COPILOT TRAINING ─── */}
+        {activeSection === "ads_copilot" && (
+          <div className="max-w-2xl flex flex-col gap-6">
+            <div>
+              <h2 className="text-xl font-bold">Biblioteca de Entrenamiento de Ads</h2>
+              <p className="text-sm text-muted-foreground">
+                Entrena a tu copiloto de IA compartiendo tus videos del curso. La IA escuchará el audio y guardará el conocimiento en su base de datos.
+              </p>
+            </div>
+
+            <Card className="border border-primary/20 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <IconHexagon size={20} className="text-primary animate-pulse" />
+                  {recording ? "Grabando y Transcribiendo en Vivo..." : "Agregar Nueva Lección o Conocimiento"}
+                </CardTitle>
+                <CardDescription>
+                  {adsTrainingMode === "record" 
+                    ? "Coloca el título del video, inicia la compartición de pantalla con audio de la pestaña de Chrome y reproduce el video."
+                    : "Coloca el título y copia o escribe el texto de tu lección para entrenar a la IA."
+                  }
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                {!recording && (
+                  <div className="flex border-b border-border mb-2">
+                    <button
+                      type="button"
+                      className={cn(
+                        "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                        adsTrainingMode === "record"
+                          ? "border-primary text-primary"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      )}
+                      onClick={() => {
+                        setAdsTrainingMode("record");
+                        setLessonTitle("");
+                        setLiveTranscription("");
+                      }}
+                    >
+                      Grabar Video / Pestaña
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                        adsTrainingMode === "manual"
+                          ? "border-primary text-primary"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      )}
+                      onClick={() => {
+                        setAdsTrainingMode("manual");
+                        setLessonTitle("");
+                        setLiveTranscription("");
+                      }}
+                    >
+                      Cargar Texto Manual
+                    </button>
+                  </div>
+                )}
+
+                {adsTrainingMode === "record" ? (
+                  <>
+                    {!recording && (
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Título de la Clase / Video</Label>
+                        <Input 
+                          placeholder="Ej. Lección 1: Cómo estructurar públicos similares" 
+                          value={lessonTitle}
+                          onChange={e => setLessonTitle(e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    {recording && (
+                      <div className="flex flex-col items-center justify-center p-6 bg-background rounded-xl border border-dashed gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className="size-3 rounded-full bg-red-500 animate-ping" />
+                          <span className="text-sm font-semibold text-red-500">Escuchando audio del video...</span>
+                        </div>
+                        <div className="flex items-center justify-center gap-1 h-8">
+                          <div className="w-1 bg-primary rounded-full animate-bounce h-6" style={{ animationDelay: "0.1s" }} />
+                          <div className="w-1 bg-primary rounded-full animate-bounce h-8" style={{ animationDelay: "0.2s" }} />
+                          <div className="w-1 bg-primary rounded-full animate-bounce h-4" style={{ animationDelay: "0.3s" }} />
+                          <div className="w-1 bg-primary rounded-full animate-bounce h-7" style={{ animationDelay: "0.4s" }} />
+                          <div className="w-1 bg-primary rounded-full animate-bounce h-5" style={{ animationDelay: "0.5s" }} />
+                        </div>
+                        <p className="text-xs text-muted-foreground text-center max-w-sm">
+                          La transcripción se genera en fragmentos de 15 segundos. Puedes reproducir el video en otra pestaña tranquilamente.
+                        </p>
+                      </div>
+                    )}
+
+                    {(liveTranscription.trim() || recording) && (
+                      <div className="flex flex-col gap-1.5 mt-2">
+                        <Label className="text-xs uppercase font-bold text-muted-foreground">Texto Transcrito (Vista Previa)</Label>
+                        <div className="p-4 bg-background border rounded-lg max-h-[200px] overflow-y-auto whitespace-pre-line text-sm text-foreground/80 leading-relaxed font-mono">
+                          {liveTranscription || <span className="italic text-muted-foreground">Esperando primer fragmento de audio...</span>}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex gap-3 justify-end mt-4">
+                      {!recording ? (
+                        <>
+                          {liveTranscription.trim() && (
+                            <Button variant="outline" className="text-destructive hover:bg-destructive/10" onClick={() => {
+                              setLiveTranscription("");
+                              setLessonTitle("");
+                              accumulatedBlobsRef.current = [];
+                            }}>
+                              Descartar
+                            </Button>
+                          )}
+                          <Button className="gap-2" onClick={startRecording}>
+                            <IconHexagon size={16} /> Compartir Pestaña y Grabar
+                          </Button>
+                        </>
+                      ) : (
+                        <Button className="gap-2 bg-red-600 hover:bg-red-700 text-white" onClick={stopRecording}>
+                          <IconTrash size={16} /> Detener Grabación
+                        </Button>
+                      )}
+
+                      {!recording && liveTranscription.trim() && (
+                        <Button className="gap-2 bg-primary hover:bg-primary" onClick={saveLesson}>
+                          <IconDeviceFloppy size={16} /> Guardar Lección en la IA
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Título de la Clase / Documento</Label>
+                      <Input 
+                        placeholder="Ej. Lección 1: Cómo estructurar públicos similares" 
+                        value={lessonTitle}
+                        onChange={e => setLessonTitle(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Contenido / Transcripción Escrita</Label>
+                      <textarea
+                        placeholder="Pega aquí el texto completo del video, curso o documento que quieres que la IA aprenda..."
+                        value={liveTranscription}
+                        onChange={e => setLiveTranscription(e.target.value)}
+                        rows={8}
+                        className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                    </div>
+
+                    <div className="flex gap-3 justify-end mt-4">
+                      {liveTranscription.trim() && (
+                        <Button variant="outline" className="text-destructive hover:bg-destructive/10" onClick={() => {
+                          setLiveTranscription("");
+                          setLessonTitle("");
+                        }}>
+                          Limpiar
+                        </Button>
+                      )}
+                      <Button 
+                        className="gap-2 bg-primary hover:bg-primary" 
+                        onClick={saveLesson} 
+                        disabled={!lessonTitle.trim() || !liveTranscription.trim()}
+                      >
+                        <IconDeviceFloppy size={16} /> Guardar Lección en la IA
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-bold">Lecciones Registradas en el Cerebro de la IA</CardTitle>
+                <CardDescription>Documentos de transcripción que la IA lee para guiarte en Meta Ads.</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                {adsDocsLoading ? (
+                  <div className="p-6 text-center text-sm text-muted-foreground animate-pulse">Cargando biblioteca...</div>
+                ) : adsDocs.length === 0 ? (
+                  <p className="p-8 text-center text-xs text-muted-foreground italic border-t">
+                    No hay lecciones registradas. Graba un video o sube una transcripción para empezar.
+                  </p>
+                ) : (
+                  <div className="border-t divide-y divide-border">
+                    {adsDocs.map((doc) => (
+                      <div key={doc.id} className="flex justify-between items-center p-4 hover:bg-muted/10 transition-colors">
+                        <div className="flex flex-col gap-1 pr-6 flex-1">
+                          <p className="font-semibold text-sm">{doc.title}</p>
+                          <p className="text-[11px] text-muted-foreground max-w-md truncate">{doc.content}</p>
+                          <p className="text-[10px] text-muted-foreground mt-1 flex gap-2">
+                            <span>📅 {new Date(doc.createdAt).toLocaleDateString()}</span>
+                            <span>📊 {doc.content.length} caracteres</span>
+                          </p>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 w-8"
+                            onClick={() => {
+                              setEditingDoc(doc);
+                              setEditDocTitle(doc.title);
+                              setEditDocContent(doc.content);
+                              setEditDocDialogOpen(true);
+                            }}
+                          >
+                            <IconPencil size={15} />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8"
+                            onClick={() => deleteAdsDoc(doc.id)}
+                          >
+                            <IconTrash size={15} />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
       </main>
 
       {/* ALERT DIALOG DE ELIMINACION DE SUCURSAL */}
@@ -1893,6 +2665,51 @@ export default function ConfiguracionPage() {
               }}
             >
               Guardar Permisos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para Editar Documento de Entrenamiento */}
+      <Dialog open={editDocDialogOpen} onOpenChange={setEditDocDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <IconHexagon size={20} className="text-primary" /> Editar Lección / Documento
+            </DialogTitle>
+            <DialogDescription>
+              Modifica el título y contenido del conocimiento de tu IA. Los emojis serán limpiados automáticamente al guardar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <div className="flex flex-col gap-1.5">
+              <Label>Título de la Clase / Documento</Label>
+              <Input 
+                value={editDocTitle}
+                onChange={e => setEditDocTitle(e.target.value)}
+                placeholder="Título de la lección"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Contenido / Transcripción</Label>
+              <textarea
+                value={editDocContent}
+                onChange={e => setEditDocContent(e.target.value)}
+                rows={12}
+                placeholder="Contenido o transcripción del video..."
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setEditDocDialogOpen(false);
+              setEditingDoc(null);
+            }}>
+              Cancelar
+            </Button>
+            <Button onClick={updateAdsDoc}>
+              Guardar Cambios
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -62,8 +62,11 @@ export class SettingsService {
   async updateSettings(updateData: any, businessId: string) {
     if (!businessId) throw new Error('Business ID is required');
 
-    const settings = await this.getSettings(businessId);
-    if (!settings) throw new Error('Could not find or create settings');
+    // Always fetch from DB directly (not cache) so we have the correct settings.id
+    let settings = await this.prisma.setting.findFirst({ where: { businessId } });
+    if (!settings) {
+      settings = await this.prisma.setting.create({ data: { businessId } });
+    }
     
     // Lista de campos permitidos en el modelo Setting para evitar errores de Prisma
     const allowedFields = [
@@ -80,7 +83,8 @@ export class SettingsService {
       'syncroCreditMaxInstallments', 'syncroCreditFrequencyDays',
       'salesGoal', 'showSalesGoal', 'showNetMargin',
       'exchangeRate', 'exchangeRateEur', 'bcvUpdateDate',
-      'exchangeRateDashboard', 'exchangeRateDashboardEur', 'bcvUpdateDateDashboard'
+      'exchangeRateDashboard', 'exchangeRateDashboardEur', 'bcvUpdateDateDashboard',
+      'whatsappBotEnabled', 'whatsappAuthorizedPhones'
     ];
 
     const filteredData: any = {};
@@ -95,8 +99,9 @@ export class SettingsService {
         where: { id: settings.id },
         data: filteredData
       });
-      // Invalidate cache so next read gets fresh data
+      // Invalidate cache immediately so next GET returns fresh data
       await this.invalidateSettingsCache(businessId);
+      console.log(`[Settings] Updated fields for business ${businessId}:`, Object.keys(filteredData));
       return result;
     } catch (error) {
       console.error("ERROR AL ACTUALIZAR CONFIGURACIÓN:", error);

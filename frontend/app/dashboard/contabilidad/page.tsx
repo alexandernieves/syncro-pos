@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
-  IconPlus, IconReceipt, IconReportAnalytics, IconArrowRight, IconLoader2, IconDotsVertical, IconFilter, IconCash, IconArrowUpRight, IconArrowDownLeft, IconDeviceDesktop, IconPackage, IconUserCog, IconDatabase, IconTrendingUp, IconTrendingDown, IconCheck, IconTicket, IconShoppingCart, IconStack2, IconWallet, IconBuildingStore
+  IconPlus, IconReceipt, IconReportAnalytics, IconArrowRight, IconLoader2, IconDotsVertical, IconFilter, IconCash, IconArrowUpRight, IconArrowDownLeft, IconDeviceDesktop, IconPackage, IconUserCog, IconDatabase, IconTrendingUp, IconTrendingDown, IconCheck, IconTicket, IconShoppingCart, IconStack2, IconWallet, IconBuildingStore, IconPrinter, IconCalendar
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +32,14 @@ import {
 import { ChartAreaInteractive } from "@/components/chart-area-interactive";
 
 const API = API_URL;
+
+const categoryExplanations: Record<string, string> = {
+  OPERATIVO: "Gastos del día a día del negocio: papelería, mantenimiento, limpieza, suministros, etc.",
+  SALARIO: "Sueldos pagados a tus empleados. No incluye tu propio retiro como dueño.",
+  MARKETING: "Lo que gastaste en publicidad, redes sociales, volantes o promociones.",
+  SERVICIOS: "Pagos de servicios: luz, agua, internet, teléfono, alquiler del local.",
+  OTROS: "Gastos varios que no encajan en las otras categorías pero que registraste manualmente.",
+};
 
 type AdvancedStats = {
   revenue: {
@@ -90,20 +98,100 @@ export default function AccountingPage() {
       origin: "MANUAL"
   });
 
+  // State for period filters
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
+  const [period, setPeriod] = useState<"month" | "year" | "custom">("month");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [financialData, setFinancialData] = useState<any>(null);
+  const [loadingFS, setLoadingFS] = useState<boolean>(false);
+
+  const getDatesForPeriod = (p: string) => {
+    const now = new Date();
+    let start = "";
+    let end = "";
+    if (p === "month") {
+      const y = now.getFullYear();
+      const m = now.getMonth();
+      start = `${y}-${String(m + 1).padStart(2, "0")}-01`;
+      const lastDay = new Date(y, m + 1, 0).getDate();
+      end = `${y}-${String(m + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    } else if (p === "year") {
+      const y = now.getFullYear();
+      start = `${y}-01-01`;
+      end = `${y}-12-31`;
+    }
+    return { start, end };
+  };
+
+  const handlePeriodChange = (val: "month" | "year" | "custom") => {
+    setPeriod(val);
+    if (val !== "custom") {
+      const { start, end } = getDatesForPeriod(val);
+      setStartDate(start);
+      setEndDate(end);
+    }
+  };
+
+  // Mount effect to initialize states
   useEffect(() => {
-    fetchData();
+    const initialBranchId = localStorage.getItem("currentBranchId") || "";
+    setSelectedBranchId(initialBranchId);
+
+    const { start, end } = getDatesForPeriod("month");
+    setStartDate(start);
+    setEndDate(end);
   }, []);
+
+  // Update data and financial statements when filters change
+  useEffect(() => {
+    if (startDate && endDate) {
+      fetchData();
+      fetchFinancialStatements();
+    }
+  }, [selectedBranchId, startDate, endDate]);
+
+  const fetchFinancialStatements = async () => {
+    if (!startDate || !endDate) return;
+    setLoadingFS(true);
+    try {
+      const token = localStorage.getItem("token");
+      const headers = { 'Authorization': `Bearer ${token}` };
+      
+      let url = `${API}/accounting/financial-statements?startDate=${startDate}&endDate=${endDate}`;
+      if (selectedBranchId && selectedBranchId !== "all") {
+        url += `&branchId=${selectedBranchId}`;
+      }
+      
+      const res = await fetch(url, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setFinancialData(data);
+      } else {
+        toast.error("Error al cargar estados financieros");
+      }
+    } catch (error) {
+      toast.error("Error de conexión al cargar estados financieros");
+    } finally {
+      setLoadingFS(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const branchId = localStorage.getItem("currentBranchId") || "";
       const token = localStorage.getItem("token");
       const headers = { 'Authorization': `Bearer ${token}` };
+      
+      const bParam = selectedBranchId && selectedBranchId !== "all" ? `?branchId=${selectedBranchId}` : "";
+      
+      const dateParams = `startDate=${startDate}&endDate=${endDate}`;
+      const statsUrl = `${API}/accounting/advanced-stats${bParam ? `${bParam}&${dateParams}` : `?${dateParams}`}`;
+      const entriesUrl = `${API}/accounting${bParam}`;
 
       const [entriesRes, statsRes] = await Promise.all([
-        fetch(`${API}/accounting${branchId ? `?branchId=${branchId}` : ""}`, { headers }),
-        fetch(`${API}/accounting/advanced-stats${branchId ? `?branchId=${branchId}` : ""}`, { headers })
+        fetch(entriesUrl, { headers }),
+        fetch(statsUrl, { headers })
       ]);
       
       if (entriesRes.ok) {
@@ -259,6 +347,90 @@ export default function AccountingPage() {
 
   return (
     <div className="flex flex-col gap-6 py-4 md:gap-8 md:py-6 font-sans text-secondary-foreground">
+      
+      {/* Print Styles */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          .print-report, .print-report * {
+            visibility: visible;
+          }
+          .print-report {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            background: white !important;
+            color: black !important;
+            padding: 0;
+            border: none !important;
+            box-shadow: none !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}} />
+
+      {/* Header with Filters */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-4 lg:px-6 border-b pb-6 no-print">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <IconReportAnalytics className="text-primary" size={24} />
+            Contabilidad y Finanzas
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Visualiza el balance general, estado de resultados y flujos de caja de tu negocio.
+          </p>
+        </div>
+        
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-3">
+
+          {/* Period Selector */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <IconCalendar size={12} /> Período
+            </span>
+            <Select value={period} onValueChange={(val: any) => handlePeriodChange(val)}>
+              <SelectTrigger className="w-[150px] h-9 rounded-xl">
+                <SelectValue placeholder="Seleccionar período" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="month">Este Mes</SelectItem>
+                <SelectItem value="year">Este Año</SelectItem>
+                <SelectItem value="custom">Personalizado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Custom Date Inputs */}
+          {period === "custom" && (
+            <>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Desde</span>
+                <Input 
+                  type="date" 
+                  value={startDate} 
+                  onChange={(e) => setStartDate(e.target.value)} 
+                  className="h-9 w-[140px] rounded-xl text-xs"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Hasta</span>
+                <Input 
+                  type="date" 
+                  value={endDate} 
+                  onChange={(e) => setEndDate(e.target.value)} 
+                  className="h-9 w-[140px] rounded-xl text-xs"
+                />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
       
       {/* 💰 MÉTRICAS CLAVE (Modo CEO) */}
       <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
@@ -460,10 +632,12 @@ export default function AccountingPage() {
 
       {/* Tabs Layout with Table */}
       <Tabs defaultValue="movimientos" className="w-full flex flex-col gap-6">
-        <div className="flex items-center justify-between px-4 lg:px-6">
+        <div className="flex items-center justify-between px-4 lg:px-6 no-print">
           <TabsList>
             <TabsTrigger value="movimientos">Libro Diario</TabsTrigger>
             <TabsTrigger value="manual">Gestión de Gastos</TabsTrigger>
+            <TabsTrigger value="estado-resultados">Estado de Resultados</TabsTrigger>
+            <TabsTrigger value="balance-general">Balance General</TabsTrigger>
           </TabsList>
           
           <div className="flex items-center gap-2">
@@ -490,7 +664,7 @@ export default function AccountingPage() {
             </div>
         </TabsContent>
         
-        <TabsContent value="manual" className="px-4 lg:px-6">
+        <TabsContent value="manual" className="px-4 lg:px-6 no-print">
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="border-dashed flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
                  <IconBuildingStore size={40} className="mb-4 opacity-20" />
@@ -498,6 +672,352 @@ export default function AccountingPage() {
                  <p className="text-[10px] mt-2 italic">(Alquiler, sueldos, servicios, etc.)</p>
               </Card>
            </div>
+        </TabsContent>
+
+        <TabsContent value="estado-resultados" className="px-4 lg:px-6">
+          <Card className="border-none shadow-sm rounded-2xl bg-card p-6 print-report">
+            {/* Report Header */}
+            <div className="flex flex-col items-center text-center pb-6 border-b mb-6">
+              <h2 className="text-xl font-bold uppercase tracking-wide">Estado de Resultados</h2>
+              <p className="text-sm font-semibold text-primary mt-1">
+                {financialData?.branchName || "Consolidado - Todas las Sucursales"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Período: {financialData?.period ? `${new Date(financialData.period.from + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })} al ${new Date(financialData.period.to + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}` : ""}
+              </p>
+              <div className="no-print mt-4">
+                <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2 rounded-xl">
+                  <IconPrinter size={16} /> Exportar PDF / Imprimir
+                </Button>
+              </div>
+            </div>
+
+            {/* Statement Body */}
+            {loadingFS ? (
+              <div className="py-20 flex flex-col items-center justify-center gap-3">
+                <IconLoader2 className="animate-spin text-primary" size={32} />
+                <span className="text-sm text-muted-foreground font-medium">Generando estado financiero...</span>
+              </div>
+            ) : !financialData ? (
+              <div className="py-20 text-center text-muted-foreground italic">No hay datos para el período seleccionado.</div>
+            ) : (
+              <div className="space-y-6 max-w-3xl mx-auto text-sm">
+                
+                {/* 1. INGRESOS */}
+                <div>
+                  <h3 className="font-bold border-b pb-1 text-xs uppercase tracking-wider text-muted-foreground">Ingresos</h3>
+                  <div className="mt-3 space-y-2">
+                    <div className="flex justify-between items-start py-1.5 border-b border-muted/10">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-foreground">Total de Ventas</span>
+                        <span className="text-[11px] text-muted-foreground">Dinero recibido de todos los clientes por las ventas realizadas en el período.</span>
+                      </div>
+                      <span className="font-semibold text-foreground">${(financialData.incomeStatement.grossRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    {/* Only show tax deduction if there actually ARE taxes */}
+                    {(financialData.incomeStatement.salesTax || 0) > 0 && (
+                      <div className="flex justify-between items-start py-1.5 text-rose-500 border-b border-muted/10">
+                        <div className="flex flex-col">
+                          <span>(-) Impuestos Cobrados (IVA / IGTF)</span>
+                          <span className="text-[11px] text-rose-400/80">Impuestos que cobraste al cliente y que debes entregar al fisco — no son ingresos tuyos.</span>
+                        </div>
+                        <span className="font-semibold">-${(financialData.incomeStatement.salesTax || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center py-2 border-t font-bold text-base text-emerald-600 bg-emerald-500/5 px-2 rounded-lg">
+                      <div className="flex flex-col">
+                        <span>INGRESOS NETOS</span>
+                        <span className="text-[10px] text-emerald-600/70 font-medium">
+                          {(financialData.incomeStatement.salesTax || 0) > 0
+                            ? "Dinero real del negocio después de separar los impuestos cobrados."
+                            : "Total de dinero que ingresó al negocio por ventas en este período."}
+                        </span>
+                      </div>
+                      <span>${(financialData.incomeStatement.netRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. COSTO DE VENTAS */}
+                <div>
+                  <h3 className="font-bold border-b pb-1 text-xs uppercase tracking-wider text-muted-foreground">Costo de lo Vendido</h3>
+                  <div className="mt-3 space-y-2">
+                    <div className="flex justify-between items-start py-1.5 text-rose-500 border-b border-muted/10">
+                      <div className="flex flex-col">
+                        <span>(-) Costo de los Productos Vendidos</span>
+                        <span className="text-[11px] text-rose-400/80">Lo que te costó comprar los productos que vendiste — precio de compra al proveedor.</span>
+                      </div>
+                      <span className="font-semibold">-${(financialData.incomeStatement.cogs || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-t font-bold text-base text-blue-600 bg-blue-500/5 px-2 rounded-lg">
+                      <div className="flex flex-col">
+                        <span>GANANCIA BRUTA</span>
+                        <span className="text-[10px] text-blue-600/70 font-medium">Lo que te queda después de pagar lo que costaron los productos (Ventas - Costo de Compra).</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full dark:bg-blue-900/30 dark:text-blue-300">
+                          Margen: {financialData.incomeStatement.grossMarginPct.toFixed(1)}%
+                        </span>
+                        <span>${(financialData.incomeStatement.grossProfit || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. GASTOS OPERATIVOS */}
+                <div>
+                  <h3 className="font-bold border-b pb-1 text-xs uppercase tracking-wider text-muted-foreground">Gastos del Negocio</h3>
+                  <div className="mt-3 space-y-2">
+                    {financialData.incomeStatement.operatingExpenses.byCategory.map((cat: any) => (
+                      <div key={cat.category} className="flex justify-between items-start py-1.5 border-b border-muted/10">
+                        <div className="flex flex-col">
+                          <span className="capitalize font-semibold">{cat.category.toLowerCase()}</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {categoryExplanations[cat.category.toUpperCase()] || "Gastos varios registrados manualmente en esta categoría."}
+                          </span>
+                        </div>
+                        <span className="text-rose-500 font-semibold">-${(cat.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    ))}
+                    {financialData.incomeStatement.operatingExpenses.byCategory.length === 0 && (
+                      <div className="text-center py-4 text-xs text-muted-foreground italic">✓ No se registraron gastos en el período seleccionado</div>
+                    )}
+                    <div className="flex justify-between items-center py-2 border-t font-bold text-rose-600 bg-rose-500/5 px-2 rounded-lg">
+                      <div className="flex flex-col">
+                        <span>TOTAL GASTOS</span>
+                        <span className="text-[10px] text-rose-600/70 font-medium">Suma de todos los gastos que registraste: alquiler, salarios de empleados, servicios, etc.</span>
+                      </div>
+                      <span>-${(financialData.incomeStatement.operatingExpenses.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. RESULTADO NETO */}
+                <div className="pt-4">
+                  <div className="flex justify-between items-center p-4 border border-primary/20 bg-primary/5 rounded-2xl shadow-sm">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-lg font-black tracking-tight text-primary uppercase">
+                        {(financialData.incomeStatement.netProfit || 0) >= 0 ? "✅ GANANCIA NETA" : "❌ PÉRDIDA NETA"}
+                      </span>
+                      <span className="text-xs text-muted-foreground font-medium">
+                        Lo que realmente te quedó del negocio después de pagar productos y gastos. Es lo que puedes reinvertir o retirar.
+                      </span>
+                      <div className="flex items-center gap-3 mt-1 text-[11px] font-semibold">
+                        <span className="text-emerald-600">Ventas: ${(financialData.incomeStatement.netRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <span className="text-muted-foreground">−</span>
+                        <span className="text-rose-500">Costo: ${(financialData.incomeStatement.cogs || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <span className="text-muted-foreground">−</span>
+                        <span className="text-rose-500">Gastos: ${(financialData.incomeStatement.operatingExpenses.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">Margen neto: {financialData.incomeStatement.netMarginPct.toFixed(1)}% de tus ventas</span>
+                    </div>
+                    <div className={`text-2xl font-black tabular-nums ${(financialData.incomeStatement.netProfit || 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      ${(financialData.incomeStatement.netProfit || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metrics footnotes */}
+                <div className="flex justify-between text-[11px] text-muted-foreground pt-4 border-t border-dashed">
+                  <span>Transacciones procesadas: {financialData.incomeStatement.totalTickets}</span>
+                  <span>Unidades vendidas: {financialData.incomeStatement.totalUnits}</span>
+                </div>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="balance-general" className="px-4 lg:px-6">
+          <Card className="border-none shadow-sm rounded-2xl bg-card p-6 print-report">
+            {/* Report Header */}
+            <div className="flex flex-col items-center text-center pb-6 border-b mb-6">
+              <h2 className="text-xl font-bold uppercase tracking-wide">Balance General</h2>
+              <p className="text-sm font-semibold text-primary mt-1">
+                {financialData?.branchName || "Consolidado - Todas las Sucursales"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Al: {financialData?.period ? `${new Date(financialData.period.to + 'T23:59:59').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}` : ""}
+              </p>
+              
+              {/* Balanced indicator */}
+              {financialData && (
+                <div className="mt-2.5">
+                  {financialData.balanceSheet.isBalanced ? (
+                    <Badge className="bg-emerald-500/10 text-emerald-600 border-none font-bold text-xs gap-1.5 px-3 py-1 rounded-full">
+                      <IconCheck size={14} /> Ecuación Contable Balanceada
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-rose-500/10 text-rose-600 border-none font-bold text-xs gap-1.5 px-3 py-1 rounded-full animate-pulse">
+                      ⚠️ Diferencia en Ecuación Contable: ${(Math.abs(financialData.balanceSheet.assets.totalAssets - financialData.balanceSheet.totalLiabilitiesAndEquity)).toFixed(2)}
+                    </Badge>
+                  )}
+                </div>
+              )}
+
+              <div className="no-print mt-4">
+                <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2 rounded-xl">
+                  <IconPrinter size={16} /> Exportar PDF / Imprimir
+                </Button>
+              </div>
+            </div>
+
+            {/* Statement Body */}
+            {loadingFS ? (
+              <div className="py-20 flex flex-col items-center justify-center gap-3">
+                <IconLoader2 className="animate-spin text-primary" size={32} />
+                <span className="text-sm text-muted-foreground font-medium">Generando balance general...</span>
+              </div>
+            ) : !financialData ? (
+              <div className="py-20 text-center text-muted-foreground italic">No hay datos para el período seleccionado.</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm">
+                
+                {/* ─── COLUMNA 1: ACTIVOS ─── */}
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="font-bold border-b pb-1 text-xs uppercase tracking-wider text-muted-foreground">Activos</h3>
+                    
+                    {/* Activos Corrientes */}
+                    <div className="mt-4 space-y-3">
+                      <h4 className="font-semibold text-xs text-primary/80 uppercase">Activos Corrientes</h4>
+                      <div className="pl-3 space-y-2">
+                        <div className="flex justify-between items-start py-1 border-b border-muted/30 pb-2">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-foreground">Efectivo en Caja (Ventas Cash)</span>
+                            <span className="text-[11px] text-muted-foreground">Dinero físico disponible en caja por cobros de ventas en efectivo.</span>
+                          </div>
+                          <span className="font-medium text-foreground">${(financialData.balanceSheet.assets.current.cash || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between items-start py-1 border-b border-muted/30 pb-2">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-foreground">Cuentas por Cobrar (Créditos Clientes)</span>
+                            <span className="text-[11px] text-muted-foreground">Dinero pendiente que tus clientes le deben al negocio por compras a crédito.</span>
+                          </div>
+                          <span className="font-medium text-foreground">${(financialData.balanceSheet.assets.current.accountsReceivable || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between items-start py-1 border-b border-muted/30 pb-2">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-foreground">Préstamos por Cobrar</span>
+                            <span className="text-[11px] text-muted-foreground">Saldos pendientes de financiamientos o préstamos activos otorgados a clientes.</span>
+                          </div>
+                          <span className="font-medium text-foreground">${(financialData.balanceSheet.assets.current.loansReceivable || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between items-start py-1 border-b border-muted/30 pb-2">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-foreground">Inventario de Productos (a Costo)</span>
+                            <span className="text-[11px] text-muted-foreground">El valor total de tus productos en stock calculados al costo de compra original.</span>
+                          </div>
+                          <span className="font-medium text-foreground">${(financialData.balanceSheet.assets.current.inventory || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center font-semibold bg-muted/20 p-2 rounded-lg text-xs mt-2 pl-3">
+                        <div className="flex flex-col">
+                          <span>TOTAL ACTIVOS CORRIENTES</span>
+                          <span className="text-[10px] text-muted-foreground font-medium">Bienes de valor y dinero físico convertibles a efectivo en un corto plazo.</span>
+                        </div>
+                        <span>${(financialData.balanceSheet.assets.current.totalCurrent || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+
+                    {/* Activos No Corrientes */}
+                    <div className="mt-6 space-y-3">
+                      <h4 className="font-semibold text-xs text-primary/80 uppercase">Activos No Corrientes</h4>
+                      <div className="pl-3 space-y-2">
+                        <div className="flex justify-between items-start py-1 border-b border-muted/30 pb-2">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-foreground">Propiedades, Planta y Equipo</span>
+                            <span className="text-[11px] text-muted-foreground">Bienes fijos tangibles del negocio (local, mobiliario, vehículos, computadoras).</span>
+                          </div>
+                          <span className="font-medium text-foreground">${(financialData.balanceSheet.assets.nonCurrent.totalNonCurrent || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center font-semibold bg-muted/20 p-2 rounded-lg text-xs mt-2 pl-3">
+                        <div className="flex flex-col">
+                          <span>TOTAL ACTIVOS NO CORRIENTES</span>
+                          <span className="text-[10px] text-muted-foreground font-medium">Activos permanentes que usa la empresa a largo plazo y no son para venta directa.</span>
+                        </div>
+                        <span>${(financialData.balanceSheet.assets.nonCurrent.totalNonCurrent || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* TOTAL ACTIVOS */}
+                  <div className="flex justify-between items-center p-3 font-bold text-base bg-emerald-500/5 text-emerald-600 border border-emerald-500/10 rounded-xl">
+                    <div className="flex flex-col">
+                      <span>TOTAL ACTIVOS</span>
+                      <span className="text-[10px] text-emerald-600/70 font-medium">El valor de todo lo que tu negocio posee (Efectivo + Créditos + Inventario + Equipos).</span>
+                    </div>
+                    <span>${(financialData.balanceSheet.assets.totalAssets || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+
+                {/* ─── COLUMNA 2: PASIVOS Y PATRIMONIO ─── */}
+                <div className="space-y-6 flex flex-col justify-between">
+                  <div className="space-y-6">
+                    {/* Pasivos */}
+                    <div>
+                      <h3 className="font-bold border-b pb-1 text-xs uppercase tracking-wider text-muted-foreground">Pasivos</h3>
+                      
+                      {/* Pasivos Corrientes */}
+                      <div className="mt-4 space-y-3">
+                        <h4 className="font-semibold text-xs text-primary/80 uppercase">Pasivos Corrientes</h4>
+                        <div className="pl-3 space-y-2">
+                          <div className="flex justify-between items-start py-1 border-b border-muted/30 pb-2">
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-foreground">Cuentas por Pagar (Proveedores)</span>
+                              <span className="text-[11px] text-muted-foreground">Facturas de compras de mercancía que le debes a tus proveedores.</span>
+                            </div>
+                            <span className="font-medium text-foreground">${(financialData.balanceSheet.liabilities.current.accountsPayable || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center font-semibold bg-muted/20 p-2 rounded-lg text-xs mt-2 pl-3">
+                          <div className="flex flex-col">
+                            <span>TOTAL PASIVOS CORRIENTES</span>
+                            <span className="text-[10px] text-muted-foreground font-medium">Deudas u obligaciones financieras que el negocio debe pagar en un corto plazo.</span>
+                          </div>
+                          <span>${(financialData.balanceSheet.liabilities.current.totalCurrent || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Patrimonio */}
+                    <div>
+                      <h3 className="font-bold border-b pb-1 text-xs uppercase tracking-wider text-muted-foreground">Patrimonio</h3>
+                      
+                      <div className="mt-4 space-y-3">
+                        <div className="pl-3 space-y-2">
+                          <div className="flex justify-between items-start py-1 border-b border-muted/30 pb-2">
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-foreground">Utilidades Retenidas / Acumuladas</span>
+                              <span className="text-[11px] text-muted-foreground">Ganancias del negocio acumuladas y reinvertidas históricamente (Activos - Pasivos).</span>
+                            </div>
+                            <span className="font-medium text-foreground">${(financialData.balanceSheet.equity.retainedEarnings || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center font-semibold bg-muted/20 p-2 rounded-lg text-xs mt-2 pl-3">
+                          <div className="flex flex-col">
+                            <span>TOTAL PATRIMONIO NETO</span>
+                            <span className="text-[10px] text-muted-foreground font-medium">El valor neto real del negocio que pertenece directamente a los socios o dueños.</span>
+                          </div>
+                          <span>${(financialData.balanceSheet.equity.totalEquity || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* TOTAL PASIVOS Y PATRIMONIO */}
+                  <div className="flex justify-between items-center p-3 font-bold text-base bg-blue-500/5 text-blue-600 border border-blue-500/10 rounded-xl">
+                    <div className="flex flex-col">
+                      <span>TOTAL PASIVOS Y PATRIMONIO</span>
+                      <span className="text-[10px] text-blue-600/70 font-medium">Suma de las deudas del negocio y el patrimonio (debe igualar exactamente al Total Activos).</span>
+                    </div>
+                    <span>${(financialData.balanceSheet.totalLiabilitiesAndEquity || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </Card>
         </TabsContent>
       </Tabs>
 

@@ -51,7 +51,7 @@ import { es } from "date-fns/locale";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { PWAInstallButton } from "@/components/pwa-install-button";
 import { VoiceButton, VoiceButtonState } from "@/components/ui/voice-button";
-import { AudioBubble } from "@/components/ui/audio-bubble";
+import { WhatsAppAudioPlayer } from "@/components/ui/whatsapp-audio-player";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Popover,
@@ -1313,10 +1313,22 @@ export default function SupportChatPage() {
     setVoiceState("idle");
   };
 
-  const renderContent = (msg: any) => {
+  const renderContent = (msg: any, isMe: boolean) => {
     if (msg.type === "IMAGE") return <img src={msg.fileUrl} alt="" className="rounded-xl max-w-xs" />;
     if (msg.type === "VIDEO") return <video src={msg.fileUrl} controls className="rounded-xl max-w-xs" />;
-    if (msg.type === "AUDIO") return <AudioBubble url={msg.fileUrl} isMe={msg.senderId === user?.id} />;
+    if (msg.type === "AUDIO" || msg.type === "audio") {
+      const timestamp = new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      return (
+        <WhatsAppAudioPlayer
+          src={msg.fileUrl}
+          isMe={isMe}
+          timestamp={timestamp}
+          isRead={msg.isRead}
+          senderAvatar={!isMe ? "/syncro.png" : undefined}
+          senderFallback={!isMe ? "SP" : undefined}
+        />
+      );
+    }
     return <span className="leading-relaxed">{msg.text}</span>;
   };
 
@@ -1865,7 +1877,7 @@ export default function SupportChatPage() {
                               </div>
                             )}
                             {chatType === "human" ? (
-                              renderContent(msg)
+                              renderContent(msg, isMe)
                             ) : msg.role === "assistant" && msg.isNew ? (
                               <Typewriter
                                 text={msg.content}
@@ -2072,18 +2084,20 @@ export default function SupportChatPage() {
                               </div>
                             )}
 
-                            <div className={cn("flex items-center gap-1 mt-1.5 text-[9px]", isMe ? "text-white/60 justify-end" : "text-muted-foreground")}>
-                              {(() => {
-                                try {
-                                  const d = new Date(msg.createdAt || Date.now());
-                                  if (isNaN(d.getTime())) return "";
-                                  return format(d, 'hh:mm a');
-                                } catch (e) {
-                                  return "";
-                                }
-                              })()}
-                              {isMe && chatType === "human" && <IconChecks size={12} className={msg.isRead ? "text-sky-400" : "text-white/40"} />}
-                            </div>
+                            {msg.type !== "AUDIO" && msg.type !== "audio" && (
+                              <div className={cn("flex items-center gap-1 mt-1.5 text-[9px]", isMe ? "text-white/60 justify-end" : "text-muted-foreground")}>
+                                {(() => {
+                                  try {
+                                    const d = new Date(msg.createdAt || Date.now());
+                                    if (isNaN(d.getTime())) return "";
+                                    return format(d, 'hh:mm a');
+                                  } catch (e) {
+                                    return "";
+                                  }
+                                })()}
+                                {isMe && chatType === "human" && <IconChecks size={12} className={msg.isRead ? "text-sky-400" : "text-white/40"} />}
+                              </div>
+                            )}
                           </div>
 
                           {/* Feedback Bar */}

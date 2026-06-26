@@ -61,7 +61,7 @@ export class AiAgentService {
 
   // ── Chat ─────────────────────────────────────────────────────────────────────
 
-  async chat(userId: string, businessId: string, userMessage: string, sessionId: string = 'default'): Promise<AgentResponse> {
+  async chat(userId: string, businessId: string, userMessage: string, sessionId: string = 'default', branchId?: string): Promise<AgentResponse> {
     // 1. Get recent conversation history BEFORE saving the new message (last 10 messages for context)
     const history = await this.getHistory(businessId, userId, sessionId, 10);
 
@@ -70,7 +70,7 @@ export class AiAgentService {
       const sessionExists = await this.prisma.aiChatSession.findUnique({ where: { id: sessionId } });
       if (!sessionExists) {
         await this.prisma.aiChatSession.create({
-          data: { id: sessionId, businessId, userId, title: userMessage.substring(0, 30) + '...' }
+          data: { id: sessionId, businessId, userId, title: userMessage.substring(0, 30) + '...', branchId }
         });
       }
     }
@@ -116,7 +116,8 @@ export class AiAgentService {
     userId: string,
     businessId: string,
     userMessage: string,
-    sessionId: string = 'default',
+    sessionId: string,
+    branchId: string | undefined,
     onChunk: (chunk: string) => void,
     onFinish: (result: AgentResponse) => void
   ): Promise<void> {
@@ -129,7 +130,7 @@ export class AiAgentService {
         const sessionExists = await this.prisma.aiChatSession.findUnique({ where: { id: sessionId } });
         if (!sessionExists) {
           await this.prisma.aiChatSession.create({
-            data: { id: sessionId, businessId, userId, title: userMessage.substring(0, 30) + '...' }
+            data: { id: sessionId, businessId, userId, title: userMessage.substring(0, 30) + '...', branchId }
           });
         }
       }
@@ -185,9 +186,14 @@ export class AiAgentService {
 
   // ── Sessions & History ───────────────────────────────────────────────────────
 
-  async getSessions(businessId: string, userId: string) {
+  async getSessions(businessId: string, userId: string, type: string = 'GENERAL', branchId?: string) {
     return this.prisma.aiChatSession.findMany({
-      where: { businessId, userId },
+      where: { 
+        businessId, 
+        userId, 
+        type,
+        ...(branchId ? { branchId } : {})
+      },
       orderBy: [
         { isPinned: 'desc' },
         { updatedAt: 'desc' }
@@ -196,9 +202,9 @@ export class AiAgentService {
     });
   }
 
-  async createSession(businessId: string, userId: string, title?: string) {
+  async createSession(businessId: string, userId: string, title?: string, type: string = 'GENERAL', branchId?: string) {
     return this.prisma.aiChatSession.create({
-      data: { businessId, userId, title: title || 'Nuevo Chat' }
+      data: { businessId, userId, title: title || 'Nuevo Chat', type, branchId }
     });
   }
 
@@ -1794,5 +1800,303 @@ ${otherInfo}`;
       this.logger.error(`Error in getPredictivePurchases: ${e.message}`);
       throw e;
     }
+  }
+
+  // ── Ads Copilot Knowledge Documents ──────────────────────────────────────────
+
+  async getAdsDocuments(businessId: string, branchId?: string) {
+    return this.prisma.adsKnowledgeDocument.findMany({
+      where: { 
+        businessId,
+        ...(branchId ? { branchId } : {})
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  async createAdsDocument(businessId: string, branchId: string | null, title: string, content: string, sourceType: string = 'VIDEO_TRANSCRIPT') {
+    const cleanTitle = title.replace(/\p{Extended_Pictographic}/gu, '').trim();
+    const cleanContent = content.replace(/\p{Extended_Pictographic}/gu, '').trim();
+    return this.prisma.adsKnowledgeDocument.create({
+      data: { businessId, branchId, title: cleanTitle, content: cleanContent, sourceType }
+    });
+  }
+
+  async updateAdsDocument(businessId: string, id: string, title: string, content: string) {
+    const cleanTitle = title.replace(/\p{Extended_Pictographic}/gu, '').trim();
+    const cleanContent = content.replace(/\p{Extended_Pictographic}/gu, '').trim();
+    return this.prisma.adsKnowledgeDocument.update({
+      where: { id, businessId },
+      data: { title: cleanTitle, content: cleanContent }
+    });
+  }
+
+  async deleteAdsDocument(businessId: string, id: string) {
+    return this.prisma.adsKnowledgeDocument.delete({
+      where: { id, businessId }
+    });
+  }
+
+  // ── Audio Transcription via OpenRouter ────────────────────────────────────────
+
+  async transcribeAudioChunk(audioBase64: string, format: string = 'webm'): Promise<string> {
+    const models = ['openai/whisper-large-v3', 'openai/whisper-1'];
+    let lastError = null;
+
+    // Remove potential base64 data URI header prefix (e.g. data:audio/webm;codecs=opus;base64, or data:audio/webm;base64,)
+    const cleanBase64 = audioBase64.includes(',') ? audioBase64.split(',')[1] : audioBase64;
+
+    for (const model of models) {
+      try {
+        const response = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.openrouterApiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://syncropos.com',
+            'X-Title': 'Syncro POS Ads Copilot',
+          },
+          body: JSON.stringify({
+            model,
+            input_audio: {
+              data: cleanBase64,
+              format
+            }
+          }),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          return result.text || '';
+        } else {
+          const errorText = await response.text();
+          this.logger.warn(`Model ${model} transcription failed: ${response.status} - ${errorText}`);
+        }
+      } catch (err) {
+        this.logger.warn(`Model ${model} transcription error: ${err.message}`);
+        lastError = err;
+      }
+    }
+
+    throw lastError || new Error('All transcription models failed');
+  }
+
+  // ── Ads Copilot Chat Stream ──────────────────────────────────────────────────
+
+  async getAdsKnowledgeContext(businessId: string, branchId?: string): Promise<string> {
+    const docs = await this.prisma.adsKnowledgeDocument.findMany({
+      where: { 
+        businessId,
+        ...(branchId ? { branchId } : {})
+      },
+      select: { title: true, content: true }
+    });
+
+    if (docs.length === 0) {
+      return 'No hay lecciones cargadas en la biblioteca de entrenamiento de Ads.';
+    }
+
+    return docs.map(d => `--- LECCIÓN: ${d.title} ---\n${d.content}`).join('\n\n');
+  }
+
+  buildAdsSystemPrompt(knowledgeContext: string): string {
+    return `Eres el "Ads Copilot" de Syncro POS, un experto consultor de marketing y anuncios en Meta Ads (Facebook e Instagram Ads).
+Tu objetivo es guiar al usuario en tiempo real para poner en práctica las lecciones y estrategias de sus videos.
+
+--- BIBLIOTECA DE CONOCIMIENTO (REGLAS Y ESTRATEGIAS DEL CURSO) ---
+${knowledgeContext}
+------------------------------------------------------------------
+
+INSTRUCCIONES DE COMPORTAMIENTO:
+1. Basándote en la biblioteca anterior y la captura de pantalla provista (si la hay), analiza críticamente la campaña, métricas o configuración que el usuario tiene abierta.
+2. Si el usuario está cometiendo una desviación de lo enseñado en las lecciones (ej. segmentación, presupuesto, píxel, creativos), adviértelo con claridad y amabilidad.
+3. Tus respuestas deben ser sumamente concisas, directas y accionables, ya que el usuario podría estar escuchándote por voz mientras opera la pestaña de anuncios.
+4. Si detectas un error crítico que requiere atención inmediata, incluye la etiqueta "[ALERTA]" al inicio del consejo correspondiente para que el frontend pueda disparar una notificación de escritorio.
+5. Habla en español, mantén un tono profesional, motivador y experto.
+6. IMPORTANTE: No te limites a repetir las lecciones de forma robótica o como una lista de pasos secuenciales fijos. Debes razonar sobre lo que ves en la pantalla en este momento, interpretar las bases estratégicas que aprendiste del curso y aconsejar de manera lógica qué es lo que más le conviene al usuario hacer en su situación particular en tiempo real.`;
+  }
+
+  async adsChatStream(
+    userId: string,
+    businessId: string,
+    userMessage: string,
+    sessionId: string,
+    screenshotBase64: string | null,
+    branchId: string | null,
+    onChunk: (chunk: string) => void,
+    onFinish: (result: { id: string; message: string; action?: any }) => void
+  ): Promise<void> {
+    try {
+      // 1. Get recent history scoped to this session
+      const history = await this.getHistory(businessId, userId, sessionId, 10);
+
+      // Ensure session exists
+      if (sessionId !== 'default') {
+        const sessionExists = await this.prisma.aiChatSession.findUnique({ where: { id: sessionId } });
+        if (!sessionExists) {
+          await this.prisma.aiChatSession.create({
+            data: { id: sessionId, businessId, userId, title: userMessage.substring(0, 30) + '...', type: 'ADS_COPILOT', branchId }
+          });
+        }
+      }
+
+      // 2. Save user message to history DB
+      await this.prisma.aiChatMessage.create({
+        data: { businessId, userId, sessionId, role: 'user', content: userMessage }
+      });
+
+      // 3. Retrieve ads knowledge document context
+      const knowledgeContext = await this.getAdsKnowledgeContext(businessId, branchId || undefined);
+
+      // 4. Build custom system prompt
+      const systemPrompt = this.buildAdsSystemPrompt(knowledgeContext);
+
+      // 5. Call OpenRouter with streaming
+      const rawResponse = await this.callAdsOpenRouterStream(systemPrompt, history, userMessage, screenshotBase64, onChunk);
+
+      // 6. Parse action if present
+      const { message, action } = this.parseResponse(rawResponse);
+
+      // 7. Save assistant response to history DB
+      const savedMessage = await this.prisma.aiChatMessage.create({
+        data: {
+          businessId,
+          userId,
+          sessionId,
+          role: 'assistant',
+          content: message,
+          actionJson: action ? JSON.stringify(action) : null
+        }
+      });
+
+      // 8. Callback on completion
+      onFinish({ id: savedMessage.id, message, action });
+
+    } catch (error) {
+      this.logger.error(`Error in adsChatStream: ${error.message}`);
+      onChunk('⚠️ Ocurrió un error al procesar tu solicitud en el Copiloto de Ads.');
+      onFinish({ id: '', message: '⚠️ Ocurrió un error al procesar tu solicitud.' });
+    }
+  }
+
+  private async callAdsOpenRouterStream(
+    systemPrompt: string,
+    history: ChatMessage[],
+    userMessage: string,
+    screenshotBase64: string | null,
+    onChunk: (chunk: string) => void
+  ): Promise<string> {
+    const formattedHistory = history.slice(-8).map(m => ({ role: m.role, content: m.content }));
+
+    let userContent: any = userMessage;
+    if (screenshotBase64) {
+      const cleanBase64 = screenshotBase64.includes(',') ? screenshotBase64.split(',')[1] : screenshotBase64;
+      userContent = [
+        { type: 'text', text: userMessage },
+        {
+          type: 'image_url',
+          image_url: {
+            url: `data:image/jpeg;base64,${cleanBase64}`
+          }
+        }
+      ];
+    }
+
+    const messages = [
+      ...formattedHistory,
+      { role: 'user', content: userContent }
+    ];
+
+    const models = [
+      'google/gemini-2.5-flash',
+      'openai/gpt-4o-mini',
+      'openrouter/free',
+    ];
+
+    for (const model of models) {
+      try {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.openrouterApiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://syncropos.com',
+            'X-Title': 'Syncro POS Ads Copilot',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              ...messages,
+            ],
+            max_tokens: 800,
+            temperature: 0.4,
+            stream: true,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          this.logger.warn(`Ads Model ${model} failed stream call: ${response.status} — ${errorText}`);
+          continue;
+        }
+
+        if (!response.body) {
+          this.logger.warn(`Ads Model ${model} failed: Response body is null`);
+          continue;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullResponseText = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            if (trimmed === 'data: [DONE]') continue;
+            if (trimmed.startsWith('data: ')) {
+              try {
+                const json = JSON.parse(trimmed.slice(6));
+                const text = json.choices?.[0]?.delta?.content || '';
+                if (text) {
+                  fullResponseText += text;
+                  onChunk(text);
+                }
+              } catch (e) {}
+            }
+          }
+        }
+
+        if (buffer && buffer.startsWith('data: ')) {
+          try {
+            const json = JSON.parse(buffer.slice(6));
+            const text = json.choices?.[0]?.delta?.content || '';
+            if (text) {
+              fullResponseText += text;
+              onChunk(text);
+            }
+          } catch (e) {}
+        }
+
+        return fullResponseText;
+      } catch (err) {
+        this.logger.warn(`Ads Model ${model} stream error: ${err.message}`);
+        continue;
+      }
+    }
+
+    this.logger.error('All Ads OpenRouter models failed streaming');
+    const errorMessage = '⚠️ El copiloto de Ads no está disponible en este momento. Por favor intenta de nuevo en unos segundos.';
+    onChunk(errorMessage);
+    return errorMessage;
   }
 }

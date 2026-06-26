@@ -42,4 +42,16 @@ export class AccountingController {
     const businessId = req.user?.businessId;
     return this.accountingService.getInvestmentBySupplier(businessId);
   }
+
+  @Get('financial-statements')
+  async getFinancialStatements(
+    @Req() req: any,
+    @Query('branchId') branchId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const businessId = req.user?.businessId;
+    return this.accountingService.getFinancialStatements(businessId, branchId, startDate, endDate);
+  }
 }
+

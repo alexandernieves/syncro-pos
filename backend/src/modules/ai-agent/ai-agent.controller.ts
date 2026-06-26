@@ -2,8 +2,10 @@ import {
   Controller,
   Post,
   Get,
+  Put,
   Delete,
   Body,
+  Param,
   Req,
   Res,
   Query,
@@ -23,20 +25,20 @@ export class AiAgentController {
    * Get all AI chat sessions for this user
    */
   @Get('sessions')
-  async getSessions(@Req() req: any) {
+  async getSessions(@Req() req: any, @Query('type') type?: string, @Query('branchId') branchId?: string) {
     const userId = req.user?.id || req.user?.sub;
     const businessId = req.user?.businessId;
-    return this.aiAgentService.getSessions(businessId, userId);
+    return this.aiAgentService.getSessions(businessId, userId, type || 'GENERAL', branchId);
   }
 
   /**
    * Create a new AI chat session
    */
   @Post('sessions')
-  async createSession(@Req() req: any, @Body('title') title?: string) {
+  async createSession(@Req() req: any, @Body('title') title?: string, @Body('type') type?: string, @Body('branchId') branchId?: string) {
     const userId = req.user?.id || req.user?.sub;
     const businessId = req.user?.businessId;
-    return this.aiAgentService.createSession(businessId, userId, title);
+    return this.aiAgentService.createSession(businessId, userId, title, type || 'GENERAL', branchId);
   }
 
   /**
@@ -86,10 +88,11 @@ export class AiAgentController {
     @Body('message') message: string,
     @Body('sessionId') sessionId: string,
     @Req() req: any,
+    @Body('branchId') branchId?: string,
   ): Promise<any> {
     const userId = req.user?.id || req.user?.sub;
     const businessId = req.user?.businessId;
-    return this.aiAgentService.chat(userId, businessId, message, sessionId || 'default');
+    return this.aiAgentService.chat(userId, businessId, message, sessionId || 'default', branchId);
   }
 
   /**
@@ -101,6 +104,7 @@ export class AiAgentController {
     @Body('sessionId') sessionId: string,
     @Req() req: any,
     @Res() res: any,
+    @Body('branchId') branchId?: string,
   ) {
     const userId = req.user?.id || req.user?.sub;
     const businessId = req.user?.businessId;
@@ -115,6 +119,7 @@ export class AiAgentController {
       businessId,
       message,
       sessionId || 'default',
+      branchId,
       (chunk) => {
         res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
       },
@@ -249,5 +254,111 @@ export class AiAgentController {
       throw new ForbiddenException('Acceso restringido a personal de soporte de Syncro.');
     }
     return this.aiAgentService.getAllFeedback();
+  }
+
+  /**
+   * Get all Ads Copilot documents
+   */
+  @Get('ads-copilot/documents')
+  async getAdsDocuments(@Req() req: any, @Query('branchId') branchId?: string) {
+    const businessId = req.user?.businessId;
+    return this.aiAgentService.getAdsDocuments(businessId, branchId);
+  }
+
+  /**
+   * Create a new Ads Copilot document (e.g. video transcript)
+   */
+  @Post('ads-copilot/documents')
+  async createAdsDocument(
+    @Req() req: any,
+    @Body('title') title: string,
+    @Body('content') content: string,
+    @Body('sourceType') sourceType?: string,
+    @Body('branchId') branchId?: string,
+  ) {
+    const businessId = req.user?.businessId;
+    return this.aiAgentService.createAdsDocument(businessId, branchId || null, title, content, sourceType || 'VIDEO_TRANSCRIPT');
+  }
+
+  /**
+   * Update an Ads Copilot document
+   */
+  @Put('ads-copilot/documents/:id')
+  async updateAdsDocument(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('title') title: string,
+    @Body('content') content: string,
+  ) {
+    const businessId = req.user?.businessId;
+    return this.aiAgentService.updateAdsDocument(businessId, id, title, content);
+  }
+
+  /**
+   * Delete an Ads Copilot document
+   */
+  @Delete('ads-copilot/documents')
+  async deleteAdsDocument(@Req() req: any, @Query('id') id: string) {
+    const businessId = req.user?.businessId;
+    await this.aiAgentService.deleteAdsDocument(businessId, id);
+    return { success: true };
+  }
+
+  /**
+   * Transcribe an audio chunk using OpenRouter audio/transcriptions Whisper API
+   */
+  @Post('ads-copilot/transcribe-chunk')
+  async transcribeChunk(
+    @Body('audio') audio: string, // Base64 audio chunk data
+    @Body('format') format?: string,
+  ) {
+    try {
+      const text = await this.aiAgentService.transcribeAudioChunk(audio, format || 'webm');
+      return { text };
+    } catch (err) {
+      return { text: '', error: err.message };
+    }
+  }
+
+  /**
+   * Send query + optional screenshot to the Ads Copilot with Vision SSE stream
+   */
+  @Post('ads-copilot/chat-stream')
+  async adsChatStream(
+    @Body('message') message: string,
+    @Body('sessionId') sessionId: string,
+    @Body('screenshot') screenshot: string | null,
+    @Body('branchId') branchId: string | null,
+    @Req() req: any,
+    @Res() res: any,
+  ) {
+    const userId = req.user?.id || req.user?.sub;
+    const businessId = req.user?.businessId;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    await this.aiAgentService.adsChatStream(
+      userId,
+      businessId,
+      message,
+      sessionId || 'default',
+      screenshot || null,
+      branchId || null,
+      (chunk) => {
+        res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+      },
+      (result) => {
+        res.write(`data: ${JSON.stringify({
+          done: true,
+          id: result.id,
+          message: result.message,
+          action: result.action
+        })}\n\n`);
+        res.end();
+      }
+    );
   }
 }

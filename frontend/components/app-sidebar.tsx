@@ -103,6 +103,7 @@ const data = {
       items: [
         { title: "Directorio", url: "/dashboard/clientes" },
         { title: "Cuentas por Cobrar (Fiado)", url: "/dashboard/clientes/creditos" },
+        { title: "Chat de WhatsApp", url: "/dashboard/chat" },
       ],
     },
     {
@@ -131,6 +132,11 @@ const data = {
       title: "Soporte",
       url: "/dashboard/soporte",
       icon: IconMessageCircle,
+    },
+    {
+      title: "Copiloto Ads",
+      url: "/dashboard/ads-copilot",
+      icon: IconCirclePlusFilled, // We can import/use IconCirclePlusFilled or IconHexagon/IconInnerShadowTop
     },
     {
       title: "Configuración",
