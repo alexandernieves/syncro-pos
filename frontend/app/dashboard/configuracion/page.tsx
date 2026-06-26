@@ -232,6 +232,7 @@ export default function ConfiguracionPage() {
 
   const [hasDraft, setHasDraft] = useState(false);
   const isInitialMount = useRef(true);
+  const chunkTimeoutRef = useRef<any>(null);
 
   // Comprobar si hay borrador al montar
   useEffect(() => {
@@ -261,6 +262,9 @@ export default function ConfiguracionPage() {
   useEffect(() => {
     return () => {
       localStorage.removeItem("syncro_recording_active");
+      if (chunkTimeoutRef.current) {
+        clearTimeout(chunkTimeoutRef.current);
+      }
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("syncro_session_activity"));
       }
@@ -361,57 +365,72 @@ export default function ConfiguracionPage() {
       const audioStream = new MediaStream(audioTracks);
       stream.getVideoTracks().forEach((track: any) => track.stop());
 
-      const mediaRecorder = new MediaRecorder(audioStream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
-      mediaRecorderRef.current = mediaRecorder;
-      accumulatedBlobsRef.current = [];
-
       let chunkIndex = 1;
-      mediaRecorder.ondataavailable = async (event) => {
-        if (event.data && event.data.size > 0) {
-          accumulatedBlobsRef.current.push(event.data);
-          const combinedBlob = new Blob(accumulatedBlobsRef.current, {
-            type: 'audio/webm;codecs=opus'
-          });
-          const reader = new FileReader();
-          reader.onloadend = async () => {
-            const base64data = reader.result as string;
-            try {
-              const token = localStorage.getItem("token");
-              const res = await fetch(`${API}/ai-agent/ads-copilot/transcribe-chunk`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                  audio: base64data,
-                  format: "webm"
-                })
-              });
-              if (res.ok) {
-                const data = await res.json();
-                if (data.text) {
-                  setLiveTranscription(data.text);
-                  toast.success(`Fragmento de video ${chunkIndex++} procesado`);
-                } else if (data.error) {
-                  console.error("Error transcribiendo fragmento:", data.error);
-                  toast.error(`Error en fragmento ${chunkIndex++}: ${data.error}`);
-                }
-              } else {
-                toast.error(`Error del servidor al procesar fragmento ${chunkIndex++}`);
-              }
-            } catch (e) {
-              console.error("Error transcribiendo fragmento:", e);
-            }
-          };
-          reader.readAsDataURL(combinedBlob);
+
+      const recordNextChunk = () => {
+        if (!streamRef.current || streamRef.current.getAudioTracks()[0].readyState === "ended") {
+          return;
         }
+
+        const mediaRecorder = new MediaRecorder(audioStream, {
+          mimeType: 'audio/webm;codecs=opus'
+        });
+        mediaRecorderRef.current = mediaRecorder;
+
+        mediaRecorder.ondataavailable = async (event) => {
+          if (event.data && event.data.size > 0) {
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+              const base64data = reader.result as string;
+              try {
+                const token = localStorage.getItem("token");
+                const res = await fetch(`${API}/ai-agent/ads-copilot/transcribe-chunk`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                  },
+                  body: JSON.stringify({
+                    audio: base64data,
+                    format: "webm"
+                  })
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  if (data.text && data.text.trim()) {
+                    setLiveTranscription(prev => {
+                      const current = prev.trim();
+                      return current ? `${current} ${data.text.trim()}` : data.text.trim();
+                    });
+                    toast.success(`Fragmento de video ${chunkIndex++} procesado`);
+                  } else if (data.error) {
+                    console.error("Error transcribiendo fragmento:", data.error);
+                    toast.error(`Error en fragmento ${chunkIndex++}: ${data.error}`);
+                  }
+                } else {
+                  toast.error(`Error del servidor al procesar fragmento ${chunkIndex++}`);
+                }
+              } catch (e: any) {
+                console.error("Error transcribiendo fragmento:", e);
+                toast.error(`Error de red en fragmento ${chunkIndex++}`);
+              }
+            };
+            reader.readAsDataURL(event.data);
+          }
+        };
+
+        mediaRecorder.start();
+
+        // Record chunks of 15 seconds
+        chunkTimeoutRef.current = setTimeout(() => {
+          if (mediaRecorder.state !== "inactive") {
+            mediaRecorder.stop();
+          }
+          recordNextChunk();
+        }, 15000);
       };
 
-      // Record in chunks of 15 seconds
-      mediaRecorder.start(15000);
+      recordNextChunk();
       toast.success("Captura de audio iniciada. ¡Reproduce el video en la pestaña compartida!");
 
       audioTracks[0].onended = () => {
@@ -425,6 +444,10 @@ export default function ConfiguracionPage() {
   };
 
   const stopRecording = () => {
+    if (chunkTimeoutRef.current) {
+      clearTimeout(chunkTimeoutRef.current);
+      chunkTimeoutRef.current = null;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
     }
