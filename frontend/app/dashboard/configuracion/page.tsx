@@ -230,6 +230,43 @@ export default function ConfiguracionPage() {
   const streamRef = useRef<any>(null);
   const accumulatedBlobsRef = useRef<Blob[]>([]);
 
+  const [hasDraft, setHasDraft] = useState(false);
+  const isInitialMount = useRef(true);
+
+  // Comprobar si hay borrador al montar
+  useEffect(() => {
+    const draftTitle = localStorage.getItem("syncro_ads_draft_title") || "";
+    const draftContent = localStorage.getItem("syncro_ads_draft_content") || "";
+    if (draftTitle.trim() || draftContent.trim()) {
+      setHasDraft(true);
+    }
+  }, []);
+
+  // Guardar borrador en localStorage en tiempo real para evitar pérdida de datos
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    if (lessonTitle.trim() || liveTranscription.trim()) {
+      localStorage.setItem("syncro_ads_draft_title", lessonTitle);
+      localStorage.setItem("syncro_ads_draft_content", liveTranscription);
+    } else {
+      localStorage.removeItem("syncro_ads_draft_title");
+      localStorage.removeItem("syncro_ads_draft_content");
+    }
+  }, [lessonTitle, liveTranscription]);
+
+  // Limpieza del estado de grabación al desmontar
+  useEffect(() => {
+    return () => {
+      localStorage.removeItem("syncro_recording_active");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("syncro_session_activity"));
+      }
+    };
+  }, []);
+
   const API = API_URL;
 
   const downloadAsTxt = (title: string, content: string) => {
@@ -316,6 +353,10 @@ export default function ConfiguracionPage() {
       streamRef.current = stream;
       setRecording(true);
       setLiveTranscription("");
+      localStorage.setItem("syncro_recording_active", "true");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("syncro_session_activity"));
+      }
 
       const audioStream = new MediaStream(audioTracks);
       stream.getVideoTracks().forEach((track: any) => track.stop());
@@ -393,6 +434,10 @@ export default function ConfiguracionPage() {
     }
     setRecording(false);
     toast.info("Grabación de video detenida.");
+    localStorage.removeItem("syncro_recording_active");
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("syncro_session_activity"));
+    }
   };
 
   const saveLesson = async () => {
@@ -425,6 +470,8 @@ export default function ConfiguracionPage() {
         toast.success("Lección guardada con éxito en el cerebro de la IA");
         setLessonTitle("");
         setLiveTranscription("");
+        localStorage.removeItem("syncro_ads_draft_title");
+        localStorage.removeItem("syncro_ads_draft_content");
         fetchAdsDocs();
       } else {
         toast.error("Error al guardar la lección");
@@ -2387,6 +2434,50 @@ export default function ConfiguracionPage() {
                 Entrena a tu copiloto de IA compartiendo tus videos del curso. La IA escuchará el audio y guardará el conocimiento en su base de datos.
               </p>
             </div>
+
+            {hasDraft && (
+              <div className="p-4 border border-amber-500/30 bg-amber-500/10 rounded-xl flex flex-col gap-3">
+                <div className="flex items-start gap-3">
+                  <IconAlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={20} />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-amber-500">Se detectó un borrador sin guardar</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Encontramos una transcripción o texto de lección que no se guardó (por ejemplo, si la sesión se cerró). ¿Deseas recuperarlo para no perder tu trabajo?
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-muted-foreground hover:bg-muted h-8"
+                    onClick={() => {
+                      localStorage.removeItem("syncro_ads_draft_title");
+                      localStorage.removeItem("syncro_ads_draft_content");
+                      setHasDraft(false);
+                      toast.info("Borrador descartado");
+                    }}
+                  >
+                    Descartar borrador
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    className="bg-amber-500 hover:bg-amber-600 text-white h-8 gap-1.5"
+                    onClick={() => {
+                      const draftTitle = localStorage.getItem("syncro_ads_draft_title") || "";
+                      const draftContent = localStorage.getItem("syncro_ads_draft_content") || "";
+                      setLessonTitle(draftTitle);
+                      setLiveTranscription(draftContent);
+                      setAdsTrainingMode("manual");
+                      setHasDraft(false);
+                      toast.success("Borrador recuperado. Ahora puedes guardar tu lección.");
+                    }}
+                  >
+                    Recuperar borrador
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <Card className="border border-primary/20 bg-primary/5">
               <CardHeader>

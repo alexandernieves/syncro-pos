@@ -34,6 +34,13 @@ export function SessionMonitor({ timeoutMinutes = 30 }: SessionMonitorProps) {
     // Solo si hay un token (usuario logueado)
     const token = localStorage.getItem("token")
     if (token) {
+      // Si hay una grabación de lección en curso, postergamos el cierre de sesión
+      const isRecording = localStorage.getItem("syncro_recording_active") === "true"
+      if (isRecording) {
+        timeoutId.current = setTimeout(resetTimer, 60 * 1000) // Re-evaluar en 1 minuto
+        return
+      }
+      
       timeoutId.current = setTimeout(handleLogout, timeoutMinutes * 60 * 1000)
     }
   }, [handleLogout, timeoutMinutes])
@@ -43,8 +50,8 @@ export function SessionMonitor({ timeoutMinutes = 30 }: SessionMonitorProps) {
     const isPortal = typeof window !== "undefined" && window.location.pathname.startsWith("/portal");
     if (isPortal) return;
 
-    // Eventos que reinician el contador de inactividad
-    const events = ["mousedown", "mousemove", "keydown", "scroll", "touchstart"]
+    // Eventos que reinician el contador de inactividad, incluyendo evento custom de actividad
+    const events = ["mousedown", "mousemove", "keydown", "scroll", "touchstart", "syncro_session_activity"]
     
     const token = localStorage.getItem("token")
     if (token) {
