@@ -234,6 +234,13 @@ export default function ConfiguracionPage() {
   const isInitialMount = useRef(true);
   const chunkTimeoutRef = useRef<any>(null);
 
+  const [transcriptionStats, setTranscriptionStats] = useState({
+    total: 0,
+    success: 0,
+    failed: 0,
+    failedList: [] as number[],
+  });
+
   // Comprobar si hay borrador al montar
   useEffect(() => {
     const draftTitle = localStorage.getItem("syncro_ads_draft_title") || "";
@@ -357,6 +364,7 @@ export default function ConfiguracionPage() {
       streamRef.current = stream;
       setRecording(true);
       setLiveTranscription("");
+      setTranscriptionStats({ total: 0, success: 0, failed: 0, failedList: [] });
       localStorage.setItem("syncro_recording_active", "true");
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("syncro_session_activity"));
@@ -379,6 +387,9 @@ export default function ConfiguracionPage() {
 
         mediaRecorder.ondataavailable = async (event) => {
           if (event.data && event.data.size > 0) {
+            const currentChunkIndex = chunkIndex++;
+            setTranscriptionStats(prev => ({ ...prev, total: prev.total + 1 }));
+
             const reader = new FileReader();
             reader.onloadend = async () => {
               const base64data = reader.result as string;
@@ -402,17 +413,34 @@ export default function ConfiguracionPage() {
                       const current = prev.trim();
                       return current ? `${current} ${data.text.trim()}` : data.text.trim();
                     });
-                    toast.success(`Fragmento de video ${chunkIndex++} procesado`);
-                  } else if (data.error) {
-                    console.error("Error transcribiendo fragmento:", data.error);
-                    toast.error(`Error en fragmento ${chunkIndex++}: ${data.error}`);
+                    setTranscriptionStats(prev => ({ ...prev, success: prev.success + 1 }));
+                    toast.success(`Fragmento de video ${currentChunkIndex} procesado`);
+                  } else {
+                    const errMsg = data.error || "Formato de respuesta incorrecto";
+                    console.error("Error transcribiendo fragmento:", errMsg);
+                    setTranscriptionStats(prev => ({ 
+                      ...prev, 
+                      failed: prev.failed + 1,
+                      failedList: [...prev.failedList, currentChunkIndex]
+                    }));
+                    toast.error(`Error en fragmento ${currentChunkIndex}: ${errMsg}`);
                   }
                 } else {
-                  toast.error(`Error del servidor al procesar fragmento ${chunkIndex++}`);
+                  setTranscriptionStats(prev => ({ 
+                    ...prev, 
+                    failed: prev.failed + 1,
+                    failedList: [...prev.failedList, currentChunkIndex]
+                  }));
+                  toast.error(`Error del servidor al procesar fragmento ${currentChunkIndex}`);
                 }
               } catch (e: any) {
                 console.error("Error transcribiendo fragmento:", e);
-                toast.error(`Error de red en fragmento ${chunkIndex++}`);
+                setTranscriptionStats(prev => ({ 
+                  ...prev, 
+                  failed: prev.failed + 1,
+                  failedList: [...prev.failedList, currentChunkIndex]
+                }));
+                toast.error(`Error de red en fragmento ${currentChunkIndex}`);
               }
             };
             reader.readAsDataURL(event.data);
@@ -2587,7 +2615,23 @@ export default function ConfiguracionPage() {
 
                     {(liveTranscription.trim() || recording) && (
                       <div className="flex flex-col gap-1.5 mt-2">
-                        <Label className="text-xs uppercase font-bold text-muted-foreground">Texto Transcrito (Vista Previa)</Label>
+                        <div className="flex justify-between items-center">
+                          <Label className="text-xs uppercase font-bold text-muted-foreground">Texto Transcrito (Vista Previa)</Label>
+                          {transcriptionStats.total > 0 && (
+                            <div className="flex items-center gap-2 text-xs font-semibold">
+                              <span>Procesados: {transcriptionStats.success}/{transcriptionStats.total}</span>
+                              {transcriptionStats.failed > 0 ? (
+                                <span className="text-destructive flex items-center gap-1">
+                                  <IconAlertTriangle size={12} /> {transcriptionStats.failed} fallidos ({transcriptionStats.failedList.map(n => `#${n}`).join(", ")})
+                                </span>
+                              ) : (
+                                <span className="text-green-500 flex items-center gap-1">
+                                  <IconCheck size={12} /> 100% OK
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                         <div className="p-4 bg-background border rounded-lg max-h-[200px] overflow-y-auto whitespace-pre-line text-sm text-foreground/80 leading-relaxed font-mono">
                           {liveTranscription || <span className="italic text-muted-foreground">Esperando primer fragmento de audio...</span>}
                         </div>
