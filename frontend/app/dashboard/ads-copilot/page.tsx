@@ -889,6 +889,42 @@ export default function AdsCopilotPage() {
     window.speechSynthesis.speak(utterance);
   };
 
+  const playVoicePreview = (voiceName: string) => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+
+    const voices = window.speechSynthesis.getVoices();
+    let chosenVoice: SpeechSynthesisVoice | null = null;
+    if (voiceName !== "default") {
+      chosenVoice = voices.find(v => v.name === voiceName) || null;
+    } else {
+      const preferredNames = ["colombia", "google español", "siri", "monica", "paulina", "jorge"];
+      chosenVoice = voices.find(v => v.lang.startsWith("es") && preferredNames.some(name => v.name.toLowerCase().includes(name))) || null;
+      if (!chosenVoice) {
+        chosenVoice = voices.find(v => v.lang.startsWith("es")) || voices[0] || null;
+      }
+    }
+
+    if (!chosenVoice) return;
+
+    const isColombian = chosenVoice.lang.toLowerCase().includes("co");
+    const text = isColombian
+      ? "Hola, esta es una prueba de mi voz con acento colombiano."
+      : `Hola, esta es una prueba de mi voz en español, llamada ${chosenVoice.name}.`;
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.voice = chosenVoice;
+    utterance.lang = chosenVoice.lang;
+    utterance.rate = 1.05;
+    utterance.pitch = 1.0;
+
+    utterance.onstart = () => setAiSpeaking(true);
+    utterance.onend = () => setAiSpeaking(false);
+    utterance.onerror = () => setAiSpeaking(false);
+
+    window.speechSynthesis.speak(utterance);
+  };
+
   // ── VOICE MICROPHONE LISTENING ──────────────────────────────────────────
 
   const startVoiceListening = async () => {
@@ -1704,24 +1740,43 @@ export default function AdsCopilotPage() {
                 {voiceEnabled && (
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-[10px] uppercase font-bold text-muted-foreground">Seleccionar Voz</Label>
-                    <Select value={selectedVoiceName} onValueChange={setSelectedVoiceName}>
-                      <SelectTrigger className="w-full h-8 text-xs bg-background/50 border-primary/20 focus:ring-1 focus:ring-primary/30">
-                        <SelectValue placeholder="Voz por defecto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default" className="text-xs">
-                          Voz por defecto del sistema
-                        </SelectItem>
-                        {availableVoices.map((voice) => {
-                          const isColombian = voice.lang.toLowerCase().includes("co");
-                          return (
-                            <SelectItem key={voice.name} value={voice.name} className="text-xs">
-                              {voice.name} ({voice.lang}) {isColombian ? "🇨🇴" : ""}
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <Select 
+                          value={selectedVoiceName} 
+                          onValueChange={(val) => {
+                            setSelectedVoiceName(val);
+                            playVoicePreview(val);
+                          }}
+                        >
+                          <SelectTrigger className="w-full h-8 text-xs bg-background/50 border-primary/20 focus:ring-1 focus:ring-primary/30">
+                            <SelectValue placeholder="Voz por defecto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default" className="text-xs">
+                              Voz por defecto del sistema
                             </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
+                            {availableVoices.map((voice) => {
+                              const isColombian = voice.lang.toLowerCase().includes("co");
+                              return (
+                                <SelectItem key={voice.name} value={voice.name} className="text-xs">
+                                  {voice.name} ({voice.lang}) {isColombian ? "🇨🇴" : ""}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 border-primary/20 bg-background/50 text-muted-foreground hover:text-primary shrink-0"
+                        onClick={() => playVoicePreview(selectedVoiceName)}
+                        title="Probar voz seleccionada"
+                      >
+                        <IconVolume size={14} />
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
