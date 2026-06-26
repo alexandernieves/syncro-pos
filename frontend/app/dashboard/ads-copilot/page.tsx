@@ -870,14 +870,12 @@ export default function AdsCopilotPage() {
       };
 
       recognition.onerror = () => {
-        stopVoiceListening(stream, recognition);
+        stopVoiceListening(stream, recognition, "discard");
       };
 
       recognition.onend = () => {
-        // Automatically send voice command upon pause
-        setTimeout(() => {
-          stopVoiceListening(stream, recognition, true);
-        }, 400);
+        // Stop listening and keep the transcribed text in the input box for manual editing/sending
+        stopVoiceListening(stream, recognition, "keep");
       };
 
       setSpeechRecognition(recognition);
@@ -887,7 +885,11 @@ export default function AdsCopilotPage() {
     }
   };
 
-  const stopVoiceListening = (stream?: MediaStream | null, recognition?: any, autoSend = false) => {
+  const stopVoiceListening = (
+    stream?: MediaStream | null, 
+    recognition?: any, 
+    action: "send" | "discard" | "keep" = "keep"
+  ) => {
     const activeStream = stream || micMediaStream;
     if (activeStream) {
       activeStream.getTracks().forEach(t => t.stop());
@@ -905,14 +907,14 @@ export default function AdsCopilotPage() {
 
     setVoiceListening(false);
 
-    if (autoSend) {
-      setInputText(prev => {
-        const text = prev.trim();
-        if (text) {
-          handleSend(text);
-        }
-        return "";
-      });
+    if (action === "send") {
+      const text = inputText.trim();
+      if (text) {
+        handleSend(text);
+      }
+      setInputText("");
+    } else if (action === "discard") {
+      setInputText("");
     }
   };
 
@@ -1474,7 +1476,7 @@ export default function AdsCopilotPage() {
                     variant="ghost"
                     size="icon"
                     className="rounded-full size-8 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 shrink-0"
-                    onClick={() => stopVoiceListening(micMediaStream, speechRecognition, false)}
+                    onClick={() => stopVoiceListening(micMediaStream, speechRecognition, "discard")}
                   >
                     <IconTrash size={16} />
                   </Button>
@@ -1508,7 +1510,7 @@ export default function AdsCopilotPage() {
                   <Button
                     size="icon"
                     className="rounded-full size-8 bg-primary hover:opacity-90 shrink-0 shadow-sm"
-                    onClick={() => stopVoiceListening(micMediaStream, speechRecognition, true)}
+                    onClick={() => stopVoiceListening(micMediaStream, speechRecognition, "send")}
                   >
                     <IconSend size={14} />
                   </Button>
