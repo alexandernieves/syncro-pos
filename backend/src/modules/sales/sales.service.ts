@@ -33,6 +33,42 @@ export class SalesService {
     const { branchId, items, payments, clientId, saveChangeToWallet, generatePwaCode } = data;
 
     try {
+      // Deduplication check: check if an identical sale was created by same user/branch/client in last 8 seconds
+      if (items && Array.isArray(items) && items.length > 0) {
+        const recentWindow = new Date(Date.now() - 8000);
+        const potentialDuplicate = await this.prisma.sale.findFirst({
+          where: {
+            userId,
+            branchId,
+            clientId: clientId || null,
+            createdAt: { gte: recentWindow }
+          },
+          include: { items: true, payments: true },
+          orderBy: { createdAt: 'desc' }
+        });
+
+        if (potentialDuplicate) {
+          const incomingItemCount = items.length;
+          const existingItemCount = potentialDuplicate.items.length;
+          if (incomingItemCount === existingItemCount) {
+            const isSameItems = items.every((incoming: any) => {
+              return potentialDuplicate.items.some((ext: any) =>
+                (incoming.variantId ? ext.variantId === incoming.variantId : ext.waitlistId === incoming.waitlistId) &&
+                ext.quantity === incoming.quantity
+              );
+            });
+
+            if (isSameItems) {
+              this.logger.warn(`Deduplicated sale creation request for user ${userId}, branch ${branchId}. Returning existing sale ${potentialDuplicate.id}`);
+              return {
+                ...potentialDuplicate,
+                pwaCode: null
+              };
+            }
+          }
+        }
+      }
+
       const result = await this.prisma.$transaction(async (tx) => {
       // 0. Get current settings for taxes
       const settings = await tx.setting.findFirst();

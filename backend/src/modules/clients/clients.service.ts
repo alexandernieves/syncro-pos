@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ClientsService {
+  private readonly logger = new Logger(ClientsService.name);
+
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
@@ -112,6 +114,24 @@ export class ClientsService {
 
   async registerPayment(clientId: string, data: { amount: number; notes?: string; paidCurrency?: string; paidAmount?: number; exchangeRate?: number }, businessId?: string) {
     await this.findOne(clientId, businessId);
+
+    // Deduplication check: check if identical payment was registered for client in last 5 seconds
+    if (data.amount && data.amount > 0) {
+      const recentTx = await this.prisma.creditTransaction.findFirst({
+        where: {
+          clientId,
+          amount: -data.amount,
+          type: 'PAYMENT',
+          createdAt: { gte: new Date(Date.now() - 5000) }
+        }
+      });
+      if (recentTx) {
+        this.logger.warn(`Deduplicated payment registration of $${data.amount} for client ${clientId}`);
+        const existingClient = await this.prisma.client.findUnique({ where: { id: clientId } });
+        return this.sanitizeClient(existingClient);
+      }
+    }
+
     const updatedClient = await this.prisma.$transaction(async (tx) => {
       const client = await tx.client.findUnique({ where: { id: clientId } });
       if (!client) throw new NotFoundException("Cliente no encontrado");

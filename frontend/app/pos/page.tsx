@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { API_URL } from "@/lib/constants"
 import { useRouter } from "next/navigation";
 import {
@@ -577,6 +577,7 @@ export default function POSPage() {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [processing, setProcessing] = useState(false);
+  const isProcessingRef = useRef(false);
   const [taxRate, setTaxRate] = useState(16);
   const [isSaleSuccessModalOpen, setIsSaleSuccessModalOpen] = useState(false);
 
@@ -1605,6 +1606,7 @@ export default function POSPage() {
   };
 
   const handleRegisterAbono = async () => {
+    if (isSubmittingAbono) return;
     if (!abonoAmount || parseFloat(abonoAmount) <= 0) {
       toast.error("Monto inválido");
       return;
@@ -1666,6 +1668,7 @@ export default function POSPage() {
   };
 
   const initiatePinAuthorization = async (overriddenPayments?: any[] | null) => {
+    if (isGeneratingPin) return;
     if (cart.length === 0) return toast.error("El carrito está vacío");
 
     const currentBranchId = localStorage.getItem("currentBranchId");
@@ -1813,6 +1816,7 @@ export default function POSPage() {
   }, [isPollingPin, generatedPinCode, printReceipt]);
 
   const processSale = async (overriddenPayments?: any[]) => {
+    if (processing || isProcessingRef.current) return;
     if (cart.length === 0) return toast.error("El carrito está vacío");
 
     const paymentsToEvaluate = overriddenPayments || addedPayments;
@@ -1821,6 +1825,7 @@ export default function POSPage() {
 
     if (remainingToPayEval > 0.01) return toast.error("Aún falta saldo por cubrir");
 
+    isProcessingRef.current = true;
     setProcessing(true);
 
     try {
@@ -1963,6 +1968,7 @@ export default function POSPage() {
         setTimeout(() => window.print(), 100);
       }
     } finally {
+      isProcessingRef.current = false;
       setProcessing(false);
     }
   };
@@ -4069,6 +4075,7 @@ export default function POSPage() {
               Revisar Pago
             </AlertDialogCancel>
             <AlertDialogAction
+              disabled={processing}
               onClick={() => {
                 setIsConfirmPaymentOpen(false);
                 const hasCredit = paymentsToProcess?.some((p: any) => p.method === 'CREDIT');
