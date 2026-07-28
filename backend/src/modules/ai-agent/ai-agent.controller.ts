@@ -89,10 +89,12 @@ export class AiAgentController {
     @Body('sessionId') sessionId: string,
     @Req() req: any,
     @Body('branchId') branchId?: string,
+    @Body('isAdsMode') isAdsMode?: boolean,
+    @Body('webSearch') webSearch?: boolean,
   ): Promise<any> {
     const userId = req.user?.id || req.user?.sub;
     const businessId = req.user?.businessId;
-    return this.aiAgentService.chat(userId, businessId, message, sessionId || 'default', branchId);
+    return this.aiAgentService.chat(userId, businessId, message, sessionId || 'default', branchId, isAdsMode, webSearch);
   }
 
   /**
@@ -105,6 +107,9 @@ export class AiAgentController {
     @Req() req: any,
     @Res() res: any,
     @Body('branchId') branchId?: string,
+    @Body('isAdsMode') isAdsMode?: boolean,
+    @Body('screenshot') screenshot?: string | null,
+    @Body('webSearch') webSearch?: boolean,
   ) {
     const userId = req.user?.id || req.user?.sub;
     const businessId = req.user?.businessId;
@@ -114,25 +119,72 @@ export class AiAgentController {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
 
-    await this.aiAgentService.chatStream(
-      userId,
-      businessId,
-      message,
-      sessionId || 'default',
-      branchId,
-      (chunk) => {
-        res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
-      },
-      (result) => {
-        res.write(`data: ${JSON.stringify({
-          done: true,
-          id: result.id,
-          message: result.message,
-          action: result.action
-        })}\n\n`);
-        res.end();
-      }
-    );
+    if (isAdsMode) {
+      await this.aiAgentService.adsChatStream(
+        userId,
+        businessId,
+        message,
+        sessionId || 'default',
+        screenshot || null,
+        branchId || null,
+        null, // audio
+        null, // audioFormat
+        false, // autopilot
+        (payload: any) => {
+          if (typeof payload === 'string') {
+            res.write(`data: ${JSON.stringify({ chunk: payload })}\n\n`);
+          } else {
+            res.write(`data: ${JSON.stringify(payload)}\n\n`);
+          }
+        },
+        (result) => {
+          res.write(`data: ${JSON.stringify({
+            done: true,
+            id: result.id,
+            message: result.message,
+            action: result.action
+          })}\n\n`);
+          res.end();
+        },
+        'GENERAL',
+        !!webSearch
+      );
+    } else {
+      await this.aiAgentService.chatStream(
+        userId,
+        businessId,
+        message,
+        sessionId || 'default',
+        branchId,
+        (chunk) => {
+          res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+        },
+        (result) => {
+          res.write(`data: ${JSON.stringify({
+            done: true,
+            id: result.id,
+            message: result.message,
+            action: result.action
+          })}\n\n`);
+          res.end();
+        }
+      );
+    }
+  }
+
+  /**
+   * Save a screen capture of Meta Ads Manager silently into PostgreSQL database for context retrieval
+   */
+  @Post('screenshot')
+  async saveScreenshot(
+    @Body('sessionId') sessionId: string,
+    @Body('screenshot') screenshot: string,
+    @Req() req: any,
+  ) {
+    const userId = req.user?.id || req.user?.sub;
+    const businessId = req.user?.businessId;
+    await this.aiAgentService.saveScreenshot(businessId, userId, sessionId, screenshot);
+    return { success: true };
   }
 
   /**
@@ -275,9 +327,17 @@ export class AiAgentController {
     @Body('content') content: string,
     @Body('sourceType') sourceType?: string,
     @Body('branchId') branchId?: string,
+    @Body('screenshots') screenshots?: { ts: number; data: string }[],
   ) {
     const businessId = req.user?.businessId;
-    return this.aiAgentService.createAdsDocument(businessId, branchId || null, title, content, sourceType || 'VIDEO_TRANSCRIPT');
+    return this.aiAgentService.createAdsDocument(
+      businessId, 
+      branchId || null, 
+      title, 
+      content, 
+      sourceType || 'VIDEO_TRANSCRIPT',
+      screenshots || null
+    );
   }
 
   /**
@@ -329,6 +389,9 @@ export class AiAgentController {
     @Body('sessionId') sessionId: string,
     @Body('screenshot') screenshot: string | null,
     @Body('branchId') branchId: string | null,
+    @Body('audio') audio: string | null,
+    @Body('audioFormat') audioFormat: string | null,
+    @Body('isAutopilot') isAutopilot: boolean | null,
     @Req() req: any,
     @Res() res: any,
   ) {
@@ -347,8 +410,15 @@ export class AiAgentController {
       sessionId || 'default',
       screenshot || null,
       branchId || null,
-      (chunk) => {
-        res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+      audio || null,
+      audioFormat || 'webm',
+      isAutopilot || false,
+      (payload: any) => {
+        if (typeof payload === 'string') {
+          res.write(`data: ${JSON.stringify({ chunk: payload })}\n\n`);
+        } else {
+          res.write(`data: ${JSON.stringify(payload)}\n\n`);
+        }
       },
       (result) => {
         res.write(`data: ${JSON.stringify({

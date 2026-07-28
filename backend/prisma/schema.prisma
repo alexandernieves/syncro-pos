@@ -10,33 +10,34 @@ datasource db {
 }
 
 model Business {
-  id                 String              @id @default(uuid())
-  name               String
-  status             String              @default("ACTIVE")
-  subscription       String              @default("BASIC")
-  logo               String?
-  ruc                String?
-  email              String?
-  phone              String?
-  address            String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  feedbacks          AiFeedback[]
-  auditLogs          AuditLog[]
-  branches           Branch[]
-  categories         Category[]
-  clients            Client[]
-  conversations      Conversation[]
-  deliveryOrders     DeliveryOrder[]
-  expenses           Expense[]
-  paymentSubmissions PaymentSubmission[]
-  products           Product[]
-  sales              Sale[]
-  settings           Setting[]
-  suppliers          Supplier[]
-  users              User[]
-  whatsAppChats      WhatsAppChat[]
+  id                    String                 @id @default(uuid())
+  name                  String
+  status                String                 @default("ACTIVE")
+  subscription          String                 @default("BASIC")
+  logo                  String?
+  ruc                   String?
+  email                 String?
+  phone                 String?
+  address               String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
   adsKnowledgeDocuments AdsKnowledgeDocument[]
+  feedbacks             AiFeedback[]
+  auditLogs             AuditLog[]
+  branches              Branch[]
+  categories            Category[]
+  clients               Client[]
+  conversations         Conversation[]
+  deliveryOrders        DeliveryOrder[]
+  expenses              Expense[]
+  landingPages          LandingPage[]
+  paymentSubmissions    PaymentSubmission[]
+  products              Product[]
+  sales                 Sale[]
+  settings              Setting[]
+  suppliers             Supplier[]
+  users                 User[]
+  whatsAppChats         WhatsAppChat[]
 }
 
 model Conversation {
@@ -166,31 +167,31 @@ model Supplier {
 }
 
 model Branch {
-  id                 String              @id @default(uuid())
-  name               String
-  location           String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  country            String?
-  isMain             Boolean             @default(false)
-  state              String?
-  businessId         String?
-  email              String?
-  phone              String?
-  accountingEntries  AccountingEntry[]
-  business           Business?           @relation(fields: [businessId], references: [id])
-  expenses           Expense[]
-  inventory          Inventory[]
-  inventoryMovements InventoryMovement[]
-  transfersDest      InventoryTransfer[] @relation("DestinationBranch")
-  transfersSource    InventoryTransfer[] @relation("SourceBranch")
-  notifications      Notification[]      @relation("BranchNotifications")
-  waitlistItems      ProductWaitlist[]
-  purchaseOrders     PurchaseOrder[]
-  sales              Sale[]
-  shifts             Shift[]
-  aiChatSessions        AiChatSession[]
+  id                    String                 @id @default(uuid())
+  name                  String
+  location              String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  country               String?
+  isMain                Boolean                @default(false)
+  state                 String?
+  businessId            String?
+  email                 String?
+  phone                 String?
+  accountingEntries     AccountingEntry[]
   adsKnowledgeDocuments AdsKnowledgeDocument[]
+  aiChatSessions        AiChatSession[]
+  business              Business?              @relation(fields: [businessId], references: [id])
+  expenses              Expense[]
+  inventory             Inventory[]
+  inventoryMovements    InventoryMovement[]
+  transfersDest         InventoryTransfer[]    @relation("DestinationBranch")
+  transfersSource       InventoryTransfer[]    @relation("SourceBranch")
+  notifications         Notification[]         @relation("BranchNotifications")
+  waitlistItems         ProductWaitlist[]
+  purchaseOrders        PurchaseOrder[]
+  sales                 Sale[]
+  shifts                Shift[]
 
   @@unique([businessId, name])
 }
@@ -287,8 +288,8 @@ model Setting {
   showNetMargin               Boolean   @default(true)
   syncroCreditFrequencyDays   Int       @default(15)
   syncroCreditMaxInstallments Int       @default(3)
-  whatsappBotEnabled          Boolean   @default(false)
   whatsappAuthorizedPhones    String[]  @default([])
+  whatsappBotEnabled          Boolean   @default(false)
   business                    Business? @relation(fields: [businessId], references: [id])
 }
 
@@ -682,9 +683,9 @@ model AiChatSession {
   updatedAt  DateTime        @updatedAt
   isArchived Boolean         @default(false)
   isPinned   Boolean         @default(false)
-  type       String          @default("GENERAL") // "GENERAL" or "ADS_COPILOT"
-  messages   AiChatMessage[]
+  type       String          @default("GENERAL")
   branchId   String?
+  messages   AiChatMessage[]
   branch     Branch?         @relation(fields: [branchId], references: [id], onDelete: Cascade)
 }
 
@@ -717,13 +718,13 @@ model AdsKnowledgeDocument {
   id         String   @id @default(uuid())
   businessId String
   title      String
-  content    String   @db.Text
-  sourceType String   @default("VIDEO_TRANSCRIPT") // "VIDEO_TRANSCRIPT", "PDF_DOCUMENT", "MANUAL_TEXT"
+  content    String
+  sourceType String   @default("VIDEO_TRANSCRIPT")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   branchId   String?
   branch     Branch?  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 }
 
 model Loan {
@@ -810,6 +811,107 @@ model DeliveryOrder {
   client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }
 
+model WhatsAppChat {
+  id                       String            @id @default(uuid())
+  phone                    String
+  name                     String?
+  clientId                 String?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  businessId               String?
+  assignedTo               String?
+  isPinned                 Boolean           @default(false)
+  isArchived               Boolean           @default(false)
+  isRestricted             Boolean           @default(false)
+  isFavorite               Boolean           @default(false)
+  isMuted                  Boolean           @default(false)
+  isUnread                 Boolean           @default(false)
+  isBlocked                Boolean           @default(false)
+  lists                    String[]          @default([])
+  avatarUrl                String?
+  whatsappBotSessionActive Boolean           @default(false)
+  user                     User?             @relation(fields: [assignedTo], references: [id])
+  business                 Business?         @relation(fields: [businessId], references: [id])
+  client                   Client?           @relation(fields: [clientId], references: [id])
+  messages                 WhatsAppMessage[]
+
+  @@unique([phone, businessId])
+}
+
+model WhatsAppMessage {
+  id            String       @id @default(uuid())
+  chatId        String
+  senderType    String
+  agentId       String?
+  text          String?
+  type          String
+  mediaUrl      String?
+  status        String
+  whatsappMsgId String?
+  createdAt     DateTime     @default(now())
+  chat          WhatsAppChat @relation(fields: [chatId], references: [id])
+}
+
+model WhatsAppPendingAction {
+  id         String   @id @default(uuid())
+  chatId     String?
+  phone      String
+  businessId String
+  userId     String
+  branchId   String
+  actionJson String
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+}
+
+model LandingPage {
+  id         String   @id @default(uuid())
+  businessId String
+  title      String
+  slug       String   @unique
+  productUrl String?
+  config     Json
+  status     String   @default("DRAFT")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+model ClientesPetgo {
+  id        Int       @id @default(autoincrement())
+  nombre    String    @db.VarChar(255)
+  telefono  String    @db.VarChar(100)
+  producto  String    @db.VarChar(255)
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  visitorId String?   @map("visitor_id") @db.VarChar(100)
+
+  @@map("clientes_petgo")
+}
+
+model VisitasPetgo {
+  id                   Int       @id @default(autoincrement())
+  ipAddress            String?   @map("ip_address") @db.VarChar(100)
+  userAgent            String?   @map("user_agent")
+  deviceType           String?   @map("device_type") @db.VarChar(50)
+  os                   String?   @db.VarChar(50)
+  browser              String?   @db.VarChar(50)
+  referrer             String?
+  utmSource            String?   @map("utm_source") @db.VarChar(150)
+  utmMedium            String?   @map("utm_medium") @db.VarChar(150)
+  utmCampaign          String?   @map("utm_campaign") @db.VarChar(150)
+  fbclid               String?   @db.VarChar(250)
+  createdAt            DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  visitorId            String?   @map("visitor_id") @db.VarChar(100)
+  tiempoPagina         Float?    @default(0.0) @map("tiempo_pagina")
+  formularioIniciado   Boolean?  @default(false) @map("formulario_iniciado")
+  formularioCompletado Boolean?  @default(false) @map("formulario_completado")
+  cantidadClics        Int?      @default(0) @map("cantidad_clics")
+  hizoScroll           Boolean?  @default(false) @map("hizo_scroll")
+  scrollMaximo         Int?      @default(0) @map("scroll_maximo")
+
+  @@map("visitas_petgo")
+}
+
 enum SupplierStatus {
   ACTIVE
   BLOCKED
@@ -879,57 +981,4 @@ enum InstallmentStatus {
   PENDING
   PAID
   OVERDUE
-}
-
-model WhatsAppChat {
-  id            String            @id @default(uuid())
-  phone         String
-  name          String?
-  clientId      String?
-  client        Client?           @relation(fields: [clientId], references: [id])
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  messages      WhatsAppMessage[]
-  businessId    String?
-  business      Business?         @relation(fields: [businessId], references: [id])
-  assignedTo    String?
-  user          User?             @relation(fields: [assignedTo], references: [id])
-  isPinned      Boolean           @default(false)
-  isArchived    Boolean           @default(false)
-  isRestricted  Boolean           @default(false)
-  isFavorite    Boolean           @default(false)
-  isMuted       Boolean           @default(false)
-  isUnread      Boolean           @default(false)
-  isBlocked     Boolean           @default(false)
-  lists         String[]          @default([])
-  avatarUrl     String?
-  whatsappBotSessionActive Boolean           @default(false)
-
-  @@unique([phone, businessId])
-}
-
-model WhatsAppMessage {
-  id             String       @id @default(uuid())
-  chatId         String
-  chat           WhatsAppChat @relation(fields: [chatId], references: [id])
-  senderType     String
-  agentId        String?
-  text           String?
-  type           String
-  mediaUrl       String?
-  status         String
-  whatsappMsgId  String?
-  createdAt      DateTime     @default(now())
-}
-
-model WhatsAppPendingAction {
-  id         String   @id @default(uuid())
-  chatId     String?
-  phone      String
-  businessId String
-  userId     String   // ID del usuario dueño (para confirmAction)
-  branchId   String   // sucursal activa del usuario
-  actionJson String   // JSON del AgentAction
-  createdAt  DateTime @default(now())
-  expiresAt  DateTime // TTL: 10 minutos
 }

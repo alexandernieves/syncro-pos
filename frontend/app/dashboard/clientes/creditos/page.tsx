@@ -131,6 +131,12 @@ export default function CreditosPage() {
   const [selectedClientForLimit, setSelectedClientForLimit] = useState<any>(null);
   const [isUpdatingLimit, setIsUpdatingLimit] = useState(false);
 
+  // Surcharge/Commission Section within Limit Modal
+  const [surchargeType, setSurchargeType] = useState<"PERCENT" | "FIXED">("PERCENT");
+  const [surchargeValue, setSurchargeValue] = useState("");
+  const [surchargeNotes, setSurchargeNotes] = useState("");
+  const [isApplyingSurcharge, setIsApplyingSurcharge] = useState(false);
+
   // History Modal
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyClient, setHistoryClient] = useState<any>(null);
@@ -251,6 +257,10 @@ export default function CreditosPage() {
     setSelectedClientForLimit(client);
     setIsTraditional(client.creditLimit === 0);
     setLimitAmount(client.creditLimit > 0 ? client.creditLimit.toString() : "100");
+    // Reset surcharge fields
+    setSurchargeType("PERCENT");
+    setSurchargeValue("");
+    setSurchargeNotes("");
     setLimitOpen(true);
   };
 
@@ -293,6 +303,53 @@ export default function CreditosPage() {
       toast.error("Error de conexión");
     } finally {
       setIsUpdatingLimit(false);
+    }
+  };
+
+  const handleApplySurcharge = async () => {
+    if (!selectedClientForLimit) return;
+    const val = parseFloat(surchargeValue);
+    if (isNaN(val) || val <= 0) {
+      toast.error("Por favor ingresa un monto o porcentaje válido");
+      return;
+    }
+
+    let finalAmount = val;
+    if (surchargeType === "PERCENT") {
+      const debt = selectedClientForLimit.currentDebt || 0;
+      if (debt <= 0) {
+        toast.error("No se puede aplicar un recargo porcentual a un cliente sin deuda actual");
+        return;
+      }
+      finalAmount = (val / 100) * debt;
+    }
+
+    setIsApplyingSurcharge(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/clients/${selectedClientForLimit.id}/charge`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          amount: parseFloat(finalAmount.toFixed(2)),
+          notes: surchargeNotes || (surchargeType === "PERCENT" ? `Recargo del ${val}% por crédito` : `Recargo fijo por crédito`)
+        })
+      });
+      if (res.ok) {
+        toast.success("Recargo aplicado y deuda actualizada");
+        setLimitOpen(false);
+        loadData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Error al aplicar recargo");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setIsApplyingSurcharge(false);
     }
   };
 
@@ -356,6 +413,10 @@ export default function CreditosPage() {
     (historyPage - 1) * ITEMS_PER_PAGE,
     historyPage * ITEMS_PER_PAGE
   );
+
+  const debtForSurcharge = selectedClientForLimit?.currentDebt || 0;
+  const surchargeValNum = parseFloat(surchargeValue) || 0;
+  const calculatedSurchargeAmount = surchargeType === "PERCENT" ? (surchargeValNum / 100) * debtForSurcharge : surchargeValNum;
 
   return (
     <div className="flex flex-col gap-6 py-4 md:gap-8 md:py-6 font-sans px-4 lg:px-6">
@@ -919,7 +980,7 @@ export default function CreditosPage() {
 
       {/* ─── MODAL GESTIONAR LÍMITE ──────────────────────────────────────── */}
       <Dialog open={limitOpen} onOpenChange={setLimitOpen}>
-        <DialogContent className="rounded-2xl p-6 max-w-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-200">
+        <DialogContent className="rounded-2xl p-6 max-w-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-200 overflow-y-auto max-h-[95vh]">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2 text-zinc-800 dark:text-zinc-100">
               <IconSettings size={20} className="text-zinc-500" /> Gestionar Límite de Crédito
@@ -958,17 +1019,100 @@ export default function CreditosPage() {
                 </div>
               </div>
             )}
-          </div>
 
-          <div className="flex gap-2 pt-2">
-            <Button variant="outline" onClick={() => setLimitOpen(false)} className="rounded-xl h-11 border-zinc-200 dark:border-zinc-800 bg-transparent flex-1">Cancelar</Button>
-            <Button
-              onClick={handleUpdateLimit}
-              disabled={isUpdatingLimit}
-              className="flex-1 rounded-xl h-11 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold border-none"
-            >
-              {isUpdatingLimit ? "Guardando..." : "Guardar Cambios"}
-            </Button>
+            <div className="flex gap-2 pt-2 border-b border-zinc-150 dark:border-zinc-800 pb-4">
+              <Button variant="outline" onClick={() => setLimitOpen(false)} className="rounded-xl h-11 border-zinc-200 dark:border-zinc-800 bg-transparent flex-1 text-xs">Cancelar</Button>
+              <Button
+                onClick={handleUpdateLimit}
+                disabled={isUpdatingLimit}
+                className="flex-1 rounded-xl h-11 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold border-none text-xs"
+              >
+                {isUpdatingLimit ? "Guardando..." : "Guardar Límite"}
+              </Button>
+            </div>
+
+            {/* SECCIÓN CARGO / RECARGO */}
+            <div className="space-y-3 pt-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Aplicar Cargo / Recargo</h4>
+              
+              <div className="flex gap-2 bg-zinc-50 dark:bg-zinc-900/60 p-1 border border-zinc-200 dark:border-zinc-800/80 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setSurchargeType("PERCENT")}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-[10px] font-bold tracking-tight transition-all ${
+                    surchargeType === "PERCENT"
+                      ? "bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 shadow-sm border border-zinc-200/50"
+                      : "text-zinc-500 hover:text-zinc-700"
+                  }`}
+                >
+                  Porcentaje (%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSurchargeType("FIXED")}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-[10px] font-bold tracking-tight transition-all ${
+                    surchargeType === "FIXED"
+                      ? "bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 shadow-sm border border-zinc-200/50"
+                      : "text-zinc-500 hover:text-zinc-700"
+                  }`}
+                >
+                  Monto Fijo ($)
+                </button>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                  {surchargeType === "PERCENT" ? "Porcentaje de la Deuda (%)" : "Monto a Cargar ($ USD)"}
+                </Label>
+                <div className="relative">
+                  {surchargeType === "FIXED" && (
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-400">$</span>
+                  )}
+                  <Input
+                    type="number"
+                    className={`rounded-xl h-11 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-sm font-semibold ${
+                      surchargeType === "FIXED" ? "pl-7" : "px-3.5"
+                    }`}
+                    placeholder="0.00"
+                    value={surchargeValue}
+                    onChange={(e) => setSurchargeValue(e.target.value)}
+                  />
+                  {surchargeType === "PERCENT" && (
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-400">%</span>
+                  )}
+                </div>
+              </div>
+
+              {surchargeType === "PERCENT" && (
+                <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-900 flex justify-between items-center text-xs">
+                  <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                    Monto Calculado:
+                  </span>
+                  <span className="font-bold text-zinc-700 dark:text-zinc-300">
+                    ${calculatedSurchargeAmount.toFixed(2)}
+                  </span>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Concepto / Notas</Label>
+                <Input
+                  placeholder="Ej. Recargo por crédito"
+                  className="rounded-xl h-10 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-sm"
+                  value={surchargeNotes}
+                  onChange={(e) => setSurchargeNotes(e.target.value)}
+                />
+              </div>
+
+              <Button
+                type="button"
+                onClick={handleApplySurcharge}
+                disabled={isApplyingSurcharge || !surchargeValue || parseFloat(surchargeValue) <= 0}
+                className="w-full rounded-xl h-11 bg-rose-600 hover:bg-rose-500 text-white font-bold border-none mt-2 text-xs"
+              >
+                {isApplyingSurcharge ? "Aplicando..." : "Aplicar y Cobrar"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

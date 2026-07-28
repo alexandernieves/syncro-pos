@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { API_URL } from "@/lib/constants"
 import {
   IconSend,
@@ -18,7 +18,6 @@ import {
   IconArrowLeft,
   IconPower,
   IconTrash,
-  IconSparkles,
   IconClock,
   IconLoader2,
   IconVolume,
@@ -43,6 +42,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { io, Socket } from "socket.io-client";
@@ -61,6 +62,17 @@ import {
 import { Orb, AgentState } from "@/components/ui/orb";
 import { useThemeConfig } from "@/components/active-theme";
 import { BarVisualizer } from "@/components/ui/bar-visualizer";
+import { ShimmeringText } from "@/components/ui/shimmering-text";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -97,6 +109,182 @@ const getOrbColors = (theme: string): [string, string] => {
     default:
       return ["#4b5563", "#9ca3af"]; // Default Neutral 600, 400
   }
+};
+
+const renderMarkdown = (content: string) => {
+  if (!content) return null;
+
+  const lines = content.split("\n");
+  const elements: React.ReactNode[] = [];
+
+  const parseInline = (text: string) => {
+    const parts = [];
+    let index = 0;
+    const regex = /(\*\*|__)(.*?)\1|(\*|_)(.*?)\3/g;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const matchStart = match.index;
+      if (matchStart > index) {
+        parts.push(text.substring(index, matchStart));
+      }
+      if (match[1]) {
+        parts.push(<strong key={matchStart} className="font-extrabold text-foreground">{match[2]}</strong>);
+      } else if (match[3]) {
+        parts.push(<em key={matchStart} className="italic">{match[4]}</em>);
+      }
+      index = regex.lastIndex;
+    }
+    if (index < text.length) {
+      parts.push(text.substring(index));
+    }
+    return parts.length > 0 ? parts : text;
+  };
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // 1. Check for Tables
+    if (trimmed.startsWith("|")) {
+      const tableRows: string[][] = [];
+      let hasHeaderDivider = false;
+
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        const rowStr = lines[i].trim();
+        if (rowStr.match(/^\|[ \t]*:?-+:?[ \t]*\|/)) {
+          hasHeaderDivider = true;
+        } else {
+          const cols = rowStr.split("|").map(c => c.trim());
+          if (cols[0] === "") cols.shift();
+          if (cols[cols.length - 1] === "") cols.pop();
+          tableRows.push(cols);
+        }
+        i++;
+      }
+
+      if (tableRows.length > 0) {
+        const headers = hasHeaderDivider ? tableRows[0] : null;
+        const bodyRows = hasHeaderDivider ? tableRows.slice(1) : tableRows;
+
+        elements.push(
+          <div key={`table-${i}`} className="overflow-x-auto my-3 border border-primary/20 rounded-xl shadow-sm">
+            <table className="min-w-full divide-y divide-primary/10 text-xs">
+              {headers && (
+                <thead className="bg-primary/10 dark:bg-primary/20 font-extrabold text-foreground">
+                  <tr>
+                    {headers.map((col, idx) => (
+                      <th key={idx} className="px-3 py-2 text-left font-extrabold border-r border-primary/10 last:border-r-0 uppercase tracking-wider text-[10px]">
+                        {parseInline(col)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+              )}
+              <tbody className="divide-y divide-primary/10 bg-card">
+                {bodyRows.map((row, rowIdx) => (
+                  <tr key={rowIdx} className="hover:bg-primary/5 odd:bg-primary/5/20 even:bg-card">
+                    {row.map((col, colIdx) => (
+                      <td key={colIdx} className="px-3 py-2 border-r border-primary/10 last:border-r-0 max-w-[200px] break-words text-foreground font-medium">
+                        {parseInline(col)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+      continue;
+    }
+
+    // 2. Check for Headings
+    if (trimmed.startsWith("#### ")) {
+      elements.push(<h5 key={i} className="text-xs font-bold mt-2.5 mb-1 text-foreground">{parseInline(trimmed.substring(5))}</h5>);
+      i++;
+      continue;
+    }
+    if (trimmed.startsWith("### ")) {
+      elements.push(<h4 key={i} className="text-sm font-black mt-3.5 mb-1 text-primary">{parseInline(trimmed.substring(4))}</h4>);
+      i++;
+      continue;
+    }
+    if (trimmed.startsWith("## ")) {
+      elements.push(<h3 key={i} className="text-base font-bold mt-4.5 mb-1.5 text-foreground border-b border-primary/10 pb-1">{parseInline(trimmed.substring(3))}</h3>);
+      i++;
+      continue;
+    }
+    if (trimmed.startsWith("# ")) {
+      elements.push(<h2 key={i} className="text-lg font-extrabold mt-5 mb-2 text-primary border-b border-primary/20 pb-1.5">{parseInline(trimmed.substring(2))}</h2>);
+      i++;
+      continue;
+    }
+
+    // 3. Bullet points
+    if (trimmed.startsWith("* ") || trimmed.startsWith("- ")) {
+      const items: string[] = [];
+      while (i < lines.length && (lines[i].trim().startsWith("* ") || lines[i].trim().startsWith("- "))) {
+        items.push(lines[i].trim().substring(2));
+        i++;
+      }
+      elements.push(
+        <ul key={`ul-${i}`} className="list-disc ml-5 my-2 space-y-1">
+          {items.map((item, idx) => (
+            <li key={idx} className="leading-relaxed text-sm text-foreground">
+              {parseInline(item)}
+            </li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    // 4. Numbered list
+    if (trimmed.match(/^\d+\.\s/)) {
+      const items: string[] = [];
+      while (i < lines.length && lines[i].trim().match(/^\d+\.\s/)) {
+        const itemStr = lines[i].trim();
+        const match = itemStr.match(/^\d+\.\s(.*)/);
+        if (match) {
+          items.push(match[1]);
+        } else {
+          items.push(itemStr);
+        }
+        i++;
+      }
+      elements.push(
+        <ol key={`ol-${i}`} className="list-decimal ml-5 my-2 space-y-1">
+          {items.map((item, idx) => (
+            <li key={idx} className="leading-relaxed text-sm text-foreground animate-none">
+              {parseInline(item)}
+            </li>
+          ))}
+        </ol>
+      );
+      continue;
+    }
+
+    // 5. Divider
+    if (trimmed === "---") {
+      elements.push(<hr key={i} className="my-4 border-t border-primary/10" />);
+      i++;
+      continue;
+    }
+
+    // 6. Regular line
+    if (trimmed !== "") {
+      elements.push(
+        <p key={i} className="leading-relaxed text-sm my-1 text-foreground">
+          {parseInline(trimmed)}
+        </p>
+      );
+    } else {
+      elements.push(<div key={i} className="h-2" />);
+    }
+    i++;
+  }
+  return elements;
 };
 
 interface TypewriterProps {
@@ -145,7 +333,7 @@ const Typewriter = ({ text, speed = 8, onChar, onComplete }: TypewriterProps) =>
     return () => clearInterval(interval);
   }, [text, speed]);
 
-  return <span className="whitespace-pre-line leading-relaxed">{displayedText}</span>;
+  return <div className="space-y-1 leading-relaxed text-sm">{renderMarkdown(displayedText)}</div>;
 };
 
 const IconElevenLabs = ({ className, size = 18 }: { className?: string; size?: number }) => (
@@ -193,15 +381,17 @@ export default function SupportChatPage() {
   }, []);
 
   // AI Agent States
-  const [chatType, setChatType] = useState<"human" | "ai">("human");
+  const [chatType, setChatType] = useState<"human" | "ai">("ai");
   const [aiMessages, setAiMessages] = useState<any[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
+
   const [aiInputText, setAiInputText] = useState("");
   const [aiVoiceState, setAiVoiceState] = useState<"idle" | "listening">("idle");
   const [speechRecognition, setSpeechRecognition] = useState<any>(null);
   const [aiMediaStream, setAiMediaStream] = useState<MediaStream | null>(null);
   const [aiVoiceResponseEnabled, setAiVoiceResponseEnabled] = useState(true);
   const [aiSpeaking, setAiSpeaking] = useState(false);
+  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Sessions Management
@@ -211,6 +401,64 @@ export default function SupportChatPage() {
   const [historyTab, setHistoryTab] = useState<"active" | "archived">("active");
   const [commentingMsgId, setCommentingMsgId] = useState<string | null>(null);
   const [feedbackComment, setFeedbackComment] = useState("");
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+
+  // Ads Mode & Screen sharing
+  const [adsMode, setAdsMode] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("syncro_ads_mode") === "true";
+    }
+    return false;
+  });
+
+  const [webSearchEnabled, setWebSearchEnabled] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("syncro_web_search") === "true";
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("syncro_ads_mode", adsMode ? "true" : "false");
+    }
+  }, [adsMode]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("syncro_web_search", webSearchEnabled ? "true" : "false");
+    }
+  }, [webSearchEnabled]);
+
+  const [thinkingIndex, setThinkingIndex] = useState(0);
+  const thinkingPhrases = useMemo(() => {
+    if (adsMode && webSearchEnabled) {
+      return [
+        "Navegando por la web en tiempo real...",
+        "Buscando en internet...",
+        "Analizando fuentes y tendencias actuales...",
+        "Validando datos del mercado..."
+      ];
+    }
+    return [
+      "Pensando...",
+      "Procesando tu solicitud...",
+      "Analizando los datos...",
+      "Generando respuesta...",
+      "Casi listo..."
+    ];
+  }, [adsMode, webSearchEnabled]);
+
+  useEffect(() => {
+    if (!isAiLoading) {
+      setThinkingIndex(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setThinkingIndex((prev) => (prev + 1) % thinkingPhrases.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isAiLoading, thinkingPhrases]);
 
   // Map loading/recording state to ElevenLabs AgentState
   const aiAgentState: AgentState = isAiLoading
@@ -227,6 +475,13 @@ export default function SupportChatPage() {
     { label: "Registrar un egreso", text: "Quiero registrar un egreso para el negocio" },
     { label: "¿Cuánto vendí hoy?", text: "¿Cuánto he vendido hoy en total?" },
   ]);
+
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [autopilotEnabled, setAutopilotEnabled] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const autopilotTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastScreenDataRef = useRef<Uint8ClampedArray | null>(null);
+  const sameScreenCountRef = useRef<number>(0);
 
   useEffect(() => {
     const lastRoute = localStorage.getItem("syncro_last_visited_dashboard_route") || "";
@@ -445,8 +700,33 @@ export default function SupportChatPage() {
   // Fetch AI history when chatType changes to "ai"
   useEffect(() => {
     if (chatType === "ai") {
+      const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const urlSessionId = searchParams?.get("sessionId");
+      const urlAdsMode = searchParams?.get("adsMode");
+      const urlWebSearch = searchParams?.get("webSearch");
+
       fetchSessions().then((fetchedSessions) => {
-        if (fetchedSessions && fetchedSessions.length > 0) {
+        if (urlSessionId) {
+          setSessionId(urlSessionId);
+          fetchAiHistory(urlSessionId);
+          
+          if (urlAdsMode !== null) {
+            setAdsMode(urlAdsMode === "true");
+          } else {
+            const activeSession = fetchedSessions?.find((s: any) => s.id === urlSessionId);
+            if (activeSession) {
+              setAdsMode(activeSession.type === "ADS_COPILOT");
+            }
+          }
+
+          if (urlWebSearch !== null) {
+            setWebSearchEnabled(urlWebSearch === "true");
+          }
+
+          if (typeof window !== "undefined") {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        } else if (fetchedSessions && fetchedSessions.length > 0) {
           const latestSessionId = fetchedSessions[0].id;
           setSessionId(latestSessionId);
           fetchAiHistory(latestSessionId);
@@ -495,6 +775,177 @@ export default function SupportChatPage() {
     }
   };
 
+  // ── SCREEN SHARING & CAPTURE ──────────────────────────────────────────────
+
+  const startScreenSharing = async () => {
+    try {
+      lastScreenDataRef.current = null;
+      sameScreenCountRef.current = 0;
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          displaySurface: "browser",
+        },
+        audio: false
+      });
+
+      setScreenStream(stream);
+      setAutopilotEnabled(true);
+
+      toast.success("Pantalla vinculada con éxito. Asegúrate de mostrar tu pestaña de Meta Ads Manager");
+
+      stream.getVideoTracks()[0].onended = () => {
+        stopScreenSharing();
+      };
+    } catch (err: any) {
+      console.warn("Screen share cancel or fail", err);
+      toast.error("No se pudo iniciar la compartición de pantalla: " + err.message);
+      setAdsMode(false);
+    }
+  };
+
+  const stopScreenSharing = () => {
+    if (screenStream) {
+      screenStream.getTracks().forEach(t => t.stop());
+      setScreenStream(null);
+    }
+    setAutopilotEnabled(false);
+    lastScreenDataRef.current = null;
+    sameScreenCountRef.current = 0;
+    toast.info("Pantalla desvinculada");
+  };
+
+  const captureScreenshot = (): string | null => {
+    if (!videoRef.current || !screenStream) return null;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = videoRef.current.videoWidth || 1280;
+      canvas.height = videoRef.current.videoHeight || 720;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/jpeg", 0.7);
+      }
+    } catch (e) {
+      console.error("Failed to capture screenshot", e);
+    }
+    return null;
+  };
+
+  const hasScreenChanged = (): boolean => {
+    if (!videoRef.current) return false;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 32;
+      canvas.height = 32;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return false;
+      ctx.drawImage(videoRef.current, 0, 0, 32, 32);
+      const imgData = ctx.getImageData(0, 0, 32, 32).data;
+      
+      if (!lastScreenDataRef.current) {
+        lastScreenDataRef.current = imgData;
+        return true;
+      }
+      
+      let diff = 0;
+      for (let i = 0; i < imgData.length; i += 4) {
+        const rDiff = Math.abs(imgData[i] - lastScreenDataRef.current[i]);
+        const gDiff = Math.abs(imgData[i+1] - lastScreenDataRef.current[i+1]);
+        const bDiff = Math.abs(imgData[i+2] - lastScreenDataRef.current[i+2]);
+        if (rDiff > 15 || gDiff > 15 || bDiff > 15) {
+          diff++;
+        }
+      }
+      
+      lastScreenDataRef.current = imgData;
+      const threshold = (32 * 32) * 0.02;
+      return diff > threshold;
+    } catch {
+      return true;
+    }
+  };
+
+  const runAutopilotAudit = async () => {
+    if (!screenStream) return;
+
+    const changed = hasScreenChanged();
+
+    if (!changed) {
+      sameScreenCountRef.current += 1;
+      if (sameScreenCountRef.current >= 6) {
+        setAutopilotEnabled(false);
+        toast.warning("Monitoreo en piloto pausado automáticamente por inactividad.");
+      }
+      return;
+    } else {
+      sameScreenCountRef.current = 0;
+    }
+
+    const screenshot = captureScreenshot();
+    if (!screenshot) return;
+
+    try {
+      const isPwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+      const token = isPwa ? sessionStorage.getItem("token") : localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      };
+
+      await fetch(`${API}/ai-agent/screenshot`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          sessionId,
+          screenshot
+        })
+      });
+    } catch (e) {
+      console.warn("Failed to silently save screen capture", e);
+    }
+  };
+
+  useEffect(() => {
+    if (screenStream && videoRef.current) {
+      videoRef.current.srcObject = screenStream;
+      setTimeout(() => {
+        runAutopilotAudit();
+      }, 500);
+    }
+  }, [screenStream]);
+
+  useEffect(() => {
+    if (autopilotEnabled && screenStream) {
+      autopilotTimerRef.current = setInterval(() => {
+        runAutopilotAudit();
+      }, 25000);
+    } else {
+      if (autopilotTimerRef.current) {
+        clearInterval(autopilotTimerRef.current);
+        autopilotTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (autopilotTimerRef.current) clearInterval(autopilotTimerRef.current);
+    };
+  }, [autopilotEnabled, screenStream, sessionId]);
+
+  useEffect(() => {
+    return () => {
+      if (autopilotTimerRef.current) clearInterval(autopilotTimerRef.current);
+      if (screenStream) {
+        screenStream.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [screenStream]);
+
+  // Hook to handle toggling Ads Mode dynamically - stop sharing if disabled, don't auto-start
+  useEffect(() => {
+    if (!adsMode) {
+      stopScreenSharing();
+    }
+  }, [adsMode]);
+
   const handleSendAi = async (textToSend?: string) => {
     const text = textToSend !== undefined ? textToSend : aiInputText;
     if (!text.trim()) return;
@@ -531,10 +982,17 @@ export default function SupportChatPage() {
         Authorization: `Bearer ${token}`
       };
 
+      const screenshot = adsMode ? captureScreenshot() : null;
       const res = await fetch(`${API}/ai-agent/chat-stream`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ message: text, sessionId }),
+        body: JSON.stringify({
+          message: text,
+          sessionId,
+          isAdsMode: adsMode,
+          screenshot,
+          webSearch: adsMode && webSearchEnabled
+        }),
       });
 
       if (res.ok) {
@@ -573,6 +1031,31 @@ export default function SupportChatPage() {
             if (trimmed.startsWith("data: ")) {
               try {
                 const parsed = JSON.parse(trimmed.slice(6));
+                
+                if (parsed.searching !== undefined) {
+                  setAiMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === placeholderId
+                        ? { 
+                            ...m, 
+                            searching: parsed.searching,
+                            searchQuery: parsed.searchQuery !== undefined ? parsed.searchQuery : m.searchQuery
+                          }
+                        : m
+                    )
+                  );
+                  setTimeout(scrollToBottom, 30);
+                }
+
+                if (parsed.sources !== undefined) {
+                  setAiMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === placeholderId ? { ...m, sources: parsed.sources, searching: false } : m
+                    )
+                  );
+                  setTimeout(scrollToBottom, 30);
+                }
+
                 if (parsed.chunk) {
                   assistantText += parsed.chunk;
                   setAiMessages((prev) =>
@@ -587,7 +1070,13 @@ export default function SupportChatPage() {
                   setAiMessages((prev) =>
                     prev.map((m) =>
                       m.id === placeholderId
-                        ? { ...m, id: savedId, content: parsed.message, action: parsed.action }
+                        ? { 
+                            ...m, 
+                            id: savedId, 
+                            content: parsed.message, 
+                            action: parsed.action,
+                            sources: parsed.action?.sources || m.sources
+                          }
                         : m
                     )
                   );
@@ -754,11 +1243,29 @@ export default function SupportChatPage() {
   const cleanTextForSpeech = (text: string): string => {
     if (!text) return "";
     return text
-      .replace(/[\u{1F300}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}\u{1F191}-\u{1F251}\u{1F004}\u{1F0CF}\u{1F170}-\u{1F171}\u{1F17E}-\u{1F17F}\u{1F18E}\u{3030}\u{2B50}\u{2B55}\u{2934}-\u{2935}\u{2B05}-\u{2B07}\u{2b1b}\u{2b1c}\u{3297}\u{3299}\u{303d}\u{00a9}\u{00ae}\u{2122}\u{23f3}\u{24c2}\u{23e9}-\u{23ef}\u{25b6}\u{23f8}-\u{23fa}]/gu, "")
-      .replace(/\*+/g, "")
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      // Remove Action block markers and code blocks
       .replace(/```action[\s\S]*?```/g, "")
       .replace(/```[\s\S]*?```/g, "")
+      // Remove horizontal rules
+      .replace(/^-{3,}/gm, "")
+      // Remove header dividers like |---|---|
+      .replace(/\|[ \t]*:?-+:?[ \t]*\|/g, " ")
+      .replace(/\|[ \t]*-+[ \t]*/g, " ")
+      // Replace table columns separator with spaces
+      .replace(/\|/g, " ")
+      // Remove heading hashes (#)
+      .replace(/#+/g, "")
+      // Remove bullet points and lists markers
+      .replace(/^[\s]*[-*+]\s+/gm, "")
+      .replace(/^\s*\d+\.\s+/gm, "")
+      // Remove markdown links but keep text
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      // Remove asterisks and underscores for bold/italic
+      .replace(/\*+/g, "")
+      .replace(/_+/g, "")
+      // Remove emoji characters
+      .replace(/[\u{1F300}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}\u{1F191}-\u{1F251}\u{1F004}\u{1F0CF}\u{1F170}-\u{1F171}\u{1F17E}-\u{1F17F}\u{1F18E}\u{3030}\u{2B50}\u{2B55}\u{2934}-\u{2935}\u{2B05}-\u{2B07}\u{2b1b}\u{2b1c}\u{3297}\u{3299}\u{303d}\u{00a9}\u{00ae}\u{2122}\u{23f3}\u{24c2}\u{23e9}-\u{23ef}\u{25b6}\u{23f8}-\u{23fa}]/gu, "")
+      // Normalize spaces
       .replace(/\s+/g, " ")
       .trim();
   };
@@ -779,12 +1286,16 @@ export default function SupportChatPage() {
     return spanishVoice;
   };
 
-  const speakBrowserTts = (text: string) => {
+  const speakBrowserTts = (text: string, msgId?: string) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
 
     const cleaned = cleanTextForSpeech(text);
-    if (!cleaned) return;
+    if (!cleaned) {
+      setSpeakingMsgId(null);
+      setAiSpeaking(false);
+      return;
+    }
 
     const utterance = new SpeechSynthesisUtterance(cleaned);
     utterance.lang = "es-VE";
@@ -800,27 +1311,51 @@ export default function SupportChatPage() {
 
     utterance.onstart = () => {
       setAiSpeaking(true);
+      if (msgId) setSpeakingMsgId(msgId);
     };
     utterance.onend = () => {
       setAiSpeaking(false);
+      setSpeakingMsgId(null);
     };
     utterance.onerror = () => {
       setAiSpeaking(false);
+      setSpeakingMsgId(null);
     };
     window.speechSynthesis.speak(utterance);
   };
 
-  const playAiVoiceResponse = async (text: string) => {
+  const playAiVoiceResponse = async (text: string, msgId?: string) => {
+    // If the clicked message is already speaking, cancel/stop it
+    if (speakingMsgId && speakingMsgId === msgId) {
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      if (audioRef.current) {
+        audioRef.current.onended = null;
+        audioRef.current.onerror = null;
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      setAiSpeaking(false);
+      setSpeakingMsgId(null);
+      return;
+    }
+
+    // Cancel any previous speaking audio
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
     if (audioRef.current) {
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
       audioRef.current.pause();
       audioRef.current = null;
     }
 
     const cleaned = cleanTextForSpeech(text);
     if (!cleaned) return;
+
+    if (msgId) setSpeakingMsgId(msgId);
 
     try {
       const isPwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
@@ -846,19 +1381,21 @@ export default function SupportChatPage() {
 
       audio.onplay = () => {
         setAiSpeaking(true);
+        if (msgId) setSpeakingMsgId(msgId);
       };
       audio.onended = () => {
         setAiSpeaking(false);
+        setSpeakingMsgId(null);
       };
       audio.onerror = () => {
         setAiSpeaking(false);
-        speakBrowserTts(cleaned);
+        speakBrowserTts(cleaned, msgId);
       };
 
       audio.play();
     } catch (err) {
       console.warn("ElevenLabs TTS failed, falling back to browser SpeechSynthesis:", err);
-      speakBrowserTts(cleaned);
+      speakBrowserTts(cleaned, msgId);
     }
   };
 
@@ -1032,7 +1569,13 @@ export default function SupportChatPage() {
   };
 
   const handleDeleteSession = async (sId: string) => {
-    if (!confirm("¿Estás seguro de que deseas eliminar este chat permanentemente?")) return;
+    setSessionToDelete(sId);
+  };
+
+  const confirmDeleteSession = async () => {
+    if (!sessionToDelete) return;
+    const sId = sessionToDelete;
+    setSessionToDelete(null);
     try {
       const isPwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
       const token = isPwa ? sessionStorage.getItem("token") : localStorage.getItem("token");
@@ -1367,7 +1910,7 @@ export default function SupportChatPage() {
                   <p className="text-[11px] text-muted-foreground">Canal de ayuda</p>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 md:hidden">
                 <ModeSwitcher />
                 <Button
                   variant="ghost"
@@ -1383,42 +1926,6 @@ export default function SupportChatPage() {
 
             {/* Single conversation item */}
             <div className="flex-1 p-2 space-y-1.5">
-              {/* Soporte Humano */}
-              <div
-                onClick={() => {
-                  setChatType("human");
-                  setMobileView("chat");
-                }}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors border",
-                  chatType === "human"
-                    ? "bg-primary/10 border-primary/20 text-primary"
-                    : "hover:bg-muted/40 border-transparent text-muted-foreground"
-                )}
-              >
-                <div className="relative">
-                  <Avatar className="size-10">
-                    <AvatarImage src="/syncro.png" />
-                    <AvatarFallback className="bg-primary text-primary-foreground font-bold text-xs">SP</AvatarFallback>
-                  </Avatar>
-                  <span className={cn(
-                    "absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-background transition-colors duration-300",
-                    isOtherOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-muted-foreground/30"
-                  )} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={cn("font-bold text-xs truncate", chatType === "human" ? "text-foreground" : "text-muted-foreground")}>Soporte Humano</p>
-                  <p className="text-[10px] text-muted-foreground truncate">
-                    {messages.at(-1)?.text ?? "Inicia una conversación..."}
-                  </p>
-                </div>
-                {chatType === "human" && (
-                  <Badge variant="secondary" className="bg-primary/15 text-primary text-[9px] shrink-0 font-bold">
-                    Activo
-                  </Badge>
-                )}
-              </div>
-
               {/* Asistente IA */}
               <div
                 onClick={() => {
@@ -1454,6 +1961,42 @@ export default function SupportChatPage() {
                   </Badge>
                 )}
               </div>
+
+              {/* Soporte Humano */}
+              <div
+                onClick={() => {
+                  setChatType("human");
+                  setMobileView("chat");
+                }}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors border",
+                  chatType === "human"
+                    ? "bg-primary/10 border-primary/20 text-primary"
+                    : "hover:bg-muted/40 border-transparent text-muted-foreground"
+                )}
+              >
+                <div className="relative">
+                  <Avatar className="size-10">
+                    <AvatarImage src="/syncro.png" />
+                    <AvatarFallback className="bg-primary text-primary-foreground font-bold text-xs">SP</AvatarFallback>
+                  </Avatar>
+                  <span className={cn(
+                    "absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-background transition-colors duration-300",
+                    isOtherOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-muted-foreground/30"
+                  )} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={cn("font-bold text-xs truncate", chatType === "human" ? "text-foreground" : "text-muted-foreground")}>Soporte Humano</p>
+                  <p className="text-[10px] text-muted-foreground truncate">
+                    {messages.at(-1)?.text ?? "Inicia una conversación..."}
+                  </p>
+                </div>
+                {chatType === "human" && (
+                  <Badge variant="secondary" className="bg-primary/15 text-primary text-[9px] shrink-0 font-bold">
+                    Activo
+                  </Badge>
+                )}
+              </div>
             </div>
 
             {/* Info block */}
@@ -1469,11 +2012,12 @@ export default function SupportChatPage() {
 
           {/* ── MAIN CHAT AREA ───────────────────────────── */}
           <div className={cn(
-            "flex flex-col min-w-0",
+            "flex flex-1 min-w-0 overflow-hidden",
             isStandalone
-              ? mobileView === "chat" ? "flex flex-1" : "hidden"
-              : "flex-1"
+              ? mobileView === "chat" ? "flex" : "hidden"
+              : "flex"
           )}>
+            <div className="flex-1 flex flex-col min-w-0 border-r h-full relative">
 
             {/* Chat header */}
             <div className="flex items-center justify-between px-5 py-3 border-b bg-background/80 backdrop-blur-sm shrink-0">
@@ -1539,11 +2083,11 @@ export default function SupportChatPage() {
                       />
                     </div>
                     <div>
-                      <p className="font-bold text-sm text-primary flex items-center gap-1">
-                        Syncro IA <IconSparkles size={12} className="text-primary animate-pulse" />
+                      <p className="font-bold text-sm text-primary flex items-center gap-1.5">
+                        Syncro IA <img src="/iconosyncro.png" alt="Syncro" className="shrink-0 object-contain" style={{ width: 12, height: 12 }} />
                       </p>
                       <div className="flex items-center gap-1.5 h-4">
-                        <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="size-1.5 rounded-full bg-emerald-500" />
                         <span className="text-[10px] text-muted-foreground font-medium">Asistente Virtual Activo</span>
                       </div>
                     </div>
@@ -1716,7 +2260,7 @@ export default function SupportChatPage() {
                       <DropdownMenuContent align="end" className="w-56 bg-background/95 backdrop-blur-md border border-border rounded-xl p-1.5 shadow-xl">
                         
                         <DropdownMenuItem asChild>
-                          <Link href="/dashboard/soporte/voz" className="flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-lg cursor-pointer text-muted-foreground hover:text-foreground">
+                          <Link href={`/dashboard/soporte/voz?sessionId=${sessionId}&adsMode=${adsMode}&webSearch=${webSearchEnabled}`} className="flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-lg cursor-pointer text-muted-foreground hover:text-foreground">
                             <IconMicrophone size={16} className="text-primary" />
                             <span>Modo Voz (Tiempo real)</span>
                           </Link>
@@ -1728,6 +2272,21 @@ export default function SupportChatPage() {
                         >
                           <IconHistory size={16} className="text-primary" />
                           <span>Historial de Chats</span>
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem 
+                          onClick={() => setAdsMode(prev => !prev)}
+                          className="flex items-center justify-between px-3 py-2 text-sm font-semibold rounded-lg cursor-pointer text-muted-foreground hover:text-foreground"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <IconVideo size={16} className="text-primary" />
+                            <span>Modo Ads</span>
+                          </div>
+                          <Switch
+                            checked={adsMode}
+                            onCheckedChange={setAdsMode}
+                            onClick={(e) => e.stopPropagation()}
+                          />
                         </DropdownMenuItem>
 
                         <DropdownMenuItem 
@@ -1851,7 +2410,7 @@ export default function SupportChatPage() {
                   )}
 
                   <AnimatePresence initial={false}>
-                    {(chatType === "human" ? messages : aiMessages).map((msg, i) => {
+                    {(chatType === "human" ? messages : aiMessages.filter((m) => m.role !== "screenshot")).map((msg, i) => {
                       const isMe = chatType === "human" ? (msg.senderId === user?.id) : (msg.role === "user");
                       return (
                         <motion.div
@@ -1872,7 +2431,7 @@ export default function SupportChatPage() {
                           )}>
                             {chatType === "ai" && !isMe && (
                               <div className="flex items-center gap-1.5 mb-1 text-[10px] font-bold text-primary uppercase tracking-wider">
-                                <IconSparkles size={11} className="animate-pulse" />
+                                <img src="/iconosyncro.png" alt="Syncro" className="shrink-0 object-contain" style={{ width: 11, height: 11 }} />
                                 <span>Syncro IA</span>
                               </div>
                             )}
@@ -1889,15 +2448,70 @@ export default function SupportChatPage() {
                                 }}
                               />
                             ) : (
-                              <span className="whitespace-pre-line leading-relaxed">{msg.content}</span>
+                              <div className="space-y-1 leading-relaxed text-sm">{renderMarkdown(msg.content)}</div>
+                            )}
+
+                            {/* Real-time search status or permanent sources */}
+                            {chatType === "ai" && !isMe && (
+                              <div className="mt-2 text-xs">
+                                {msg.searching && (
+                                  <div className="flex items-center gap-2 text-blue-500 bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-xl animate-pulse">
+                                    <svg className="animate-spin h-3.5 w-3.5 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                                      <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />
+                                    </svg>
+                                    <span className="font-semibold text-[11px] tracking-tight">
+                                      Navegando: "{msg.searchQuery || 'Buscando en internet...'}"
+                                    </span>
+                                  </div>
+                                )}
+                                
+                                {(() => {
+                                  const sourcesList = msg.sources || msg.action?.sources;
+                                  if (!msg.searching && sourcesList && sourcesList.length > 0) {
+                                    return (
+                                      <div className="mt-3 border-t border-primary/10 pt-2 animate-in fade-in duration-200">
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {sourcesList.map((url: string, idx: number) => {
+                                            let hostname = url;
+                                            try {
+                                              hostname = new URL(url).hostname.replace("www.", "");
+                                            } catch (e) {}
+                                            return (
+                                              <a
+                                                key={idx}
+                                                href={url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1.5 bg-primary/10 hover:bg-primary/20 text-[10px] font-bold text-primary px-2.5 py-1 rounded-xl transition-all hover:scale-[1.02] border border-primary/20"
+                                              >
+                                                <img
+                                                  src={`https://www.google.com/s2/favicons?sz=32&domain=${hostname}`}
+                                                  alt={hostname}
+                                                  className="w-3 h-3 rounded-sm object-contain bg-white p-px"
+                                                  onError={(e) => {
+                                                    (e.target as HTMLElement).style.display = 'none';
+                                                  }}
+                                                />
+                                                {hostname}
+                                              </a>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
                             )}
 
                             {/* Action confirmable card */}
-                            {chatType === "ai" && !isMe && msg.action && !msg.isNew && (
+                            {chatType === "ai" && !isMe && msg.action && msg.action.type && msg.action.type !== 'info' && !msg.isNew && (
                               <div className="mt-3 p-3.5 rounded-xl border border-primary/20 bg-card/65 backdrop-blur-xs space-y-3 max-w-[280px] shadow-lg">
                                 <div className="flex items-center gap-2">
                                   <div className="size-6 rounded-lg bg-primary/10 flex items-center justify-center">
-                                    <IconSparkles size={13} className="text-primary animate-pulse" />
+                                    <img src="/iconosyncro.png" alt="Syncro" className="shrink-0 object-contain" style={{ width: 13, height: 13 }} />
                                   </div>
                                   <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Acción sugerida</span>
                                 </div>
@@ -2142,6 +2756,20 @@ export default function SupportChatPage() {
                               >
                                 <IconCopy size={14} />
                               </button>
+
+                              {/* Voice Button */}
+                              <button
+                                onClick={() => playAiVoiceResponse(msg.content, msg.id)}
+                                className={cn(
+                                  "active:scale-95 transition-all flex items-center justify-center rounded-lg h-6 w-6 shrink-0 transition-colors",
+                                  speakingMsgId === msg.id
+                                    ? "text-primary bg-primary/10 hover:bg-primary/20"
+                                    : "hover:text-primary hover:bg-primary/10"
+                                )}
+                                title={speakingMsgId === msg.id ? "Detener lectura" : "Escuchar respuesta"}
+                              >
+                                {speakingMsgId === msg.id ? <IconVolumeOff size={14} /> : <IconVolume size={14} />}
+                              </button>
                             </div>
                           )}
 
@@ -2191,18 +2819,20 @@ export default function SupportChatPage() {
                         animate={{ opacity: 1, scale: 1 }}
                         className="self-start flex flex-col max-w-[80%]"
                       >
-                        <div className="px-4 py-3.5 rounded-2xl shadow-sm text-sm bg-primary/5 dark:bg-primary/10 border border-primary/20 rounded-tl-none flex flex-col gap-2">
-                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-primary uppercase tracking-wider">
-                            <IconSparkles size={11} className="animate-pulse text-primary" />
-                            <span>Pensando...</span>
-                          </div>
-                          {/* Audio visualizer waveform */}
-                          <div className="flex items-end gap-1 h-6 px-1 mt-1">
-                            <span className="w-1 bg-primary/80 animate-bounce [animation-delay:-0.3s] h-3 rounded-full" />
-                            <span className="w-1 bg-primary/80 animate-bounce [animation-delay:-0.15s] h-5 rounded-full" />
-                            <span className="w-1 bg-primary/80 animate-bounce [animation-delay:-0.45s] h-6 rounded-full" />
-                            <span className="w-1 bg-primary/80 animate-bounce [animation-delay:-0.6s] h-4 rounded-full" />
-                            <span className="w-1 bg-primary/80 animate-bounce [animation-delay:-0.75s] h-2 rounded-full" />
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-primary uppercase tracking-wider h-5 px-1 py-1">
+                          <img src="/iconosyncro.png" alt="Syncro" className="shrink-0 object-contain" style={{ width: 11, height: 11 }} />
+                          <div className="inline-flex items-center relative overflow-hidden">
+                            <AnimatePresence mode="wait">
+                              <motion.div
+                                key={thinkingIndex}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                transition={{ duration: 0.3 }}
+                              >
+                                <ShimmeringText text={thinkingPhrases[thinkingIndex]} />
+                              </motion.div>
+                            </AnimatePresence>
                           </div>
                         </div>
                       </motion.div>
@@ -2359,11 +2989,40 @@ export default function SupportChatPage() {
                     ) : (
                       <>
                         <div className="flex-1 flex items-center bg-primary/5 hover:bg-primary/10 focus-within:bg-background rounded-full px-4 py-1.5 border border-primary/10 focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/30 transition-all">
+                          {/* Web Search Toggle — only visible in Ads Mode */}
+                          {adsMode && (
+                            <button
+                              type="button"
+                              title={webSearchEnabled ? "Búsqueda web activada" : "Activar búsqueda web"}
+                              onClick={() => {
+                                const next = !webSearchEnabled;
+                                setWebSearchEnabled(next);
+                                toast(next ? "🌐 Búsqueda web activada" : "Búsqueda web desactivada", {
+                                  description: next
+                                    ? "La IA buscará productos reales en internet"
+                                    : "La IA usará solo su memoria interna"
+                                });
+                              }}
+                              className={cn(
+                                "shrink-0 flex items-center justify-center size-7 rounded-full mr-1.5 transition-all border",
+                                webSearchEnabled
+                                  ? "bg-blue-500/15 border-blue-500/40 text-blue-500"
+                                  : "bg-transparent border-transparent text-muted-foreground hover:text-primary hover:bg-primary/10"
+                              )}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="2" y1="12" x2="22" y2="12"/>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                              </svg>
+                            </button>
+                          )}
+
                           {/* Text Input for AI */}
                           <input
                             type="text"
                             className="flex-1 min-w-0 bg-transparent border-none outline-none focus:outline-none focus:ring-0 px-1 py-1 text-sm text-foreground placeholder:text-primary/40"
-                            placeholder="Pregúntame sobre el cuadre de caja, egresos, ventas..."
+                            placeholder={adsMode && webSearchEnabled ? "Busca productos, tendencias, mercados en tiempo real..." : "Pregúntame sobre el cuadre de caja, egresos, ventas..."}
                             value={aiInputText}
                             onChange={(e) => setAiInputText(e.target.value)}
                             onKeyDown={(e) => e.key === "Enter" && handleSendAi()}
@@ -2411,8 +3070,76 @@ export default function SupportChatPage() {
               )}
             </div>
           </div>
+
+          {/* Ads Mode Screen Sharing Panel */}
+          {adsMode && chatType === "ai" && (
+            <div className="hidden lg:flex w-[350px] shrink-0 flex-col bg-muted/10 border-l p-6 gap-6 overflow-y-auto">
+              <Card className="overflow-hidden border-border bg-card">
+                <CardHeader className="p-4 flex flex-row items-center justify-between space-y-0">
+                  <div>
+                    <CardTitle className="text-sm font-bold">Pantalla Compartida</CardTitle>
+                    <CardDescription className="text-[11px]">Meta Ads Manager Stream</CardDescription>
+                  </div>
+                  {!screenStream ? (
+                    <Button size="sm" onClick={startScreenSharing} className="bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] h-7 gap-1 px-2.5">
+                      <IconVideo size={13} /> Compartir
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={stopScreenSharing} className="text-destructive border-destructive/20 hover:bg-destructive/10 text-[11px] h-7 gap-1 px-2.5">
+                      <IconX size={13} /> Detener
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent className="p-0 border-t aspect-video bg-black flex items-center justify-center text-center relative group">
+                  {screenStream ? (
+                    // eslint-disable-next-line jsx-a11y/media-has-caption
+                    <video 
+                      ref={videoRef} 
+                      autoPlay 
+                      playsInline 
+                      muted 
+                      className="w-full h-full object-cover" 
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 p-6">
+                      <IconVideo className="text-muted-foreground animate-pulse" size={28} />
+                      <p className="text-xs text-muted-foreground max-w-[200px] leading-relaxed">
+                        Pantalla desconectada. Vincula la pestaña del Ads Manager para que la IA la analice.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
+    </div>
+      {/* Delete Chat Confirmation Modal */}
+      <AlertDialog open={!!sessionToDelete} onOpenChange={(open) => !open && setSessionToDelete(null)}>
+        <AlertDialogContent className="max-w-[400px] rounded-2xl border border-primary/20 bg-background p-6 shadow-2xl backdrop-blur-md">
+          <AlertDialogHeader className="space-y-2">
+            <AlertDialogTitle className="text-base font-extrabold text-foreground tracking-tight flex items-center gap-2">
+              <span className="text-rose-500">⚠️</span> ¿Eliminar conversación?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground leading-relaxed">
+              Esta acción no se puede deshacer. Se eliminarán de forma permanente todos los mensajes del historial de este chat de la base de datos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex gap-2 justify-end mt-5">
+            <AlertDialogCancel className="h-9 text-xs font-semibold rounded-xl border border-border bg-transparent hover:bg-muted text-foreground transition-all px-4 py-2 cursor-pointer">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteSession}
+              className="h-9 text-xs font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 hover:opacity-95 shadow-md shadow-rose-500/10 transition-all px-4 py-2 cursor-pointer"
+            >
+              Eliminar chat
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Gooey Filter Definition - Refined for sharp edges */}
       <svg className="absolute h-0 w-0" xmlns="http://www.w3.org/2000/svg">
         <defs>

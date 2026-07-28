@@ -519,6 +519,34 @@ export class WhatsAppService {
         this.trackSessionMessage(businessId, phone, messageData.key.id);
       }
 
+      const sessionId = `bot-${cleanPhone}`;
+
+      if (cleanMsg === 'activa ads') {
+        await this.prisma.aiChatSession.upsert({
+          where: { id: sessionId },
+          update: { type: 'ADS_COPILOT' },
+          create: { id: sessionId, businessId, userId: user.id, title: 'WhatsApp Bot Session', type: 'ADS_COPILOT' }
+        });
+        const welcomeAds = await this.sendBotTextMessage(phone, '🤖 *Modo Ads activado.*\nAhora responderé basándome en tu biblioteca de entrenamiento de anuncios.\n\n_Escribe *salir ads* para volver al modo general o *salir* para desactivarme._', businessId);
+        if (welcomeAds?.messageId) {
+          this.trackSessionMessage(businessId, phone, welcomeAds.messageId);
+        }
+        return { success: true };
+      }
+
+      if (cleanMsg === 'salir ads') {
+        await this.prisma.aiChatSession.upsert({
+          where: { id: sessionId },
+          update: { type: 'GENERAL' },
+          create: { id: sessionId, businessId, userId: user.id, title: 'WhatsApp Bot Session', type: 'GENERAL' }
+        });
+        const goodbyeAds = await this.sendBotTextMessage(phone, '🤖 *Modo Ads desactivado.*\nHe regresado al asistente general de Syncro POS.', businessId);
+        if (goodbyeAds?.messageId) {
+          this.trackSessionMessage(businessId, phone, goodbyeAds.messageId);
+        }
+        return { success: true };
+      }
+
       if (['salir', 'desactivar', 'chao', 'adios', 'bye'].includes(cleanMsg)) {
         await this.prisma.whatsAppChat.update({
           where: { id: botChat.id },
@@ -526,14 +554,20 @@ export class WhatsAppService {
         });
         await this.prisma.whatsAppPendingAction.deleteMany({ where: { phone: cleanPhone, businessId } });
         
+        await this.prisma.aiChatSession.upsert({
+          where: { id: sessionId },
+          update: { type: 'GENERAL' },
+          create: { id: sessionId, businessId, userId: user.id, title: 'WhatsApp Bot Session', type: 'GENERAL' }
+        }).catch(() => {});
+
         const farewellRes = await this.sendBotTextMessage(phone, '👋 *Syncro IA desactivada.*\nConversación normal restaurada.', businessId);
         if (farewellRes?.messageId) {
           this.trackSessionMessage(businessId, phone, farewellRes.messageId);
         }
-
+ 
         // Trigger message cleanup!
         this.cleanupBotSessionMessages(businessId, phone);
-
+ 
         return { success: true };
       }
 
@@ -784,7 +818,31 @@ export class WhatsAppService {
                       );
                     }
                   } else {
-                    if (['salir', 'desactivar', 'chao', 'adios', 'bye'].includes(cleanMsg)) {
+                    const sessionId = `whatsapp-${cleanSenderPhone}`;
+
+                    if (cleanMsg === 'activa ads') {
+                      await this.prisma.aiChatSession.upsert({
+                        where: { id: sessionId },
+                        update: { type: 'ADS_COPILOT' },
+                        create: { id: sessionId, businessId, userId: user.id, title: 'WhatsApp Session', type: 'ADS_COPILOT' }
+                      });
+                      await this.sendTextMessage(
+                        phone,
+                        '🤖 *Modo Ads activado.*\nAhora responderé basándome en tu biblioteca de entrenamiento de anuncios.\n\n_Escribe *salir ads* para volver al modo general o *salir* para desactivarme._',
+                        businessId
+                      );
+                    } else if (cleanMsg === 'salir ads') {
+                      await this.prisma.aiChatSession.upsert({
+                        where: { id: sessionId },
+                        update: { type: 'GENERAL' },
+                        create: { id: sessionId, businessId, userId: user.id, title: 'WhatsApp Session', type: 'GENERAL' }
+                      });
+                      await this.sendTextMessage(
+                        phone,
+                        '🤖 *Modo Ads desactivado.*\nHe regresado al asistente general de Syncro POS.',
+                        businessId
+                      );
+                    } else if (['salir', 'desactivar', 'chao', 'adios', 'bye'].includes(cleanMsg)) {
                       await this.prisma.whatsAppChat.update({
                         where: { id: chat.id },
                         data: { whatsappBotSessionActive: false },
@@ -792,6 +850,11 @@ export class WhatsAppService {
                       await this.prisma.whatsAppPendingAction.deleteMany({
                         where: { phone: cleanSenderPhone, businessId },
                       });
+                      await this.prisma.aiChatSession.upsert({
+                        where: { id: sessionId },
+                        update: { type: 'GENERAL' },
+                        create: { id: sessionId, businessId, userId: user.id, title: 'WhatsApp Session', type: 'GENERAL' }
+                      }).catch(() => {});
                       await this.sendTextMessage(
                         phone,
                         '👋 *Syncro IA desactivada.*\nConversación normal restaurada.',

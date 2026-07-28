@@ -65,9 +65,84 @@ import {
   IconBrandWhatsapp,
   IconLock,
   IconDownload,
+  IconDotsVertical,
+  IconCopy,
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+const renderMarkdown = (content: string) => {
+  if (!content) return null;
+
+  const lines = content.split("\n");
+
+  return lines.map((line, lineIdx) => {
+    let currentLine = line.trim();
+
+    // Check for Headings
+    if (currentLine.startsWith("### ")) {
+      const text = currentLine.substring(4);
+      return <h4 key={lineIdx} className="text-sm font-bold mt-3 mb-1 text-foreground">{text}</h4>;
+    }
+    if (currentLine.startsWith("## ")) {
+      const text = currentLine.substring(3);
+      return <h3 key={lineIdx} className="text-base font-bold mt-4 mb-2 text-foreground border-b pb-1">{text}</h3>;
+    }
+    if (currentLine.startsWith("# ")) {
+      const text = currentLine.substring(2);
+      return <h2 key={lineIdx} className="text-lg font-extrabold mt-5 mb-3 text-primary border-b pb-1.5">{text}</h2>;
+    }
+
+    // Handle bullet points
+    const isBullet = currentLine.startsWith("* ") || currentLine.startsWith("- ");
+    if (isBullet) {
+      currentLine = currentLine.substring(2);
+    }
+
+    // Regex to parse **bold** and *italic*
+    const parts = [];
+    let index = 0;
+    
+    const regex = /(\*\*|__)(.*?)\1|(\*|_)(.*?)\3/g;
+    let match;
+    
+    while ((match = regex.exec(currentLine)) !== null) {
+      const matchStart = match.index;
+      
+      if (matchStart > index) {
+        parts.push(currentLine.substring(index, matchStart));
+      }
+      
+      if (match[1]) {
+        parts.push(<strong key={matchStart} className="font-extrabold text-foreground">{match[2]}</strong>);
+      } else if (match[3]) {
+        parts.push(<em key={matchStart} className="italic">{match[4]}</em>);
+      }
+      
+      index = regex.lastIndex;
+    }
+    
+    if (index < currentLine.length) {
+      parts.push(currentLine.substring(index));
+    }
+
+    const contentNode = parts.length > 0 ? parts : currentLine;
+
+    if (isBullet) {
+      return (
+        <li key={lineIdx} className="list-disc ml-5 my-1 leading-relaxed text-sm text-muted-foreground">
+          {contentNode}
+        </li>
+      );
+    }
+
+    return (
+      <p key={lineIdx} className="min-h-[1rem] leading-relaxed text-sm text-muted-foreground my-1.5">
+        {contentNode}
+      </p>
+    );
+  });
+};
 
 const ICONS_MAP: Record<string, React.ElementType> = {
   IconInnerShadowTop,
@@ -223,12 +298,16 @@ export default function ConfiguracionPage() {
   const [recording, setRecording] = useState(false);
   const [adsTrainingMode, setAdsTrainingMode] = useState<"record" | "manual">("record");
   const [editingDoc, setEditingDoc] = useState<any>(null);
+  const [viewingDoc, setViewingDoc] = useState<any>(null);
+  const [viewDocDialogOpen, setViewDocDialogOpen] = useState(false);
   const [editDocDialogOpen, setEditDocDialogOpen] = useState(false);
   const [editDocTitle, setEditDocTitle] = useState("");
   const [editDocContent, setEditDocContent] = useState("");
   const mediaRecorderRef = useRef<any>(null);
   const streamRef = useRef<any>(null);
+  const [capturedScreenshots, setCapturedScreenshots] = useState<{ts: number; data: string}[]>([]);
   const accumulatedBlobsRef = useRef<Blob[]>([]);
+  const recordingStartTimeRef = useRef<number>(0);
 
   const [hasDraft, setHasDraft] = useState(false);
   const isInitialMount = useRef(true);
@@ -338,6 +417,45 @@ export default function ConfiguracionPage() {
     }
   };
 
+  const captureFrame = (stream: MediaStream): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const videoTracks = stream.getVideoTracks();
+      if (videoTracks.length === 0 || videoTracks[0].readyState === "ended") {
+        resolve(null);
+        return;
+      }
+
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+
+      video.onloadedmetadata = () => {
+        video.play().then(() => {
+          const canvas = document.createElement("canvas");
+          canvas.width = video.videoWidth || 640;
+          canvas.height = video.videoHeight || 360;
+          
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.6); // 60% quality jpeg
+            resolve(dataUrl);
+          } else {
+            resolve(null);
+          }
+          video.pause();
+          video.srcObject = null;
+        }).catch(() => {
+          resolve(null);
+        });
+      };
+      video.onerror = () => {
+        resolve(null);
+      };
+    });
+  };
+
   const startRecording = async () => {
     if (!lessonTitle.trim()) {
       toast.error("Por favor ingresa un título para la lección");
@@ -364,6 +482,8 @@ export default function ConfiguracionPage() {
       streamRef.current = stream;
       setRecording(true);
       setLiveTranscription("");
+      setCapturedScreenshots([]);
+      recordingStartTimeRef.current = Date.now();
       setTranscriptionStats({ total: 0, success: 0, failed: 0, failedList: [] });
       localStorage.setItem("syncro_recording_active", "true");
       if (typeof window !== "undefined") {
@@ -371,7 +491,8 @@ export default function ConfiguracionPage() {
       }
 
       const audioStream = new MediaStream(audioTracks);
-      stream.getVideoTracks().forEach((track: any) => track.stop());
+      // Keep the video tracks alive during recording for screen capture feed
+      // stream.getVideoTracks().forEach((track: any) => track.stop());
 
       let chunkIndex = 1;
 
@@ -388,11 +509,23 @@ export default function ConfiguracionPage() {
         mediaRecorder.ondataavailable = async (event) => {
           if (event.data && event.data.size > 0) {
             const currentChunkIndex = chunkIndex++;
+            // Calculate timestamp (in seconds) from start of recording
+            const elapsedSeconds = Math.round((Date.now() - recordingStartTimeRef.current) / 1000);
+            const chunkStartSeconds = Math.max(0, elapsedSeconds - 15);
             setTranscriptionStats(prev => ({ ...prev, total: prev.total + 1 }));
+
+            if (streamRef.current) {
+              captureFrame(streamRef.current).then((frameBase64) => {
+                if (frameBase64) {
+                  setCapturedScreenshots((prev) => [...prev, { ts: chunkStartSeconds, data: frameBase64 }]);
+                }
+              });
+            }
 
             const reader = new FileReader();
             reader.onloadend = async () => {
               const base64data = reader.result as string;
+              const tsLabel = `[${Math.floor(chunkStartSeconds / 60)}:${String(chunkStartSeconds % 60).padStart(2, '0')}]`;
               try {
                 const token = localStorage.getItem("token");
                 const res = await fetch(`${API}/ai-agent/ads-copilot/transcribe-chunk`, {
@@ -411,7 +544,9 @@ export default function ConfiguracionPage() {
                   if (data.text && data.text.trim()) {
                     setLiveTranscription(prev => {
                       const current = prev.trim();
-                      return current ? `${current} ${data.text.trim()}` : data.text.trim();
+                      // Prepend timestamp label to each chunk for temporal alignment
+                      const timestampedChunk = `${tsLabel} ${data.text.trim()}`;
+                      return current ? `${current}\n${timestampedChunk}` : timestampedChunk;
                     });
                     setTranscriptionStats(prev => ({ ...prev, success: prev.success + 1 }));
                     toast.success(`Fragmento de video ${currentChunkIndex} procesado`);
@@ -501,6 +636,8 @@ export default function ConfiguracionPage() {
       return;
     }
 
+    const toastId = toast.loading("Analizando e interpretando la lección con Inteligencia Artificial...");
+
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`${API}/ai-agent/ads-copilot/documents`, {
@@ -513,22 +650,24 @@ export default function ConfiguracionPage() {
           title: lessonTitle.trim(),
           content: liveTranscription.trim(),
           sourceType: "VIDEO_TRANSCRIPT",
-          branchId: localStorage.getItem("currentBranchId") || null
+          branchId: localStorage.getItem("currentBranchId") || null,
+          screenshots: capturedScreenshots.map(s => ({ ts: s.ts, data: s.data }))
         })
       });
 
       if (res.ok) {
-        toast.success("Lección guardada con éxito en el cerebro de la IA");
+        toast.success("Lección estructurada y guardada en el cerebro de la IA", { id: toastId });
         setLessonTitle("");
         setLiveTranscription("");
+        setCapturedScreenshots([]);
         localStorage.removeItem("syncro_ads_draft_title");
         localStorage.removeItem("syncro_ads_draft_content");
         fetchAdsDocs();
       } else {
-        toast.error("Error al guardar la lección");
+        toast.error("Error al guardar la lección", { id: toastId });
       }
     } catch (err) {
-      toast.error("Error de conexión");
+      toast.error("Error de conexión", { id: toastId });
     }
   };
 
@@ -2744,43 +2883,61 @@ export default function ConfiguracionPage() {
                           <p className="font-semibold text-sm">{doc.title}</p>
                           <p className="text-[11px] text-muted-foreground max-w-md truncate">{doc.content}</p>
                           <p className="text-[10px] text-muted-foreground mt-1 flex gap-2">
-                            <span>📅 {new Date(doc.createdAt).toLocaleDateString()}</span>
-                            <span>📊 {doc.content.length} caracteres</span>
+                            <span>Fecha: {new Date(doc.createdAt).toLocaleDateString()}</span>
+                            <span>·</span>
+                            <span>{doc.content.length} caracteres</span>
                           </p>
                         </div>
                         <div className="flex gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 w-8"
-                            onClick={() => downloadAsTxt(doc.title, doc.content)}
-                            title="Descargar Lección (TXT)"
-                          >
-                            <IconDownload size={15} />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 w-8"
-                            onClick={() => {
-                              setEditingDoc(doc);
-                              setEditDocTitle(doc.title);
-                              setEditDocContent(doc.content);
-                              setEditDocDialogOpen(true);
-                            }}
-                            title="Editar Lección"
-                          >
-                            <IconPencil size={15} />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8"
-                            onClick={() => deleteAdsDoc(doc.id)}
-                            title="Eliminar Lección"
-                          >
-                            <IconTrash size={15} />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="text-muted-foreground hover:text-foreground h-8 w-8 rounded-lg"
+                              >
+                                <IconDotsVertical size={16} />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              <DropdownMenuItem 
+                                onClick={() => {
+                                  setViewingDoc(doc);
+                                  setViewDocDialogOpen(true);
+                                }}
+                                className="gap-2 cursor-pointer"
+                              >
+                                <IconEye size={15} />
+                                <span>Visualizar</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => downloadAsTxt(doc.title, doc.content)}
+                                className="gap-2 cursor-pointer"
+                              >
+                                <IconDownload size={15} />
+                                <span>Descargar TXT</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => {
+                                  setEditingDoc(doc);
+                                  setEditDocTitle(doc.title);
+                                  setEditDocContent(doc.content);
+                                  setEditDocDialogOpen(true);
+                                }}
+                                className="gap-2 cursor-pointer"
+                              >
+                                <IconPencil size={15} />
+                                <span>Editar lección</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => deleteAdsDoc(doc.id)}
+                                className="gap-2 cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
+                              >
+                                <IconTrash size={15} className="text-destructive" />
+                                <span>Eliminar</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     ))}
@@ -2932,6 +3089,50 @@ export default function ConfiguracionPage() {
             </Button>
             <Button onClick={updateAdsDoc}>
               Guardar Cambios
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para Visualizar Documento de Entrenamiento */}
+      <Dialog open={viewDocDialogOpen} onOpenChange={setViewDocDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-6 gap-4 overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <IconEye size={20} className="text-primary" /> Visualizar Lección
+            </DialogTitle>
+            <DialogDescription>
+              Consulta el contenido estructurado de esta lección del cerebro de la IA.
+            </DialogDescription>
+          </DialogHeader>
+          {viewingDoc && (
+            <div className="flex-1 overflow-y-auto pr-1 border rounded-lg p-4 bg-muted/10">
+              <h2 className="text-lg font-bold text-foreground mb-4">{viewingDoc.title}</h2>
+              <div className="space-y-1.5 leading-relaxed">
+                {renderMarkdown(viewingDoc.content)}
+              </div>
+            </div>
+          )}
+          <DialogFooter className="shrink-0 mt-2 flex items-center justify-between sm:justify-between w-full">
+            {viewingDoc && (
+              <Button 
+                variant="outline" 
+                className="gap-1.5 hover:bg-primary/10 hover:text-primary h-9"
+                onClick={() => {
+                  const fullText = `${viewingDoc.title}\n\n${viewingDoc.content}`;
+                  navigator.clipboard.writeText(fullText);
+                  toast.success("Lección copiada al portapapeles con éxito");
+                }}
+              >
+                <IconCopy size={15} />
+                <span>Copiar Contenido</span>
+              </Button>
+            )}
+            <Button variant="outline" className="h-9" onClick={() => {
+              setViewDocDialogOpen(false);
+              setViewingDoc(null);
+            }}>
+              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>
