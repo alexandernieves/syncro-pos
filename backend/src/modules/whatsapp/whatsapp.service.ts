@@ -407,9 +407,12 @@ export class WhatsAppService {
     if (!messageData?.key) return { success: false, error: 'Invalid payload' };
 
     const remoteJid = messageData.key.remoteJid;
-    if (!remoteJid?.endsWith('@s.whatsapp.net')) return { success: true, ignored: true };
+    if (!remoteJid || remoteJid.endsWith('@g.us') || remoteJid.endsWith('@broadcast') || remoteJid.includes('@lid')) {
+      return { success: true, ignored: true };
+    }
 
-    const phone = remoteJid.split('@')[0];
+    const rawPhone = remoteJid.split('@')[0].split(':')[0];
+    const phone = rawPhone.replace(/\D/g, '');
     const fromMe = messageData.key.fromMe || false;
 
     // Ignore bot's own replies sent via API
@@ -428,7 +431,7 @@ export class WhatsAppService {
           const instances = await fetchRes.json();
           const currentInstance = instances.find((inst: any) => inst.name === instance);
           if (currentInstance && currentInstance.ownerJid) {
-            botPhone = currentInstance.ownerJid.split('@')[0].replace(/\D/g, '');
+            botPhone = currentInstance.ownerJid.split('@')[0].split(':')[0].replace(/\D/g, '');
             this.botPhones.set(businessId, botPhone!);
           }
         }
@@ -450,15 +453,23 @@ export class WhatsAppService {
     let text = msg.conversation || msg.extendedTextMessage?.text || '';
     if (!text || typeof text !== 'string') return { success: true, ignored: true };
 
+    this.logger.log(`[Bot Webhook] Message from ${phone} (fromMe: ${fromMe}): "${text}"`);
+
     try {
       const setting = await this.prisma.setting.findFirst({ where: { businessId } });
-      if (!setting?.whatsappBotEnabled) return { success: true, ignored: true };
+      if (!setting?.whatsappBotEnabled) {
+        this.logger.warn(`[Bot Webhook] Ignored: whatsappBotEnabled is false for business ${businessId}`);
+        return { success: true, ignored: true };
+      }
 
-      const cleanPhone = phone.replace(/\D/g, '');
+      const cleanPhone = phone;
       const isAuthorized = fromMe || setting.whatsappAuthorizedPhones.some(
         (p) => p.replace(/\D/g, '') === cleanPhone,
       );
-      if (!isAuthorized) return { success: true, ignored: true };
+      if (!isAuthorized) {
+        this.logger.warn(`[Bot Webhook] Ignored: Phone ${cleanPhone} is not authorized for business ${businessId}. Authorized phones: ${JSON.stringify(setting.whatsappAuthorizedPhones)}`);
+        return { success: true, ignored: true };
+      }
 
       const user = await this.prisma.user.findFirst({
         where: { businessId, role: { in: ['admin', 'owner'] } },
