@@ -353,6 +353,13 @@ export default function CreditosPage() {
     }
   };
 
+  const handleOpenMassSurcharge = () => {
+    setMassSurchargeValue("");
+    setMassSurchargeType("PERCENT");
+    setMassSurchargeNotes("");
+    setMassSurchargeOpen(true);
+  };
+
   const handleApplyMassSurcharge = async () => {
     if (selectedClients.length === 0) return;
     const val = parseFloat(massSurchargeValue);
