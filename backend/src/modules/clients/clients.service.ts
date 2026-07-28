@@ -14,9 +14,22 @@ export class ClientsService {
   private sanitizeClient(client: any) {
     if (!client) return client;
     const { password, ...sanitized } = client;
+    
+    let surchargeAmount = 0;
+    if (client.currentDebt > 0 && client.surchargeType && client.surchargeValue > 0) {
+      if (client.surchargeType === 'PERCENT') {
+        surchargeAmount = client.currentDebt * (client.surchargeValue / 100);
+      } else if (client.surchargeType === 'FIXED') {
+        surchargeAmount = client.surchargeValue;
+      }
+    }
+
     return {
       ...sanitized,
       hasAccount: !!password,
+      baseDebt: client.currentDebt,
+      surchargeAmount,
+      currentDebt: client.currentDebt + surchargeAmount,
     };
   }
 
@@ -162,8 +175,14 @@ export class ClientsService {
         }
       }
 
-      // Calculate new debt
-      const remainingDebt = Math.max(0, client.currentDebt - data.amount);
+      // Calculate remaining base debt (adjusting for surcharge type)
+      let basePaymentAmount = data.amount;
+      if (client.currentDebt > 0 && client.surchargeType && client.surchargeValue > 0) {
+        if (client.surchargeType === 'PERCENT') {
+          basePaymentAmount = data.amount / (1 + client.surchargeValue / 100);
+        }
+      }
+      const remainingDebt = Math.max(0, client.currentDebt - basePaymentAmount);
 
       // Points gained (1 point per USD on time)
       const pointsGained = !isLate ? Math.floor(data.amount) : 0;
@@ -301,6 +320,28 @@ export class ClientsService {
   async remove(id: string, businessId?: string) {
     await this.findOne(id, businessId);
     return this.prisma.client.delete({ where: { id } });
+  }
+
+  async massSurcharge(clientIds: string[], surchargeType: string, surchargeValue: number, businessId?: string) {
+    const where: any = {
+      id: { in: clientIds }
+    };
+    if (businessId) {
+      where.businessId = businessId;
+    }
+    
+    await this.prisma.client.updateMany({
+      where,
+      data: {
+        surchargeType: surchargeType === 'NONE' ? null : surchargeType,
+        surchargeValue: surchargeType === 'NONE' ? 0 : surchargeValue,
+      }
+    });
+
+    const updatedClients = await this.prisma.client.findMany({
+      where
+    });
+    return updatedClients.map(c => this.sanitizeClient(c));
   }
 
   // --- LOANS SECTION ---

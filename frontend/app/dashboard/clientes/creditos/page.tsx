@@ -137,6 +137,15 @@ export default function CreditosPage() {
   const [surchargeNotes, setSurchargeNotes] = useState("");
   const [isApplyingSurcharge, setIsApplyingSurcharge] = useState(false);
 
+  // Mass Selection & Application
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedClients, setSelectedClients] = useState<string[]>([]);
+  const [massSurchargeOpen, setMassSurchargeOpen] = useState(false);
+  const [massSurchargeType, setMassSurchargeType] = useState<"PERCENT" | "FIXED">("PERCENT");
+  const [massSurchargeValue, setMassSurchargeValue] = useState("");
+  const [isApplyingMassSurcharge, setIsApplyingMassSurcharge] = useState(false);
+  const [massSurchargeNotes, setMassSurchargeNotes] = useState("");
+
   // History Modal
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyClient, setHistoryClient] = useState<any>(null);
@@ -257,9 +266,9 @@ export default function CreditosPage() {
     setSelectedClientForLimit(client);
     setIsTraditional(client.creditLimit === 0);
     setLimitAmount(client.creditLimit > 0 ? client.creditLimit.toString() : "100");
-    // Reset surcharge fields
-    setSurchargeType("PERCENT");
-    setSurchargeValue("");
+    // Load existing surcharge settings
+    setSurchargeType(client.surchargeType === "FIXED" ? "FIXED" : "PERCENT");
+    setSurchargeValue(client.surchargeValue > 0 ? client.surchargeValue.toString() : "");
     setSurchargeNotes("");
     setLimitOpen(true);
   };
@@ -308,48 +317,79 @@ export default function CreditosPage() {
 
   const handleApplySurcharge = async () => {
     if (!selectedClientForLimit) return;
+    
     const val = parseFloat(surchargeValue);
+    const isRemoval = isNaN(val) || val <= 0;
+    
+    const finalType = isRemoval ? null : surchargeType;
+    const finalValue = isRemoval ? 0 : val;
+
+    setIsApplyingSurcharge(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/clients/${selectedClientForLimit.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          surchargeType: finalType,
+          surchargeValue: finalValue
+        })
+      });
+      if (res.ok) {
+        toast.success(isRemoval ? "Recargo de interés removido" : "Recargo de interés actualizado");
+        setLimitOpen(false);
+        loadData();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || "Error al actualizar recargo");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setIsApplyingSurcharge(false);
+    }
+  };
+
+  const handleApplyMassSurcharge = async () => {
+    if (selectedClients.length === 0) return;
+    const val = parseFloat(massSurchargeValue);
     if (isNaN(val) || val <= 0) {
       toast.error("Por favor ingresa un monto o porcentaje válido");
       return;
     }
 
-    let finalAmount = val;
-    if (surchargeType === "PERCENT") {
-      const debt = selectedClientForLimit.currentDebt || 0;
-      if (debt <= 0) {
-        toast.error("No se puede aplicar un recargo porcentual a un cliente sin deuda actual");
-        return;
-      }
-      finalAmount = (val / 100) * debt;
-    }
-
-    setIsApplyingSurcharge(true);
+    setIsApplyingMassSurcharge(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API}/clients/${selectedClientForLimit.id}/charge`, {
+      const res = await fetch(`${API}/clients/mass-surcharge`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          amount: parseFloat(finalAmount.toFixed(2)),
-          notes: surchargeNotes || (surchargeType === "PERCENT" ? `Recargo del ${val}% por crédito` : `Recargo fijo por crédito`)
+          clientIds: selectedClients,
+          surchargeType: massSurchargeType,
+          surchargeValue: val
         })
       });
       if (res.ok) {
-        toast.success("Recargo aplicado y deuda actualizada");
-        setLimitOpen(false);
+        toast.success(`Recargo aplicado a ${selectedClients.length} cliente(s)`);
+        setMassSurchargeOpen(false);
+        setIsSelectionMode(false);
+        setSelectedClients([]);
         loadData();
       } else {
         const err = await res.json().catch(() => ({}));
-        toast.error(err.message || "Error al aplicar recargo");
+        toast.error(err.message || "Error al aplicar recargo masivo");
       }
     } catch {
       toast.error("Error de conexión");
     } finally {
-      setIsApplyingSurcharge(false);
+      setIsApplyingMassSurcharge(false);
     }
   };
 
@@ -426,14 +466,26 @@ export default function CreditosPage() {
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Cuentas por Cobrar (Fiado)</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Clientes con deudas pendientes o saldo utilizado.</p>
         </div>
-        <div className="relative w-full md:w-80">
-          <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-          <Input
-            placeholder="Buscar cliente..."
-            className="pl-10 rounded-xl h-11 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950/40 text-sm"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <Button
+            variant={isSelectionMode ? "secondary" : "outline"}
+            onClick={() => {
+              setIsSelectionMode(!isSelectionMode);
+              setSelectedClients([]);
+            }}
+            className="rounded-xl h-11 text-xs font-bold gap-1.5"
+          >
+            {isSelectionMode ? "Cancelar Selección" : "Selección Masiva"}
+          </Button>
+          <div className="relative w-full md:w-80">
+            <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+            <Input
+              placeholder="Buscar cliente..."
+              className="pl-10 rounded-xl h-11 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950/40 text-sm"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 
@@ -466,15 +518,35 @@ export default function CreditosPage() {
                   {/* CARD HEADER */}
                   <CardHeader className="pb-3 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50/20 dark:bg-zinc-950/20">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 animate-in fade-in duration-200">
+                        {isSelectionMode && (
+                          <input
+                            type="checkbox"
+                            checked={selectedClients.includes(c.id)}
+                            disabled={!!(c.surchargeType && c.surchargeValue > 0)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedClients([...selectedClients, c.id]);
+                              } else {
+                                setSelectedClients(selectedClients.filter(id => id !== c.id));
+                              }
+                            }}
+                            className="size-4.5 rounded border-zinc-300 dark:border-zinc-800 accent-amber-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          />
+                        )}
                         <div className="size-10 rounded-xl bg-gradient-to-tr from-zinc-100 to-zinc-200/50 dark:from-zinc-800 dark:to-zinc-700/50 border border-zinc-200 dark:border-zinc-700/30 flex items-center justify-center font-bold uppercase shadow-inner text-zinc-700 dark:text-zinc-200">
                           {c.name.charAt(0)}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <CardTitle className="text-base font-bold text-zinc-800 dark:text-zinc-100 truncate max-w-[130px]">{c.name}</CardTitle>
+                            <CardTitle className="text-base font-bold text-zinc-800 dark:text-zinc-100 truncate max-w-[120px]">{c.name}</CardTitle>
                             {c.isSuspended && (
                               <Badge className="bg-rose-500 text-white border-none hover:bg-rose-500 text-[9px] h-4 px-1.5 font-bold uppercase">Mora</Badge>
+                            )}
+                            {c.surchargeType && c.surchargeValue > 0 && (
+                              <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200/30 dark:border-amber-500/20 text-[9px] h-4 px-1.5 font-bold uppercase shrink-0" title="Recargo activo">
+                                +{c.surchargeValue}{c.surchargeType === "PERCENT" ? "%" : " USD"}
+                              </Badge>
                             )}
                           </div>
                           <CardDescription className="text-[11px] text-zinc-400 font-mono mt-0.5">{c.documentId || "Cédula S/D"}</CardDescription>
@@ -1116,6 +1188,107 @@ export default function CreditosPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ─── MODAL RECARGO MASIVO ───────────────────────────────────────── */}
+      <Dialog open={massSurchargeOpen} onOpenChange={setMassSurchargeOpen}>
+        <DialogContent className="rounded-2xl p-6 max-w-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-200">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-zinc-800 dark:text-zinc-100">
+              <IconSettings size={20} className="text-zinc-500" /> Aplicar Recargo Masivo
+            </DialogTitle>
+            <DialogDescription className="text-xs mt-1">
+              Aplicando recargo a <strong>{selectedClients.length}</strong> cliente(s) seleccionado(s).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="flex gap-2 bg-zinc-50 dark:bg-zinc-900/60 p-1 border border-zinc-200 dark:border-zinc-800/80 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setMassSurchargeType("PERCENT")}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-[10px] font-bold tracking-tight transition-all ${
+                  massSurchargeType === "PERCENT"
+                    ? "bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 shadow-sm border border-zinc-200/50"
+                    : "text-zinc-500 hover:text-zinc-700"
+                }`}
+              >
+                Porcentaje (%)
+              </button>
+              <button
+                type="button"
+                onClick={() => setMassSurchargeType("FIXED")}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-[10px] font-bold tracking-tight transition-all ${
+                  massSurchargeType === "FIXED"
+                    ? "bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 shadow-sm border border-zinc-200/50"
+                    : "text-zinc-500 hover:text-zinc-700"
+                }`}
+              >
+                Monto Fijo ($)
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                {massSurchargeType === "PERCENT" ? "Porcentaje del Recargo (%)" : "Monto a Cargar ($ USD)"}
+              </Label>
+              <div className="relative">
+                {massSurchargeType === "FIXED" && (
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-400">$</span>
+                )}
+                <Input
+                  type="number"
+                  className={`rounded-xl h-11 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-sm font-semibold ${
+                    massSurchargeType === "FIXED" ? "pl-7" : "px-3.5"
+                  }`}
+                  placeholder="0.00"
+                  value={massSurchargeValue}
+                  onChange={(e) => setMassSurchargeValue(e.target.value)}
+                />
+                {massSurchargeType === "PERCENT" && (
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-400">%</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" onClick={() => setMassSurchargeOpen(false)} className="rounded-xl h-11 border-zinc-200 dark:border-zinc-800 bg-transparent flex-1 text-xs">Cancelar</Button>
+            <Button
+              onClick={handleApplyMassSurcharge}
+              disabled={isApplyingMassSurcharge || !massSurchargeValue || parseFloat(massSurchargeValue) <= 0}
+              className="flex-1 rounded-xl h-11 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold border-none text-xs"
+            >
+              {isApplyingMassSurcharge ? "Aplicando..." : "Confirmar Recargo"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* FLOATING ACTION BAR FOR SELECTION */}
+      {isSelectionMode && selectedClients.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <span className="text-xs font-bold">
+            {selectedClients.length} cliente(s) seleccionado(s)
+          </span>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={handleOpenMassSurcharge}
+              className="h-9 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold border-none text-xs"
+            >
+              Aplicar Recargo Masivo
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSelectedClients([])}
+              className="h-9 px-4 rounded-xl border-zinc-700 bg-transparent text-white hover:bg-zinc-800 text-xs"
+            >
+              Desmarcar Todos
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

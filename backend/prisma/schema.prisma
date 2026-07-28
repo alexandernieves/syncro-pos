@@ -430,6 +430,8 @@ model Client {
   password                    String?
   syncroCreditFrequencyDays   Int?
   syncroCreditMaxInstallments Int?
+  surchargeType               String?
+  surchargeValue              Float               @default(0)
   business                    Business?           @relation(fields: [businessId], references: [id])
   creditTransactions          CreditTransaction[]
   deliveryOrders              DeliveryOrder[]

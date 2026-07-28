@@ -192,6 +192,12 @@ export class ClientsController {
     return this.clientsService.deleteDeliveryOrder(id, businessId);
   }
 
+  @Post('mass-surcharge')
+  async massSurcharge(@Body() body: { clientIds: string[]; surchargeType: string; surchargeValue: number }, @Request() req: any) {
+    const businessId = req.user.businessId;
+    return this.clientsService.massSurcharge(body.clientIds, body.surchargeType, body.surchargeValue, businessId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string, @Request() req: any) {
     const businessId = req.user.businessId;
