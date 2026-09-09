@@ -6,6 +6,18 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { json, urlencoded } from 'express';
 
+// Evita que errores transitorios de red/conexión (p. ej. la VPN del servidor
+// interrumpiendo momentáneamente la ruta hacia la BD) terminen el proceso.
+// Node por defecto mata el proceso ante un unhandledRejection/uncaughtException
+// si no hay listener; con estos handlers solo se loguea y el proceso sigue vivo.
+process.on('unhandledRejection', (reason) => {
+  console.error('[UnhandledRejection]', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[UncaughtException]', err);
+});
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
@@ -106,4 +118,7 @@ async function bootstrap() {
   await app.listen(process.env.PORT ?? 9000);
   console.log(`[Bootstrap] Application running on port ${process.env.PORT ?? 9000}`);
 }
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('[Bootstrap] Fallo al iniciar la aplicación:', err);
+  process.exit(1);
+});

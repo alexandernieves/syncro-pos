@@ -34,7 +34,6 @@ import { UploadModule } from './modules/upload/upload.module';
 import { AiAgentModule } from './modules/ai-agent/ai-agent.module';
 import { AppCacheModule } from './modules/cache/app-cache.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
-import { LandingsModule } from './modules/landings/landings.module';
 
 @Module({
   imports: [
@@ -76,7 +75,6 @@ import { LandingsModule } from './modules/landings/landings.module';
     UploadModule,
     AiAgentModule,
     WhatsAppModule,
-    LandingsModule,
   ],
   controllers: [AppController],
   providers: [

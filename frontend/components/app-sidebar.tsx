@@ -21,7 +21,6 @@ import {
   IconChevronDown,
   IconCirclePlusFilled,
   IconMessageCircle,
-  IconLayout,
 } from "@tabler/icons-react";
 
 import {
@@ -72,15 +71,6 @@ const data = {
       items: [
         { title: "Todos los Productos", url: "/dashboard/productos/todos" },
         { title: "Categorías", url: "/dashboard/productos/categorias" },
-      ],
-    },
-    {
-      title: "Landing Pages",
-      url: "/dashboard/landings",
-      icon: IconLayout,
-      items: [
-        { title: "Mis Páginas", url: "/dashboard/landings" },
-        { title: "Clientes", url: "/dashboard/landings/clientes" },
       ],
     },
     {
@@ -237,7 +227,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       if (p.includes("dashboard") && urlStr === "/dashboard") return true;
       if (p.includes("pos") && urlStr === "/pos") return true;
-      if (p.includes("productos") && (urlStr.includes("/productos") || urlStr.includes("/landings"))) return true;
+      if (p.includes("productos") && urlStr.includes("/productos")) return true;
       if (p.includes("inventario") && urlStr.includes("/inventario")) return true;
       if (p.includes("proveedores") && urlStr.includes("/proveedores")) return true;
       if (p.includes("reportes") && urlStr.includes("/reportes")) return true;

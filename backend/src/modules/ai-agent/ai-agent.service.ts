@@ -1647,6 +1647,9 @@ ${otherInfo}`;
       today.setHours(0, 0, 0, 0);
 
       // 1. Stock Crítico Check
+      // Se agrupa por sucursal en UNA sola notificación/toast en vez de una por
+      // producto: con muchos productos bajo el mínimo, emitir una notificación
+      // por item generaba una "tormenta" de decenas de toasts apilados en la UI.
       const inventories = await this.prisma.inventory.findMany({
         where: {
           branch: { businessId },
@@ -1660,27 +1663,46 @@ ${otherInfo}`;
       });
 
       const lowStockItems = inventories.filter(inv => inv.quantity <= inv.variant.minStock);
-      for (const item of lowStockItems) {
-        const title = `⚠️ Stock Crítico: ${item.variant.product.name}`;
-        const msg = `El producto "${item.variant.product.name} (${item.variant.name})" en la sucursal ${item.branch.name} tiene un stock crítico de ${item.quantity} unidades (mínimo requerido: ${item.variant.minStock}).`;
 
+      const lowStockByBranch = new Map<string, { branchName: string; items: typeof lowStockItems }>();
+      for (const item of lowStockItems) {
+        const bucket = lowStockByBranch.get(item.branchId) ?? { branchName: item.branch.name, items: [] };
+        bucket.items.push(item);
+        lowStockByBranch.set(item.branchId, bucket);
+      }
+
+      for (const [branchId, { branchName, items }] of lowStockByBranch) {
+        // Máximo una alerta de stock por sucursal por día (evita re-disparar
+        // el mismo aviso cada 10 min mientras la condición siga vigente).
         const exists = await this.prisma.notification.findFirst({
           where: {
-            branchId: item.branchId,
-            title,
+            branchId,
+            type: 'STOCK_ALERT',
             createdAt: { gte: today }
           }
         });
+        if (exists) continue;
 
-        if (!exists) {
-          await this.notificationsService.create({
-            type: 'STOCK_ALERT',
-            title,
-            message: msg,
-            branchId: item.branchId
-          });
-          alertsCount++;
-        }
+        const preview = items
+          .slice(0, 5)
+          .map(i => `${i.variant.product.name} (${i.variant.name}): ${i.quantity} u.`)
+          .join(', ');
+        const extra = items.length > 5 ? ` y ${items.length - 5} producto(s) más` : '';
+
+        const title = items.length === 1
+          ? `⚠️ Stock Crítico: ${items[0].variant.product.name}`
+          : `⚠️ Stock Crítico: ${items.length} productos en ${branchName}`;
+        const msg = items.length === 1
+          ? `El producto "${items[0].variant.product.name} (${items[0].variant.name})" en la sucursal ${branchName} tiene un stock crítico de ${items[0].quantity} unidades (mínimo requerido: ${items[0].variant.minStock}).`
+          : `${items.length} productos en la sucursal ${branchName} están en stock crítico: ${preview}${extra}. Revisa el módulo de Inventario para más detalle.`;
+
+        await this.notificationsService.create({
+          type: 'STOCK_ALERT',
+          title,
+          message: msg,
+          branchId
+        });
+        alertsCount++;
       }
 
       const sixteenHoursAgo = new Date(Date.now() - 16 * 60 * 60 * 1000);

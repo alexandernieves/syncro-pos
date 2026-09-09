@@ -192,6 +192,9 @@ model Branch {
   purchaseOrders        PurchaseOrder[]
   sales                 Sale[]
   shifts                Shift[]
+  landingPages          LandingPage[]
+  landingLeads          LandingLead[]
+  landingVisits         LandingVisit[]
 
   @@unique([businessId, name])
 }
@@ -867,16 +870,75 @@ model WhatsAppPendingAction {
 }
 
 model LandingPage {
-  id         String   @id @default(uuid())
-  businessId String
-  title      String
-  slug       String   @unique
-  productUrl String?
+  id             String   @id @default(uuid())
+  businessId     String
+  branchId       String?
+  title          String
+  slug           String   @unique
+  productUrl     String?
+  // Producto de tu propio inventario del que se generó esta landing (flujo
+  // "Crear desde mi Inventario"). Sin relación formal de Prisma a propósito
+  // (igual que productUrl): si el producto se borra más adelante, la landing
+  // ya publicada sigue funcionando con su config ya generada.
+  sourceProductId String?
   config     Json
   status     String   @default("DRAFT")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business   Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch     Branch?        @relation(fields: [branchId], references: [id])
+  leads      LandingLead[]
+  visits     LandingVisit[]
+}
+
+// Lead capturado desde el formulario de pedido de una landing page pública.
+// Reemplaza funcionalmente a ClientesPetgo (legacy, sin aislar), pero
+// vinculado siempre a su landing/negocio/sucursal de origen.
+model LandingLead {
+  id              String   @id @default(uuid())
+  landingPageId   String
+  businessId      String
+  branchId        String
+  name            String
+  phone           String
+  address         String?
+  city            String?
+  productInterest String?
+  packId          String?
+  visitorId       String?
+  status          String   @default("NEW")
+  saleId          String?
+  createdAt       DateTime @default(now())
+  landingPage     LandingPage @relation(fields: [landingPageId], references: [id], onDelete: Cascade)
+  branch          Branch      @relation(fields: [branchId], references: [id])
+}
+
+// Visita/analítica de una landing page pública.
+// Reemplaza funcionalmente a VisitasPetgo (legacy, sin aislar), mismo set de
+// métricas pero vinculado siempre a su landing/negocio/sucursal de origen.
+model LandingVisit {
+  id            String   @id @default(uuid())
+  landingPageId String
+  businessId    String
+  branchId      String
+  visitorId     String
+  ipAddress     String?
+  userAgent     String?
+  deviceType    String?
+  referrer      String?
+  utmSource     String?
+  utmMedium     String?
+  utmCampaign   String?
+  fbclid        String?
+  timeOnPage    Float    @default(0)
+  formStarted   Boolean  @default(false)
+  formCompleted Boolean  @default(false)
+  clicks        Int      @default(0)
+  scrolled      Boolean  @default(false)
+  maxScroll     Int      @default(0)
+  createdAt     DateTime @default(now())
+  landingPage   LandingPage @relation(fields: [landingPageId], references: [id], onDelete: Cascade)
+  branch        Branch      @relation(fields: [branchId], references: [id])
 }
 
 model ClientesPetgo {

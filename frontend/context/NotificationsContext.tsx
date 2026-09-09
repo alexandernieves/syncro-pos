@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { API_URL } from "@/lib/constants"
 import { io, Socket } from "socket.io-client";
 import { toast } from "sonner";
@@ -22,6 +22,13 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [socket, setSocket] = useState<Socket | null>(null);
+
+  // Colapsa ráfagas de notificaciones (ej. varias alertas de stock llegando casi
+  // juntas) en un único toast agrupado, para no apilar decenas de toasts.
+  const burstCountRef = useRef(0);
+  const burstTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const BURST_THRESHOLD = 3;
+  const BURST_WINDOW_MS = 4000;
 
   const fetchNotifications = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -70,15 +77,36 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       // Only show toast if we are still in the dashboard context
       const stillInDashboard = !window.location.pathname.startsWith("/portal");
       if (stillInDashboard) {
-        toast(notification.title, {
-          description: notification.message,
-        });
+        // id = notification.id evita duplicar el toast si el mismo evento
+        // llega dos veces (p.ej. reconexión del socket).
+        burstCountRef.current += 1;
+        if (burstTimerRef.current) clearTimeout(burstTimerRef.current);
+        burstTimerRef.current = setTimeout(() => {
+          burstCountRef.current = 0;
+        }, BURST_WINDOW_MS);
+
+        if (burstCountRef.current <= BURST_THRESHOLD) {
+          toast(notification.title, {
+            id: notification.id,
+            description: notification.message,
+          });
+        } else {
+          // Ya se mostraron varios toasts individuales en esta ráfaga:
+          // a partir de aquí se agrupan todos en un único toast que se
+          // va actualizando, en vez de seguir apilando uno por evento.
+          const extra = burstCountRef.current - BURST_THRESHOLD;
+          toast(`🔔 ${extra} notificaciones más`, {
+            id: "notifications-burst",
+            description: "Revisa la campana de notificaciones para ver el detalle.",
+          });
+        }
       }
     });
 
     setSocket(newSocket);
 
     return () => {
+      if (burstTimerRef.current) clearTimeout(burstTimerRef.current);
       newSocket.disconnect();
     };
   }, [fetchNotifications]);
