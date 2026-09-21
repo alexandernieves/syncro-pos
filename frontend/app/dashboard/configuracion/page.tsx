@@ -67,7 +67,12 @@ import {
   IconDownload,
   IconDotsVertical,
   IconCopy,
+  IconAdjustmentsHorizontal,
+  IconSparkles,
+  IconShirt,
+  IconLayoutGrid,
 } from "@tabler/icons-react";
+import { ALL_MODULES, PRESET_DEFINITIONS } from "@/components/module-customizer-dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -151,6 +156,7 @@ const ICONS_MAP: Record<string, React.ElementType> = {
 };
 
 const SECTIONS = [
+  { id: "modulos", label: "Giro y Módulos", icon: IconAdjustmentsHorizontal },
   { id: "negocio", label: "Negocio", icon: IconBuilding },
   { id: "facturacion", label: "Facturación e IVA", icon: IconReceipt },
   { id: "pagos", label: "Métodos de Pago", icon: IconCreditCard },
@@ -171,8 +177,11 @@ const VENEZUELA_STATES = [
 
 export default function ConfiguracionPage() {
   const [mounted, setMounted] = useState(false);
-  const [activeSection, setActiveSection] = React.useState("negocio");
+  const [activeSection, setActiveSection] = React.useState("modulos");
   const [loading, setLoading] = useState(true);
+  const [businessType, setBusinessType] = useState("GENERAL");
+  const [enabledModules, setEnabledModules] = useState<string[]>([]);
+  const [savingModules, setSavingModules] = useState(false);
 
   React.useEffect(() => { setMounted(true); }, []);
 
@@ -226,6 +235,7 @@ export default function ConfiguracionPage() {
     printOnSale: true,
     lowStockAlert: "5",
     allowNegativeStock: false,
+    blindShiftClose: true,
   });
 
   const [syncroCreditMaxInstallments, setSyncroCreditMaxInstallments] = useState(3);
@@ -810,6 +820,7 @@ export default function ConfiguracionPage() {
               printOnSale: data.printOnSale !== false,
               lowStockAlert: String(data.lowStockAlert || "5"),
               allowNegativeStock: data.allowNegativeStock || false,
+              blindShiftClose: data.blindShiftClose !== false,
             });
             setPrintConfig({
               defaultPrinter: data.defaultPrinter || "",
@@ -848,6 +859,13 @@ export default function ConfiguracionPage() {
               showSalesGoal: data.showSalesGoal !== undefined ? data.showSalesGoal : true,
               showNetMargin: data.showNetMargin !== undefined ? data.showNetMargin : true,
             });
+            setBusinessType(data.businessType || "GENERAL");
+            if (Array.isArray(data.enabledModules) && data.enabledModules.length > 0) {
+              setEnabledModules(data.enabledModules);
+            } else {
+              const p = PRESET_DEFINITIONS[data.businessType] || PRESET_DEFINITIONS.GENERAL;
+              setEnabledModules(p.modules);
+            }
           }
         }
       } catch (err) {
@@ -992,6 +1010,7 @@ export default function ConfiguracionPage() {
           printOnSale: posConfig.printOnSale,
           lowStockAlert: Number(posConfig.lowStockAlert) || 5,
           allowNegativeStock: posConfig.allowNegativeStock,
+          blindShiftClose: posConfig.blindShiftClose,
           pagoMovilBank: pagoMovil.bank,
           pagoMovilId: pagoMovil.id,
           pagoMovilPhone: pagoMovil.phone,
@@ -1035,6 +1054,65 @@ export default function ConfiguracionPage() {
 
   const togglePayment = (id: number) => {
     setPaymentMethods(prev => prev.map(p => p.id === id ? { ...p, enabled: !p.enabled } : p));
+  };
+
+  const handleApplyPreset = (key: string) => {
+    setBusinessType(key);
+    const preset = PRESET_DEFINITIONS[key];
+    if (preset) {
+      setEnabledModules(preset.modules);
+      toast.info(`Preset "${preset.title}" seleccionado`, {
+        description: "Haz clic en 'Guardar Cambios' para aplicar esta plantilla a tu sistema.",
+      });
+    }
+  };
+
+  const handleToggleModule = (moduleId: string) => {
+    const mod = ALL_MODULES.find((m) => m.id === moduleId);
+    if (mod?.isCore) {
+      toast.warning("Este módulo es esencial para el funcionamiento básico del sistema");
+      return;
+    }
+    setEnabledModules((prev) =>
+      prev.includes(moduleId)
+        ? prev.filter((id) => id !== moduleId)
+        : [...prev, moduleId]
+    );
+  };
+
+  const handleSaveModules = async (newType?: string, newModules?: string[]) => {
+    try {
+      setSavingModules(true);
+      const typeToSave = newType || businessType;
+      const modulesToSave = newModules || enabledModules;
+      const res = await fetch(`${API}/settings`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          businessType: typeToSave,
+          enabledModules: modulesToSave,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Error al guardar la configuración de módulos");
+      }
+
+      localStorage.setItem("businessType", typeToSave);
+      localStorage.setItem("enabledModules", JSON.stringify(modulesToSave));
+      window.dispatchEvent(new Event("settingsUpdated"));
+
+      toast.success("¡Espacio de trabajo actualizado!", {
+        description: "Tu menú y herramientas ahora se adaptan a tu negocio.",
+      });
+    } catch (e: any) {
+      toast.error(e.message || "Error al actualizar módulos");
+    } finally {
+      setSavingModules(false);
+    }
   };
 
   if (!mounted) return null;
@@ -1094,6 +1172,168 @@ export default function ConfiguracionPage() {
 
       {/* MAIN CONTENT */}
       <main className="flex-1 p-6 overflow-y-auto">
+
+        {/* ─── GIRO Y MÓDULOS ─── */}
+        {activeSection === "modulos" && (
+          <div className="max-w-4xl flex flex-col gap-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <IconAdjustmentsHorizontal className="w-6 h-6 text-primary" />
+                  Giro del Negocio y Módulos de Trabajo
+                </h2>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Adapta Syncro POS al rubro exacto de tu negocio. Enciende solo lo que tu equipo necesita.
+                </p>
+              </div>
+              <Button
+                onClick={() => handleSaveModules()}
+                disabled={savingModules}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+              >
+                {savingModules ? "Guardando..." : "Guardar Cambios"}
+              </Button>
+            </div>
+
+            {/* Presets Rápidos */}
+            <Card className="border-border/80 shadow-xs">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base font-semibold">1. Elige tu Preset de Rubro</CardTitle>
+                  <Badge variant="outline" className="text-xs text-primary border-primary/30">
+                    <IconSparkles className="w-3.5 h-3.5 mr-1" /> Configura todo en 1 clic
+                  </Badge>
+                </div>
+                <CardDescription className="text-xs">
+                  Al hacer clic en un rubro, los módulos recomendados se seleccionarán de forma automática.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {Object.entries(PRESET_DEFINITIONS).map(([key, def]) => {
+                    const Icon = def.icon;
+                    const isSelected = businessType === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => handleApplyPreset(key)}
+                        className={cn(
+                          "flex flex-col text-left p-4 rounded-xl border transition-all cursor-pointer group hover:border-primary/50",
+                          isSelected
+                            ? "border-primary bg-primary/5 shadow-xs ring-2 ring-primary/20"
+                            : "border-border/70 bg-card hover:bg-muted/30"
+                        )}
+                      >
+                        <div className="flex items-center justify-between w-full mb-2">
+                          <div
+                            className={cn(
+                              "p-2.5 rounded-lg",
+                              isSelected
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-foreground group-hover:bg-primary/10 group-hover:text-primary"
+                            )}
+                          >
+                            <Icon className="w-5 h-5" />
+                          </div>
+                          {isSelected && (
+                            <Badge className="bg-primary text-primary-foreground text-[10px] px-2 py-0.5 h-5 flex items-center gap-1">
+                              <IconCheck className="w-3 h-3" /> Activo
+                            </Badge>
+                          )}
+                        </div>
+                        <h4 className="font-semibold text-sm text-foreground">{def.title}</h4>
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          {def.subtitle}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Módulos Individuales */}
+            <Card className="border-border/80 shadow-xs">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base font-semibold">
+                    2. Módulos y Herramientas Activas ({enabledModules.length} de {ALL_MODULES.length})
+                  </CardTitle>
+                  <span className="text-xs text-muted-foreground">
+                    Los módulos desactivados no aparecerán en tu menú lateral
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {ALL_MODULES.map((mod) => {
+                    const Icon = mod.icon;
+                    const isChecked = enabledModules.includes(mod.id);
+
+                    return (
+                      <div
+                        key={mod.id}
+                        onClick={() => handleToggleModule(mod.id)}
+                        className={cn(
+                          "flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none",
+                          isChecked
+                            ? "border-primary/40 bg-card shadow-2xs"
+                            : "border-border/50 bg-muted/20 opacity-60 hover:opacity-100"
+                        )}
+                      >
+                        <div className="flex items-center gap-3 pr-2 min-w-0">
+                          <div
+                            className={cn(
+                              "p-2 rounded-lg shrink-0",
+                              isChecked
+                                ? "bg-primary/10 text-primary"
+                                : "bg-muted text-muted-foreground"
+                            )}
+                          >
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-semibold text-foreground truncate">
+                                {mod.name}
+                              </p>
+                              {mod.isCore && (
+                                <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                                  Esencial
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground line-clamp-1">
+                              {mod.description}
+                            </p>
+                          </div>
+                        </div>
+
+                        <Switch
+                          checked={isChecked}
+                          disabled={mod.isCore}
+                          onCheckedChange={() => handleToggleModule(mod.id)}
+                          className="shrink-0 data-[state=checked]:bg-primary"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                  <Button
+                    onClick={() => handleSaveModules()}
+                    disabled={savingModules}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    {savingModules ? "Guardando..." : "Guardar y Aplicar Módulos"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* ─── NEGOCIO ─── */}
         {activeSection === "negocio" && (
@@ -1423,6 +1663,7 @@ export default function ConfiguracionPage() {
                   { field: "requireClient", label: "Requerir cliente en cada venta", desc: "Obligatorio seleccionar un cliente antes de cobrar" },
                   { field: "printOnSale", label: "Imprimir comprobante automáticamente", desc: "Envía a impresión al completar la venta" },
                   { field: "allowNegativeStock", label: "Permitir venta con stock negativo", desc: "Vende aunque no quede inventario registrado" },
+                  { field: "blindShiftClose", label: "🛡️ Arqueo Ciego Obligatorio para Cajeros", desc: "Oculta el saldo esperado y las diferencias a los cajeros al cerrar caja para evitar manipulaciones. La auditoría solo la ve gerencia." },
                 ].map(({ field, label, desc }) => (
                   <div key={field} className="flex justify-between items-center py-4">
                     <div><p className="font-medium text-sm">{label}</p><p className="text-xs text-muted-foreground">{desc}</p></div>

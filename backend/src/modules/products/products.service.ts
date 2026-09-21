@@ -87,8 +87,11 @@ export class ProductsService {
       const cost = typeof v.cost === 'number' && !isNaN(v.cost) ? v.cost : (v.cost !== null && v.cost !== undefined && v.cost !== '') ? Number(v.cost) : null;
       const promoPrice = typeof v.promoPrice === 'number' && !isNaN(v.promoPrice) ? v.promoPrice : (v.promoPrice !== null && v.promoPrice !== undefined && v.promoPrice !== '') ? Number(v.promoPrice) : null;
       const bulkPrice = typeof v.bulkPrice === 'number' && !isNaN(v.bulkPrice) ? v.bulkPrice : (v.bulkPrice !== null && v.bulkPrice !== undefined && v.bulkPrice !== '') ? Number(v.bulkPrice) : null;
-      const stock = typeof v.stock === 'number' && !isNaN(v.stock) ? v.stock : parseInt(v.stock) || 0;
-      const minStock = typeof v.minStock === 'number' && !isNaN(v.minStock) ? v.minStock : parseInt(v.minStock) || 0;
+      // parseFloat, not parseInt: anything sold by weight or by the metre
+      // arrives here with decimals, and parseInt would silently floor 0.85 kg
+      // of cheese to zero stock.
+      const stock = typeof v.stock === 'number' && !isNaN(v.stock) ? v.stock : parseFloat(v.stock) || 0;
+      const minStock = typeof v.minStock === 'number' && !isNaN(v.minStock) ? v.minStock : parseFloat(v.minStock) || 0;
 
       return {
         name: v.name || `Variante ${index + 1}`,
@@ -478,8 +481,8 @@ export class ProductsService {
           const cost = typeof v.cost === 'number' && !isNaN(v.cost) ? v.cost : (v.cost !== null && v.cost !== undefined && v.cost !== '') ? Number(v.cost) : null;
           const promoPrice = typeof v.promoPrice === 'number' && !isNaN(v.promoPrice) ? v.promoPrice : (v.promoPrice !== null && v.promoPrice !== undefined && v.promoPrice !== '') ? Number(v.promoPrice) : null;
           const bulkPrice = typeof v.bulkPrice === 'number' && !isNaN(v.bulkPrice) ? v.bulkPrice : (v.bulkPrice !== null && v.bulkPrice !== undefined && v.bulkPrice !== '') ? Number(v.bulkPrice) : null;
-          const stock = typeof v.stock === 'number' && !isNaN(v.stock) ? v.stock : parseInt(v.stock) || 0;
-          const minStock = typeof v.minStock === 'number' && !isNaN(v.minStock) ? v.minStock : parseInt(v.minStock) || 0;
+          const stock = typeof v.stock === 'number' && !isNaN(v.stock) ? v.stock : parseFloat(v.stock) || 0;
+          const minStock = typeof v.minStock === 'number' && !isNaN(v.minStock) ? v.minStock : parseFloat(v.minStock) || 0;
 
           const variantData = {
             name: v.name,

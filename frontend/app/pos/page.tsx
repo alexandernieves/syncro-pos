@@ -21,7 +21,7 @@ import {
   IconEye, IconPencil, IconScan, IconCamera, IconBarcode, IconAlertCircle, IconCircleCheckFilled, IconCheck, IconAlertTriangle,
   IconHexagon, IconWorld, IconBuilding, IconHistory, IconReceipt, IconFilter, IconArrowBackUp,
   IconPlayerPause, IconReceiptOff, IconList, IconFingerprint, IconCalendar as IconCalendarTabler, IconKeyboard,
-  IconPackage, IconScale, IconLock, IconDiscount, IconInfoCircle
+  IconPackage, IconScale, IconLock, IconDiscount, IconInfoCircle, IconShieldCheck, IconShieldLock
 } from "@tabler/icons-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -1151,7 +1151,7 @@ export default function POSPage() {
     if (mounted && token) {
       checkShift();
     } else if (mounted && !token) {
-      router.push("/");
+      router.push("/login");
     }
   }, [mounted, token, checkShift, router]);
 
@@ -1478,16 +1478,30 @@ export default function POSPage() {
       const expectedCash = activeShift.expectedTotals?.CASH || 0;
       const differenceVal = finalClosingBalance - expectedCash;
 
+      const isCashier = user?.role === "pos";
+      const isBlindClose = isCashier && (settings?.blindShiftClose !== false);
+
       const res = await fetch(`${API}/shifts/close/${activeShift.id}`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ closingBalance: finalClosingBalance }),
+        body: JSON.stringify({ 
+          closingBalance: finalClosingBalance,
+          cashBreakdown,
+          declaredDetails: {
+            cashUsd: totalPhysicalUsd,
+            cashBs: Number(cashBs) || 0,
+            posBatch: Number(posBatch) || 0,
+            pagoMovilBatch: Number(pagoMovilBatch) || 0,
+            isBlindClose,
+          }
+        }),
       });
       if (res.ok) {
         setCloseSummary({
           expected: expectedCash,
           reported: finalClosingBalance,
-          difference: differenceVal
+          difference: differenceVal,
+          isBlind: isBlindClose,
         });
         setIsCloseSummaryOpen(true);
         setIsClosingShift(false);
@@ -2380,7 +2394,7 @@ export default function POSPage() {
                       onClick={() => {
                         toast.info("Sesión cerrada");
                         localStorage.clear();
-                        router.push("/");
+                        router.push("/login");
                       }}
                     >
                       <IconLogout className="size-4 mr-2" /> Cerrar Sesión
@@ -4457,54 +4471,96 @@ export default function POSPage() {
 
       {/* DIALOG: CLOSE SHIFT SUMMARY (ARQUEO DE CAJA RESULTADO) */}
       <Dialog open={isCloseSummaryOpen} onOpenChange={setIsCloseSummaryOpen}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg text-emerald-500">
-              <IconCheck className="size-5" /> Caja Cerrada Exitosamente
+        <DialogContent className="sm:max-w-[420px] p-6 rounded-2xl border-border/80 shadow-xl bg-card">
+          <DialogHeader className="space-y-1 text-center sm:text-left">
+            <DialogTitle className="flex items-center justify-center sm:justify-start gap-2 text-lg font-bold text-foreground">
+              {closeSummary?.isBlind ? (
+                <>
+                  <div className="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-500">
+                    <IconShieldCheck className="size-5" />
+                  </div>
+                  <span>Arqueo Ciego Registrado</span>
+                </>
+              ) : (
+                <>
+                  <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                    <IconCheck className="size-5" />
+                  </div>
+                  <span>Caja Cerrada Exitosamente</span>
+                </>
+              )}
             </DialogTitle>
-            <DialogDescription>
-              Resumen del cuadre de caja de este turno de trabajo.
+            <DialogDescription className="text-xs text-muted-foreground">
+              {closeSummary?.isBlind
+                ? "El turno de trabajo ha finalizado y los fondos han sido registrados de forma segura."
+                : "Resumen de conciliación del turno actual y auditoría de diferencias."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="p-4 rounded-xl bg-muted/50 border space-y-3">
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Efectivo Esperado:</span>
-                <span className="font-semibold text-foreground">${closeSummary?.expected.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Efectivo Contado:</span>
-                <span className="font-semibold text-foreground">${closeSummary?.reported.toFixed(2)}</span>
-              </div>
-
-              <Separator />
-
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Diferencia:</span>
-                <span className={`text-base font-bold tabular-nums ${(closeSummary?.difference || 0) < -0.01
-                    ? 'text-rose-500'
-                    : (closeSummary?.difference || 0) > 0.01
-                      ? 'text-emerald-500'
-                      : 'text-foreground'
-                  }`}>
-                  {((closeSummary?.difference || 0) < -0.01 ? '-$' : '$') + Math.abs(closeSummary?.difference || 0).toFixed(2)}
-                  <span className="text-[10px] ml-1 block text-right font-medium">
-                    {(closeSummary?.difference || 0) < -0.01
-                      ? '(Faltante)'
-                      : (closeSummary?.difference || 0) > 0.01
-                        ? '(Sobrante)'
-                        : '(Cuadrado Perfecto)'}
+          {closeSummary?.isBlind ? (
+            /* VISTA DE ARQUEO CIEGO PARA CAJEROS (Control Anti-Robo) */
+            <div className="space-y-4 py-3">
+              <div className="p-4 rounded-xl bg-muted/40 border border-border/80 space-y-3 shadow-2xs">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground font-medium">Efectivo Total Declarado:</span>
+                  <span className="font-extrabold text-foreground text-base tabular-nums">
+                    ${closeSummary?.reported?.toFixed(2)}
                   </span>
-                </span>
+                </div>
+                <div className="flex justify-between items-center text-xs text-muted-foreground">
+                  <span>Modo de Seguridad:</span>
+                  <Badge variant="outline" className="text-[10px] text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/5 font-semibold">
+                    <IconShieldLock className="size-3 mr-1" /> Arqueo Ciego Activo
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs leading-relaxed">
+                🛡️ <strong>Comprobante de Entrega:</strong> Los fondos contados fueron transferidos al Administrador para su verificación. Ya puedes retirar tu gaveta.
               </div>
             </div>
+          ) : (
+            /* VISTA DE AUDITORÍA COMPLETA PARA DUEÑO / ADMINISTRADOR */
+            <div className="space-y-4 py-3">
+              <div className="p-4 rounded-xl bg-muted/40 border border-border/80 space-y-3 shadow-2xs">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground font-medium">Efectivo Esperado (Sistema):</span>
+                  <span className="font-semibold text-foreground tabular-nums">${closeSummary?.expected?.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground font-medium">Efectivo Contado (Declarado):</span>
+                  <span className="font-bold text-foreground tabular-nums">${closeSummary?.reported?.toFixed(2)}</span>
+                </div>
 
-            <p className="text-xs text-muted-foreground text-center">
-              Este reporte ha sido guardado de forma segura y puede ser consultado en el historial de turnos del Dashboard de Contabilidad.
-            </p>
-          </div>
-          <DialogFooter>
+                <Separator />
+
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-semibold">Diferencia de Cuadre:</span>
+                  <span className={`text-base font-extrabold tabular-nums ${(closeSummary?.difference || 0) < -0.01
+                      ? 'text-rose-500'
+                      : (closeSummary?.difference || 0) > 0.01
+                        ? 'text-emerald-500'
+                        : 'text-foreground'
+                    }`}>
+                    {((closeSummary?.difference || 0) < -0.01 ? '-$' : '$') + Math.abs(closeSummary?.difference || 0).toFixed(2)}
+                    <span className="text-[10px] ml-1 block text-right font-bold">
+                      {(closeSummary?.difference || 0) < -0.01
+                        ? '(Faltante)'
+                        : (closeSummary?.difference || 0) > 0.01
+                          ? '(Sobrante)'
+                          : '(Cuadrado Perfecto)'}
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground text-center">
+                Auditoría registrada de forma inmutable en el historial de turnos.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter className="mt-2">
             <Button
               onClick={(e) => {
                 e.preventDefault();

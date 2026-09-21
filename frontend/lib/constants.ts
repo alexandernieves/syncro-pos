@@ -7,10 +7,16 @@ const getApiUrl = () => {
   }
   const hostname = window.location.hostname;
 
-  // Servido por Caddy sobre HTTPS: la API pasa por /api en el mismo origen
-  // para evitar Mixed Content (no se puede llamar http:// desde una página https://).
-  if (hostname.endsWith('.test')) {
-    return `https://${hostname}/api`;
+  // Servido por Caddy sobre HTTPS o a través de un túnel: la API pasa por /api en el mismo origen
+  // para evitar Mixed Content y conectar con el backend local a través del túnel.
+  if (
+    hostname.endsWith('.test') ||
+    hostname.includes('pinggy') ||
+    hostname.includes('loca.lt') ||
+    hostname.includes('trycloudflare.com') ||
+    hostname.includes('ngrok')
+  ) {
+    return `${window.location.origin}/api`;
   }
 
   const isLocal =

@@ -343,7 +343,7 @@ export const BarVisualizer = React.forwardRef<HTMLDivElement, BarVisualizerProps
                 "w-2 rounded-full transition-all duration-150 ease-out",
                 // Active/Inactive color styles
                 isHighlighted
-                  ? "bg-primary shadow-[0_0_8px_rgba(var(--color-primary),0.3)] opacity-95"
+                  ? "bg-primary shadow-md shadow-primary/30 opacity-95"
                   : "bg-primary/20 dark:bg-primary/30 opacity-70",
                 // Special styles based on agent states
                 state === "thinking" && "duration-300",

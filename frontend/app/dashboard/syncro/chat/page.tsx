@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { API_URL } from "@/lib/constants"
+import { apiFetch } from "@/lib/api"
 import {
   IconSend,
   IconMicrophone,
@@ -26,10 +27,12 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { io, Socket } from "socket.io-client";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
 
 const API = API_URL;
 
 export default function SyncroAdminChatPage() {
+  useRequireSyncroAdmin();
   const [conversations, setConversations] = useState<any[]>([]);
   const [activeConv, setActiveConv] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -50,22 +53,24 @@ export default function SyncroAdminChatPage() {
       const u = JSON.parse(userStr);
       setUser(u);
       fetchConversations();
-      initSocket(u.id);
+      initSocket();
     }
   }, []);
 
   const fetchConversations = async () => {
     try {
-      const res = await fetch(`${API}/chat/support/sync`);
+      const res = await apiFetch(`/chat/support/sync`);
       if (res.ok) setConversations(await res.json());
     } catch {
       toast.error("Error al cargar chats");
     }
   };
 
-  const initSocket = (userId: string) => {
+  const initSocket = () => {
     const socketUrl = API;
-    socketRef.current = io(socketUrl, { query: { userId } });
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    socketRef.current = io(socketUrl, { auth: { token } });
     socketRef.current.on("newMessage", (msg: any) => {
       setMessages((prev) => {
         if (prev.length && prev[0].conversationId === msg.conversationId) {
@@ -78,11 +83,33 @@ export default function SyncroAdminChatPage() {
     });
   };
 
+  // Broadcast Mike's cursor (viewport %) to the active business's dashboard
+  // while a conversation is open, throttled to ~15fps.
+  useEffect(() => {
+    if (!activeConv?.id) return;
+    let lastEmit = 0;
+    const handleMove = (e: MouseEvent) => {
+      const now = Date.now();
+      if (now - lastEmit < 66) return;
+      lastEmit = now;
+      socketRef.current?.emit("cursorMove", {
+        conversationId: activeConv.id,
+        x: (e.clientX / window.innerWidth) * 100,
+        y: (e.clientY / window.innerHeight) * 100,
+      });
+    };
+    window.addEventListener("mousemove", handleMove);
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      socketRef.current?.emit("cursorLeave", { conversationId: activeConv.id });
+    };
+  }, [activeConv?.id]);
+
   const selectConversation = async (conv: any) => {
     setActiveConv(conv);
     setMessages([]);
     try {
-      const res = await fetch(`${API}/chat/business/${conv.businessId}`);
+      const res = await apiFetch(`/chat/business/${conv.businessId}`);
       if (res.ok) {
         const data = await res.json();
         setMessages(data.messages || []);
@@ -189,7 +216,7 @@ export default function SyncroAdminChatPage() {
   );
 
   return (
-    <div className="flex h-[calc(100vh-var(--header-height,60px))] overflow-hidden bg-background">
+    <div className="flex h-[calc(100vh-60px)] overflow-hidden bg-background">
 
       {/* ── LEFT SIDEBAR ─────────────────────────────── */}
       <aside className="w-[300px] shrink-0 border-r flex flex-col">

@@ -92,8 +92,8 @@ model ProductVariant {
   cost               Float?
   promoPrice         Float?
   bulkPrice          Float?
-  stock              Int                     @default(0)
-  minStock           Int                     @default(5)
+  stock              Float                     @default(0)
+  minStock           Float                     @default(5)
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
   inventory          Inventory[]
@@ -111,7 +111,7 @@ model Inventory {
   id        String         @id @default(uuid())
   variantId String
   branchId  String
-  quantity  Int            @default(0)
+  quantity  Float            @default(0)
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
   branch    Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
@@ -293,6 +293,10 @@ model Setting {
   syncroCreditMaxInstallments Int       @default(3)
   whatsappAuthorizedPhones    String[]  @default([])
   whatsappBotEnabled          Boolean   @default(false)
+  businessType                String?   @default("GENERAL")
+  enabledModules              Json?
+  sidebarOrder                Json?
+  blindShiftClose             Boolean   @default(true)
   business                    Business? @relation(fields: [businessId], references: [id])
 }
 
@@ -341,7 +345,7 @@ model SaleReturnItem {
   id        String          @id @default(uuid())
   returnId  String
   variantId String?
-  quantity  Int
+  quantity  Float
   price     Float
   subtotal  Float
   return    SaleReturn      @relation(fields: [returnId], references: [id], onDelete: Cascade)
@@ -363,7 +367,7 @@ model ProductWaitlist {
   id        String     @id @default(uuid())
   name      String
   price     Float
-  stock     Int        @default(0)
+  stock     Float        @default(0)
   barcode   String
   status    String     @default("PENDING")
   branchId  String?
@@ -379,7 +383,7 @@ model SaleItem {
   saleId      String
   variantId   String?
   waitlistId  String?
-  quantity    Int
+  quantity    Float
   price       Float
   cost        Float?
   discountAmt Float            @default(0)
@@ -395,7 +399,7 @@ model InventoryMovement {
   variantId     String
   branchId      String
   type          MovementType
-  quantity      Int
+  quantity      Float
   reason        String
   referenceId   String?
   createdAt     DateTime       @default(now())
@@ -468,6 +472,8 @@ model Shift {
   openedAt        DateTime    @default(now())
   closedAt        DateTime?
   notes           String?
+  cashBreakdown   Json?
+  declaredDetails Json?
   sales           Sale[]
   branch          Branch      @relation(fields: [branchId], references: [id])
   user            User        @relation(fields: [userId], references: [id])
@@ -530,7 +536,7 @@ model PurchaseOrderItem {
   id              String         @id @default(uuid())
   purchaseOrderId String
   variantId       String
-  quantity        Int
+  quantity        Float
   cost            Float
   taxRate         Float          @default(0)
   taxAmount       Float          @default(0)
@@ -583,7 +589,7 @@ model SupplierReturn {
   id         String         @id @default(uuid())
   supplierId String
   variantId  String
-  quantity   Int
+  quantity   Float
   reason     String
   createdAt  DateTime       @default(now())
   supplier   Supplier       @relation(fields: [supplierId], references: [id])
@@ -623,7 +629,7 @@ model InventoryTransferItem {
   id         String            @id @default(uuid())
   transferId String
   variantId  String
-  quantity   Int
+  quantity   Float
   transfer   InventoryTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
   variant    ProductVariant    @relation(fields: [variantId], references: [id])
 }

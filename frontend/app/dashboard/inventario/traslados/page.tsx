@@ -87,7 +87,8 @@ export default function TrasladosPage() {
   };
 
   const handleQuantityChange = (variantId: string, value: string) => {
-    const qty = value === "" ? "" : parseInt(value) || 0;
+    // Transfers move the same goods the till sells, weight included.
+    const qty = value === "" ? "" : parseFloat(value) || 0;
     setSelectedItems(selectedItems.map(i => {
       if (i.variantId === variantId) {
         return { ...i, quantity: qty as any };
@@ -333,10 +334,11 @@ export default function TrasladosPage() {
                             <Label className="text-[10px] font-bold">CANTIDAD:</Label>
                             <Input 
                               type="number" 
+                              step="any"
                               className="h-9 w-24 rounded-lg text-center font-bold bg-background shadow-sm" 
                               value={item.quantity} 
                               onChange={(e) => handleQuantityChange(item.variantId, e.target.value)}
-                              min={1}
+                              min={0}
                             />
                           </div>
                         </div>

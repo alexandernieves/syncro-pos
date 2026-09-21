@@ -30,7 +30,7 @@ export class ShiftsService {
     return this.getActive(userId);
   }
 
-  async close(id: string, closingBalance: number) {
+  async close(id: string, closingBalance: number, cashBreakdown?: any, declaredDetails?: any, notes?: string) {
     const shift = await this.prisma.shift.findUnique({ 
       where: { id },
       include: { 
@@ -59,6 +59,9 @@ export class ShiftsService {
         closingBalance: Number(closingBalance),
         expectedBalance,
         difference,
+        cashBreakdown: cashBreakdown ? (cashBreakdown as any) : undefined,
+        declaredDetails: declaredDetails ? (declaredDetails as any) : undefined,
+        notes: notes !== undefined ? notes : shift.notes,
         status: 'CLOSED' as any,
         closedAt: new Date()
       }

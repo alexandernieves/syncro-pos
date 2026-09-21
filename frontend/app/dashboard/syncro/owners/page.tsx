@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { API_URL } from "@/lib/constants"
+import { apiFetch } from "@/lib/api"
 import { 
   IconUsers, 
   IconBuildingStore, 
@@ -41,17 +41,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-
-const API = API_URL;
+import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
 
 export default function OwnersManagementPage() {
+  useRequireSyncroAdmin();
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
   const fetchBusinesses = async () => {
     try {
-      const res = await fetch(`${API}/syncro-admin/businesses`);
+      const res = await apiFetch(`/syncro-admin/businesses`);
       if (res.ok) {
         const data = await res.json();
         setBusinesses(data);
@@ -70,9 +70,8 @@ export default function OwnersManagementPage() {
 
   const handleStatusChange = async (id: string, newStatus: string) => {
     try {
-      const res = await fetch(`${API}/syncro-admin/business/${id}/status`, {
+      const res = await apiFetch(`/syncro-admin/business/${id}/status`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus })
       });
 

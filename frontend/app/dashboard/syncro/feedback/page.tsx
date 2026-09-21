@@ -35,10 +35,12 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
 
 const API = API_URL;
 
 export default function AiFeedbackAuditPage() {
+  useRequireSyncroAdmin();
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");

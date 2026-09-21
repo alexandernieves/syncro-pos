@@ -1635,14 +1635,15 @@ export default function SupportChatPage() {
     const isPwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
     const userStr = isPwa ? sessionStorage.getItem("user") : localStorage.getItem("user");
     const storedUser = JSON.parse(userStr || "{}");
-    if (!storedUser.id) return;
+    const token = isPwa ? sessionStorage.getItem("token") : localStorage.getItem("token");
+    if (!storedUser.id || !token) return;
 
     const socketUrl = API;
     if (socketRef.current) socketRef.current.disconnect();
 
     socketRef.current = io(socketUrl, {
       transports: ["websocket", "polling"],
-      query: { userId: storedUser.id },
+      auth: { token },
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
@@ -1887,7 +1888,7 @@ export default function SupportChatPage() {
           "flex bg-background w-full overflow-hidden",
           isStandalone
             ? "fixed top-0 left-0 right-0"
-            : "h-[calc(100vh-var(--header-height,60px))]"
+            : "h-[calc(100vh-60px)]"
         )}>
 
         <div className="flex w-full h-full">

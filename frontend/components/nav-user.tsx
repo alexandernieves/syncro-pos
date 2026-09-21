@@ -49,7 +49,7 @@ export function NavUser({
   const handleLogout = async () => {
     await clearAuthSession()
     toast.success("Has cerrado sesión correctamente")
-    router.replace("/")
+    router.replace("/login")
   }
 
   return (

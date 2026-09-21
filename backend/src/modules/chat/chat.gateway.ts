@@ -9,9 +9,16 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
+import * as jwt from 'jsonwebtoken';
 import { ChatService } from './chat.service';
 import { PushService } from './push.service';
 import { PrismaService } from '../prisma/prisma.service';
+
+interface AuthedSocketData {
+  userId: string;
+  role: string;
+  businessId?: string;
+}
 
 @WebSocketGateway({
   cors: {
@@ -32,39 +39,52 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log('ChatGateway initialized');
   }
 
-  async handleConnection(client: Socket) {
-    const userId = client.handshake.query.userId as string;
-    if (userId) {
-      client.join(`user_${userId}`);
-      // Update last seen and broadcast online status
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { lastSeen: new Date() }
-      });
-      this.logger.log(`User connected: ${userId}`);
+  /** Identity comes from the verified JWT only — never from client-supplied fields. */
+  private authenticate(client: Socket): AuthedSocketData | null {
+    let token = client.handshake.auth?.token as string | undefined;
+    if (!token) return null;
+    if (token.startsWith('Bearer ')) token = token.slice(7);
+    try {
+      const secret = process.env.JWT_SECRET || 'syncro-pos-secret-key-2025';
+      const decoded = jwt.verify(token, secret) as any;
+      return { userId: decoded.sub, role: decoded.role, businessId: decoded.businessId };
+    } catch (err: any) {
+      this.logger.warn(`Socket auth failed for ${client.id}: ${err.message}`);
+      return null;
     }
   }
 
+  async handleConnection(client: Socket) {
+    const auth = this.authenticate(client);
+    if (!auth) {
+      client.disconnect(true);
+      return;
+    }
+    client.data = auth;
+    client.join(`user_${auth.userId}`);
+    await this.prisma.user.update({
+      where: { id: auth.userId },
+      data: { lastSeen: new Date() }
+    });
+    this.logger.log(`User connected: ${auth.userId}`);
+  }
+
   async handleDisconnect(client: Socket) {
-    const userId = client.handshake.query.userId as string;
-    if (userId) {
-      client.leave(`user_${userId}`);
-      // Final update of last seen
+    const auth = client.data as AuthedSocketData | undefined;
+    if (auth?.userId) {
+      client.leave(`user_${auth.userId}`);
       await this.prisma.user.update({
-        where: { id: userId },
+        where: { id: auth.userId },
         data: { lastSeen: new Date() }
       });
-      
-      // Notify all conversations this user was in
-      // For simplicity, we can broadcast to all rooms the client was part of
-      // or just a general presence update if needed.
+
       this.server.emit('userPresence', {
-        userId,
+        userId: auth.userId,
         status: 'offline',
         lastSeen: new Date()
       });
 
-      this.logger.log(`User disconnected: ${userId}`);
+      this.logger.log(`User disconnected: ${auth.userId}`);
     }
   }
 
@@ -73,12 +93,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() conversationId: string,
   ) {
+    const auth = client.data as AuthedSocketData | undefined;
+    if (!auth) return { event: 'error', message: 'No autenticado' };
+
+    // Support staff can join any conversation; a business user only their own.
+    if (auth.role !== 'syncropos') {
+      const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+      if (!conversation || conversation.businessId !== auth.businessId) {
+        return { event: 'error', message: 'No tienes acceso a esta conversación' };
+      }
+    }
+
     client.join(`conv_${conversationId}`);
-    
-    // Notify others that this user is online in the conversation
-    const userId = client.handshake.query.userId as string;
     this.server.to(`conv_${conversationId}`).emit('userPresence', {
-      userId,
+      userId: auth.userId,
       status: 'online'
     });
 
@@ -90,25 +118,35 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string; isTyping: boolean },
   ) {
-    const userId = client.handshake.query.userId as string;
-    // Broadcast "Escribiendo..." to everyone in the room EXCEPT the sender
+    const auth = client.data as AuthedSocketData | undefined;
+    if (!auth) return;
     client.to(`conv_${data.conversationId}`).emit('userTyping', {
-      userId,
+      userId: auth.userId,
       isTyping: data.isTyping
     });
   }
 
   @SubscribeMessage('sendMessage')
   async handleMessage(
+    @ConnectedSocket() client: Socket,
     @MessageBody() data: {
       conversationId: string;
-      senderId: string;
       text?: string;
       type?: string;
       fileUrl?: string;
     },
   ) {
-    const message = await this.chatService.saveMessage(data);
+    const auth = client.data as AuthedSocketData | undefined;
+    if (!auth) return { event: 'error', message: 'No autenticado' };
+
+    if (auth.role !== 'syncropos') {
+      const conversation = await this.prisma.conversation.findUnique({ where: { id: data.conversationId } });
+      if (!conversation || conversation.businessId !== auth.businessId) {
+        return { event: 'error', message: 'No tienes acceso a esta conversación' };
+      }
+    }
+
+    const message = await this.chatService.saveMessage({ ...data, senderId: auth.userId });
 
     // Broadcast to the conversation room
     this.server.to(`conv_${data.conversationId}`).emit('newMessage', message);
@@ -126,8 +164,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         where: { id: data.conversationId },
         include: { business: true },
       });
-      const sender = await this.prisma.user.findUnique({ where: { id: data.senderId } });
-      const isSupportSender = sender?.role === 'syncropos';
+      const isSupportSender = auth.role === 'syncropos';
 
       if (isSupportSender && conv?.businessId) {
         const businessUsers = await this.prisma.user.findMany({
@@ -159,18 +196,46 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('markAsRead')
   async handleMarkRead(
-    @MessageBody() data: { conversationId: string; userId: string },
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { conversationId: string },
   ) {
+    const auth = client.data as AuthedSocketData | undefined;
+    if (!auth) return;
     try {
-      await this.chatService.markAsRead(data.conversationId, data.userId);
+      await this.chatService.markAsRead(data.conversationId, auth.userId);
       // Emit to the conversation room so the sender sees the double check turn blue
       this.server.to(`conv_${data.conversationId}`).emit('messagesRead', {
         conversationId: data.conversationId,
-        readBy: data.userId
+        readBy: auth.userId
       });
-      this.logger.log(`Messages marked as read in conv: ${data.conversationId} by ${data.userId}`);
+      this.logger.log(`Messages marked as read in conv: ${data.conversationId} by ${auth.userId}`);
     } catch (e) {
       this.logger.error(`Error marking messages as read: ${e.message}`);
     }
+  }
+
+  /**
+   * "Mike" live cursor — support staff only. Broadcasts a viewport-relative
+   * position (0-100) to the business's conversation room so their dashboard
+   * can render a ghost cursor. Purely presentational, no page/route data.
+   */
+  @SubscribeMessage('cursorMove')
+  handleCursorMove(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { conversationId: string; x: number; y: number },
+  ) {
+    const auth = client.data as AuthedSocketData | undefined;
+    if (!auth || auth.role !== 'syncropos') return;
+    client.to(`conv_${data.conversationId}`).emit('mikeCursor', { x: data.x, y: data.y });
+  }
+
+  @SubscribeMessage('cursorLeave')
+  handleCursorLeave(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { conversationId: string },
+  ) {
+    const auth = client.data as AuthedSocketData | undefined;
+    if (!auth || auth.role !== 'syncropos') return;
+    client.to(`conv_${data.conversationId}`).emit('mikeCursorLeave');
   }
 }

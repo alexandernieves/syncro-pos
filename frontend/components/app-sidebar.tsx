@@ -44,6 +44,9 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { Badge } from "@/components/ui/badge";
+import { ModuleCustomizerDialog, PRESET_DEFINITIONS } from "@/components/module-customizer-dialog";
+import { IconAdjustmentsHorizontal, IconSparkles } from "@tabler/icons-react";
 
 const data = {
   user: {
@@ -58,16 +61,19 @@ const data = {
       title: "Dashboard",
       url: "/dashboard",
       icon: IconCirclePlusFilled,
+      moduleId: "dashboard",
     },
     {
       title: "Punto de Venta",
       url: "/pos",
       icon: IconShoppingCart,
+      moduleId: "pos",
     },
     {
       title: "Productos",
       url: "/dashboard/productos",
       icon: IconPackage,
+      moduleId: "products",
       items: [
         { title: "Todos los Productos", url: "/dashboard/productos/todos" },
         { title: "Categorías", url: "/dashboard/productos/categorias" },
@@ -77,6 +83,7 @@ const data = {
       title: "Inventario",
       url: "/dashboard/inventario",
       icon: IconBox,
+      moduleId: "inventory",
       items: [
         { title: "Almacén", url: "/dashboard/inventario/almacen" },
         { title: "Compras (OC)", url: "/dashboard/inventario/compras" },
@@ -90,26 +97,30 @@ const data = {
       title: "Proveedores",
       url: "/dashboard/proveedores",
       icon: IconTruck,
+      moduleId: "suppliers",
     },
     {
       title: "Reportes",
       url: "/dashboard/reportes",
       icon: IconReportAnalytics,
+      moduleId: "reports",
     },
     {
       title: "Clientes",
       url: "/dashboard/clientes",
       icon: IconUsers,
+      moduleId: "clients",
       items: [
         { title: "Directorio", url: "/dashboard/clientes" },
-        { title: "Cuentas por Cobrar (Fiado)", url: "/dashboard/clientes/creditos" },
-        { title: "Chat de WhatsApp", url: "/dashboard/chat" },
+        { title: "Cuentas por Cobrar (Fiado)", url: "/dashboard/clientes/creditos", moduleId: "credit" },
+        { title: "Chat de WhatsApp", url: "/dashboard/chat", moduleId: "whatsapp" },
       ],
     },
     {
       title: "Contabilidad",
       url: "/dashboard/contabilidad",
       icon: IconCash,
+      moduleId: "accounting",
       items: [
         { title: "Resumen", url: "/dashboard/contabilidad" },
         { title: "Gastos (Caja Chica)", url: "/dashboard/contabilidad/gastos" },
@@ -120,11 +131,13 @@ const data = {
       title: "Historial",
       url: "/dashboard/historial",
       icon: IconHistory,
+      moduleId: "historial",
     },
     {
       title: "Delivery",
       url: "/dashboard/deliveries",
       icon: IconTruck,
+      moduleId: "deliveries",
     },
   ],
   navSecondary: [
@@ -169,7 +182,9 @@ const data = {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [user, setUser] = React.useState(data.user);
   const [businessName, setBusinessName] = React.useState("SYNCRO POS");
-  const [activeLogo, setActiveLogo] = React.useState<string>("/syncro.png");
+  const [businessType, setBusinessType] = React.useState<string>("GENERAL");
+  const [enabledModules, setEnabledModules] = React.useState<string[]>([]);
+  const [customizerOpen, setCustomizerOpen] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -179,21 +194,36 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       if (storedUser) {
         setUser(JSON.parse(storedUser));
       }
-      
+
       const storedBusinessName = localStorage.getItem("businessName");
       if (storedBusinessName) {
         setBusinessName(storedBusinessName);
       }
-      
+
+      const storedBusinessType = localStorage.getItem("businessType");
+      if (storedBusinessType) {
+        setBusinessType(storedBusinessType);
+      }
+
+      const storedModules = localStorage.getItem("enabledModules");
+      if (storedModules) {
+        try {
+          setEnabledModules(JSON.parse(storedModules));
+        } catch (e) {}
+      }
+
       const fetchConfig = async () => {
         try {
           const token = localStorage.getItem("token");
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || `${API_URL}`}/settings`, {
-            headers: token ? { "Authorization": `Bearer ${token}` } : {}
-          });
-          if(res.ok) {
+          const res = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL || `${API_URL}`}/settings`,
+            {
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            }
+          );
+          if (res.ok) {
             const config = await res.json();
-            if(config) {
+            if (config) {
               if (config.businessName) {
                 setBusinessName(config.businessName);
                 localStorage.setItem("businessName", config.businessName);
@@ -201,9 +231,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 setBusinessName("SYNCRO POS");
                 localStorage.setItem("businessName", "SYNCRO POS");
               }
+
+              if (config.businessType) {
+                setBusinessType(config.businessType);
+                localStorage.setItem("businessType", config.businessType);
+              }
+
+              if (config.enabledModules && Array.isArray(config.enabledModules)) {
+                setEnabledModules(config.enabledModules);
+                localStorage.setItem(
+                  "enabledModules",
+                  JSON.stringify(config.enabledModules)
+                );
+              }
             }
           }
-        } catch(e) {}
+        } catch (e) {}
       };
       fetchConfig();
 
@@ -218,10 +261,32 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     if (isSyncro) return data.navSyncro;
 
     const isAdmin = user.role === "ownerpos" || user.role === "admin";
-    if (isAdmin) return data.navMain;
+
+    // Filtrar primero por módulos activos (si está configurado)
+    let moduleFiltered = data.navMain;
+    if (enabledModules && enabledModules.length > 0) {
+      moduleFiltered = data.navMain
+        .filter((item) => {
+          if (!item.moduleId || item.moduleId === "dashboard") return true;
+          return enabledModules.includes(item.moduleId);
+        })
+        .map((item) => {
+          // Filtrar también sub-ítems específicos si tienen moduleId
+          if (item.items && item.items.length > 0) {
+            const filteredSubItems = item.items.filter((sub: any) => {
+              if (!sub.moduleId) return true;
+              return enabledModules.includes(sub.moduleId);
+            });
+            return { ...item, items: filteredSubItems };
+          }
+          return item;
+        });
+    }
+
+    if (isAdmin) return moduleFiltered;
     if (!user.permissions || user.permissions.length === 0) return [];
-    
-    return data.navMain.filter(item => {
+
+    return moduleFiltered.filter((item) => {
       const urlStr = item.url.toLowerCase();
       const p = user.permissions as string[];
 
@@ -234,10 +299,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       if (p.includes("clientes") && urlStr.includes("/clientes")) return true;
       if (p.includes("contabilidad") && urlStr.includes("/contabilidad")) return true;
       if (p.includes("historial") && urlStr.includes("/historial")) return true;
-      
+      if (urlStr.includes("/deliveries")) return true;
+
       return false;
     });
-  }, [user]);
+  }, [user, enabledModules]);
 
   const filteredNavSecondary = React.useMemo(() => {
     const isSyncro = user.role === "syncropos";
@@ -265,34 +331,71 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   return (
-    <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-                <SidebarMenuButton
-                  size="lg"
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                >
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden">
-                    <img src="/syncro.png" alt="Logo" className="size-full object-cover rounded-md" />
-                  </div>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
+    <>
+      <Sidebar collapsible="icon" {...props}>
+        <SidebarHeader>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                size="lg"
+                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              >
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden shrink-0">
+                  <img src="/syncro.png" alt="Logo" className="size-full object-cover rounded-md" />
+                </div>
+                <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
+                  <div className="flex items-center gap-1.5">
                     <span className="truncate font-semibold text-base">{businessName}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="truncate text-xs text-muted-foreground">
                       {user.role === "syncropos" ? "Centro de Soporte" : "Panel de Control"}
                     </span>
+                    {businessType && businessType !== "GENERAL" && (
+                      <span className="text-[9px] px-1.5 py-0.2 rounded-full font-medium bg-primary/15 text-primary border border-primary/20 shrink-0">
+                        {businessType === "BODEGA" ? "Bodega" : businessType === "MODA" ? "Moda" : businessType}
+                      </span>
+                    )}
                   </div>
-                </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarHeader>
-      <SidebarContent>
-        <NavMain items={filteredNavMain} />
-        <NavSecondary items={filteredNavSecondary} className="mt-auto" />
-      </SidebarContent>
-      <SidebarFooter>
-        <NavUser user={user} />
-      </SidebarFooter>
-    </Sidebar>
+                </div>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarHeader>
+        <SidebarContent>
+          <NavMain items={filteredNavMain} />
+
+          {(user.role === "ownerpos" || user.role === "admin") && (
+            <div className="px-3 py-2 mt-2">
+              <button
+                type="button"
+                onClick={() => setCustomizerOpen(true)}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border border-border/70 hover:border-primary/50 bg-card hover:bg-muted/40 transition-colors group text-foreground cursor-pointer shadow-2xs"
+              >
+                <span className="flex items-center gap-2">
+                  <IconAdjustmentsHorizontal className="w-4 h-4 text-primary group-hover:rotate-12 transition-transform" />
+                  <span>Personalizar Menú</span>
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground group-hover:text-primary group-hover:bg-primary/10">
+                  Adaptar
+                </span>
+              </button>
+            </div>
+          )}
+
+          <NavSecondary items={filteredNavSecondary} className="mt-auto" />
+        </SidebarContent>
+        <SidebarFooter>
+          <NavUser user={user} />
+        </SidebarFooter>
+      </Sidebar>
+
+      <ModuleCustomizerDialog
+        open={customizerOpen}
+        onOpenChange={setCustomizerOpen}
+        currentType={businessType}
+        currentModules={enabledModules}
+      />
+    </>
   );
 }

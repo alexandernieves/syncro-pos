@@ -1934,6 +1934,7 @@ export default function ProductosPage() {
                                 <Label className="text-[11px] text-muted-foreground/60 font-semibold font-sans">Stock Actual</Label>
                                 <Input 
                                   type="number" 
+                                  step="any"
                                   value={v.stock} 
                                   disabled
                                   className="h-9 text-xs bg-muted/50 border-transparent text-muted-foreground/80 cursor-not-allowed select-none opacity-80"
@@ -1943,6 +1944,7 @@ export default function ProductosPage() {
                                 <Label className="text-[11px] text-muted-foreground font-semibold font-mono">Stock Mínimo</Label>
                                 <Input 
                                   type="number" 
+                                  step="any"
                                   value={v.minStock} 
                                   onChange={e => {
                                     const n = [...editVariants]; 
@@ -2337,6 +2339,7 @@ export default function ProductosPage() {
                   <Input 
                     id="q-stock" 
                     type="number" 
+                    step="any"
                     className="h-12 font-mono text-lg font-medium bg-muted/50 border-transparent transition-all"
                     placeholder="0" 
                     required 

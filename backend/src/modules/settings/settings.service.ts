@@ -84,7 +84,9 @@ export class SettingsService {
       'salesGoal', 'showSalesGoal', 'showNetMargin',
       'exchangeRate', 'exchangeRateEur', 'bcvUpdateDate',
       'exchangeRateDashboard', 'exchangeRateDashboardEur', 'bcvUpdateDateDashboard',
-      'whatsappBotEnabled', 'whatsappAuthorizedPhones'
+      'whatsappBotEnabled', 'whatsappAuthorizedPhones',
+      'businessType', 'enabledModules', 'sidebarOrder',
+      'blindShiftClose'
     ];
 
     const filteredData: any = {};
@@ -107,5 +109,59 @@ export class SettingsService {
       console.error("ERROR AL ACTUALIZAR CONFIGURACIÓN:", error);
       throw error;
     }
+  }
+
+  async applyPreset(presetName: string, businessId: string) {
+    if (!businessId) throw new Error('Business ID is required');
+
+    const defaultModules = [
+      'pos',
+      'products',
+      'inventory',
+      'clients',
+      'credit',
+      'suppliers',
+      'accounting',
+      'reports',
+      'historial',
+      'whatsapp',
+      'deliveries',
+      'ai_agent'
+    ];
+
+    let modules = defaultModules;
+    let businessType = 'GENERAL';
+
+    const cleanPreset = (presetName || '').toUpperCase();
+    if (cleanPreset === 'BODEGA' || cleanPreset === 'MINIMARKET') {
+      businessType = 'BODEGA';
+      modules = [
+        'pos',
+        'products',
+        'inventory',
+        'clients',
+        'suppliers',
+        'accounting',
+        'reports',
+        'historial'
+      ];
+    } else if (cleanPreset === 'MODA' || cleanPreset === 'ROPA' || cleanPreset === 'BOUTIQUE') {
+      businessType = 'MODA';
+      modules = [
+        'pos',
+        'products',
+        'inventory',
+        'clients',
+        'credit',
+        'whatsapp',
+        'reports',
+        'historial'
+      ];
+    }
+
+    return this.updateSettings({
+      businessType,
+      enabledModules: modules
+    }, businessId);
   }
 }

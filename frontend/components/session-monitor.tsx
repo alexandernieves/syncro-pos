@@ -23,7 +23,7 @@ export function SessionMonitor({ timeoutMinutes = 30 }: SessionMonitorProps) {
       duration: 10000,
     })
     
-    router.replace("/")
+    router.replace("/login")
   }, [router])
 
   const resetTimer = useCallback(() => {

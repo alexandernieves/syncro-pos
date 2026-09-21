@@ -1,0 +1,5372 @@
+"use client";
+
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { API_URL } from "@/lib/constants"
+import { useRouter } from "next/navigation";
+import {
+  Card, CardContent, CardHeader, CardTitle, CardDescription
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { BranchSwitcher } from "@/components/branch-switcher";
+import { ModeSwitcher } from "@/components/mode-switcher";
+import { ThemeSelector } from "@/components/theme-selector";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  IconShoppingCart, IconTrash, IconWallet, IconSearch, IconCash, IconCreditCard,
+  IconPlus, IconMinus, IconUser, IconChevronRight, IconUserPlus, IconX, IconBox,
+  IconArrowLeft, IconLogout, IconDeviceDesktop, IconDevices, IconCalculator, IconRefresh, IconReceiptTax,
+  IconEye, IconPencil, IconScan, IconCamera, IconBarcode, IconAlertCircle, IconCircleCheckFilled, IconCheck, IconAlertTriangle,
+  IconHexagon, IconWorld, IconBuilding, IconHistory, IconReceipt, IconFilter, IconArrowBackUp,
+  IconPlayerPause, IconReceiptOff, IconList, IconFingerprint, IconCalendar as IconCalendarTabler, IconKeyboard,
+  IconPackage, IconScale, IconLock, IconDiscount, IconInfoCircle
+} from "@tabler/icons-react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Html5Qrcode } from "html5-qrcode";
+import { toast } from "sonner";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
+} from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
+import { db } from "@/lib/db";
+import { useSync } from "@/hooks/useSync";
+import {
+  Card as AntCard,
+  Button as AntButton,
+  Input as AntInput,
+  Badge as AntBadge,
+  Tag as AntTag,
+  Switch as AntSwitch,
+  Select as AntSelect,
+  Divider as AntDivider,
+  Alert as AntAlert,
+  Empty as AntEmpty,
+} from "antd";
+const { Search: AntSearch } = AntInput;
+import { useCurrency } from "@/context/CurrencyContext";
+
+const API = API_URL;
+
+type Product = {
+  id: string;
+  name: string;
+  totalStock: number;
+  variants: Array<{
+    id: string;
+    name: string;
+    price: number;
+    stock: number;
+    sku: string;
+    barcode?: string;
+    secondaryBarcodes?: string[];
+  }>;
+  image?: string;
+  category?: { name: string };
+  isWeighable?: boolean;
+};
+
+type Client = {
+  id: string;
+  _id?: string;
+  name: string;
+  documentId?: string;
+  walletBalance?: number;
+  creditLimit?: number;
+  currentDebt?: number;
+  creditScore?: number;
+  downPaymentPercentage?: number;
+  hasAccount?: boolean;
+  isSuspended?: boolean;
+};
+
+type CartProduct = {
+  id: string;
+  variantId?: string;
+  waitlistId?: string;
+  name: string;
+  price: number;
+  stock: number;
+  sku?: string;
+  barcode?: string;
+};
+
+type ProductWaitlist = {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+  barcode: string;
+  status: string;
+  branchId?: string;
+  createdAt: string;
+  branch?: { name: string };
+};
+
+type CartItem = {
+  product: CartProduct;
+  quantity: number;
+  discount?: { type: 'pct' | 'amt', value: number };
+};
+
+type Shift = {
+  id: string;
+  status: 'OPEN' | 'CLOSED';
+  openingBalance: number;
+  closingBalance?: number;
+  openedAt: string;
+  closedAt?: string;
+  userId: string;
+  branchId: string;
+  expectedTotals?: {
+    CASH: number;
+    CARD: number;
+    TRANSFER: number;
+    PAGO_MOVIL: number;
+    BINANCE: number;
+    ZINLI: number;
+    PAYPAL: number;
+  };
+};
+
+// Credit Status Radial component
+const CreditRadial = ({ client }: { client: any }) => {
+  const limit = client?.creditLimit || 0;
+  const debt = client?.currentDebt || 0;
+  const available = Math.max(0, limit - debt);
+  const score = client?.creditScore || 0;
+
+  // Calculate percentage (default to 100% if limit is 0)
+  const percentage = limit > 0 ? (available / limit) * 100 : 100;
+
+  // SVG circular progress settings
+  const radius = 28;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  // Determine colors based on available credit percent
+  let strokeColor = "stroke-emerald-500 dark:stroke-emerald-400";
+  let textColor = "text-emerald-600 dark:text-emerald-400";
+  let bgLight = "bg-emerald-500/5 border-emerald-500/10 dark:bg-emerald-500/10 dark:border-emerald-500/20";
+
+  if (percentage < 30) {
+    strokeColor = "stroke-red-500 dark:stroke-red-400";
+    textColor = "text-red-600 dark:text-red-400";
+    bgLight = "bg-red-500/5 border-red-500/10 dark:bg-red-500/10 dark:border-red-500/20";
+  } else if (percentage < 75) {
+    strokeColor = "stroke-amber-500 dark:stroke-amber-400";
+    textColor = "text-amber-600 dark:text-amber-400";
+    bgLight = "bg-amber-500/5 border-amber-500/10 dark:bg-amber-500/10 dark:border-amber-500/20";
+  }
+
+  return (
+    <div className={`p-3 rounded-xl border ${bgLight} flex items-center justify-between gap-3 transition-all duration-300 font-sans shadow-sm`}>
+      <div className="flex flex-col gap-1 flex-1 min-w-0">
+        <span className="text-[9px] font-extrabold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-1">
+          <IconCreditCard size={12} className={textColor} stroke={2.5} /> SyncroCredit Activo
+        </span>
+        <div className="flex flex-col">
+          <span className="text-[10px] font-semibold text-muted-foreground/80 leading-none">Cupo Disponible:</span>
+          <span className="text-base font-black text-foreground tabular-nums mt-0.5">${available.toFixed(2)}</span>
+        </div>
+        <div className="flex items-center gap-2.5 mt-1 pt-1.5 border-t border-border/40 text-[9px] font-bold text-muted-foreground/80">
+          <div className="flex flex-col">
+            <span className="text-[7px] font-medium uppercase text-muted-foreground/60 leading-none">Límite</span>
+            <span className="text-foreground/95 mt-0.5">${limit.toFixed(2)}</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[7px] font-medium uppercase text-muted-foreground/60 leading-none">Deuda</span>
+            <span className="text-amber-600/90 mt-0.5">${debt.toFixed(2)}</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[7px] font-medium uppercase text-muted-foreground/60 leading-none">Score</span>
+            <span className="text-blue-500 mt-0.5">{score.toFixed(0)} PTS</span>
+          </div>
+        </div>
+      </div>
+      <div className="relative size-16 flex items-center justify-center shrink-0">
+        {/* SVG radial progress */}
+        <svg className="size-full -rotate-90">
+          {/* Background circle */}
+          <circle
+            cx="32"
+            cy="32"
+            r={radius}
+            className="stroke-muted-foreground/15"
+            strokeWidth="5"
+            fill="transparent"
+          />
+          {/* Active progress circle */}
+          <circle
+            cx="32"
+            cy="32"
+            r={radius}
+            className={`${strokeColor} transition-all duration-500 ease-out`}
+            strokeWidth="5"
+            fill="transparent"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+          />
+        </svg>
+        {/* Inside circle text */}
+        <div className="absolute flex flex-col items-center justify-center text-center w-full px-1">
+          <span className="text-[8px] font-extrabold text-foreground tabular-nums leading-none">${available.toFixed(2)}</span>
+          <span className="text-[5px] font-extrabold text-muted-foreground uppercase leading-none mt-0.5">Disponible</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Ticket View for Printing
+const ThermalTicket = ({ order, settings }: { order: any, settings: any }) => {
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+
+  if (!mounted) return null;
+
+  return (
+    <div className="hidden print:block font-mono text-[10px] w-[80mm] p-4 text-black bg-white mx-auto uppercase">
+      <div className="text-center mb-4">
+        <h2 className="text-sm font-black tracking-widest">{settings?.businessName || 'SYNCRO POS'}</h2>
+        <p>{settings?.businessAddress || 'S/N'}</p>
+        <p>{settings?.businessPhone || 'TEL: 000-0000000'}</p>
+        <div className="my-2 border-b border-dashed border-black" />
+      </div>
+      <div className="flex justify-between mb-1">
+        <span>#VENTA: {order.id?.substring(0, 8) || '0000'}</span>
+        <span>{order.date}</span>
+      </div>
+      <div className="flex justify-between mb-4">
+        <span>CLIENTE: {order.clientName}</span>
+      </div>
+      <div className="border-b border-dashed border-black mb-2" />
+      <table className="w-full mb-2">
+        <thead>
+          <tr className="border-b border-black">
+            <th className="text-left font-normal pb-1">CANT</th>
+            <th className="text-left font-normal pb-1 uppercase">DETALLE</th>
+            <th className="text-right font-normal pb-1">SUB</th>
+          </tr>
+        </thead>
+        <tbody>
+          {order.items.map((it: any, i: number) => (
+            <tr key={it.id || i}>
+              <td className="py-1">{it.quantity}X</td>
+              <td className="py-1 uppercase">{it.product.name}</td>
+              <td className="py-1 text-right">${(it.product.price * it.quantity).toFixed(2)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="border-t border-dashed border-black pt-2 space-y-1">
+        <div className="flex justify-between font-black text-xs">
+          <span>TOTAL USD:</span>
+          <span>${order.total.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between italic">
+          <span>TASA BCV: Bs {(order?.payments?.[0]?.exchangeRate || settings?.exchangeRate || 1).toFixed(2)}</span>
+          <span>BS: {(order.total * (order?.payments?.[0]?.exchangeRate || settings?.exchangeRate || 1)).toLocaleString('es-VE')}</span>
+        </div>
+      </div>
+      <div className="text-center mt-6">
+        <p>¡GRACIAS POR SU COMPRA!</p>
+        <p className="text-[8px] mt-2 italic text-slate-500">Documento no fiscal • Generado por Syncro POS</p>
+      </div>
+    </div>
+  );
+};
+
+function PosNumpad({ onClose, onEnter }: { onClose: () => void, onEnter: (val: string) => void }) {
+  const [display, setDisplay] = useState("");
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    setPosition({ x: window.innerWidth / 2 - 140, y: window.innerHeight / 2 - 200 });
+  }, []);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (isDragging) {
+      setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    setIsDragging(false);
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+
+  const handleNum = (num: string) => setDisplay(prev => prev + num);
+  const handleClear = () => setDisplay("");
+  const handleBackspace = () => setDisplay(prev => prev.slice(0, -1));
+  const handleSubmit = () => {
+    if (display) {
+      onEnter(display);
+      setDisplay("");
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement
+      ) {
+        if (e.key === "Escape") onClose();
+        return;
+      }
+
+      const key = e.key;
+      if (/[0-9]/.test(key)) handleNum(key);
+      else if (key === "Enter") {
+        e.preventDefault();
+        handleSubmit();
+      }
+      else if (key === "Escape") onClose();
+      else if (key === "Backspace") handleBackspace();
+      else if (key === "Delete" || key.toLowerCase() === "c") handleClear();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [display, onClose]);
+
+  return (
+    <div
+      className="fixed z-[100] w-[280px] bg-background/95 backdrop-blur-md border border-border/50 rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden transition-shadow"
+      style={{ left: position.x, top: position.y, touchAction: 'none' }}
+    >
+      <div
+        className="h-10 bg-muted/40 w-full cursor-grab active:cursor-grabbing flex items-center justify-between px-4 border-b border-border/30"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
+        <span className="text-xs font-bold text-muted-foreground flex items-center gap-2"><IconKeyboard size={14} /> Teclado Numérico</span>
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={onClose}
+          className="p-1 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors"
+          title="Cerrar (Esc)"
+        >
+          <IconX size={14} />
+        </button>
+      </div>
+
+      <div className="p-4 flex flex-col gap-3">
+        <div className="bg-muted/30 p-3 rounded-xl text-right overflow-hidden shadow-inner border border-muted/50 flex items-center min-h-[60px]">
+          <span className="text-2xl font-mono font-bold tracking-tighter truncate block w-full">{display || "0"}</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <Button variant="outline" className="h-14 font-bold text-rose-500 bg-rose-500/10 border-none hover:bg-rose-500/20 text-sm shadow-sm" onClick={handleClear}>CLS</Button>
+          <Button variant="outline" className="h-14 font-bold bg-muted/50 border-none hover:bg-muted text-lg shadow-sm" onClick={handleBackspace}>←</Button>
+          <Button variant="default" className="h-14 font-bold bg-primary text-primary-foreground text-sm shadow-sm" onClick={handleSubmit}>Enter</Button>
+
+          {[7, 8, 9, 4, 5, 6, 1, 2, 3].map(num => (
+            <Button key={num} variant="outline" className="h-14 font-bold text-2xl border-none bg-muted/20 hover:bg-muted/50 shadow-sm" onClick={() => handleNum(String(num))}>{num}</Button>
+          ))}
+
+          <Button variant="outline" className="h-14 font-bold text-2xl border-none bg-muted/20 hover:bg-muted/50 col-span-2 shadow-sm" onClick={() => handleNum("0")}>0</Button>
+          <Button variant="outline" className="h-14 font-bold text-2xl border-none bg-muted/20 hover:bg-muted/50 shadow-sm" onClick={() => handleNum("00")}>00</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PosCalculator({ onClose }: { onClose: () => void }) {
+  const [display, setDisplay] = useState("0");
+  const [prev, setPrev] = useState<number | null>(null);
+  const [op, setOp] = useState<string | null>(null);
+  const [waitingForNewValue, setWaitingForNewValue] = useState(false);
+
+  // Drag state
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    setPosition({ x: window.innerWidth / 2 - 192, y: window.innerHeight / 2 - 250 });
+  }, []);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (isDragging) {
+      setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    setIsDragging(false);
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+
+  const handleNum = (num: string) => {
+    if (waitingForNewValue) {
+      setDisplay(num);
+      setWaitingForNewValue(false);
+    } else {
+      setDisplay(display === "0" ? num : display + num);
+    }
+  };
+
+  const handleOp = (operator: string) => {
+    if (op && !waitingForNewValue) {
+      calculate();
+    } else {
+      setPrev(parseFloat(display));
+    }
+    setOp(operator);
+    setWaitingForNewValue(true);
+  };
+
+  const calculate = () => {
+    if (prev === null || op === null) return;
+    const current = parseFloat(display);
+    let result = 0;
+    switch (op) {
+      case "+": result = prev + current; break;
+      case "-": result = prev - current; break;
+      case "*": result = prev * current; break;
+      case "/": result = prev / current; break;
+    }
+    // Round to 4 decimal places to avoid JS floating point issues
+    result = Math.round(result * 10000) / 10000;
+    setDisplay(String(result));
+    setPrev(result);
+    setOp(null);
+    setWaitingForNewValue(true);
+  };
+
+  const handleClear = () => {
+    setDisplay("0");
+    setPrev(null);
+    setOp(null);
+    setWaitingForNewValue(false);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignorar si el usuario está escribiendo en algún input (ej. barra de búsqueda)
+      if (
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement
+      ) {
+        if (e.key === "Escape") onClose();
+        return;
+      }
+
+      const key = e.key;
+      if (/[0-9]/.test(key)) {
+        handleNum(key);
+      } else if (key === "+" || key === "-") {
+        handleOp(key);
+      } else if (key === "*" || key.toLowerCase() === "x") {
+        handleOp("*");
+      } else if (key === "/") {
+        e.preventDefault();
+        handleOp("/");
+      } else if (key === "Enter" || key === "=") {
+        e.preventDefault();
+        calculate();
+      } else if (key === "Escape") {
+        onClose();
+      } else if (key === "Backspace" || key === "Delete" || key.toLowerCase() === "c") {
+        handleClear();
+      } else if (key === "." || key === ",") {
+        if (!display.includes(".")) handleNum(".");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [display, prev, op, waitingForNewValue, onClose]);
+
+
+  return (
+    <div
+      className="fixed z-[100] w-[384px] bg-background/95 backdrop-blur-md border border-border/50 rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden transition-shadow"
+      style={{ left: position.x, top: position.y, touchAction: 'none' }}
+    >
+      <div
+        className="h-10 bg-muted/40 w-full cursor-grab active:cursor-grabbing flex items-center justify-between px-4 border-b border-border/30"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
+        <span className="text-xs font-bold text-muted-foreground flex items-center gap-2"><IconCalculator size={14} /> Calculadora</span>
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={onClose}
+          className="p-1 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors"
+          title="Cerrar (Esc)"
+        >
+          <IconX size={14} />
+        </button>
+      </div>
+
+      <div className="p-5 flex flex-col gap-4">
+        <div className="bg-muted/30 p-4 rounded-xl text-right overflow-hidden shadow-inner border border-muted/50 flex flex-col justify-end min-h-[80px]">
+          <div className="h-4 mb-1 text-xs text-muted-foreground font-semibold">
+            {prev !== null && op && `${prev} ${op} ${waitingForNewValue ? '' : display}`}
+          </div>
+          <span className="text-4xl font-mono font-bold tracking-tighter truncate block">{display}</span>
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          <Button variant="outline" className="h-14 font-bold text-rose-500 bg-rose-500/10 border-none hover:bg-rose-500/20 text-lg shadow-sm" onClick={handleClear}>C</Button>
+          <Button variant="outline" className="h-14 font-bold bg-muted/50 border-none hover:bg-muted text-lg shadow-sm" onClick={() => handleOp("/")}>/</Button>
+          <Button variant="outline" className="h-14 font-bold bg-muted/50 border-none hover:bg-muted text-lg shadow-sm" onClick={() => handleOp("*")}>x</Button>
+          <Button variant="outline" className="h-14 font-bold bg-muted/50 border-none hover:bg-muted text-xl shadow-sm" onClick={() => { setDisplay(display.includes("-") ? display.replace("-", "") : "-" + display) }}>±</Button>
+
+          {[7, 8, 9].map(num => (
+            <Button key={num} variant="outline" className="h-14 font-bold text-xl border-none bg-muted/20 hover:bg-muted/50 shadow-sm" onClick={() => handleNum(String(num))}>{num}</Button>
+          ))}
+          <Button variant="outline" className="h-14 font-bold bg-muted/50 border-none hover:bg-muted text-2xl shadow-sm" onClick={() => handleOp("-")}>-</Button>
+
+          {[4, 5, 6].map(num => (
+            <Button key={num} variant="outline" className="h-14 font-bold text-xl border-none bg-muted/20 hover:bg-muted/50 shadow-sm" onClick={() => handleNum(String(num))}>{num}</Button>
+          ))}
+          <Button variant="outline" className="h-14 font-bold bg-muted/50 border-none hover:bg-muted text-2xl shadow-sm" onClick={() => handleOp("+")}>+</Button>
+
+          {[1, 2, 3].map(num => (
+            <Button key={num} variant="outline" className="h-14 font-bold text-xl border-none bg-muted/20 hover:bg-muted/50 shadow-sm" onClick={() => handleNum(String(num))}>{num}</Button>
+          ))}
+          <Button variant="default" className="h-full row-span-2 font-black text-2xl rounded-xl shadow-md bg-primary hover:bg-primary/90 text-primary-foreground" onClick={calculate}>=</Button>
+
+          <Button variant="outline" className="h-14 font-bold text-xl border-none bg-muted/20 hover:bg-muted/50 col-span-2 shadow-sm" onClick={() => handleNum("0")}>0</Button>
+          <Button variant="outline" className="h-14 font-bold text-xl border-none bg-muted/20 hover:bg-muted/50 shadow-sm" onClick={() => { if (!display.includes(".")) handleNum(".") }}>.</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function POSPage() {
+  const router = useRouter();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedClientId, setSelectedClientId] = useState<string>("consumidor-final");
+
+  const selectedClient = clients.find(c => (c.id || (c as any)._id) === selectedClientId);
+
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [processing, setProcessing] = useState(false);
+  const isProcessingRef = useRef(false);
+  const [taxRate, setTaxRate] = useState(16);
+  const [isSaleSuccessModalOpen, setIsSaleSuccessModalOpen] = useState(false);
+
+  const [activeShift, setActiveShift] = useState<Shift | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [openingBalance, setOpeningBalance] = useState<string>("0");
+  const [showFondoBreakdown, setShowFondoBreakdown] = useState(false);
+  const [openingUsd, setOpeningUsd] = useState<string>("");
+  const [openingBs, setOpeningBs] = useState<string>("");
+  const [isClosingShift, setIsClosingShift] = useState(false);
+  const [closingBalance, setClosingBalance] = useState<string>("0");
+  const [closeSummary, setCloseSummary] = useState<{ expected: number; reported: number; difference: number } | null>(null);
+  const [isCloseSummaryOpen, setIsCloseSummaryOpen] = useState(false);
+  const [cashBreakdown, setCashBreakdown] = useState({ b1: 0, b5: 0, b10: 0, b20: 0, b50: 0, b100: 0 });
+  const [posBatch, setPosBatch] = useState<string>("0");
+  const [pagoMovilBatch, setPagoMovilBatch] = useState<string>("0");
+  const [cashBs, setCashBs] = useState<string>("0");
+
+  // Payment Modal State
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD">("CASH");
+  const [amountReceived, setAmountReceived] = useState<string>("0");
+
+  // Abono Modal State
+  const [isPaymentModalAbonoOpen, setIsPaymentModalAbonoOpen] = useState(false);
+  const [abonoAmount, setAbonoAmount] = useState<string>("");
+  const [abonoPaymentMethod, setAbonoPaymentMethod] = useState<string>("CASH");
+  const [abonoNotes, setAbonoNotes] = useState<string>("");
+  const [isSubmittingAbono, setIsSubmittingAbono] = useState(false);
+
+  // Quick Client State
+  const [isQuickClientOpen, setIsQuickClientOpen] = useState(false);
+  const [newClient, setNewClient] = useState({ name: "", documentId: "", phone: "" });
+  const [savingClient, setSavingClient] = useState(false);
+
+  // Client document search
+  const [clientDocSearch, setClientDocSearch] = useState("");
+  const [searchingClient, setSearchingClient] = useState(false);
+
+  // Advanced Payment State
+  const [addedPayments, setAddedPayments] = useState<any[]>([]);
+  const [showSplitPaymentForm, setShowSplitPaymentForm] = useState(false);
+  const [tempPaymentMethod, setTempPaymentMethod] = useState<"CASH" | "CARD" | "TRANSFER" | "PAGO_MOVIL" | "BINANCE" | "ZINLI" | "PAYPAL" | "WALLET" | "CREDIT">("CASH");
+  const [saveChangeToWallet, setSaveChangeToWallet] = useState(false);
+  const [printReceipt, setPrintReceipt] = useState(false);
+  const [generatingPwaCode, setGeneratingPwaCode] = useState(false);
+  const [creditType, setCreditType] = useState<"traditional" | "syncrocredit">("traditional");
+  const [togglingSuspension, setTogglingSuspension] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [updatingLimit, setUpdatingLimit] = useState(false);
+  const [limitInputValue, setLimitInputValue] = useState<number | undefined>(undefined);
+  const [showPwaCodeModal, setShowPwaCodeModal] = useState(false);
+  const [generatedPwaCode, setGeneratedPwaCode] = useState("");
+  const [pwaClientName, setPwaClientName] = useState("");
+  const [pwaClientDocument, setPwaClientDocument] = useState("");
+  const [selectedCreditLimit, setSelectedCreditLimit] = useState<number | null>(null);
+  const [selectedFrequencyDays, setSelectedFrequencyDays] = useState<number>(15);
+  const [showPinAuthModal, setShowPinAuthModal] = useState(false);
+  const [generatedPinCode, setGeneratedPinCode] = useState<string | null>(null);
+  const [isGeneratingPin, setIsGeneratingPin] = useState(false);
+  const [isPollingPin, setIsPollingPin] = useState(false);
+  const [pendingSaleData, setPendingSaleData] = useState<any>(null);
+  const [checkingActivation, setCheckingActivation] = useState(false);
+  const [tempAmount, setTempAmount] = useState<string>("0");
+  const [tempReference, setTempReference] = useState<string>("");
+  const [syncingBcv, setSyncingBcv] = useState(false);
+  const [settings, setSettings] = useState<any>(null);
+  const { currency, exchangeRate: bcvRate, eurExchangeRate: bcvEurRate, refreshRates, formatPrice } = useCurrency();
+  const [baseCurrency, setBaseCurrency] = useState<"USD" | "EUR">("USD");
+  const [useWalletBalance, setUseWalletBalance] = useState(false);
+  const [tempCurrency, setTempCurrency] = useState<"USD" | "VES">("USD");
+
+  // Sync global currency with POS base currency
+  useEffect(() => {
+    if (currency === "EUR") setBaseCurrency("EUR");
+    else setBaseCurrency("USD");
+  }, [currency]);
+
+  useEffect(() => {
+    if (isPaymentModalOpen) {
+      setCreditType("traditional");
+      const limit = selectedClient?.creditLimit || 0;
+      const debt = selectedClient?.currentDebt || 0;
+      const available = limit - debt;
+      const isBlocked = selectedClient?.hasAccount && (available <= 0.01 && debt > 0);
+      if (isBlocked && tempPaymentMethod === 'CREDIT') {
+        setTempPaymentMethod('CASH');
+      }
+    }
+  }, [isPaymentModalOpen, selectedClient, tempPaymentMethod]);
+
+  // Alerta de selección de cliente bloqueado
+  useEffect(() => {
+    if (selectedClientId && selectedClientId !== "consumidor-final") {
+      const client = clients.find(c => (c.id || (c as any)._id) === selectedClientId);
+      if (client) {
+        const available = (client.creditLimit || 0) - (client.currentDebt || 0);
+        if (client.hasAccount && available <= 0.01 && (client.currentDebt || 0) > 0) {
+          toast.warning(
+            `El cliente ${client.name} tiene el cupo de crédito agotado y deudas activas. No se le permite fiar, por favor realice un abono a su deuda.`,
+            { duration: 5000 }
+          );
+        }
+      }
+    }
+  }, [selectedClientId, clients]);
+
+  // Scanner & Waitlist State
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [useCamera, setUseCamera] = useState(false);
+  const [isDetected, setIsDetected] = useState(false);
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [waitlistData, setWaitlistData] = useState({ name: "", price: "", stock: "1", barcode: "" });
+  const [savingWaitlist, setSavingWaitlist] = useState(false);
+
+  // View state for toggling between POS and History
+  const [view, setView] = useState<'pos' | 'history'>('pos');
+  const [salesHistory, setSalesHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySearchTerm, setHistorySearchTerm] = useState("");
+
+  const filteredSalesHistory = React.useMemo(() => {
+    const query = historySearchTerm.toLowerCase().trim();
+    if (!query) return salesHistory;
+    return salesHistory.filter((sale) => {
+      return (
+        sale.id?.toLowerCase().includes(query) ||
+        sale.client?.name?.toLowerCase().includes(query) ||
+        (sale.client?.documentId && sale.client.documentId.toLowerCase().includes(query)) ||
+        (typeof sale.client === "string" && sale.client.toLowerCase().includes(query))
+      );
+    });
+  }, [salesHistory, historySearchTerm]);
+
+  // Payment confirmation states
+  const [isConfirmPaymentOpen, setIsConfirmPaymentOpen] = useState(false);
+  const [paymentConfirmationSummary, setPaymentConfirmationSummary] = useState("");
+  const [paymentConfirmationWarning, setPaymentConfirmationWarning] = useState("");
+  const [paymentsToProcess, setPaymentsToProcess] = useState<any[] | null>(null);
+
+  // Calculator State
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
+
+  // Numpad State
+  const [isNumpadOpen, setIsNumpadOpen] = useState(false);
+
+  // Weighable Product State
+  const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
+
+  // Discount State
+  const [globalDiscount, setGlobalDiscount] = useState<{ type: 'pct' | 'amt', value: number } | null>(null);
+  const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
+  // targetDiscountId === 'GLOBAL' (discount ticket) o targetDiscountId === 'product_id' (discount item)
+  const [targetDiscountId, setTargetDiscountId] = useState<string | null>(null);
+  const [discountType, setDiscountType] = useState<'pct' | 'amt'>('pct');
+  const [discountValueInput, setDiscountValueInput] = useState('');
+
+  // PIN Verification State
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [pinCallback, setPinCallback] = useState<((pinUsed?: string) => void) | null>(null);
+  const pinInputRef = React.useRef<HTMLInputElement>(null);
+
+  const openPinVerification = (onSuccess: (pinUsed?: string) => void) => {
+    if (!settings?.discountPin) {
+      // No PIN configured, allow directly
+      onSuccess();
+      return;
+    }
+    setPinInput("");
+    setPinError("");
+    setPinCallback(() => onSuccess);
+    setIsPinModalOpen(true);
+    setTimeout(() => pinInputRef.current?.focus(), 100);
+  };
+
+  const handlePinConfirm = () => {
+    if (pinInput === settings?.discountPin) {
+      const pinUsed = pinInput;
+      setIsPinModalOpen(false);
+      setPinInput("");
+      setPinError("");
+      pinCallback?.(pinUsed);
+      setPinCallback(null);
+    } else {
+      setPinError("PIN incorrecto. Inténtelo de nuevo.");
+      setPinInput("");
+    }
+  };
+
+  const handleApplyDiscount = () => {
+    const val = parseFloat(discountValueInput);
+    if (isNaN(val) || val < 0) {
+      toast.error('Ingrese un valor válido');
+      return;
+    }
+    if (discountType === 'pct' && val > 100) {
+      toast.error('El porcentaje no puede ser mayor a 100');
+      return;
+    }
+
+    if (targetDiscountId === 'GLOBAL') {
+      if (val === 0) {
+        setGlobalDiscount(null);
+      } else {
+        setGlobalDiscount({ type: discountType, value: val });
+      }
+    } else if (targetDiscountId) {
+      setCart(prev => prev.map(item => {
+        if (item.product.id === targetDiscountId) {
+          if (val === 0) {
+            const { discount, ...rest } = item;
+            return rest;
+          }
+          return { ...item, discount: { type: discountType, value: val } };
+        }
+        return item;
+      }));
+    }
+    setIsDiscountModalOpen(false);
+    setDiscountValueInput('');
+  };
+  const [weighableProduct, setWeighableProduct] = useState<Product | null>(null);
+  const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
+  const [editingCartItemPrice, setEditingCartItemPrice] = useState<number>(0);
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'ud'>('ud');
+  const [editingCartItemName, setEditingCartItemName] = useState<string>("");
+  const [weightValue, setWeightValue] = useState("");
+  const weightInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isWeightModalOpen) {
+      setTimeout(() => weightInputRef.current?.focus(), 100);
+    }
+  }, [isWeightModalOpen]);
+
+  const handleConfirmWeight = () => {
+    const weight = parseFloat(weightValue);
+    if (isNaN(weight) || weight <= 0) {
+      toast.error("Ingrese un peso o cantidad válida");
+      return;
+    }
+
+    if (editingCartItemId) {
+      setCart(prev => prev.map(item => {
+        if (item.product.id === editingCartItemId) {
+          return { ...item, quantity: weight };
+        }
+        return item;
+      }));
+      setIsWeightModalOpen(false);
+      setWeightValue("");
+      setEditingCartItemId(null);
+      setEditingCartItemName("");
+    } else if (weighableProduct) {
+      addToCart(weighableProduct, weight);
+      setIsWeightModalOpen(false);
+      setWeightValue("");
+      setWeighableProduct(null);
+    }
+  };
+
+  // Función helper para comparar códigos de barras de forma inteligente (resuelve discrepancias de ceros o dígitos iniciales como EAN-13 vs UPC-A)
+  const matchBarcodes = (barcodeA: string | undefined, barcodeB: string) => {
+    if (!barcodeA || !barcodeB) return false;
+    const cleanA = barcodeA.trim().replace(/^0+/, ''); // Quitar ceros a la izquierda
+    const cleanB = barcodeB.trim().replace(/^0+/, ''); // Quitar ceros a la izquierda
+    if (cleanA === cleanB) return true;
+
+    // Si uno de los códigos tiene 12 dígitos y el otro 13 (ej. EAN-13 vs UPC-A),
+    // o si uno es sufijo del otro por diferencia de dígitos de control/país.
+    if (cleanA.length >= 12 && cleanB.length >= 12) {
+      return cleanA.endsWith(cleanB) || cleanB.endsWith(cleanA);
+    }
+    return false;
+  };
+
+  const handleNumpadEnter = (code: string) => {
+    const product = products.find(p =>
+      p.variants?.some(v =>
+        matchBarcodes(v.barcode, code) ||
+        v.sku === code ||
+        v.secondaryBarcodes?.some(sb => matchBarcodes(sb, code))
+      )
+    );
+    if (product) {
+      // addToCart is declared later, we will handle it in a useEffect or ensure it's available. 
+      // Actually addToCart is defined below in the file, we can call it here because of hoisting or closure behavior in React components.
+      addToCart(product);
+      toast.success(`Agregado al carrito: ${product.name}`);
+    } else {
+      toast.error(`Producto no encontrado con el código: ${code}`);
+    }
+  };
+
+  const [mounted, setMounted] = useState(false);
+  const [token, setToken] = useState<string>("");
+  const [user, setUser] = useState<any>(null);
+
+  // Return Modal State
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [selectedSaleForReturn, setSelectedSaleForReturn] = useState<any>(null);
+
+  // Order Detail Modal State
+  const [selectedSale, setSelectedSale] = useState<any>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [clientHistory, setClientHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Helper to format raw sale objects from POS backend
+  const formatSaleObject = (s: any) => {
+    if (!s) return null;
+    return {
+      id: s.id,
+      client: s.client?.name || "Consumidor Final",
+      clientId: s.clientId,
+      clientDocument: s.client?.documentId || null,
+      total: s.total,
+      subtotal: s.subtotal,
+      taxAmount: s.taxAmount,
+      igtfAmount: s.igtfAmount,
+      discountAmt: s.discountAmt,
+      status: s.status || "COMPLETED",
+      branch: s.branch?.name || "N/A",
+      date: s.createdAt,
+      seller: s.user?.name || "Desconocido",
+      payments: (s.payments || []).map((p: any) => ({
+        method: p.method,
+        amount: p.amount
+      })),
+      items: (s.items || []).map((item: any) => ({
+        id: item.id,
+        name: item.variant?.product?.name || "Producto Desconocido",
+        variantName: item.variant?.name || "",
+        quantity: item.quantity,
+        price: item.price,
+        subtotal: item.subtotal
+      }))
+    };
+  };
+
+  // Fetch client history when selectedSale changes
+  useEffect(() => {
+    if (!selectedSale || !selectedSale.clientId) {
+      setClientHistory([]);
+      return;
+    }
+
+    const fetchClientHistory = async () => {
+      setLoadingHistory(true);
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API}/clients/${selectedSale.clientId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const clientData = await res.json();
+          const salesHistory = (clientData.sales || []).map((s: any) => ({
+            id: s.id,
+            client: clientData.name || "Consumidor Final",
+            clientId: s.clientId || clientData.id,
+            clientDocument: clientData.documentId || null,
+            total: s.total,
+            subtotal: s.subtotal,
+            taxAmount: s.taxAmount,
+            igtfAmount: s.igtfAmount,
+            discountAmt: s.discountAmt,
+            status: s.status || "COMPLETED",
+            branch: s.branch?.name || "N/A",
+            date: s.createdAt,
+            payments: s.payments.map((p: any) => ({
+              method: p.method,
+              amount: p.amount
+            })),
+            items: s.items.map((item: any) => ({
+              id: item.id,
+              name: item.variant?.product?.name || "Producto Desconocido",
+              variantName: item.variant?.name || "",
+              quantity: item.quantity,
+              price: item.price,
+              subtotal: item.subtotal
+            }))
+          }));
+          setClientHistory(salesHistory);
+        }
+      } catch (err) {
+        console.error("Error loading client history", err);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+
+    fetchClientHistory();
+  }, [selectedSale?.clientId]);
+  const [returnQuantities, setReturnQuantities] = useState<Record<string, number>>({});
+  const [returnReason, setReturnReason] = useState("");
+  const [processingReturn, setProcessingReturn] = useState(false);
+  const [fetchingSaleDetails, setFetchingSaleDetails] = useState(false);
+
+  // Waitlist State
+  const [waitlist, setWaitlist] = useState<ProductWaitlist[]>([]);
+  const [isWaitlistOpen, setIsWaitlistOpen] = useState(false);
+  const [loadingWaitlist, setLoadingWaitlist] = useState(false);
+
+  // Parked Tickets State
+  const [parkedTickets, setParkedTickets] = useState<any[]>([]);
+  const [isParkedModalOpen, setIsParkedModalOpen] = useState(false);
+  const [promisedPaymentDate, setPromisedPaymentDate] = useState<Date | undefined>(new Date());
+  const [showOnlyInStock, setShowOnlyInStock] = useState(false);
+
+  const scannerInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Auto-focus hidden input for laser scanner
+  useEffect(() => {
+    if (scannerOpen && !useCamera) {
+      const timer = setTimeout(() => {
+        scannerInputRef.current?.focus();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [scannerOpen, useCamera]);
+
+  const { isOnline, syncPendingSales, pullRemoteData } = useSync();
+
+  const isDesktop = typeof window !== 'undefined' && 'electron' in window;
+  const canAccessDashboard = user?.permissions?.includes("dashboard") || user?.role === "ownerpos" || user?.role === "admin";
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const currentExchangeRate = baseCurrency === "USD" ? bcvRate : bcvEurRate;
+
+  const checkShift = useCallback(async () => {
+    try {
+      const currentToken = localStorage.getItem("token") || "";
+      const h = { Authorization: `Bearer ${currentToken}`, "Content-Type": "application/json" };
+      const res = await fetch(`${API}/shifts/active`, { headers: h });
+      const data = await res.json();
+      if (res.ok && data && data.status === "OPEN") {
+        setActiveShift(data);
+      } else {
+        setActiveShift(null);
+      }
+    } catch (error) {
+      console.error("Error checking shift:", error);
+    } finally {
+      setInitialLoading(false);
+    }
+  }, []);
+
+  // Notification for due payments
+  useEffect(() => {
+    if (clients.length > 0 && activeShift) {
+      const today = new Date().toISOString().split('T')[0];
+      const dueClients = clients.filter((c: any) => {
+        if (!c.nextPaymentDate || (c.currentDebt || 0) <= 0) return false;
+        const dueDate = new Date(c.nextPaymentDate).toISOString().split('T')[0];
+        return dueDate <= today;
+      });
+
+      if (dueClients.length > 0) {
+        toast.info(`Cobranza Pendiente: ${dueClients.length} clientes deben pagar hoy.`, {
+          description: "Revise el módulo de clientes para más detalles.",
+          duration: 10000,
+          icon: <IconAlertCircle className="text-amber-500" />
+        });
+      }
+    }
+  }, [clients, activeShift]);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+
+    // First, load from LOCAL DB for an instant UI
+    try {
+      const localProducts = await db.products.toArray();
+      const localClients = await db.clients.toArray();
+
+      if (localProducts.length > 0) {
+        setProducts(localProducts as any);
+      }
+      if (localClients.length > 0) {
+        setClients(localClients as any);
+      }
+    } catch (e) {
+      console.error("Local load error", e);
+    } finally {
+      if (products.length > 0) setLoading(false);
+    }
+
+    // Then, pull from remote to update local DB and refresh UI
+    if (navigator.onLine) {
+      await pullRemoteData();
+
+      // Refresh local state from updated DB
+      const updatedProducts = await db.products.toArray();
+      const updatedClients = await db.clients.toArray();
+      setProducts(updatedProducts as any);
+      setClients(updatedClients as any);
+
+      // Also fetch settings which aren't in IndexedDB yet
+      const currentToken = localStorage.getItem("token") || "";
+      const h = { Authorization: `Bearer ${currentToken}`, "Content-Type": "application/json" };
+      try {
+        const sRes = await fetch(`${API}/settings`, { headers: h });
+        const sData = await sRes.json();
+        setSettings(sData);
+        if (sData && sData.taxRate !== undefined && sData.taxRate !== null) {
+          setTaxRate(Number(sData.taxRate));
+        }
+      } catch (e) { }
+    }
+
+    setLoading(false);
+  }, [pullRemoteData, products.length]);
+
+  const updateClientLimit = async (newLimit: number) => {
+    if (newLimit < 0) return;
+    setUpdatingLimit(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/clients/${selectedClientId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ creditLimit: newLimit })
+      });
+      if (res.ok) {
+        const updatedClient = await res.json();
+        setClients(prev => prev.map(c => c.id === updatedClient.id ? { ...c, ...updatedClient } : c));
+        // Save to IndexedDB
+        await db.clients.put({ ...updatedClient, _id: updatedClient.id });
+        toast.success(`Límite de crédito actualizado a $${newLimit}`);
+      } else {
+        toast.error("Error al actualizar límite de crédito");
+      }
+    } catch (err) {
+      toast.error("Error de conexión");
+    } finally {
+      setUpdatingLimit(false);
+    }
+  };
+
+  const refreshSelectedClient = async () => {
+    if (!selectedClientId || selectedClientId === "consumidor-final") return;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/clients/${selectedClientId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const updatedClient = await res.json();
+        setClients(prev => prev.map(c => c.id === updatedClient.id ? { ...c, ...updatedClient } : c));
+        // Save to IndexedDB
+        await db.clients.put({ ...updatedClient, _id: updatedClient.id });
+      }
+    } catch (e) {
+      console.error("Error refreshing client", e);
+    }
+  };
+
+  useEffect(() => {
+    setMounted(true);
+    const storedToken = localStorage.getItem("token") || "";
+    const storedUserStr = localStorage.getItem("user");
+    if (storedUserStr) setUser(JSON.parse(storedUserStr));
+    setToken(storedToken);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && token) {
+      checkShift();
+    } else if (mounted && !token) {
+      router.push("/login");
+    }
+  }, [mounted, token, checkShift, router]);
+
+  useEffect(() => {
+    if (activeShift) {
+      loadData();
+      fetchWaitlist();
+    }
+  }, [activeShift, loadData]);
+
+  // BARCODE SCANNER GLOBAL LISTENER
+  const [barcodeBuffer, setBarcodeBuffer] = useState("");
+  const [lastCharTime, setLastCharTime] = useState(0);
+
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Ignore if focus is in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      const currentTime = new Date().getTime();
+      const diff = currentTime - lastCharTime;
+
+      // Reset buffer if delay > 50ms (typing manually vs scanner)
+      if (diff > 50) {
+        if (e.key.length === 1) setBarcodeBuffer(e.key);
+      } else {
+        if (e.key.length === 1) setBarcodeBuffer(prev => prev + e.key);
+      }
+
+      setLastCharTime(currentTime);
+
+      if (e.key === "Enter") {
+        if (barcodeBuffer.length > 2) {
+          processBarcode(barcodeBuffer);
+        }
+        setBarcodeBuffer("");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyPress);
+    return () => window.removeEventListener("keydown", handleKeyPress);
+  }, [barcodeBuffer, lastCharTime]);
+
+  // Calculaciones de Totales
+  const originalSubtotal = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+  const subtotalWithItemDiscounts = cart.reduce((acc, item) => {
+    let itemTotal = item.product.price * item.quantity;
+    if (item.discount) {
+      if (item.discount.type === 'pct') {
+        itemTotal -= itemTotal * (item.discount.value / 100);
+      } else {
+        itemTotal -= item.discount.value;
+      }
+    }
+    return acc + Math.max(0, itemTotal);
+  }, 0);
+
+  let globalDiscountAmt = 0;
+  if (globalDiscount) {
+    if (globalDiscount.type === 'pct') {
+      globalDiscountAmt = subtotalWithItemDiscounts * (globalDiscount.value / 100);
+    } else {
+      globalDiscountAmt = globalDiscount.value;
+    }
+  }
+
+  const subtotalAfterGlobalDiscount = Math.max(0, subtotalWithItemDiscounts - globalDiscountAmt);
+  const totalItemDiscounts = originalSubtotal - subtotalWithItemDiscounts;
+  const totalDiscountAmt = totalItemDiscounts + globalDiscountAmt;
+
+  // Para propósitos de retrocompatibilidad con referencias a `subtotal`
+  const subtotal = originalSubtotal;
+
+  const updatedTotal = subtotalAfterGlobalDiscount + (subtotalAfterGlobalDiscount * (taxRate / 100));
+  const taxAmount = subtotalAfterGlobalDiscount * (taxRate / 100);
+
+  // Calculate IGTF based on CASH payments added
+  const cashPaymentsTotal = addedPayments
+    .filter(p => p.method === "CASH")
+    .reduce((acc, p) => acc + p.amount, 0);
+
+  const igtfRateVal = settings?.igtfRate !== undefined && settings?.igtfRate !== null ? Number(settings.igtfRate) : 3;
+  const igtfAmount = cashPaymentsTotal * (igtfRateVal / 100);
+  const totalBeforeWallet = updatedTotal + igtfAmount;
+
+  // Calculate Wallet Deduction
+  const availableWallet = selectedClient?.walletBalance || 0;
+  const availableCredit = (selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0);
+  const walletDeduction = useWalletBalance ? Math.min(availableWallet, totalBeforeWallet) : 0;
+
+  const finalTotalWithIgtf = totalBeforeWallet - walletDeduction;
+  const totalPaid = addedPayments.reduce((acc, p) => acc + p.amount, 0);
+  const remainingToPay = Math.max(0, finalTotalWithIgtf - totalPaid);
+  const changeDue = Math.max(0, totalPaid - finalTotalWithIgtf);
+  const changeDueBs = changeDue * currentExchangeRate;
+
+  // Auto-switch tempPaymentMethod and update tempAmount when addedPayments changes
+  useEffect(() => {
+    if (!isPaymentModalOpen) return;
+
+    const allMethods = ["CASH", "CARD", "TRANSFER", "PAGO_MOVIL", "BINANCE", "ZINLI", "PAYPAL", "WALLET", "CREDIT"];
+    const addedMethods = addedPayments.map(p => p.method);
+
+    // Automatically set the tempAmount to remaining to pay
+    setTempAmount(remainingToPay.toFixed(2));
+
+    // Switch to first available method if current is already added
+    if (addedMethods.includes(tempPaymentMethod)) {
+      const available = allMethods.find(m => {
+        if (m === "PAGO_MOVIL" && !settings?.pagoMovilEnabled) return false;
+        if (m === "BINANCE" && !settings?.binanceEnabled) return false;
+        if (m === "ZINLI" && !settings?.zinliEnabled) return false;
+        if (m === "PAYPAL" && !settings?.paypalEnabled) return false;
+        return !addedMethods.includes(m);
+      });
+      if (available) {
+        setTempPaymentMethod(available as any);
+      }
+    }
+  }, [addedPayments, remainingToPay, isPaymentModalOpen, settings]);
+
+  useEffect(() => {
+    let html5QrCode: any = null;
+
+    const startScanner = async () => {
+      try {
+        let element = null;
+        for (let i = 0; i < 10; i++) {
+          element = document.getElementById("reader");
+          if (element) break;
+          await new Promise(r => setTimeout(r, 100));
+        }
+        if (!element) return;
+
+        html5QrCode = new Html5Qrcode("reader");
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          {
+            fps: 60,
+            qrbox: 250,
+            aspectRatio: 1.0,
+            disableFlip: true,
+            videoConstraints: {
+              width: { min: 1280, ideal: 1920, max: 3840 },
+              height: { min: 720, ideal: 1080, max: 2160 },
+              facingMode: "environment",
+              focusMode: "continuous",
+            }
+          },
+          (decodedText: string) => {
+            setIsDetected(true);
+            const audio = new Audio("/scanner.mp3");
+            audio.play().catch(() => { });
+            processBarcode(decodedText);
+            setTimeout(() => {
+              setScannerOpen(false);
+              setUseCamera(false);
+              setIsDetected(false);
+            }, 800);
+          },
+          () => { }
+        );
+      } catch (err) {
+        console.error("Camera error", err);
+      }
+    };
+
+    if (useCamera && scannerOpen) {
+      startScanner();
+    }
+
+    return () => {
+      if (html5QrCode) {
+        const cleanup = async () => {
+          if (html5QrCode.isScanning) {
+            await html5QrCode.stop();
+          }
+        };
+        cleanup().catch(() => { });
+      }
+    };
+  }, [useCamera, scannerOpen]);
+
+  const processBarcode = (code: string) => {
+    console.log("Processing Barcode:", code);
+    const found = products.find(p =>
+      p.variants?.some(v =>
+        matchBarcodes(v.barcode, code) ||
+        v.sku === code ||
+        v.secondaryBarcodes?.some(sb => matchBarcodes(sb, code))
+      )
+    );
+    if (found) {
+      addToCart(found);
+      toast.success(`Leído: ${found.name}`, { icon: '🔍' });
+    } else {
+      toast.error(`Producto no encontrado (${code})`);
+      setWaitlistData(prev => ({ ...prev, barcode: code }));
+      setWaitlistOpen(true);
+    }
+  };
+
+  const handleWaitlistSubmit = async () => {
+    if (!waitlistData.name || !waitlistData.price) {
+      return toast.error("Nombre y precio son obligatorios");
+    }
+    setSavingWaitlist(true);
+    try {
+      const currentBranchId = localStorage.getItem("currentBranchId");
+      const res = await fetch(`${API}/products/waitlist`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          ...waitlistData,
+          price: Number(waitlistData.price),
+          stock: Number(waitlistData.stock),
+          branchId: currentBranchId
+        }),
+      });
+
+      if (res.ok) {
+        const created = await res.json();
+        toast.success("Producto agregado a lista de espera y carrito");
+
+        // Add to cart as a "Ghost/Waitlist" product
+        const waitlistProduct: CartProduct = {
+          id: `waitlist-${created.id}`,
+          variantId: "", // Empty for waitlist
+          name: `(ESPERA) ${created.name}`,
+          price: created.price,
+          stock: created.stock,
+        };
+
+        setCart(prev => [...prev, { product: waitlistProduct, quantity: 1, waitlistId: created.id } as any]);
+        setWaitlistOpen(false);
+        setWaitlistData({ name: "", price: "", stock: "1", barcode: "" });
+      } else {
+        const err = await res.json();
+        toast.error(err.message || "Error al guardar en lista de espera");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setSavingWaitlist(false);
+    }
+  };
+
+
+
+  const handleOpenShift = async () => {
+    try {
+      // Check if token is valid
+      const currentToken = localStorage.getItem("token");
+      if (!currentToken) {
+        toast.error("No hay sesión activa. Por favor inicie sesión nuevamente.");
+        router.push("/login");
+        return;
+      }
+
+      const currentBranchId = localStorage.getItem("currentBranchId") || "";
+      if (!currentBranchId) {
+        toast.error("No hay una sucursal seleccionada");
+        return;
+      }
+
+      if (openingBalance === undefined || openingBalance === null || Number(openingBalance) < 0) {
+        toast.error("Monto de apertura inválido");
+        return;
+      }
+
+      console.log("Opening shift with:", {
+        openingBalance: Number(openingBalance),
+        branchId: currentBranchId,
+        token: currentToken.substring(0, 20) + "..."
+      });
+
+      const res = await fetch(`${API}/shifts/open`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${currentToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          openingBalance: Number(openingBalance),
+          branchId: currentBranchId
+        }),
+      });
+
+      console.log("Shift open response status:", res.status);
+
+      if (res.ok) {
+        const data = await res.json();
+        setActiveShift(data);
+        toast.success("Caja abierta correctamente");
+      } else {
+        const err = await res.json();
+        console.error("Shift open error:", err);
+
+        if (res.status === 401) {
+          toast.error("Sesión expirada. Por favor inicie sesión nuevamente.");
+          router.push("/login");
+        } else {
+          toast.error(err.message || "Error al abrir caja");
+        }
+      }
+    } catch (error) {
+      console.error("Shift open error:", error);
+      toast.error("Error de conexión");
+    }
+  };
+
+  const handleCloseShift = async () => {
+    if (!activeShift) return;
+    try {
+      if (!activeShift.id) {
+        toast.error("ID de turno no encontrado");
+        return;
+      }
+
+      const totalPhysicalUsd = cashBreakdown.b1 + (cashBreakdown.b5 * 5) + (cashBreakdown.b10 * 10) + (cashBreakdown.b20 * 20) + (cashBreakdown.b50 * 50) + (cashBreakdown.b100 * 100);
+      const totalPhysicalBsToUsd = (Number(cashBs) || 0) / currentExchangeRate;
+      const finalClosingBalance = totalPhysicalUsd + totalPhysicalBsToUsd;
+
+      const expectedCash = activeShift.expectedTotals?.CASH || 0;
+      const differenceVal = finalClosingBalance - expectedCash;
+
+      const res = await fetch(`${API}/shifts/close/${activeShift.id}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ closingBalance: finalClosingBalance }),
+      });
+      if (res.ok) {
+        setCloseSummary({
+          expected: expectedCash,
+          reported: finalClosingBalance,
+          difference: differenceVal
+        });
+        setIsCloseSummaryOpen(true);
+        setIsClosingShift(false);
+        toast.success("Caja cerrada correctamente");
+      } else {
+        const err = await res.json();
+        toast.error(err.message || "Error al cerrar caja");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    }
+  };
+
+  const addToCart = (product: Product, customQuantity?: number) => {
+    if (product.isWeighable && customQuantity === undefined) {
+      setWeighableProduct(product);
+      setWeightValue("");
+      setIsWeightModalOpen(true);
+      return;
+    }
+
+    const variant = product.variants?.[0]; // Default to first variant for now
+    const qtyToAdd = customQuantity || 1;
+
+    if (!variant || variant.stock < qtyToAdd) {
+      toast.error("Producto sin stock suficiente");
+      return;
+    }
+    setCart(prev => {
+      const existing = prev.find(item => item.product.variantId === variant.id);
+      if (existing) {
+        if (existing.quantity + qtyToAdd > variant.stock) {
+          toast.error("No hay más stock disponible");
+          return prev;
+        }
+        return prev.map(item =>
+          item.product.variantId === variant.id ? { ...item, quantity: item.quantity + qtyToAdd } : item
+        );
+      }
+      // Store dummy product with variant details for UI
+      const uiProduct: CartProduct = {
+        id: product.id,
+        variantId: variant.id,
+        name: product.name + (variant.name !== 'Principal' ? ` (${variant.name})` : ''),
+        price: variant.price,
+        stock: variant.stock,
+        sku: variant.sku,
+        barcode: variant.barcode,
+      };
+      return [...prev, { product: uiProduct, quantity: qtyToAdd }];
+    });
+  };
+
+  const updateQuantity = (id: string, delta: number) => {
+    setCart(prev => prev.map(item => {
+      if (item.product.id === id) {
+        const newQty = item.quantity + delta;
+        if (newQty > item.product.stock) {
+          toast.error("Stock insuficiente");
+          return item;
+        }
+        return newQty > 0 ? { ...item, quantity: newQty } : item;
+      }
+      return item;
+    }));
+  };
+
+
+  const removeFromCart = (id: string) => {
+    setCart(prev => prev.filter(item => item.product.id !== id));
+  };
+
+  const openPaymentModal = (method: "CASH" | "CARD") => {
+    setPaymentMethod(method);
+    setAddedPayments([]); // Start fresh for mixed payment logic if needed, or just keep it
+    setShowSplitPaymentForm(false);
+    setTempPaymentMethod(method);
+    setTempAmount(finalTotalWithIgtf.toFixed(2));
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleSyncBcv = async () => {
+    setSyncingBcv(true);
+    try {
+      const res = await fetch(`${API}/settings/sync-bcv`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ target: "pos" })
+      });
+      if (res.ok) {
+        await refreshRates();
+        toast.success(`Tasas BCV (Punto de Venta) actualizadas`);
+      } else {
+        toast.error("No se pudo sincronizar la tasa");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setSyncingBcv(false);
+    }
+  };
+
+  const addPayment = () => {
+    const amt = Number(tempAmount);
+    if (amt <= 0) return toast.error("Monto inválido");
+
+    setAddedPayments([...addedPayments, {
+      method: tempPaymentMethod,
+      amount: amt,
+      amountLocal: amt * currentExchangeRate,
+      exchangeRate: currentExchangeRate,
+      reference: tempPaymentMethod !== "CASH" ? tempReference : ""
+    }]);
+    setTempAmount("0");
+    setTempReference("");
+  };
+
+  const handleRegisterAbono = async () => {
+    if (isSubmittingAbono) return;
+    if (!abonoAmount || parseFloat(abonoAmount) <= 0) {
+      toast.error("Monto inválido");
+      return;
+    }
+
+    setIsSubmittingAbono(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/clients/${selectedClientId}/payment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          amount: parseFloat(abonoAmount),
+          notes: abonoNotes || `Abono en ${abonoPaymentMethod}`
+        })
+      });
+
+      if (res.ok) {
+        toast.success("Pago registrado y deuda actualizada");
+        setIsPaymentModalAbonoOpen(false);
+        setAbonoNotes("");
+        setAbonoAmount("");
+
+        // Reload clients to update debt visually
+        const updatedRes = await fetch(`${API}/clients`, { headers: { Authorization: `Bearer ${token}` } });
+        if (updatedRes.ok) {
+          const data = await updatedRes.json();
+          setClients(data);
+          await db.clients.clear();
+          await db.clients.bulkAdd(data.map((c: any) => ({ ...c, _id: c.id })));
+        }
+      } else {
+        toast.error("Error al registrar pago");
+      }
+    } catch (error) {
+      toast.error("Error de conexión");
+    } finally {
+      setIsSubmittingAbono(false);
+    }
+  };
+
+  const cancelPinAuthorization = async (pin: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      await fetch(`${API}/sales/pending-credit/reject/${pin}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.error("Error canceling pending purchase:", err);
+    } finally {
+      setIsPollingPin(false);
+      setGeneratedPinCode(null);
+      setShowPinAuthModal(false);
+    }
+  };
+
+  const initiatePinAuthorization = async (overriddenPayments?: any[] | null) => {
+    if (isGeneratingPin) return;
+    if (cart.length === 0) return toast.error("El carrito está vacío");
+
+    const currentBranchId = localStorage.getItem("currentBranchId");
+    if (!currentBranchId) {
+      return toast.error("Seleccione una sucursal primero");
+    }
+
+    const paymentsToEvaluate = overriddenPayments || addedPayments;
+    const creditPayments = paymentsToEvaluate.filter((p: any) => p.method === 'CREDIT');
+    const creditTotal = creditPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
+
+    if (creditTotal <= 0) {
+      return toast.error("No hay ningún pago a crédito para autorizar");
+    }
+
+    setIsGeneratingPin(true);
+    setShowPinAuthModal(true);
+    setGeneratedPinCode(null);
+
+    try {
+      const saleData = {
+        branchId: currentBranchId,
+        promisedPaymentDate: promisedPaymentDate ? promisedPaymentDate.toISOString() : null,
+        items: cart.map(item => {
+          let itemTotal = item.product.price * item.quantity;
+          let discountAmt = 0;
+          let discountPct = 0;
+          if (item.discount) {
+            if (item.discount.type === 'pct') {
+              discountPct = item.discount.value;
+              discountAmt = itemTotal * (discountPct / 100);
+            } else {
+              discountAmt = item.discount.value;
+            }
+            itemTotal = Math.max(0, itemTotal - discountAmt);
+          }
+          return {
+            variantId: (item as any).waitlistId ? null : item.product.variantId,
+            waitlistId: (item as any).waitlistId || null,
+            quantity: item.quantity,
+            price: item.product.price,
+            subtotal: itemTotal,
+            discountAmt: discountAmt,
+            discountPct: discountPct
+          };
+        }),
+        discountAmt: globalDiscountAmt,
+        discountPct: globalDiscount?.type === 'pct' ? globalDiscount.value : 0,
+        payments: useWalletBalance && walletDeduction > 0
+          ? [...paymentsToEvaluate, { method: "WALLET", amount: walletDeduction, amountLocal: 0, exchangeRate: 1 }]
+          : paymentsToEvaluate,
+        clientId: selectedClientId === "consumidor-final" ? null : selectedClientId,
+        saveChangeToWallet: saveChangeToWallet ? changeDue : 0,
+      };
+
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/sales/pending-credit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          clientId: selectedClientId,
+          amount: creditTotal,
+          cartData: saleData
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setGeneratedPinCode(data.pinCode);
+        setIsPollingPin(true);
+      } else {
+        const err = await res.json();
+        toast.error(err.message || "Error al iniciar autorización");
+        setShowPinAuthModal(false);
+      }
+    } catch (err) {
+      toast.error("Error de conexión al iniciar autorización");
+      setShowPinAuthModal(false);
+    } finally {
+      setIsGeneratingPin(false);
+    }
+  };
+
+  // PIN polling logic
+  useEffect(() => {
+    if (!isPollingPin || !generatedPinCode) return;
+
+    let active = true;
+    const interval = setInterval(async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API}/sales/pending-credit/status/${generatedPinCode}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok && active) {
+          const data = await res.json();
+          if (data.status === 'APPROVED') {
+            setIsPollingPin(false);
+            setShowPinAuthModal(false);
+            setGeneratedPinCode(null);
+            clearInterval(interval);
+            toast.success("Venta autorizada por el cliente con éxito");
+            setIsSaleSuccessModalOpen(true);
+
+            // Clean up cart and finalize POS side
+            setCart([]);
+            setAddedPayments([]);
+            setSaveChangeToWallet(false);
+            setUseWalletBalance(false);
+            setSelectedClientId("consumidor-final");
+            setIsPaymentModalOpen(false);
+
+            // Reload clients to update debt visually
+            const clientsRes = await fetch(`${API}/clients`, { headers: { Authorization: `Bearer ${token}` } });
+            if (clientsRes.ok) {
+              const clientsData = await clientsRes.json();
+              setClients(clientsData);
+              await db.clients.clear();
+              await db.clients.bulkAdd(clientsData.map((c: any) => ({ ...c, _id: c.id })));
+            }
+
+            if (printReceipt) {
+              setTimeout(() => window.print(), 100);
+            }
+          } else if (data.status === 'REJECTED') {
+            setIsPollingPin(false);
+            setShowPinAuthModal(false);
+            setGeneratedPinCode(null);
+            clearInterval(interval);
+            toast.error("La compra fue rechazada por el cliente.");
+          }
+        }
+      } catch (err) {
+        console.error("Error polling PIN status:", err);
+      }
+    }, 2000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [isPollingPin, generatedPinCode, printReceipt]);
+
+  const processSale = async (overriddenPayments?: any[]) => {
+    if (processing || isProcessingRef.current) return;
+    if (cart.length === 0) return toast.error("El carrito está vacío");
+
+    const paymentsToEvaluate = overriddenPayments || addedPayments;
+    const totalPaidEval = paymentsToEvaluate.reduce((acc: number, p: any) => acc + p.amount, 0) + (useWalletBalance ? walletDeduction : 0);
+    const remainingToPayEval = Math.max(0, finalTotalWithIgtf - totalPaidEval);
+
+    if (remainingToPayEval > 0.01) return toast.error("Aún falta saldo por cubrir");
+
+    isProcessingRef.current = true;
+    setProcessing(true);
+
+    try {
+      const currentBranchId = localStorage.getItem("currentBranchId");
+      if (!currentBranchId) {
+        toast.error("Seleccione una sucursal primero");
+        setProcessing(false);
+        return;
+      }
+
+      const saleData = {
+        branchId: currentBranchId,
+        promisedPaymentDate: promisedPaymentDate ? promisedPaymentDate.toISOString() : null,
+        items: cart.map(item => {
+          let itemTotal = item.product.price * item.quantity;
+          let discountAmt = 0;
+          let discountPct = 0;
+          if (item.discount) {
+            if (item.discount.type === 'pct') {
+              discountPct = item.discount.value;
+              discountAmt = itemTotal * (discountPct / 100);
+            } else {
+              discountAmt = item.discount.value;
+            }
+            itemTotal = Math.max(0, itemTotal - discountAmt);
+          }
+          return {
+            variantId: (item as any).waitlistId ? null : item.product.variantId,
+            waitlistId: (item as any).waitlistId || null,
+            quantity: item.quantity,
+            price: item.product.price, // Ensure price is sent
+            subtotal: itemTotal,
+            discountAmt: discountAmt,
+            discountPct: discountPct
+          };
+        }),
+        discountAmt: globalDiscountAmt,
+        discountPct: globalDiscount?.type === 'pct' ? globalDiscount.value : 0,
+        payments: useWalletBalance && walletDeduction > 0
+          ? [...paymentsToEvaluate, { method: "WALLET", amount: walletDeduction, amountLocal: 0, exchangeRate: 1 }]
+          : paymentsToEvaluate,
+        clientId: selectedClientId === "consumidor-final" ? null : selectedClientId,
+        saveChangeToWallet: saveChangeToWallet ? changeDue : 0,
+      };
+
+      // OFFLINE MODE: If offline, queue the sale
+      if (!navigator.onLine) {
+        await db.pendingSales.add({
+          data: saleData,
+          status: "pending",
+          createdAt: Date.now()
+        });
+
+        toast.success("Venta guardada localmente (Pendiente de sincronizar)", {
+          description: "La venta se subirá al sistema automáticamente cuando se recupere la conexión.",
+          duration: 6000
+        });
+
+        setCart([]);
+        setSelectedClientId("consumidor-final");
+        setIsPaymentModalOpen(false);
+        setProcessing(false);
+
+        if (printReceipt) {
+          setTimeout(() => window.print(), 100);
+        }
+
+        return;
+      }
+
+      // ONLINE MODE: Direct POST
+      const res = await fetch(`${API}/sales`, {
+        method: "POST", headers, body: JSON.stringify(saleData),
+      });
+
+      if (res.ok) {
+        const createdSale = await res.json();
+        toast.success("Venta realizada con éxito");
+        setIsSaleSuccessModalOpen(true);
+
+        if (createdSale && createdSale.pwaCode) {
+          setGeneratedPwaCode(createdSale.pwaCode);
+          setPwaClientName(selectedClient ? selectedClient.name : "Cliente");
+          setShowPwaCodeModal(true);
+        }
+        // Print logic
+        const settings = {
+          businessName: user?.companyName || "SYNCRO POS",
+          exchangeRate: currentExchangeRate
+        }
+        // Small delay to allow react to render ThermalTicket if needed
+        if (printReceipt) {
+          setTimeout(() => window.print(), 100);
+        }
+
+        setCart([]);
+        setAddedPayments([]);
+        setSaveChangeToWallet(false);
+        setUseWalletBalance(false);
+        setSelectedClientId("consumidor-final");
+        setPromisedPaymentDate(new Date());
+        setIsPaymentModalOpen(false);
+        loadData(); // Refresh stock
+        checkShift(); // Refresh active shift expected totals
+      } else {
+        const err = await res.json();
+        toast.error(err.message || "Error al procesar la venta");
+      }
+    } catch (e) {
+      // Catch network errors and queue locally
+      console.error("Sale error, checking offline fallback", e);
+
+      const currentBranchId = localStorage.getItem("currentBranchId");
+      const saleData = {
+        branchId: currentBranchId,
+        items: cart.map(item => ({
+          variantId: item.product.variantId || null,
+          waitlistId: item.product.waitlistId || null,
+          quantity: item.quantity
+        })),
+        payments: addedPayments,
+        clientId: selectedClientId === "consumidor-final" ? null : selectedClientId,
+      };
+
+      await db.pendingSales.add({
+        data: saleData,
+        status: "pending",
+        createdAt: Date.now()
+      });
+
+      toast.warning("Error de red. Venta guardada localmente.", {
+        description: "Se sincronizará al recuperar conexión."
+      });
+
+      setCart([]);
+      setSelectedClientId("consumidor-final");
+      setIsPaymentModalOpen(false);
+
+      if (printReceipt) {
+        setTimeout(() => window.print(), 100);
+      }
+    } finally {
+      isProcessingRef.current = false;
+      setProcessing(false);
+    }
+  };
+
+  const handleCreateClient = async () => {
+    if (!newClient.name.trim()) return toast.error("El nombre es obligatorio");
+    if (!newClient.documentId.trim()) return toast.error("La Cédula / RIF es obligatoria");
+    setSavingClient(true);
+    try {
+      const res = await fetch(`${API}/clients`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(newClient),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        toast.success(`Cliente "${created.name}" registrado correctamente`);
+        setClients(prev => [...prev, created]);
+        setSelectedClientId(created.id || created._id);
+        setIsQuickClientOpen(false);
+        setNewClient({ name: "", documentId: "", phone: "" });
+        setClientDocSearch("");
+      } else {
+        const err = await res.json();
+        toast.error(err.message || "Error al registrar cliente");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setSavingClient(false);
+    }
+  };
+
+  const handleClientDocSearch = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter" || !clientDocSearch.trim()) return;
+    setSearchingClient(true);
+    try {
+      const res = await fetch(`${API}/clients/search?q=${encodeURIComponent(clientDocSearch.trim())}`, { headers });
+      const results = await res.json();
+      if (results && results.length > 0) {
+        const found = results[0];
+        setSelectedClientId(found.id);
+        // Ensure client is in local list
+        setClients(prev => prev.find(c => c.id === found.id) ? prev : [...prev, found]);
+        toast.success(`Cliente encontrado: ${found.name}`);
+        setClientDocSearch("");
+      } else {
+        toast.warning("Cliente no encontrado. Complete el registro.");
+        setNewClient(prev => ({ ...prev, documentId: clientDocSearch.trim() }));
+        setIsQuickClientOpen(true);
+      }
+    } catch {
+      toast.error("Error buscando cliente");
+    } finally {
+      setSearchingClient(false);
+    }
+  };
+
+  const openReturnModal = async (sale: any) => {
+    setSelectedSaleForReturn(null);
+    setReturnQuantities({});
+    setReturnReason("");
+    setFetchingSaleDetails(true);
+    setIsReturnModalOpen(true);
+
+    try {
+      const res = await fetch(`${API}/sales/${sale.id}`, { headers });
+      if (res.ok) {
+        const fullSale = await res.json();
+        setSelectedSaleForReturn(fullSale);
+
+        // Initialize return quantities to 0
+        const initialQtys: Record<string, number> = {};
+        fullSale.items.forEach((item: any) => {
+          if (item.variantId) initialQtys[item.variantId] = 0;
+        });
+        setReturnQuantities(initialQtys);
+      } else {
+        toast.error("Error al obtener detalles de la venta");
+        setIsReturnModalOpen(false);
+      }
+    } catch (error) {
+      console.error("Error fetching sale details:", error);
+      toast.error("Error de conexión");
+      setIsReturnModalOpen(false);
+    } finally {
+      setFetchingSaleDetails(false);
+    }
+  };
+
+  const handleReturnSubmit = async () => {
+    if (!selectedSaleForReturn) return;
+
+    const itemsToReturn = Object.entries(returnQuantities)
+      .filter(([_, qty]) => qty > 0)
+      .map(([variantId, quantity]) => ({ variantId, quantity }));
+
+    if (itemsToReturn.length === 0) {
+      return toast.error("Debe seleccionar al menos un artículo para devolver");
+    }
+
+    setProcessingReturn(true);
+    try {
+      const res = await fetch(`${API}/sales/${selectedSaleForReturn.id}/return`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          items: itemsToReturn,
+          reason: returnReason
+        })
+      });
+
+      if (res.ok) {
+        toast.success("Devolución procesada correctamente");
+        setIsReturnModalOpen(false);
+        // Refresh history
+        const hRes = await fetch(`${API}/sales`, { headers });
+        const hData = await hRes.json();
+        setSalesHistory(Array.isArray(hData) ? hData : []);
+      } else {
+        const err = await res.json();
+        toast.error(err.message || "Error al procesar la devolución");
+      }
+    } finally {
+      setProcessingReturn(false);
+    }
+  };
+
+  const fetchWaitlist = async () => {
+    setLoadingWaitlist(true);
+    try {
+      const res = await fetch(`${API}/products/waitlist/all`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setWaitlist(data);
+      } else {
+        toast.error("Error al obtener lista de espera");
+      }
+    } catch (error) {
+      toast.error("Error de conexión");
+    } finally {
+      setLoadingWaitlist(false);
+    }
+  };
+
+  const addWaitlistItemToCart = (item: ProductWaitlist) => {
+    setCart(prev => {
+      const existing = prev.find(ci => ci.product.waitlistId === item.id);
+      if (existing) {
+        return prev.map(ci =>
+          ci.product.waitlistId === item.id ? { ...ci, quantity: ci.quantity + 1 } : ci
+        );
+      }
+      const uiProduct: CartProduct = {
+        id: `waitlist-${item.id}`,
+        waitlistId: item.id,
+        name: item.name + " (En Espera)",
+        price: item.price,
+        stock: 999, // Infinite virtual stock
+        barcode: item.barcode,
+      };
+      return [...prev, { product: uiProduct, quantity: 1 }];
+    });
+    toast.success(`${item.name} añadido al carrito`);
+  };
+
+  const parkTicket = () => {
+    if (cart.length === 0) return toast.error("El carrito está vacío");
+    const newTicket = {
+      id: Math.random().toString(36).substr(2, 9).toUpperCase(),
+      cart: [...cart],
+      selectedClientId,
+      clientDocSearch,
+      parkedAt: new Date().toISOString(),
+    };
+    setParkedTickets(prev => [newTicket, ...prev]);
+    setCart([]);
+    setSelectedClientId("consumidor-final");
+    setClientDocSearch("");
+    toast.success("Ticket puesto en espera", {
+      description: `ID: ${newTicket.id}`
+    });
+  };
+
+  const resumeTicket = (ticket: any) => {
+    if (cart.length > 0) {
+      return toast.error("Vacíe o pause el ticket actual antes de recuperar uno en espera.");
+    }
+    setCart(ticket.cart);
+    setSelectedClientId(ticket.selectedClientId);
+    setClientDocSearch(ticket.clientDocSearch || "");
+    setParkedTickets(prev => prev.filter(t => t.id !== ticket.id));
+    setIsParkedModalOpen(false);
+    toast.success("Ticket recuperado");
+  };
+
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.variants?.some(v =>
+        v.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        v.barcode?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+
+    if (showOnlyInStock) {
+      return matchesSearch && p.totalStock > 0;
+    }
+    return matchesSearch;
+  });
+
+  if (!mounted || initialLoading) {
+    return (
+      <div className="h-screen w-full flex flex-col bg-background">
+        <header className="h-14 border-b px-6 flex items-center justify-between shrink-0">
+          <Skeleton className="h-8 w-32" />
+          <div className="flex gap-4">
+            <Skeleton className="h-8 w-24" />
+            <Skeleton className="h-8 w-24" />
+          </div>
+        </header>
+        <div className="flex-1 flex flex-col lg:flex-row h-full">
+          {/* Main Area Skeleton */}
+          <div className="flex-1 flex flex-col h-full border-r">
+            <div className="p-6 border-b flex gap-4">
+              <Skeleton className="h-10 flex-1" />
+              <Skeleton className="h-10 w-24" />
+            </div>
+            <div className="p-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {[...Array(10)].map((_, i) => (
+                <div key={i} className="border rounded-lg p-3 space-y-3">
+                  <Skeleton className="h-32 w-full rounded-md" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-4 w-1/2" />
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Sidebar Skeleton */}
+          <div className="w-[380px] p-6 space-y-6">
+            <Skeleton className="h-10 w-full" />
+            <div className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex gap-4">
+                  <Skeleton className="h-12 w-12 rounded-md" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="pt-6 border-t space-y-4">
+              <div className="flex justify-between">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-8 w-32" />
+              </div>
+              <Skeleton className="h-12 w-full" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // SCREEN: Opening Cash Register
+  if (!activeShift) {
+    return (
+      <div className="h-screen w-full flex flex-col bg-muted/10">
+        {/* Header for opening screen */}
+        <header className="h-14 bg-background border-b px-6 flex items-center justify-between shrink-0">
+          <div className="flex items-center">
+            {canAccessDashboard && (
+              <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard")} className="h-8 w-8 mr-4">
+                <IconArrowLeft className="size-4" />
+              </Button>
+            )}
+            <h1 className="font-bold text-lg tracking-tight">SYNCRO POS</h1>
+          </div>
+          <BranchSwitcher disabled={!!activeShift} />
+        </header>
+
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm space-y-8 bg-background border p-8 rounded-lg shadow-sm">
+            <div className="space-y-2 text-center">
+              <div className="size-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <IconCalculator className="size-6 text-primary" />
+              </div>
+              <h1 className="text-2xl font-semibold tracking-tight leading-none">Terminal de Venta</h1>
+              <p className="text-sm text-muted-foreground mt-2">
+                Inicie su turno de trabajo estableciendo el fondo de caja inicial.
+              </p>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-4 p-3 border rounded-md bg-muted/30">
+                  <IconUser className="size-5 text-muted-foreground" />
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase font-medium text-muted-foreground">Cajero</span>
+                    <span className="text-sm font-semibold leading-none">{user?.name || "Administrador"}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="opening-balance">Monto Inicial en Caja</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                    <Input
+                      id="opening-balance"
+                      type="number"
+                      value={openingBalance}
+                      onChange={(e) => setOpeningBalance(e.target.value)}
+                      className="pl-7 h-12 text-xl font-semibold"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowFondoBreakdown(!showFondoBreakdown)}
+                    className="text-xs text-primary hover:underline flex items-center gap-1 font-medium transition-all"
+                  >
+                    {showFondoBreakdown ? "✕ Ocultar desglose de efectivo" : "＋ Desglosar efectivo (Dólares y Bolívares)"}
+                  </button>
+
+                  {showFondoBreakdown && (
+                    <div className="p-3 border rounded-lg bg-muted/20 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <div className="text-[10px] text-muted-foreground uppercase font-semibold flex justify-between">
+                        <span>Asistente de Fondo</span>
+                        <span>Tasa BCV: Bs {currentExchangeRate?.toFixed(2)}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label htmlFor="opening-usd" className="text-xs text-muted-foreground">Efectivo $</Label>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                            <Input
+                              id="opening-usd"
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              className="pl-6 h-8 text-xs font-semibold"
+                              value={openingUsd}
+                              onChange={(e) => {
+                                setOpeningUsd(e.target.value);
+                                const usd = e.target.value;
+                                const bs = openingBs;
+                                const usdVal = Number(usd) || 0;
+                                const bsVal = Number(bs) || 0;
+                                const total = usdVal + (bsVal / (currentExchangeRate || 1));
+                                setOpeningBalance(total.toFixed(2));
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="opening-bs" className="text-xs text-muted-foreground">Efectivo Bs</Label>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">Bs</span>
+                            <Input
+                              id="opening-bs"
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              className="pl-8 h-8 text-xs font-semibold"
+                              value={openingBs}
+                              onChange={(e) => {
+                                setOpeningBs(e.target.value);
+                                const usd = openingUsd;
+                                const bs = e.target.value;
+                                const usdVal = Number(usd) || 0;
+                                const bsVal = Number(bs) || 0;
+                                const total = usdVal + (bsVal / (currentExchangeRate || 1));
+                                setOpeningBalance(total.toFixed(2));
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Button
+                  onClick={handleOpenShift}
+                  className="w-full h-11"
+                >
+                  Abrir Caja Registradora
+                </Button>
+
+                <div className="flex flex-col gap-1">
+                  {canAccessDashboard ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full h-9 text-muted-foreground gap-2"
+                      onClick={() => router.push("/dashboard")}
+                    >
+                      <IconArrowLeft className="size-3" /> Regresar al Dashboard
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full h-9 text-destructive hover:bg-destructive/5"
+                      onClick={() => {
+                        toast.info("Sesión cerrada");
+                        localStorage.clear();
+                        router.push("/login");
+                      }}
+                    >
+                      <IconLogout className="size-4 mr-2" /> Cerrar Sesión
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t text-center">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest leading-none">
+                SYNCRO POS • {new Date().toLocaleDateString()}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // MAIN POS INTERFACE
+  return (
+    <div className="flex flex-col h-screen bg-muted/20 print:bg-white p-0">
+
+      {/* THERMAL TICKET RENDER */}
+      <ThermalTicket
+        order={{
+          id: 'POS-INTERNAL',
+          date: new Date().toLocaleDateString(),
+          clientName: clients.find(c => c.id === selectedClientId || c._id === selectedClientId)?.name || "Consumidor Final",
+          total: updatedTotal,
+          items: cart,
+          payments: addedPayments.map(p => ({
+            method: p.method,
+            amount: p.amount,
+            amountLocal: p.amountLocal,
+            exchangeRate: p.exchangeRate || currentExchangeRate
+          }))
+        }}
+        settings={{
+          businessName: "SYNCRO POS",
+          exchangeRate: currentExchangeRate
+        }}
+      />
+
+      <header className="h-12 bg-background border-b px-3 flex items-center justify-between sticky top-0 z-10 shrink-0 print:hidden text-xs">
+        <div className="flex items-center gap-2">
+          {canAccessDashboard && (
+            <AntButton type="text" size="small" className="!h-7 !w-7 !p-0" onClick={() => router.push("/dashboard")} icon={<IconArrowLeft className="size-4" />} />
+          )}
+          <div className="flex items-center gap-1.5">
+            <h1 className="font-bold text-sm tracking-tight whitespace-nowrap">SYNCRO POS</h1>
+            <AntTag
+              color={isOnline ? "success" : "error"}
+              className="hidden sm:inline-flex !text-[9px] !leading-4 !py-0 !px-1.5 !m-0 font-bold uppercase tracking-wider"
+            >
+              {isOnline ? 'Online' : 'Offline'}
+            </AntTag>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:flex flex-col items-end">
+            <p className="text-[9px] text-muted-foreground leading-none">Cajero</p>
+            <p className="text-[10px] font-semibold leading-none mt-0.5">{user?.name || "Administrador"}</p>
+          </div>
+          {settings?.bcvUpdateDate && (
+            <div className="hidden xl:flex flex-col items-end mr-1">
+              <p className="text-[9px] text-muted-foreground leading-none">Fecha Valor</p>
+              <p className="text-[10px] font-semibold text-[#79716b] leading-none mt-0.5">{settings.bcvUpdateDate}</p>
+            </div>
+          )}
+          <div className="flex items-center gap-1">
+            <AntSelect
+              value={baseCurrency}
+              onChange={(v: "USD" | "EUR") => setBaseCurrency(v)}
+              size="small"
+              className="w-[68px] !text-[9px] font-bold"
+              options={[
+                { value: "USD", label: "USD" },
+                { value: "EUR", label: "EUR" },
+              ]}
+            />
+            <AntButton
+              size="small"
+              onClick={handleSyncBcv}
+              loading={syncingBcv}
+              icon={!syncingBcv ? <IconRefresh size={12} /> : undefined}
+              className="!text-[9px] font-bold"
+            >
+              BCV: {currentExchangeRate.toFixed(2)}
+            </AntButton>
+          </div>
+          <AntDivider type="vertical" className="!h-5 !mx-0.5" />
+          <BranchSwitcher disabled={!!activeShift} />
+          <div className="flex items-center gap-1">
+            <ThemeSelector />
+            <ModeSwitcher />
+          </div>
+          <AntButton
+            type="text"
+            danger
+            size="small"
+            className="!text-[10px] !px-2 !h-7"
+            onClick={() => {
+              checkShift();
+              setIsClosingShift(true);
+            }}
+            icon={<IconCash size={14} />}
+          >
+            Cerrar Turno
+          </AntButton>
+        </div>
+      </header>
+
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden gap-4 p-4 lg:p-6 pb-2">
+
+        {/* SECCIÓN IZQUIERDA: CONTENIDO PRINCIPAL (PRODUCTOS O HISTORIAL) */}
+        <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+
+          {/* BARRA DE CONTROLES SUPERIOR */}
+          <div className="flex items-center justify-between gap-2 shrink-0">
+            {/* Buscador (Solo en vista POS) */}
+            <div className={cn(
+              "flex items-center gap-2 bg-background border rounded-md px-2 h-8 flex-1 shadow-sm transition-all",
+              view === 'history' && "opacity-50 pointer-events-none grayscale"
+            )}>
+              <IconSearch className="text-muted-foreground size-3.5 shrink-0" />
+              <AntInput
+                variant="borderless"
+                placeholder="Buscar productos por nombre o SKU..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="!p-0 !h-full !text-xs !shadow-none"
+                disabled={view === 'history'}
+              />
+              {searchTerm && (
+                <AntButton type="text" size="small" className="!h-5 !w-5 !p-0 !min-w-0" onClick={() => setSearchTerm("")} icon={<IconX size={12} />} />
+              )}
+              <div className="flex items-center gap-1.5 mr-1 ml-0.5">
+                <AntSwitch
+                  size="small"
+                  checked={showOnlyInStock}
+                  onChange={setShowOnlyInStock}
+                />
+                <Label htmlFor="stock-filter" className="text-[9px] font-bold text-muted-foreground whitespace-nowrap cursor-pointer uppercase select-none">
+                  Stock
+                </Label>
+              </div>
+              <AntDivider type="vertical" className="!h-3 !mx-0.5" />
+              <AntButton
+                type="text"
+                size="small"
+                className="!h-6 !w-6 !p-0 !min-w-0 text-primary"
+                onClick={() => setIsNumpadOpen(true)}
+                title="Teclado numérico"
+                icon={<IconKeyboard size={15} />}
+              />
+              <AntButton
+                type="text"
+                size="small"
+                className="!h-6 !w-6 !p-0 !min-w-0 text-primary"
+                onClick={() => setScannerOpen(true)}
+                title="Escanear con cámara"
+                icon={<IconScan size={15} />}
+              />
+            </div>
+
+            {/* Toggle Historial */}
+            <AntButton
+              type={view === "history" ? "primary" : "default"}
+              className="!h-8 !px-2 shrink-0"
+              icon={<IconHistory size={15} />}
+              onClick={async () => {
+                if (view === 'pos') {
+                  setView('history');
+                  setHistoryLoading(true);
+                  try {
+                    const res = await fetch(`${API}/sales`, {
+                      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+                    });
+                    const data = await res.json();
+                    setSalesHistory(Array.isArray(data) ? data : []);
+                  } catch (e) {
+                    console.error("Error fetching sales history", e);
+                  } finally {
+                    setHistoryLoading(false);
+                  }
+                } else {
+                  setView('pos');
+                }
+              }}
+            >
+              <span className="font-bold text-[10px]">Historial</span>
+            </AntButton>
+
+            <AntButton
+              className="!h-8 !px-2 shrink-0 !border-blue-500/30 !text-blue-600 hover:!bg-blue-500/5"
+              icon={<IconCalculator size={15} />}
+              onClick={() => setIsCalculatorOpen(true)}
+            >
+              <span className="text-[10px] font-bold hidden md:inline">Calculadora</span>
+            </AntButton>
+
+            <AntBadge count={waitlist.length} size="small" offset={[-4, 4]}>
+              <AntButton
+                className="!h-8 !px-2 shrink-0 !border-amber-500/30 !text-amber-600 hover:!bg-amber-500/5"
+                icon={<IconAlertCircle size={15} />}
+                onClick={() => {
+                  fetchWaitlist();
+                  setIsWaitlistOpen(true);
+                }}
+              >
+                <span className="text-[10px] font-bold hidden md:inline">Lista de Espera</span>
+              </AntButton>
+            </AntBadge>
+
+            <AntBadge count={parkedTickets.length} size="small" offset={[-4, 4]}>
+              <AntButton
+                className="!h-8 !px-2 shrink-0"
+                icon={<IconPlayerPause size={13} />}
+                onClick={() => setIsParkedModalOpen(true)}
+              >
+                <span className="text-[10px] font-bold hidden md:inline">Tickets en Pausa</span>
+              </AntButton>
+            </AntBadge>
+          </div>
+
+          {view === "pos" ? (
+            <div className="flex-1 overflow-y-auto pr-1">
+              {loading ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                  {[...Array(12)].map((_, i) => (
+                    <div key={i} className="animate-pulse border rounded-md overflow-hidden bg-muted/20 aspect-[3/4]">
+                      <div className="h-32 bg-muted/40" />
+                      <div className="p-4 space-y-2">
+                        <div className="h-4 bg-muted/40 w-3/4 rounded" />
+                        <div className="h-4 bg-muted/40 w-1/4 rounded" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50 pt-20">
+                  <IconBox size={60} stroke={1} className="mb-4" />
+                  <p className="text-xl font-black uppercase tracking-widest text-center">Sin resultados</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-8">
+                  {filteredProducts.map(p => (
+                    <AntCard
+                      key={p.id}
+                      hoverable
+                      size="small"
+                      className={cn(
+                        "relative overflow-hidden",
+                        p.totalStock <= 0 && "opacity-60 grayscale-[0.5]"
+                      )}
+                      styles={{ body: { padding: 8 } }}
+                      onClick={() => addToCart(p)}
+                      cover={
+                        <div className="aspect-square relative overflow-hidden bg-muted/30">
+                          {p.image ? (
+                            <img src={p.image} alt={p.name} loading="lazy" decoding="async" className="object-cover w-full h-full" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-muted-foreground/20">
+                              <IconBox size={40} stroke={1} />
+                            </div>
+                          )}
+                        </div>
+                      }
+                    >
+                      {/* Badge de Agotado superpuesto */}
+                      {p.totalStock <= 0 && (
+                        <div className="absolute top-2 right-2 z-10">
+                          <AntTag color="error" className="!text-[8px] !leading-4 !py-0 !px-1.5 !m-0 font-bold uppercase">Agotado</AntTag>
+                        </div>
+                      )}
+                      <div className="flex flex-col h-full">
+                        <p className="font-semibold text-[11px] leading-tight line-clamp-2" title={p.name}>{p.name}</p>
+                        <div className="flex items-end justify-between mt-auto pt-2">
+                          <span className="font-bold text-xs">${(p.variants?.[0]?.price || 0).toFixed(2)}</span>
+                          <div className="flex flex-col items-end gap-0.5 mt-1 text-right shrink-0">
+                            <p className="text-[9px] font-mono text-muted-foreground uppercase leading-none" title="SKU Interno">
+                              {p.variants?.[0]?.sku || 'S/SKU'}
+                            </p>
+                            {p.variants?.[0]?.barcode && (
+                              <p className="text-[8.5px] font-mono text-muted-foreground/60 flex items-center justify-end gap-1 leading-none" title="Código de Barras">
+                                <IconBarcode size={10} stroke={1.5} />
+                                {p.variants[0].barcode}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </AntCard>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex-1 bg-background border rounded-lg overflow-hidden flex flex-col shadow-sm">
+              <div className="p-4 border-b bg-muted/10 flex justify-between items-center">
+                <div>
+                  <h2 className="text-sm font-bold flex items-center gap-2">
+                    <IconReceipt size={16} className="text-primary" /> Historial de Ventas
+                  </h2>
+                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">Control de actividad de facturación</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <AntInput
+                    prefix={<IconSearch className="text-muted-foreground" size={13} />}
+                    placeholder="Buscar por cliente o cédula..."
+                    className="!h-7 !text-[11px] w-60"
+                    value={historySearchTerm}
+                    onChange={(e) => setHistorySearchTerm(e.target.value)}
+                  />
+                  <AntButton size="small" className="!h-8 !text-[10px] uppercase font-bold tracking-widest" onClick={() => setView('pos')}>
+                    Volver al POS
+                  </AntButton>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-auto bg-muted/5">
+                {historyLoading ? (
+                  <div className="p-6 space-y-4">
+                    {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-md" />)}
+                  </div>
+                ) : filteredSalesHistory.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-40 py-20">
+                    <IconHistory size={48} stroke={1} className="mb-2" />
+                    <p className="text-xs font-bold uppercase tracking-widest">Sin ventas registradas</p>
+                  </div>
+                ) : (
+                  <div className="min-w-full inline-block align-middle">
+                    <table className="w-full text-sm">
+                      <thead className="bg-background sticky top-0 border-b z-10">
+                        <tr>
+                          <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">ID Venta</th>
+                          <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Fecha / Hora</th>
+                          <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Cliente</th>
+                          <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Cajero</th>
+                          <th className="p-4 text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Artículos</th>
+                          <th className="p-4 text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Total USD</th>
+                          <th className="p-4 text-center font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y bg-background/50">
+                        {filteredSalesHistory.map((sale) => (
+                          <tr
+                            key={sale.id}
+                            className="hover:bg-muted/10 transition-colors group cursor-pointer"
+                            onClick={() => {
+                              setSelectedSale(formatSaleObject(sale));
+                              setIsDetailModalOpen(true);
+                            }}
+                          >
+                            <td className="p-4">
+                              <code className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded uppercase">
+                                #{sale.id.slice(-6)}
+                              </code>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-[11px]">{new Date(sale.createdAt).toLocaleDateString()}</span>
+                                <span className="text-[10px] text-muted-foreground font-medium">{new Date(sale.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center gap-2">
+                                <div className="size-7 rounded-full bg-muted flex items-center justify-center border">
+                                  <IconUser size={12} className="text-muted-foreground opacity-70" />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-[11px] font-bold group-hover:text-primary transition-colors">{sale.client?.name || "Consumidor Final"}</span>
+                                  <span className="text-[9px] text-muted-foreground">{sale.client?.documentId || "No identificado"}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4 text-xs font-semibold text-zinc-300">
+                              {sale.user?.name || "Desconocido"}
+                            </td>
+                            <td className="p-4 text-right">
+                              <div className="inline-flex flex-col items-end">
+                                <span className="font-bold text-[10px] px-1.5 py-0.5 rounded-full bg-muted/50 border text-muted-foreground">
+                                  {sale.items?.length || 0} ITEMS
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-4 text-right font-black text-xs tabular-nums text-foreground/90">
+                              ${sale.total?.toFixed(2)}
+                            </td>
+                            <td className="p-4 text-center">
+                              <div className="flex items-center justify-center gap-3">
+                                <AntTag color="success" className="!text-[9px] font-black tracking-widest !m-0">COMPLETA</AntTag>
+                                <AntButton
+                                  type="text"
+                                  size="small"
+                                  className="!h-8 !w-8 !p-0 !min-w-0 text-amber-500"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openReturnModal(sale);
+                                  }}
+                                  title="Procesar Devolución"
+                                  icon={<IconArrowBackUp size={18} />}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* SECCIÓN DERECHA: CARRITO Y PAGO */}
+        <div className="w-full lg:w-[360px] flex flex-col h-full bg-background border rounded-lg overflow-hidden shadow-sm shrink-0">
+          <div className="p-3 border-b bg-muted/10 shrink-0">
+            <div className="flex justify-between items-start">
+              <div>
+                <h2 className="text-xs font-bold flex items-center gap-1.5">
+                  <IconShoppingCart className="text-primary size-3.5" /> Ticket Actual
+                </h2>
+                <p className="text-[9px] text-muted-foreground mt-0.5">
+                  {cart.length} productos • {new Date().toLocaleDateString()}
+                </p>
+              </div>
+              <div className="flex items-center gap-1">
+                <AntButton
+                  type="text"
+                  size="small"
+                  className="!h-7 !w-7 !p-0 !min-w-0 text-blue-600"
+                  onClick={parkTicket}
+                  title="Poner ticket en espera"
+                  icon={<IconPlayerPause size={14} />}
+                />
+                <AntButton
+                  type="text"
+                  danger
+                  size="small"
+                  className="!h-7 !w-7 !p-0 !min-w-0"
+                  onClick={() => setCart([])}
+                  title="Vaciar carrito"
+                  icon={<IconTrash size={14} />}
+                />
+              </div>
+            </div>
+
+            <AntDivider className="!mt-2 !mb-2" />
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center px-0.5">
+                <Label className="text-[9px] font-black uppercase text-[#79716b] tracking-widest">Identificación Cliente</Label>
+                <button className="text-primary text-[9px] font-bold hover:underline" onClick={() => setIsQuickClientOpen(true)}>
+                  + NUEVO
+                </button>
+              </div>
+              <div className="relative">
+                <AntInput
+                  placeholder="Buscar por cédula / RIF... (Enter)"
+                  value={clientDocSearch}
+                  onChange={e => setClientDocSearch(e.target.value)}
+                  onKeyDown={handleClientDocSearch}
+                  className="!h-7 !text-xs"
+                  disabled={searchingClient}
+                  suffix={searchingClient ? <IconRefresh size={10} className="animate-spin text-muted-foreground" /> : null}
+                />
+              </div>
+              <AntSelect
+                value={selectedClientId}
+                onChange={setSelectedClientId}
+                className="w-full"
+                placeholder="Seleccionar Cliente"
+                showSearch
+                optionFilterProp="label"
+                options={[
+                  { value: "consumidor-final", label: "Consumidor Final" },
+                  ...clients.map(c => ({
+                    value: c.id || (c as any)._id,
+                    label: `${c.name} (${c.documentId || 'S/D'})`,
+                  })),
+                ]}
+              />
+              {selectedClientId !== "consumidor-final" && (() => {
+                const c = clients.find(cl => (cl.id || (cl as any)._id) === selectedClientId) as any;
+                if (c) {
+                  return (
+                    <div className="space-y-2 mt-2">
+                      {/* Wallet Balance */}
+                      {(c.walletBalance || 0) > 0 && (
+                        <AntAlert
+                          type="success"
+                          showIcon
+                          icon={<IconWallet size={14} />}
+                          message={
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold uppercase tracking-widest">Saldo a Favor</span>
+                              <span className="text-sm font-black tabular-nums">${(c.walletBalance || 0).toFixed(2)}</span>
+                            </div>
+                          }
+                        />
+                      )}
+
+                      {/* Current Debt & Abono */}
+                      {(c.currentDebt || 0) > 0 && (() => {
+                        const available = (c.creditLimit || 0) - (c.currentDebt || 0);
+                        const isBlocked = c.hasAccount && (available <= 0.01);
+                        return (
+                          <AntAlert
+                            type={isBlocked ? "error" : "warning"}
+                            showIcon
+                            icon={isBlocked ? <IconAlertTriangle size={14} /> : <IconHistory size={14} />}
+                            message={
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold uppercase tracking-widest">
+                                  {isBlocked ? "Crédito Bloqueado" : "Deuda Activa"}
+                                </span>
+                                <span className="text-sm font-black tabular-nums">${(c.currentDebt || 0).toFixed(2)}</span>
+                              </div>
+                            }
+                            description={
+                              <div className="flex flex-col gap-2 mt-1">
+                                {isBlocked && (
+                                  <p className="text-[9px] font-semibold leading-normal text-left">
+                                    El cupo está agotado. Debe realizar un abono para volver a activar las compras a crédito.
+                                  </p>
+                                )}
+                                <AntButton
+                                  danger={isBlocked}
+                                  type={isBlocked ? "primary" : "default"}
+                                  size="small"
+                                  className="w-full !text-[10px] font-bold uppercase tracking-wider"
+                                  onClick={() => {
+                                    setAbonoAmount(c.currentDebt.toString());
+                                    setIsPaymentModalAbonoOpen(true);
+                                  }}
+                                >
+                                  Abonar a Deuda
+                                </AntButton>
+                              </div>
+                            }
+                          />
+                        );
+                      })()}
+
+                      {/* SyncroCredit Radial (shows if they have a registered account) */}
+                      {c.hasAccount && (
+                        <div className="animate-in fade-in duration-300">
+                          <CreditRadial client={c} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {cart.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center py-20 opacity-40">
+                <AntEmpty description={<span className="text-xs font-bold uppercase tracking-widest">Carrito Vacío</span>} />
+              </div>
+            ) : (
+              cart.map(item => (
+                <div
+                  key={item.product.variantId || item.product.id}
+                  className="p-3 rounded-lg border bg-muted/5 flex flex-col gap-2 relative group hover:border-primary/40 transition-colors"
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <p className="font-bold text-[11px] leading-tight flex-1 group-hover:text-primary transition-colors">{item.product.name}</p>
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      <div className="flex flex-col items-end">
+                        {item.discount ? (
+                          <>
+                            <p className="font-bold text-xs text-rose-500 line-through opacity-70">${(item.product.price * item.quantity).toFixed(2)}</p>
+                            <p className="font-bold text-[13px] text-emerald-500">
+                              ${(Math.max(0, (item.product.price * item.quantity) - (item.discount.type === 'pct' ? (item.product.price * item.quantity) * (item.discount.value / 100) : item.discount.value))).toFixed(2)}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="font-bold text-xs">${(item.product.price * item.quantity).toFixed(2)}</p>
+                        )}
+                      </div>
+                      <p className="text-[9px] font-mono text-muted-foreground uppercase leading-none">
+                        {item.product.sku || 'S/SKU'}
+                      </p>
+                      {item.product.barcode && (
+                        <p className="text-[8.5px] font-mono text-muted-foreground/60 flex items-center gap-1 leading-none">
+                          <IconBarcode size={9} stroke={1.5} />
+                          {item.product.barcode}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center border rounded h-7">
+                      <AntButton type="text" size="small" className="!h-6 !w-6 !p-0 !min-w-0 rounded-none border-r" onClick={(e) => { e.stopPropagation(); updateQuantity(item.product.id, -1); }} icon={<IconMinus size={10} />} />
+                      <span className="w-8 text-center text-[10px] font-bold">{item.quantity}</span>
+                      <AntButton type="text" size="small" className="!h-6 !w-6 !p-0 !min-w-0 rounded-none border-l" onClick={(e) => { e.stopPropagation(); updateQuantity(item.product.id, 1); }} icon={<IconPlus size={10} />} />
+                    </div>
+                    <div className="flex gap-1 items-center">
+                      <AntButton type="text" size="small" title="Editar Cantidad / Peso" className="!h-6 !w-6 !p-0 !min-w-0 text-blue-500" onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingCartItemId(item.product.id);
+                        setEditingCartItemName(item.product.name);
+                        setEditingCartItemPrice(item.product.price);
+                        setWeightValue(String(item.quantity));
+                        setWeightUnit('ud');
+                        setIsWeightModalOpen(true);
+                      }} icon={<IconScale size={14} />} />
+                      <AntButton type="text" size="small" title="Aplicar Descuento" className="!h-6 !w-6 !p-0 !min-w-0 text-emerald-500" onClick={(e) => {
+                        e.stopPropagation();
+                        openPinVerification(() => {
+                          setTargetDiscountId(item.product.id);
+                          setDiscountType('pct');
+                          setDiscountValueInput('');
+                          setIsDiscountModalOpen(true);
+                        });
+                      }} icon={<IconDiscount size={12} />} />
+                      <AntButton type="text" danger size="small" className="!h-6 !w-6 !p-0 !min-w-0" onClick={(e) => { e.stopPropagation(); removeFromCart(item.product.id); }} icon={<IconTrash size={12} />} />
+                    </div>
+                  </div>
+                  {item.discount && (
+                    <div className="flex justify-start">
+                      <AntTag
+                        color="success"
+                        className="!text-[9px] !leading-4 !py-0 !px-1 !m-0 flex items-center gap-1 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Remove discount
+                          setCart(prev => prev.map(c => c.product.id === item.product.id ? { ...c, discount: undefined } : c));
+                        }}
+                      >
+                        <IconDiscount size={8} />
+                        {item.discount.type === 'pct' ? `${item.discount.value}%` : `$${item.discount.value}`} OFF
+                        <IconX size={8} className="ml-1" />
+                      </AntTag>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="p-3 border-t bg-muted/5 shrink-0 space-y-2.5">
+            <div className="space-y-1 px-1">
+              <div className="flex justify-between text-[11px] font-medium text-muted-foreground group relative cursor-pointer" onClick={() => {
+                openPinVerification(() => {
+                  setTargetDiscountId('GLOBAL');
+                  setDiscountType('pct');
+                  setDiscountValueInput('');
+                  setIsDiscountModalOpen(true);
+                });
+              }}>
+                <span className="flex items-center gap-1 border-b border-dashed border-muted-foreground/30 hover:border-emerald-500 hover:text-emerald-500 transition-colors">
+                  <IconDiscount size={11} /> Descuento Global
+                </span>
+                <span className={cn("tabular-nums", totalDiscountAmt > 0 ? "text-emerald-500 font-bold" : "")}>
+                  {totalDiscountAmt > 0 ? `-$${totalDiscountAmt.toFixed(2)}` : '$0.00'}
+                </span>
+              </div>
+              <div className="flex justify-between text-[11px] font-medium text-muted-foreground">
+                <span>Subtotal (Neto)</span>
+                <span className="tabular-nums">${subtotalAfterGlobalDiscount.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-[11px] font-medium text-muted-foreground">
+                <span>IVA ({taxRate}%)</span>
+                <span className="tabular-nums">${taxAmount.toFixed(2)}</span>
+              </div>
+            </div>
+            <div className="flex justify-between items-center pt-1.5 border-t">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[11px] font-bold text-foreground">Total Checkout</span>
+                <span className="text-[9px] text-muted-foreground font-medium tabular-nums">~ Bs {(updatedTotal * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <span className="text-xl font-black tracking-tight tabular-nums">${updatedTotal.toFixed(2)}</span>
+            </div>
+            <AntButton
+              type="primary"
+              size="large"
+              className="w-full !h-10 font-semibold !text-xs"
+              onClick={() => openPaymentModal("CASH")}
+              disabled={cart.length === 0 || processing}
+              icon={<IconCash className="size-4" />}
+            >
+              Procesar Pago
+            </AntButton>
+          </div>
+        </div>
+      </div>
+
+      <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
+        <DialogContent className="sm:max-w-5xl lg:max-w-6xl gap-0 p-0 overflow-hidden border shadow-2xl rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-12 h-full max-h-[90vh]">
+
+            {/* LEFT COLUMN: ORDER SUMMARY */}
+            <div className="md:col-span-5 bg-muted/20 border-r flex flex-col overflow-hidden">
+              <div className="p-5 border-b bg-background/50">
+                <DialogTitle className="text-base font-semibold tracking-tight text-foreground flex items-center gap-2">
+                  <IconList className="size-4 text-primary" /> Resumen de Compra
+                </DialogTitle>
+                <p className="text-[11px] text-muted-foreground font-medium mt-0.5">{cart.length} productos en el carrito</p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {cart.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center p-3 rounded-md bg-background border border-border/50 shadow-sm transition-all hover:border-primary/20">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[13px] font-semibold text-foreground truncate max-w-[220px]">{item.product.name}</span>
+                      <span className="text-[11px] text-muted-foreground font-medium">{item.quantity} x ${item.product.price.toFixed(2)}</span>
+                    </div>
+                    <div className="text-right flex flex-col">
+                      <span className="text-[13px] font-bold text-foreground">${(item.quantity * item.product.price).toFixed(2)}</span>
+                      <span className="text-[10px] text-muted-foreground font-medium">Bs {((item.quantity * item.product.price) * currentExchangeRate).toLocaleString('es-VE')}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-5 bg-background border-t space-y-2">
+                <div className="flex justify-between items-center text-muted-foreground">
+                  <span className="text-xs font-medium">Subtotal</span>
+                  <span className="text-sm font-semibold text-foreground/80">${subtotal.toFixed(2)}</span>
+                </div>
+                {taxAmount > 0 && (
+                  <div className="flex justify-between items-center text-muted-foreground">
+                    <span className="text-xs font-medium">IVA ({taxRate}%)</span>
+                    <span className="text-sm font-semibold text-foreground/80">${taxAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="text-[13px] font-semibold text-foreground">Total Bruto</span>
+                  <span className="text-lg font-bold text-foreground">${updatedTotal.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: PAYMENT PROCESSING */}
+            <div className="md:col-span-7 flex flex-col overflow-hidden bg-background">
+              <div className="p-5 border-b flex justify-between items-center h-[69px]">
+                <div>
+                  <DialogTitle className="text-base font-semibold tracking-tight text-foreground">Procesar Pago</DialogTitle>
+                  <p className="text-[11px] text-muted-foreground font-medium">Complete la información de pago</p>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1.5 mr-6 rounded-full bg-muted/40 border">
+                  <IconUser size={14} className="text-muted-foreground" />
+                  <span className="text-[11px] font-semibold truncate max-w-[150px]" title={selectedClient ? selectedClient.name : "Consumidor Final"}>
+                    {selectedClient ? selectedClient.name : "Consumidor Final"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+                {/* Total Display */}
+                <div className="p-6 rounded-lg bg-primary/5 border border-primary/20 flex flex-col gap-3">
+                  <p className="text-xs font-semibold text-primary/70 tracking-tight">Monto Total a Pagar</p>
+                  <div className="flex flex-wrap items-baseline gap-x-8 gap-y-1">
+                    <p className="text-4xl font-bold tracking-tight text-primary">${finalTotalWithIgtf.toFixed(2)}</p>
+                    <p className="text-3xl font-bold tracking-tight text-primary/50 tabular-nums">Bs {(finalTotalWithIgtf * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                  {igtfAmount > 0 && <p className="text-[11px] font-semibold text-emerald-600 bg-emerald-500/10 self-start px-2 py-0.5 rounded">+ IGTF (3%) Incluido</p>}
+                </div>
+
+                {/* Wallet Toggle */}
+                {selectedClientId !== "consumidor-final" && availableWallet > 0 && (
+                  <div className={cn(
+                    "flex items-center justify-between p-4 rounded-lg border transition-all",
+                    useWalletBalance ? "bg-emerald-500/5 border-emerald-500/30" : "bg-muted/30 border-transparent opacity-80"
+                  )}>
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "p-2 rounded-md",
+                        useWalletBalance ? "bg-emerald-500 text-white" : "bg-background text-muted-foreground"
+                      )}>
+                        <IconWallet size={18} stroke={2} />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[13px] font-semibold text-foreground">Saldo a Favor</span>
+                        <span className="text-[11px] text-muted-foreground font-medium">Disponible: ${availableWallet.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <Switch checked={useWalletBalance} onCheckedChange={setUseWalletBalance} />
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground tracking-tight">Métodos de Pago</h4>
+                  </div>
+
+                  {/* Payment Entry Form: Dynamic Grid based on method */}
+                  {remainingToPay > 0.001 && (addedPayments.length === 0 || showSplitPaymentForm) && (
+                    <>
+                      <div className="grid grid-cols-12 gap-3 items-start animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className={cn(tempPaymentMethod === "CASH" ? "col-span-4" : tempPaymentMethod === "CREDIT" ? "col-span-6" : "col-span-3")}>
+                          <Select value={tempPaymentMethod} onValueChange={(v: any) => setTempPaymentMethod(v)}>
+                            <SelectTrigger className="h-10 rounded-md font-medium text-[13px] border-border/60">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="CASH" disabled={addedPayments.some(p => p.method === "CASH")}>Efectivo</SelectItem>
+                              <SelectItem value="CARD" disabled={addedPayments.some(p => p.method === "CARD")}>Tarjeta (Punto)</SelectItem>
+                              <SelectItem value="TRANSFER" disabled={addedPayments.some(p => p.method === "TRANSFER")}>Transferencia</SelectItem>
+                              {settings?.pagoMovilEnabled && <SelectItem value="PAGO_MOVIL" disabled={addedPayments.some(p => p.method === "PAGO_MOVIL")}>Pago Móvil</SelectItem>}
+                              {settings?.binanceEnabled && <SelectItem value="BINANCE" disabled={addedPayments.some(p => p.method === "BINANCE")}>Binance Pay</SelectItem>}
+                              {settings?.zinliEnabled && <SelectItem value="ZINLI" disabled={addedPayments.some(p => p.method === "ZINLI")}>Zinli</SelectItem>}
+                              {settings?.paypalEnabled && <SelectItem value="PAYPAL" disabled={addedPayments.some(p => p.method === "PAYPAL")}>PayPal</SelectItem>}
+                              <SelectItem value="WALLET" disabled={addedPayments.some(p => p.method === "WALLET")}>Monedero</SelectItem>
+                              <SelectItem
+                                value="CREDIT"
+                                disabled={
+                                  addedPayments.some(p => p.method === "CREDIT") ||
+                                  (selectedClient?.hasAccount && ((selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0) <= 0.01 && (selectedClient?.currentDebt || 0) > 0))
+                                }
+                              >
+                                {(selectedClient?.hasAccount && ((selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0) <= 0.01 && (selectedClient?.currentDebt || 0) > 0))
+                                  ? "Crédito / Fiado (Bloqueado)"
+                                  : "Crédito / Fiado"
+                                }
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          {tempPaymentMethod === "CREDIT" && (selectedClientId === "consumidor-final" || !selectedClient?.hasAccount || creditType === "traditional") && (
+                            <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-500">
+                              <div className="space-y-2 px-1">
+                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.15em] ml-0.5">
+                                  Fecha Promesa de Pago
+                                </label>
+                                <Popover>
+                                  <PopoverTrigger asChild disabled={selectedClientId === "consumidor-final"}>
+                                    <Button
+                                      variant="outline"
+                                      className={cn(
+                                        "w-full h-10 justify-start text-left font-bold text-[13px] rounded-lg border-border/40 bg-muted/20 hover:bg-muted/30 hover:border-primary/30 transition-all duration-300 shadow-sm px-3",
+                                        (!promisedPaymentDate || selectedClientId === "consumidor-final") && "text-muted-foreground"
+                                      )}
+                                    >
+                                      <div className="size-7 rounded-md bg-primary/10 flex items-center justify-center mr-2.5 text-primary shrink-0">
+                                        <IconCalendarTabler size={16} stroke={2.5} />
+                                      </div>
+                                      <span className="flex-1 whitespace-nowrap overflow-hidden">
+                                        {selectedClientId === "consumidor-final"
+                                          ? "Seleccione un cliente para fiar"
+                                          : promisedPaymentDate ? format(promisedPaymentDate, "PPP", { locale: es }) : "Seleccionar fecha"}
+                                      </span>
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-2xl overflow-hidden" align="end">
+                                    <div className="bg-gradient-to-br from-card to-muted/50 p-1">
+                                      <Calendar
+                                        mode="single"
+                                        selected={promisedPaymentDate}
+                                        onSelect={setPromisedPaymentDate}
+                                        initialFocus
+                                        locale={es}
+                                        className="rounded-xl border-none"
+                                      />
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                                {selectedClientId !== "consumidor-final" ? (
+                                  <p className="text-[10px] text-muted-foreground/60 italic ml-1 flex items-center gap-1">
+                                    <IconAlertCircle size={10} /> El sistema notificará automáticamente este día.
+                                  </p>
+                                ) : (
+                                  <p className="text-[10px] text-destructive font-bold italic ml-1 flex items-center gap-1">
+                                    <IconAlertCircle size={10} /> No se puede fiar al Consumidor Final.
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {tempPaymentMethod === "WALLET" && selectedClientId !== "consumidor-final" && (
+                            <div className="mt-1 flex items-center gap-1.5 px-1 animate-in fade-in slide-in-from-top-1 duration-300">
+                              <div className="size-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                              <span className="text-[9px] font-bold text-blue-600 tracking-tight uppercase">Saldo: ${availableWallet.toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {tempPaymentMethod !== "CASH" && tempPaymentMethod !== "CREDIT" && (
+                          <div className="col-span-3">
+                            <Input
+                              className="h-10 rounded-md text-[13px] font-medium border-border/60"
+                              value={tempReference}
+                              onChange={(e) => setTempReference(e.target.value)}
+                              placeholder="Referencia"
+                            />
+                          </div>
+                        )}
+
+                        {tempPaymentMethod !== "CREDIT" && (
+                          <div className={cn(tempPaymentMethod === "CASH" ? "col-span-6" : "col-span-4", "relative group")}>
+                            <button
+                              type="button"
+                              onClick={() => setTempCurrency(tempCurrency === "USD" ? "VES" : "USD")}
+                              className={cn(
+                                "absolute left-1.5 top-1.5 size-7 rounded flex items-center justify-center text-[11px] font-bold transition-all z-10 shadow-sm",
+                                tempCurrency === "USD" ? "bg-primary text-primary-foreground" : "bg-emerald-500 text-white"
+                              )}
+                            >
+                              {tempCurrency === "USD" ? "$" : "Bs"}
+                            </button>
+                            <Input
+                              type="number"
+                              className="pl-10 h-10 rounded-md text-[13px] font-semibold border-border/60 tracking-tight"
+                              value={tempAmount}
+                              onChange={(e) => setTempAmount(e.target.value)}
+                              placeholder="0.00"
+                              onFocus={(e) => e.target.select()}
+                            />
+                          </div>
+                        )}
+
+                        {tempPaymentMethod === "CREDIT" && selectedClient && (selectedClient.currentDebt || 0) > 0 && (
+                          <div className="col-span-6 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div className="flex items-center gap-2">
+                              <IconHistory className="text-amber-600 size-5" />
+                              <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-500 tracking-tight">Deuda Previa Abierta</span>
+                            </div>
+                            <div className="flex flex-col text-right">
+                              <span className="text-[10px] font-bold text-amber-600/80 uppercase">Libreta Actual</span>
+                              <span className="text-sm font-black text-amber-600 tabular-nums">${(selectedClient.currentDebt || 0).toFixed(2)}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {tempPaymentMethod !== "CREDIT" && (
+                          <div className="col-span-2">
+                            <Button
+                              className="w-full h-10 rounded-md text-xs font-semibold"
+                              onClick={() => {
+                                const amountNum = Number(tempAmount);
+                                if (isNaN(amountNum) || amountNum <= 0) return;
+                                let usdAmount = amountNum;
+                                let vesAmount = amountNum * currentExchangeRate;
+                                if (tempCurrency === "VES") {
+                                  usdAmount = amountNum / currentExchangeRate;
+                                  vesAmount = amountNum;
+                                }
+                                setAddedPayments([...addedPayments, {
+                                  method: tempPaymentMethod,
+                                  amount: usdAmount,
+                                  amountLocal: vesAmount,
+                                  exchangeRate: currentExchangeRate,
+                                  reference: tempReference
+                                }]);
+                                setTempAmount("0");
+                                setTempReference("");
+                                setShowSplitPaymentForm(false);
+                              }}
+                            >
+                              Añadir
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      {tempPaymentMethod === "PAGO_MOVIL" && (
+                        <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                          <div className="flex items-center gap-2">
+                            <IconDevices className="text-blue-500 size-5" />
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 hidden sm:block">Datos Pago Móvil</span>
+                          </div>
+                          <div className="flex gap-4">
+                            <div className="flex flex-col text-right">
+                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Banco</span>
+                              <span className="text-xs font-semibold">{settings?.pagoMovilBank || "-"}</span>
+                            </div>
+                            <div className="flex flex-col text-right">
+                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Cédula/RIF</span>
+                              <span className="text-xs font-semibold">{settings?.pagoMovilId || "-"}</span>
+                            </div>
+                            <div className="flex flex-col text-right">
+                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Teléfono</span>
+                              <span className="text-xs font-semibold">{settings?.pagoMovilPhone || "-"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {tempPaymentMethod === "BINANCE" && (
+                        <div className="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                          <div className="flex items-center gap-2">
+                            <IconHexagon className="text-yellow-600 size-5" />
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-yellow-600 hidden sm:block">Datos Binance Pay</span>
+                          </div>
+                          <div className="flex gap-4">
+                            <div className="flex flex-col text-right">
+                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Binance ID</span>
+                              <span className="text-xs font-semibold">{settings?.binanceId || "-"}</span>
+                            </div>
+                            <div className="flex flex-col text-right">
+                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo</span>
+                              <span className="text-xs font-semibold">{settings?.binanceEmail || "-"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {tempPaymentMethod === "ZINLI" && (
+                        <div className="p-3 bg-purple-500/5 border border-purple-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                          <div className="flex items-center gap-2">
+                            <IconWorld className="text-purple-600 size-5" />
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-purple-600 hidden sm:block">Datos Zinli</span>
+                          </div>
+                          <div className="flex gap-4">
+                            <div className="flex flex-col text-right">
+                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo Zinli</span>
+                              <span className="text-xs font-semibold">{settings?.zinliEmail || "-"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {tempPaymentMethod === "PAYPAL" && (
+                        <div className="p-3 bg-blue-700/5 border border-blue-700/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                          <div className="flex items-center gap-2">
+                            <IconBuilding className="text-blue-800 size-5" />
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-800 hidden sm:block">Datos PayPal</span>
+                          </div>
+                          <div className="flex gap-4">
+                            <div className="flex flex-col text-right">
+                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo PayPal</span>
+                              <span className="text-xs font-semibold">{settings?.paypalEmail || "-"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* List of Added Payments (Locked Rows) */}
+                  {addedPayments.length > 0 && (
+                    <div className="space-y-3">
+                      {addedPayments.map((p, i) => {
+                        const isCash = p.method === "CASH";
+                        const isCredit = p.method === "CREDIT";
+                        const hasRef = !isCash && !isCredit;
+
+                        const methodNames: Record<string, string> = {
+                          CASH: "Efectivo",
+                          CARD: "Tarjeta (Punto)",
+                          TRANSFER: "Transferencia",
+                          PAGO_MOVIL: "Pago Móvil",
+                          BINANCE: "Binance Pay",
+                          ZINLI: "Zinli",
+                          PAYPAL: "PayPal",
+                          WALLET: "Monedero",
+                          CREDIT: "Crédito / Fiado"
+                        };
+
+                        return (
+                          <div key={i} className="grid grid-cols-12 gap-3 items-center p-3 rounded-lg border border-border/50 bg-muted/20 relative group transition-all duration-300">
+                            {/* Payment Method Select (Locked/Disabled) */}
+                            <div className={cn(isCash ? "col-span-4" : isCredit ? "col-span-6" : "col-span-3")}>
+                              <Select value={p.method} disabled>
+                                <SelectTrigger className="h-10 rounded-md font-semibold text-[13px] border-border/60 bg-muted/30 text-foreground/80 opacity-95 cursor-not-allowed">
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    <IconLock size={12} className="text-muted-foreground shrink-0" />
+                                    <SelectValue />
+                                  </div>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value={p.method}>{methodNames[p.method] || p.method}</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {/* Reference Input (Locked/Disabled) */}
+                            {hasRef && (
+                              <div className="col-span-3">
+                                <Input
+                                  className="h-10 rounded-md text-[13px] font-medium border-border/60 bg-muted/30 text-foreground/80 opacity-95 cursor-not-allowed"
+                                  value={p.reference || ""}
+                                  disabled
+                                  placeholder="Referencia"
+                                />
+                              </div>
+                            )}
+
+                            {/* Amount Input (Locked/Disabled) */}
+                            {!isCredit && (
+                              <div className={cn(isCash ? "col-span-6" : "col-span-4", "relative")}>
+                                <span className="absolute left-3 top-2.5 text-[11px] font-bold text-muted-foreground/80">$</span>
+                                <Input
+                                  className="pl-6 h-10 rounded-md text-[13px] font-semibold border-border/60 bg-muted/30 text-foreground/80 opacity-95 cursor-not-allowed tracking-tight"
+                                  value={p.amount.toFixed(2)}
+                                  disabled
+                                />
+                              </div>
+                            )}
+
+                            {isCredit && (
+                              <div className="col-span-4 flex items-center justify-end px-2">
+                                <span className="text-[11px] font-bold text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                                  Por Cobrar en Libreta
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Delete Button */}
+                            <div className="col-span-2 flex justify-end">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-10 w-full rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors border border-dashed border-border/60 hover:border-destructive/30"
+                                onClick={() => {
+                                  setAddedPayments(addedPayments.filter((_, idx) => idx !== i));
+                                  setShowSplitPaymentForm(false);
+                                }}
+                                title="Eliminar este pago"
+                              >
+                                <IconTrash size={16} />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Add Another Payment Method Button */}
+                  {remainingToPay > 0.001 && addedPayments.length > 0 && !showSplitPaymentForm && (
+                    <div className="animate-in fade-in zoom-in-95 duration-300">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full py-6 border-dashed border-primary/30 hover:border-primary text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2 rounded-xl font-bold text-xs tracking-wider uppercase"
+                        onClick={() => setShowSplitPaymentForm(true)}
+                      >
+                        <IconPlus size={16} />
+                        Agregar otro método de pago
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Status Display Area */}
+                  <div className="pt-2">
+                    {remainingToPay > 0.001 ? (
+                      <div className="p-8 rounded-lg bg-amber-500/5 border border-amber-500/20 flex flex-col items-center gap-2 shadow-sm">
+                        <span className="text-[12px] font-semibold text-amber-600 tracking-tight">Pendiente por Cobrar</span>
+                        <div className="flex flex-col items-center gap-1 text-center">
+                          <span className="text-5xl font-bold text-amber-500 tabular-nums tracking-tighter leading-none">${remainingToPay.toFixed(2)}</span>
+                          <span className="text-4xl font-bold text-amber-500/70 tabular-nums tracking-tighter leading-none">
+                            Bs {(remainingToPay * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                    ) : changeDue > 0.001 ? (
+                      <div className="space-y-4">
+                        <div className="p-8 rounded-lg bg-blue-500/5 border border-blue-500/20 flex flex-col items-center gap-2 shadow-sm">
+                          <span className="text-[12px] font-semibold text-blue-600 tracking-tight">Cambio para el Cliente</span>
+                          <div className="flex flex-col items-center gap-1 text-center">
+                            <span className="text-5xl font-bold text-blue-600 tabular-nums tracking-tighter leading-none">${changeDue.toFixed(2)}</span>
+                            <span className="text-4xl font-bold text-blue-600/70 tabular-nums tracking-tighter leading-none">
+                              Bs {(changeDue * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        </div>
+                        {selectedClientId !== "consumidor-final" && (
+                          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/40 border">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-foreground/80">Abonar al monedero</span>
+                              <span className="text-[11px] text-muted-foreground font-medium">Guardar el vuelto para futuras compras</span>
+                            </div>
+                            <Switch checked={saveChangeToWallet} onCheckedChange={setSaveChangeToWallet} />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-10 rounded-lg bg-emerald-500/5 border border-emerald-500/20 flex flex-col items-center gap-4 shadow-sm">
+                        <span className="text-[13px] font-semibold text-emerald-600 tracking-tight">Pago Completado</span>
+                        <div className="size-16 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
+                          <IconCircleCheckFilled size={32} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Switch to enable/disable printing receipt */}
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-muted/40 border transition-all duration-300">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-semibold text-foreground/80">Imprimir Recibo al Finalizar</span>
+                      <span className="text-[11px] text-muted-foreground font-medium">Abrir el diálogo de impresión automáticamente al registrar la venta</span>
+                    </div>
+                    <Switch checked={printReceipt} onCheckedChange={setPrintReceipt} />
+                  </div>
+
+                  {/* SyncroCredit activation: credit chip selector + compact generate button */}
+                  {(tempPaymentMethod === 'CREDIT' || addedPayments.some((p: any) => p.method === 'CREDIT')) && selectedClientId !== "consumidor-final" && !selectedClient?.hasAccount && (
+                    <div className="flex flex-col gap-2.5 p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/20 transition-all duration-300">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Acceso a SyncroCredit</span>
+                        {selectedCreditLimit !== null && (
+                          <span className="text-[11px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold">${selectedCreditLimit} USD</span>
+                        )}
+                      </div>
+                      {/* Credit amount chips */}
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((amount) => (
+                          <button
+                            key={amount}
+                            type="button"
+                            onClick={() => setSelectedCreditLimit(selectedCreditLimit === amount ? null : amount)}
+                            className={`h-8 rounded-lg text-[11px] font-bold border transition-all duration-150 ${selectedCreditLimit === amount
+                                ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
+                                : "bg-card border-border text-foreground/70 hover:border-emerald-500/60 hover:text-emerald-700"
+                              }`}
+                          >
+                            ${amount}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Custom Credit Limit Input */}
+                      <div className="flex items-center gap-2 mt-1">
+                        <Label htmlFor="custom-credit-limit" className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 shrink-0">Límite Personalizado:</Label>
+                        <div className="relative flex-1">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">$</span>
+                          <Input
+                            id="custom-credit-limit"
+                            type="number"
+                            placeholder="Otro monto"
+                            className="h-8 pl-5 pr-2 rounded-lg text-xs bg-card border-border focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500 text-white"
+                            value={selectedCreditLimit !== null && ![10, 20, 30, 40, 50, 60, 70, 80, 90, 100].includes(selectedCreditLimit) ? selectedCreditLimit : ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "") {
+                                setSelectedCreditLimit(null);
+                              } else {
+                                setSelectedCreditLimit(Number(val));
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                      {/* Compact generate button — only enabled when a credit limit is chosen */}
+                      <Button
+                        type="button"
+                        onClick={async () => {
+                          if (!selectedClientId || selectedCreditLimit === null) return;
+                          setGeneratingPwaCode(true);
+                          try {
+                            const token = localStorage.getItem("token");
+                            const res = await fetch(`${API}/clients/${selectedClientId}/activation-code`, {
+                              method: "POST",
+                              headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`
+                              },
+                              body: JSON.stringify({ creditLimit: selectedCreditLimit })
+                            });
+                            if (res.ok) {
+                              const data = await res.json();
+                              setGeneratedPwaCode(data.activationCode);
+                              setPwaClientName(selectedClient?.name || "Cliente");
+                              setPwaClientDocument(selectedClient?.documentId || "");
+                              setShowPwaCodeModal(true);
+                              setSelectedCreditLimit(null);
+                              toast.success("Código de activación generado con éxito");
+                            } else {
+                              const err = await res.json();
+                              toast.error(err.message || "Error al generar código");
+                            }
+                          } catch (err) {
+                            toast.error("Error de conexión al generar código");
+                          } finally {
+                            setGeneratingPwaCode(false);
+                          }
+                        }}
+                        disabled={generatingPwaCode || selectedCreditLimit === null}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-lg text-[11px] font-bold shadow-sm flex items-center justify-center gap-1.5 h-8 transition-colors"
+                      >
+                        {generatingPwaCode ? (
+                          <><IconRefresh className="animate-spin size-3" /> Generando...</>
+                        ) : (
+                          <><IconDevices size={13} /> Generar Código SyncroCredit</>
+                        )}
+                      </Button>
+
+                      <div className="pt-2.5 flex items-center justify-between border-t border-emerald-500/10 mt-1">
+                        <span className="text-[10px] text-muted-foreground font-semibold">¿Ya se registró en el portal?</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            setCheckingActivation(true);
+                            await refreshSelectedClient();
+                            setCheckingActivation(false);
+                            toast.success("Estado del cliente verificado");
+                          }}
+                          disabled={checkingActivation}
+                          className="h-7 px-2.5 rounded-lg text-[10px] font-bold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-500/10 flex items-center gap-1.5 border border-dashed border-emerald-500/20"
+                        >
+                          {checkingActivation ? (
+                            <><IconRefresh className="animate-spin size-3" /> Verificando...</>
+                          ) : (
+                            <><IconRefresh size={12} /> Verificar Estado</>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Selector de Tipo de Fiado: Tradicional vs SyncroCredit */}
+                  {(tempPaymentMethod === 'CREDIT' || addedPayments.some((p: any) => p.method === 'CREDIT')) && selectedClientId !== "consumidor-final" && selectedClient?.hasAccount && (
+                    <div className="flex flex-col gap-2 p-2 bg-muted/40 border border-border/40 rounded-xl animate-in fade-in duration-200">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">Modalidad de Fiado</span>
+                      <div className="grid grid-cols-2 gap-1.5 p-1 bg-muted rounded-lg border">
+                        <button
+                          type="button"
+                          onClick={() => setCreditType("traditional")}
+                          className={`py-2 rounded-md text-xs font-bold transition-all ${creditType === "traditional"
+                              ? "bg-amber-600 text-white shadow-sm"
+                              : "text-muted-foreground hover:text-foreground"
+                            }`}
+                        >
+                          Fiado Tradicional (Libreta)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCreditType("syncrocredit")}
+                          className={`py-2 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${creditType === "syncrocredit"
+                              ? "bg-emerald-600 text-white shadow-sm"
+                              : "text-muted-foreground hover:text-foreground"
+                            }`}
+                        >
+                          <IconDevices size={14} /> SyncroCredit (Digital)
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Informacion de Fiado Tradicional */}
+                  {(tempPaymentMethod === 'CREDIT' || addedPayments.some((p: any) => p.method === 'CREDIT')) && selectedClientId !== "consumidor-final" && selectedClient?.hasAccount && creditType === 'traditional' && (
+                    <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl flex items-start gap-2.5 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                      <IconInfoCircle className="text-amber-600 shrink-0 size-4 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-amber-700 dark:text-amber-500">Fiado Directo a Libreta</p>
+                        <p className="text-[10px] text-muted-foreground font-semibold leading-normal mt-0.5">
+                          Este crédito se registrará directamente en la cuenta local del cliente sin requerir código PIN ni cuotas fijas.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SyncroCredit status for registered clients */}
+                  {(tempPaymentMethod === 'CREDIT' || addedPayments.some((p: any) => p.method === 'CREDIT')) && selectedClientId !== "consumidor-final" && selectedClient?.hasAccount && creditType === 'syncrocredit' && (
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-300 flex flex-col gap-3">
+                      <CreditRadial client={selectedClient} />
+                    </div>
+                  )}
+
+                  {/* Gestión de SyncroCredit (Reset Password, Pause/Reactivate, Delete) */}
+                  {(tempPaymentMethod === 'CREDIT' || addedPayments.some((p: any) => p.method === 'CREDIT')) && selectedClientId !== "consumidor-final" && selectedClient?.hasAccount && creditType === 'syncrocredit' && (
+                    <div className="p-4 rounded-xl border border-border bg-card shadow-sm space-y-3 animate-in fade-in duration-200">
+                      <div className="flex items-center gap-2 text-foreground font-bold text-xs tracking-tight border-b pb-2">
+                        <IconLock size={15} className="text-emerald-600" />
+                        <span>Gestión de SyncroCredit</span>
+                      </div>
+
+                      {/* Ajustar Límite de Crédito */}
+                      <div className="flex items-center justify-between p-2 rounded-lg bg-muted/50 border border-border/60">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase leading-none">Límite de Crédito</span>
+                          <span className="text-xs font-black mt-1">
+                            {selectedClient?.creditLimit === 0 ? "Sin Límite (Libreta Tradicional)" : `$${selectedClient?.creditLimit || 0}`}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={updatingLimit}
+                            className="h-7 px-2 text-[10px] font-bold flex items-center justify-center gap-0.5"
+                            onClick={async () => {
+                              const currentLimit = selectedClient?.creditLimit || 0;
+                              const newLimit = Math.max(0, currentLimit - 10);
+                              await updateClientLimit(newLimit);
+                            }}
+                          >
+                            -10
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={updatingLimit}
+                            className="h-7 px-2 text-[10px] font-bold flex items-center justify-center gap-0.5"
+                            onClick={async () => {
+                              const currentLimit = selectedClient?.creditLimit || 0;
+                              const newLimit = currentLimit + 10;
+                              await updateClientLimit(newLimit);
+                            }}
+                          >
+                            +10
+                          </Button>
+                          <input
+                            type="number"
+                            disabled={updatingLimit}
+                            className="w-16 h-7 text-xs font-bold text-center bg-background border rounded-md"
+                            value={limitInputValue !== undefined ? limitInputValue : (selectedClient?.creditLimit || 0)}
+                            onChange={(e) => {
+                              setLimitInputValue(Number(e.target.value));
+                            }}
+                            onBlur={async () => {
+                              if (limitInputValue !== undefined) {
+                                await updateClientLimit(limitInputValue);
+                                setLimitInputValue(undefined);
+                              }
+                            }}
+                            onKeyDown={async (e) => {
+                              if (e.key === 'Enter' && limitInputValue !== undefined) {
+                                await updateClientLimit(limitInputValue);
+                                setLimitInputValue(undefined);
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2">
+                        {/* Cambiar Contraseña */}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={generatingPwaCode || togglingSuspension || deletingAccount}
+                          onClick={async () => {
+                            setGeneratingPwaCode(true);
+                            try {
+                              const token = localStorage.getItem("token");
+                              const res = await fetch(`${API}/clients/${selectedClientId}/activation-code`, {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                  Authorization: `Bearer ${token}`
+                                }
+                              });
+                              if (res.ok) {
+                                const data = await res.json();
+                                setGeneratedPwaCode(data.activationCode);
+                                setPwaClientName(selectedClient?.name || "Cliente");
+                                setPwaClientDocument(selectedClient?.documentId || "");
+                                setShowPwaCodeModal(true);
+                                toast.success("Código temporal de restablecimiento generado");
+                              } else {
+                                const err = await res.json();
+                                toast.error(err.message || "Error al generar código");
+                              }
+                            } catch (err) {
+                              toast.error("Error de conexión");
+                            } finally {
+                              setGeneratingPwaCode(false);
+                            }
+                          }}
+                          className="w-full text-[11px] font-bold h-9 flex items-center justify-center gap-1.5"
+                        >
+                          <IconLock size={13} /> Cambiar Contraseña (OTP)
+                        </Button>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          {/* Pausar/Reactivar Cuenta */}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={generatingPwaCode || togglingSuspension || deletingAccount}
+                            onClick={async () => {
+                              setTogglingSuspension(true);
+                              try {
+                                const token = localStorage.getItem("token");
+                                const res = await fetch(`${API}/clients/${selectedClientId}/toggle-suspension`, {
+                                  method: "PATCH",
+                                  headers: {
+                                    Authorization: `Bearer ${token}`
+                                  }
+                                });
+                                if (res.ok) {
+                                  const updatedClient = await res.json();
+
+                                  // Update client in list and DB
+                                  setClients(prev => prev.map(c => c.id === updatedClient.id ? { ...c, ...updatedClient } : c));
+
+                                  toast.success(updatedClient.isSuspended ? "Cuenta pausada correctamente" : "Cuenta reactivada correctamente");
+                                } else {
+                                  toast.error("Error al cambiar estado de suspensión");
+                                }
+                              } catch (err) {
+                                toast.error("Error de conexión");
+                              } finally {
+                                setTogglingSuspension(false);
+                              }
+                            }}
+                            className={`w-full text-[11px] font-bold h-9 flex items-center justify-center gap-1.5 ${selectedClient?.isSuspended
+                                ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border-emerald-500/20"
+                                : "bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 border-rose-500/20"
+                              }`}
+                          >
+                            {selectedClient?.isSuspended ? (
+                              <><IconLock size={13} /> Reactivar Cuenta</>
+                            ) : (
+                              <><IconLock size={13} /> Pausar Cuenta</>
+                            )}
+                          </Button>
+
+                          {/* Eliminar Cuenta */}
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            disabled={generatingPwaCode || togglingSuspension || deletingAccount}
+                            onClick={() => {
+                              openPinVerification(async (pinUsed) => {
+                                setDeletingAccount(true);
+                                try {
+                                  const token = localStorage.getItem("token");
+                                  const res = await fetch(`${API}/clients/${selectedClientId}/delete-account`, {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                      Authorization: `Bearer ${token}`
+                                    },
+                                    body: JSON.stringify({ securityPin: pinUsed })
+                                  });
+                                  if (res.ok) {
+                                    toast.success("Cuenta de SyncroCredit eliminada exitosamente y deudas reseteadas");
+
+                                    // Refresh clients list
+                                    const clientsRes = await fetch(`${API}/clients`, { headers: { Authorization: `Bearer ${token}` } });
+                                    if (clientsRes.ok) {
+                                      const clientsData = await clientsRes.json();
+                                      setClients(clientsData);
+                                      await db.clients.clear();
+                                      await db.clients.bulkAdd(clientsData.map((c: any) => ({ ...c, _id: c.id })));
+                                    }
+                                  } else {
+                                    const err = await res.json();
+                                    toast.error(err.message || "Error al eliminar cuenta");
+                                  }
+                                } catch (err) {
+                                  toast.error("Error de conexión");
+                                } finally {
+                                  setDeletingAccount(false);
+                                }
+                              });
+                            }}
+                            className="w-full text-[11px] font-bold h-9 flex items-center justify-center gap-1.5"
+                          >
+                            <IconTrash size={13} /> Eliminar Cuenta
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-5 bg-muted/20 border-t flex gap-3">
+                <Button variant="outline" className="flex-1 h-12 rounded-md text-xs font-semibold" onClick={() => setIsPaymentModalOpen(false)}>Cancelar</Button>
+                <Button
+                  className="flex-[2] h-12 rounded-md text-xs font-semibold shadow-sm"
+                  disabled={processing || (tempPaymentMethod !== 'CREDIT' && remainingToPay > 0.01)}
+                  onClick={() => {
+                    if (tempPaymentMethod === 'CREDIT' && selectedClientId === 'consumidor-final') {
+                      toast.error("No se puede fiar al Consumidor Final.");
+                      return;
+                    }
+
+                    // Build summary of payments
+                    let paymentsToUse = [...addedPayments];
+                    if (remainingToPay > 0.01 && tempPaymentMethod === 'CREDIT') {
+                      paymentsToUse.push({
+                        method: "CREDIT",
+                        amount: remainingToPay,
+                        amountLocal: remainingToPay * currentExchangeRate,
+                        exchangeRate: currentExchangeRate,
+                        reference: "",
+                        promisedPaymentDate
+                      });
+                    }
+
+                    const summary = paymentsToUse.map(p => {
+                      const name = p.method === "CASH" ? "EFECTIVO" : p.method === "CARD" ? "TARJETA" : p.method === "TRANSFER" ? "TRANSFERENCIA" : p.method === "WALLET" ? "MONEDERO" : p.method === "CREDIT" ? "CRÉDITO / FIADO" : p.method;
+                      return `${name} ($${p.amount.toFixed(2)} USD)`;
+                    }).join(" + ");
+
+                    // Warning details
+                    let warning = "";
+                    if (selectedClientId !== "consumidor-final") {
+                      const creditPayments = paymentsToUse.filter(p => p.method === 'CREDIT');
+                      const nonCreditPayments = paymentsToUse.filter(p => p.method !== 'CREDIT');
+
+                      const creditTotal = creditPayments.reduce((sum, p) => sum + p.amount, 0);
+                      const nonCreditTotal = nonCreditPayments.reduce((sum, p) => sum + p.amount, 0);
+
+                      if (creditTotal > 0 && nonCreditTotal > 0) {
+                        warning = `Se registrará un cobro inmediato de $${nonCreditTotal.toFixed(2)} USD y se sumará $${creditTotal.toFixed(2)} USD a la Libreta (Fiado) de ${selectedClient?.name || "cliente"}.`;
+                      } else if (nonCreditTotal > 0) {
+                        warning = `Se registrará cobro inmediato para ${selectedClient?.name || "cliente"} en lugar de sumarlo a su Libreta (Fiado).`;
+                      }
+                    }
+
+                    setPaymentsToProcess(paymentsToUse);
+                    setPaymentConfirmationSummary(summary);
+                    setPaymentConfirmationWarning(warning);
+                    setIsConfirmPaymentOpen(true);
+                  }}
+                >
+                  {processing ? (
+                    <span className="flex items-center gap-2">
+                      <IconRefresh className="animate-spin size-4" /> Procesando...
+                    </span>
+                  ) : (tempPaymentMethod === 'CREDIT' && addedPayments.length === 0) ? ((selectedClient?.currentDebt || 0) > 0 ? "Agregar a Libreta" : "Confirmar Fiado") : "Finalizar Venta"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: CONFIRMAR FINALIZAR VENTA */}
+      <AlertDialog open={isConfirmPaymentOpen} onOpenChange={setIsConfirmPaymentOpen}>
+        <AlertDialogContent className="max-w-md border-none shadow-2xl rounded-2xl p-0 overflow-hidden bg-card text-foreground">
+          <AlertDialogHeader className="p-6 pb-2 text-center flex flex-col items-center">
+            <div className="size-12 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mb-3">
+              <IconReceipt size={24} />
+            </div>
+            <AlertDialogTitle className="text-xl font-bold tracking-tight">¿Confirmar Método de Pago?</AlertDialogTitle>
+          </AlertDialogHeader>
+
+          <div className="px-6 py-4 space-y-5 text-center">
+            {/* Huge Payment Method */}
+            <div className="space-y-1">
+              <div className={cn(
+                "font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-tight break-words leading-none",
+                (() => {
+                  const name = paymentConfirmationSummary.split(" + ").map(p => p.split(" (")[0]).join(" + ");
+                  if (name.length > 15) return "text-3xl";
+                  if (name.length > 9) return "text-4xl";
+                  return "text-6xl";
+                })()
+              )}>
+                {paymentConfirmationSummary.split(" + ").map(p => p.split(" (")[0]).join(" + ")}
+              </div>
+            </div>
+
+            {/* Total Amount in smaller font */}
+            <div className="py-2.5 px-4 rounded-xl bg-muted/40 border border-border/40 flex justify-between items-center text-sm font-semibold text-muted-foreground">
+              <span>Monto Total:</span>
+              <span className="text-lg font-black text-foreground font-mono">
+                ${finalTotalWithIgtf.toFixed(2)} USD
+              </span>
+            </div>
+
+
+          </div>
+
+          <AlertDialogFooter className="p-6 pt-2 flex sm:flex-row flex-col gap-3">
+            <AlertDialogCancel className="w-full sm:flex-1 rounded-xl h-12 font-bold text-sm border-border hover:bg-muted transition-colors mt-0">
+              Revisar Pago
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={processing}
+              onClick={() => {
+                setIsConfirmPaymentOpen(false);
+                const hasCredit = paymentsToProcess?.some((p: any) => p.method === 'CREDIT');
+                if (hasCredit && selectedClientId !== "consumidor-final" && selectedClient?.hasAccount && creditType === 'syncrocredit') {
+                  initiatePinAuthorization(paymentsToProcess);
+                } else {
+                  if (paymentsToProcess) {
+                    processSale(paymentsToProcess);
+                  } else {
+                    processSale();
+                  }
+                }
+              }}
+              className="w-full sm:flex-1 rounded-xl h-12 px-8 font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/10 border-none transition-colors"
+            >
+              Registrar Venta
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* DIALOG: AUTORIZACIÓN SYNCOCREDIT POR PIN */}
+      <Dialog open={showPinAuthModal} onOpenChange={(open) => {
+        if (!open && generatedPinCode) {
+          cancelPinAuthorization(generatedPinCode);
+        }
+      }}>
+        <DialogContent className="sm:max-w-[420px] rounded-2xl border-none shadow-2xl p-6 bg-card text-foreground">
+          <DialogHeader className="text-center flex flex-col items-center pb-2">
+            <div className="size-14 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center mb-3">
+              <IconLock size={28} />
+            </div>
+            <DialogTitle className="text-xl font-bold tracking-tight">Autorización SyncroCredit Requerida</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-1 flex flex-col items-center gap-0.5">
+              <span>El cliente <strong>{selectedClient?.name || "Cliente"}</strong> debe autorizar el crédito.</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-6 space-y-6 text-center">
+            {isGeneratingPin ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-6">
+                <IconRefresh className="animate-spin text-blue-500 size-8" />
+                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Generando PIN...</span>
+              </div>
+            ) : generatedPinCode ? (
+              <div className="space-y-6">
+                <div className="flex flex-col items-center justify-center gap-1.5">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Dicta este PIN al cliente:</span>
+                  <div className="text-5xl font-black tracking-widest text-blue-600 font-mono select-all select-none py-3 px-6 bg-blue-500/5 rounded-2xl border border-blue-500/10 shadow-inner">
+                    {generatedPinCode}
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-semibold">
+                    <IconRefresh className="animate-spin text-blue-500 size-3.5" />
+                    <span>Esperando confirmación en la app del cliente...</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground/60">
+                    Frecuencia elegida: cada {selectedFrequencyDays} días
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-rose-500 font-bold py-6">
+                Error al generar el PIN de autorización.
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex sm:flex-row flex-col gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (generatedPinCode) {
+                  cancelPinAuthorization(generatedPinCode);
+                } else {
+                  setShowPinAuthModal(false);
+                }
+              }}
+              className="w-full h-12 rounded-xl text-xs font-black"
+            >
+              Cancelar Operación
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: CÓDIGO DE ACTIVACIÓN SYNCOCREDIT GENERADO */}
+      <Dialog open={showPwaCodeModal} onOpenChange={setShowPwaCodeModal}>
+        <DialogContent className="sm:max-w-[420px] rounded-2xl border-none shadow-2xl p-6 bg-card text-foreground">
+          <DialogHeader className="text-center flex flex-col items-center pb-2">
+            <div className="size-14 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-3">
+              <IconDevices size={28} />
+            </div>
+            <DialogTitle className="text-xl font-bold tracking-tight">Acceso SyncroCredit Generado</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-1 flex flex-col items-center gap-0.5">
+              <span>Código de activación para <strong>{pwaClientName}</strong></span>
+              {pwaClientDocument && (
+                <span className="text-[11px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-2.5 py-0.5 rounded-full mt-1.5 font-bold font-mono">
+                  Cédula/ID: {pwaClientDocument}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-6 space-y-6 text-center">
+            {/* 6-digit OTP code display */}
+            <div className="flex justify-center gap-2">
+              {generatedPwaCode.split("").map((digit, idx) => (
+                <div
+                  key={idx}
+                  className="size-12 rounded-xl border-2 border-emerald-500/30 bg-emerald-500/5 flex items-center justify-center text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono shadow-sm animate-in fade-in-50 slide-in-from-bottom-3 duration-350"
+                  style={{ animationDelay: `${idx * 50}ms` }}
+                >
+                  {digit}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <DialogFooter className="flex gap-2 sm:flex-row flex-col">
+            <Button
+              onClick={() => {
+                navigator.clipboard.writeText(generatedPwaCode);
+                toast.success("Código copiado al portapapeles");
+              }}
+              variant="outline"
+              className="w-full sm:flex-1 rounded-xl h-11 font-bold text-xs flex items-center justify-center gap-2"
+            >
+              Copiar Código
+            </Button>
+            <Button
+              onClick={async () => {
+                await refreshSelectedClient();
+                setShowPwaCodeModal(false);
+              }}
+              className="w-full sm:flex-1 rounded-xl h-11 font-bold text-xs bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition-colors"
+            >
+              Listo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* DIALOG: VENTA PROCESADA EXITOSAMENTE */}
+      <Dialog open={isSaleSuccessModalOpen} onOpenChange={setIsSaleSuccessModalOpen}>
+        <DialogContent className="sm:max-w-[400px] rounded-2xl border-none shadow-2xl p-6 bg-card text-foreground text-center flex flex-col items-center justify-center space-y-4">
+          <div className="size-16 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+            <IconCheck size={36} stroke={3} />
+          </div>
+          <DialogHeader className="text-center flex flex-col items-center">
+            <DialogTitle className="text-2xl font-black tracking-tight text-emerald-600 dark:text-emerald-500">
+              ¡Venta Procesada!
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground mt-2 font-medium">
+              La transacción ha sido registrada y autorizada con éxito en el sistema. El carrito de compras ha sido limpiado para la siguiente venta.
+            </DialogDescription>
+          </DialogHeader>
+          <Button
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-11 rounded-xl shadow-lg shadow-emerald-600/20 transition-all duration-300"
+            onClick={() => setIsSaleSuccessModalOpen(false)}
+          >
+            Aceptar
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: ABONAR A DEUDA */}
+      <Dialog open={isPaymentModalAbonoOpen} onOpenChange={setIsPaymentModalAbonoOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <IconHistory size={18} /> Abonar a Deuda
+            </DialogTitle>
+            <DialogDescription>
+              Registra un pago para reducir la deuda activa del cliente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Monto a Abonar (USD) <span className="text-destructive">*</span></Label>
+              <Input
+                type="number"
+                placeholder="0.00"
+                value={abonoAmount}
+                onChange={(e) => setAbonoAmount(e.target.value)}
+                className="font-mono text-lg"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Método de Pago</Label>
+              <Select value={abonoPaymentMethod} onValueChange={setAbonoPaymentMethod}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione método" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CASH">Efectivo</SelectItem>
+                  <SelectItem value="CARD">Punto de Venta</SelectItem>
+                  <SelectItem value="PAGO_MOVIL">Pago Móvil</SelectItem>
+                  <SelectItem value="TRANSFER">Transferencia</SelectItem>
+                  <SelectItem value="ZELLE">Zelle</SelectItem>
+                  <SelectItem value="BINANCE">Binance</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Referencia / Notas</Label>
+              <Input
+                placeholder="Opcional"
+                value={abonoNotes}
+                onChange={(e) => setAbonoNotes(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsPaymentModalAbonoOpen(false)} disabled={isSubmittingAbono}>Cancelar</Button>
+            <Button onClick={handleRegisterAbono} disabled={isSubmittingAbono} className="bg-amber-600 hover:bg-amber-700 text-white">
+              {isSubmittingAbono ? <IconRefresh className="animate-spin size-4 mr-2" /> : null}
+              Registrar Abono
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: QUICK CLIENT REGISTRATION */}
+      <Dialog open={isQuickClientOpen} onOpenChange={setIsQuickClientOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <IconUserPlus size={18} className="text-primary" /> Nuevo Cliente
+            </DialogTitle>
+            <DialogDescription>
+              Completa los datos para registrar el cliente en el sistema.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Nombre Completo <span className="text-destructive">*</span></Label>
+              <Input
+                placeholder="Juan Pérez"
+                value={newClient.name}
+                onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Cédula / RIF</Label>
+                <Input
+                  placeholder="V-12345678"
+                  className="tabular-nums"
+                  value={newClient.documentId}
+                  onChange={(e) => setNewClient({ ...newClient, documentId: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Teléfono</Label>
+                <Input
+                  placeholder="0414-0000000"
+                  className="tabular-nums"
+                  value={newClient.phone}
+                  onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsQuickClientOpen(false)}>Cancelar</Button>
+            <Button onClick={handleCreateClient} disabled={savingClient}>
+              {savingClient ? "Guardando..." : "Registrar Cliente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: CLOSE SHIFT (ARQUEO DE CAJA) */}
+      <Dialog open={isClosingShift} onOpenChange={setIsClosingShift}>
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <IconCalculator className="text-primary" size={20} /> Arqueo de Caja Detallado
+            </DialogTitle>
+            <DialogDescription>
+              Ingrese los montos físicos para realizar el cierre de caja. El sistema calculará los sobrantes o faltantes.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+
+            {/* Expected Totals Summary */}
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="p-3 rounded-lg bg-muted/30 border space-y-1">
+                <p className="text-muted-foreground text-xs font-medium">Efectivo USD Esperado</p>
+                <p className="font-semibold text-base">${activeShift?.expectedTotals?.CASH?.toFixed(2) || '0.00'}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-muted/30 border space-y-1">
+                <p className="text-muted-foreground text-xs font-medium">Punto y Pago Móvil</p>
+                <p className="font-semibold text-base">Bs {((activeShift?.expectedTotals?.CARD || 0) + (activeShift?.expectedTotals?.PAGO_MOVIL || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</p>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* USD Bills Breakdown */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold">Billetes (USD)</h4>
+              <div className="grid grid-cols-3 gap-3">
+                {([1, 5, 10, 20, 50, 100] as const).map(bill => (
+                  <div key={bill} className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">${bill}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      className="h-8"
+                      value={cashBreakdown[`b${bill}` as keyof typeof cashBreakdown] || ''}
+                      onChange={e => setCashBreakdown({ ...cashBreakdown, [`b${bill}`]: Number(e.target.value) })}
+                      placeholder="Cant."
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Bs Cash and Digital */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold">Bolívares y Digital</h4>
+              <div className="grid grid-cols-1 gap-3">
+                <div className="flex items-center gap-3">
+                  <Label className="w-1/3 text-xs text-muted-foreground">Efectivo Bs</Label>
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-medium">Bs</span>
+                    <Input type="number" className="pl-8 h-9" value={cashBs} onChange={e => setCashBs(e.target.value)} />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Label className="w-1/3 text-xs text-muted-foreground">Lote Punto Venta</Label>
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-medium">Bs</span>
+                    <Input type="number" className="pl-8 h-9" value={posBatch} onChange={e => setPosBatch(e.target.value)} />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Label className="w-1/3 text-xs text-muted-foreground">Total Pago Móvil</Label>
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-medium">Bs</span>
+                    <Input type="number" className="pl-8 h-9" value={pagoMovilBatch} onChange={e => setPagoMovilBatch(e.target.value)} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Validation Panel */}
+            <div className="p-4 rounded-xl bg-muted/50 border space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium">Efectivo Contado (USD eq):</span>
+                <span className="text-base font-bold tabular-nums">
+                  ${(
+                    cashBreakdown.b1 + (cashBreakdown.b5 * 5) + (cashBreakdown.b10 * 10) +
+                    (cashBreakdown.b20 * 20) + (cashBreakdown.b50 * 50) + (cashBreakdown.b100 * 100) +
+                    ((Number(cashBs) || 0) / currentExchangeRate)
+                  ).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-muted-foreground">
+                <span>Total Digital Contado (Bs):</span>
+                <span className="tabular-nums">Bs {((Number(posBatch) || 0) + (Number(pagoMovilBatch) || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsClosingShift(false)}>Cancelar</Button>
+            <Button onClick={handleCloseShift} disabled={isClosingShift && processing} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              {processing ? "Procesando..." : "Confirmar Arqueo y Cerrar Caja"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: CLOSE SHIFT SUMMARY (ARQUEO DE CAJA RESULTADO) */}
+      <Dialog open={isCloseSummaryOpen} onOpenChange={setIsCloseSummaryOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg text-emerald-500">
+              <IconCheck className="size-5" /> Caja Cerrada Exitosamente
+            </DialogTitle>
+            <DialogDescription>
+              Resumen del cuadre de caja de este turno de trabajo.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="p-4 rounded-xl bg-muted/50 border space-y-3">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Efectivo Esperado:</span>
+                <span className="font-semibold text-foreground">${closeSummary?.expected.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Efectivo Contado:</span>
+                <span className="font-semibold text-foreground">${closeSummary?.reported.toFixed(2)}</span>
+              </div>
+
+              <Separator />
+
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium">Diferencia:</span>
+                <span className={`text-base font-bold tabular-nums ${(closeSummary?.difference || 0) < -0.01
+                    ? 'text-rose-500'
+                    : (closeSummary?.difference || 0) > 0.01
+                      ? 'text-emerald-500'
+                      : 'text-foreground'
+                  }`}>
+                  {((closeSummary?.difference || 0) < -0.01 ? '-$' : '$') + Math.abs(closeSummary?.difference || 0).toFixed(2)}
+                  <span className="text-[10px] ml-1 block text-right font-medium">
+                    {(closeSummary?.difference || 0) < -0.01
+                      ? '(Faltante)'
+                      : (closeSummary?.difference || 0) > 0.01
+                        ? '(Sobrante)'
+                        : '(Cuadrado Perfecto)'}
+                  </span>
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground text-center">
+              Este reporte ha sido guardado de forma segura y puede ser consultado en el historial de turnos del Dashboard de Contabilidad.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsCloseSummaryOpen(false);
+                setActiveShift(null);
+                setOpeningBalance("0");
+                setOpeningUsd("");
+                setOpeningBs("");
+              }}
+              className="w-full"
+            >
+              Entendido
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: ESCÁNER Y CÁMARA (ESTILO UNIFICADO) */}
+      <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>
+        <DialogContent className={cn("overflow-hidden bg-black/95 border-white/10 shadow-2xl p-0 transition-all duration-300", useCamera ? "sm:max-w-[320px]" : "sm:max-w-md")}>
+          <DialogHeader className="sr-only">
+            <DialogTitle>Captura de Código de Barras</DialogTitle>
+          </DialogHeader>
+
+          <Button variant="ghost" size="icon" className="absolute top-3 right-3 size-8 rounded-full bg-black/50 hover:bg-white/10 text-white z-50" onClick={() => setScannerOpen(false)}>
+            <IconX size={16} />
+          </Button>
+
+          <div className={cn("relative w-full flex flex-col items-center justify-center transition-all duration-300", useCamera ? "h-[320px]" : "h-[360px] sm:h-[400px]")}>
+            {!useCamera ? (
+              <div className="flex flex-col items-center w-full max-w-[280px] text-center space-y-6 pt-4 animate-in zoom-in-95 duration-500">
+                <input
+                  ref={scannerInputRef}
+                  autoFocus
+                  className="opacity-0 absolute top-0 left-0 size-1 pointer-events-none"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = (e.target as HTMLInputElement).value;
+                      if (val) processBarcode(val);
+                      (e.target as HTMLInputElement).value = '';
+                    }
+                  }}
+                  onBlur={() => {
+                    if (scannerOpen && !useCamera) {
+                      setTimeout(() => scannerInputRef.current?.focus(), 100);
+                    }
+                  }}
+                />
+                <div className="w-full flex flex-col items-center justify-center py-12 gap-8 bg-muted/10 border border-muted/20 rounded-2xl relative overflow-hidden">
+                  <div className="size-24 rounded-xl bg-background border border-muted/50 shadow-sm flex items-center justify-center text-muted-foreground relative z-10">
+                    <IconBarcode size={48} stroke={1.2} />
+                  </div>
+                  <div className="text-center space-y-2 relative z-10">
+                    <p className="font-semibold text-lg tracking-tight">Escáner Listo</p>
+                    <p className="text-[11px] text-muted-foreground/50 font-normal tracking-tight">Esperando lector láser...</p>
+                  </div>
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="mx-auto size-14 hover:bg-primary/5 transition-all group"
+                  onClick={() => setUseCamera(true)}
+                  title="Usar Cámara"
+                >
+                  <IconCamera size={32} className="text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all duration-500" />
+                </Button>
+              </div>
+            ) : (
+              <div className="w-full h-full relative flex flex-col items-center justify-center p-4">
+                <div className={cn(
+                  "relative w-full h-full rounded-xl overflow-hidden border shadow-2xl bg-black flex items-center justify-center",
+                  isDetected ? "border-green-500" : "border-white/10"
+                )}>
+                  {/* the #reader container must be square-ish so the camera stretches nicely */}
+                  <div id="reader" className="w-full h-full [&_video]:object-cover [&_video]:w-full [&_video]:h-full [&_video]:min-h-full [&_#qr-shaded-region]:hidden"></div>
+
+                  {/* Láser Minimalista (Oscilante) */}
+                  <div className={cn(
+                    "absolute inset-x-8 z-10 animate-scanline transition-all duration-300 h-0.5 shadow-[0_0_8px_currentColor]",
+                    isDetected ? "text-green-500 bg-green-500" : "text-primary bg-primary"
+                  )} />
+
+                  {/* Esquinas Rectangulares Transparentes */}
+                  <div className="absolute inset-6 z-20 pointer-events-none opacity-40 mix-blend-difference filter drop-shadow-md">
+                    <div className={cn("absolute top-0 left-0 size-8 border-t-2 border-l-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                    <div className={cn("absolute top-0 right-0 size-8 border-t-2 border-r-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                    <div className={cn("absolute bottom-0 left-0 size-8 border-b-2 border-l-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                    <div className={cn("absolute bottom-0 right-0 size-8 border-b-2 border-r-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                  </div>
+
+                  {isDetected && (
+                    <div className="absolute inset-0 bg-green-500/20 z-10 animate-in fade-in zoom-in duration-300" />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: PRODUCT WAITLIST (FOR NON-EXISTING PRODUCTS) */}
+      <Dialog open={waitlistOpen} onOpenChange={setWaitlistOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+              <IconAlertCircle className="text-amber-500" /> Producto no registrado
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              El código <strong>{waitlistData.barcode}</strong> no existe. Ingréselo en la lista de espera para poder facturarlo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Nombre del Producto <span className="text-destructive">*</span></Label>
+              <Input
+                placeholder="Ej. Refresco Cola 2L"
+                value={waitlistData.name}
+                onChange={(e) => setWaitlistData({ ...waitlistData, name: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Precio Sugerido ($) <span className="text-destructive">*</span></Label>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={waitlistData.price}
+                  onChange={(e) => setWaitlistData({ ...waitlistData, price: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Stock Inicial</Label>
+                <Input
+                  type="number"
+                  placeholder="1"
+                  value={waitlistData.stock}
+                  onChange={(e) => setWaitlistData({ ...waitlistData, stock: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setWaitlistOpen(false)}>Cancelar</Button>
+            <Button onClick={handleWaitlistSubmit} disabled={savingWaitlist} className="bg-amber-500 hover:bg-amber-600">
+              {savingWaitlist ? "Guardando..." : "Agregar a Espera y Carrito"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: SALE RETURN (DEVOLUCIONES) */}
+      <Dialog open={isReturnModalOpen} onOpenChange={setIsReturnModalOpen}>
+        <DialogContent className="sm:max-w-[550px] max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600">
+                <IconArrowBackUp size={24} />
+              </div>
+              <div className="space-y-1 text-left">
+                <DialogTitle className="text-lg font-black uppercase tracking-tight">Procesar Devolución</DialogTitle>
+                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  {selectedSaleForReturn ? `Venta #${selectedSaleForReturn.id.slice(-8).toUpperCase()}` : "Cargando detalles..."}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {fetchingSaleDetails ? (
+            <div className="flex-1 flex flex-col items-center justify-center py-12 gap-4">
+              <IconRefresh size={40} className="animate-spin text-muted-foreground opacity-20" />
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground animate-pulse">Obteniendo información...</p>
+            </div>
+          ) : selectedSaleForReturn && (
+            <div className="flex-1 flex flex-col overflow-hidden py-4 gap-6">
+              <div className="space-y-3">
+                <div className="flex justify-between items-end px-1">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Artículos de la Venta</Label>
+                  <span className="text-[9px] font-medium text-muted-foreground italic">Seleccione la cantidad a devolver</span>
+                </div>
+
+                <div className="border rounded-xl bg-muted/5 divide-y overflow-auto max-h-[300px]">
+                  {selectedSaleForReturn.items.map((item: any) => {
+                    if (!item.variantId) return null; // Skip waitlist items for now as they have no stock tracking
+
+                    const returnedQty = selectedSaleForReturn.returns?.reduce((acc: number, r: any) => {
+                      const returnItem = r.items.find((ri: any) => ri.variantId === item.variantId);
+                      return acc + (returnItem?.quantity || 0);
+                    }, 0) || 0;
+
+                    const maxAvailable = item.quantity - returnedQty;
+                    const currentReturnQty = returnQuantities[item.variantId] || 0;
+
+                    if (maxAvailable <= 0) return null;
+
+                    return (
+                      <div key={item.id} className="p-4 flex items-center justify-between gap-4 group hover:bg-muted/10 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-bold truncate leading-tight">{item.variant?.product?.name || "Producto"} {item.variant?.name !== 'Principal' ? `(${item.variant?.name})` : ''}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[9px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded uppercase">Vendido: {item.quantity}</span>
+                            {returnedQty > 0 && <span className="text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded uppercase">Devuelto: {returnedQty}</span>}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-[10px] font-bold tabular-nums">${item.price.toFixed(2)}</span>
+                            <span className="text-[8px] text-muted-foreground font-medium uppercase tracking-tighter">Sub: ${(item.price * currentReturnQty).toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center border rounded-lg h-9 bg-background shadow-sm">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-none border-r"
+                              onClick={() => setReturnQuantities({ ...returnQuantities, [item.variantId]: Math.max(0, currentReturnQty - 1) })}
+                            >
+                              <IconMinus size={12} />
+                            </Button>
+                            <span className="w-10 text-center text-xs font-black tabular-nums">{currentReturnQty}</span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-none border-l"
+                              onClick={() => setReturnQuantities({ ...returnQuantities, [item.variantId]: Math.min(maxAvailable, currentReturnQty + 1) })}
+                            >
+                              <IconPlus size={12} />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {selectedSaleForReturn.items.every((it: any) => {
+                    const ret = selectedSaleForReturn.returns?.reduce((acc: number, r: any) => {
+                      const ri = r.items.find((rii: any) => rii.variantId === it.variantId);
+                      return acc + (ri?.quantity || 0);
+                    }, 0) || 0;
+                    return it.quantity - ret <= 0;
+                  }) && (
+                      <div className="p-8 text-center text-muted-foreground space-y-2">
+                        <IconCircleCheckFilled size={32} className="mx-auto text-emerald-500 opacity-50" />
+                        <p className="text-[10px] font-black uppercase tracking-widest">Todos los artículos han sido devueltos</p>
+                      </div>
+                    )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Motivo de la Devolución</Label>
+                  <Input
+                    placeholder="Ej. Producto defectuoso, Error en la compra..."
+                    className="h-10 text-xs"
+                    value={returnReason}
+                    onChange={(e) => setReturnReason(e.target.value)}
+                  />
+                </div>
+
+                <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex justify-between items-center">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">Total a Reembolsar</span>
+                    <span className="text-[9px] text-muted-foreground font-medium italic">Incluye impuestos proporcionales</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-black text-amber-600 tabular-nums">
+                      ${(Object.entries(returnQuantities).reduce((acc, [vid, qty]) => {
+                        const item = selectedSaleForReturn.items.find((it: any) => it.variantId === vid);
+                        return acc + (item ? item.price * qty : 0);
+                      }, 0) * (1 + taxRate / 100)).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="pt-2 border-t mt-auto">
+            <Button variant="ghost" onClick={() => setIsReturnModalOpen(false)} className="font-bold text-[10px] uppercase">Cancelar</Button>
+            <Button
+              onClick={handleReturnSubmit}
+              disabled={processingReturn || !selectedSaleForReturn || Object.values(returnQuantities).every(q => q === 0)}
+              className="bg-amber-500 hover:bg-amber-600 h-11 font-black text-[10px] uppercase tracking-widest px-8"
+            >
+              {processingReturn ? "PROCESANDO..." : "CONFIRMAR DEVOLUCIÓN"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: ORDER DETAILS & CLIENT HISTORY */}
+      <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
+        <DialogContent className="rounded-2xl p-6 max-w-lg border-[#79716b]/20 bg-[#121110]! text-white">
+          <DialogHeader className="border-b border-[#79716b]/10 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                <IconReceipt size={20} />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold tracking-tight text-white">Detalle de la Orden</DialogTitle>
+                <DialogDescription className="text-zinc-500 text-[10px] uppercase font-mono tracking-wider mt-0.5">
+                  ID: {selectedSale?.id}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {/* Client & Date Info */}
+          <div className="grid grid-cols-2 gap-4 py-4 border-b border-[#79716b]/10 text-xs">
+            <div className="space-y-1">
+              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Cliente</span>
+              <div className="font-bold text-white uppercase">{selectedSale?.client || "Consumidor Final"}</div>
+              {selectedSale?.clientDocument && (
+                <div className="text-zinc-500 font-mono text-[10px]">{selectedSale.clientDocument}</div>
+              )}
+              {selectedSale?.seller && (
+                <div className="text-[10px] text-zinc-400 mt-2">
+                  <span className="font-semibold text-zinc-500 uppercase text-[9px] tracking-wider block">Cajero / Vendedor</span>
+                  <span className="font-bold text-zinc-200">{selectedSale.seller}</span>
+                </div>
+              )}
+            </div>
+            <div className="space-y-1 text-right">
+              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Fecha y Hora</span>
+              <div className="font-semibold text-zinc-300">
+                {selectedSale && format(new Date(selectedSale.date), "dd 'de' MMMM 'de' yyyy, hh:mm a", { locale: es })}
+              </div>
+              <div className="text-zinc-500 text-[10px] uppercase font-bold">Sucursal: {selectedSale?.branch || "N/A"}</div>
+            </div>
+          </div>
+
+          {/* Products List */}
+          <div className="py-4 space-y-3">
+            <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Productos Comprados</span>
+            <div className="rounded-xl border border-[#79716b]/10 overflow-hidden max-h-48 overflow-y-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-muted/30 border-b border-[#79716b]/10">
+                  <tr>
+                    <th className="h-8 p-2 text-[9px] uppercase font-bold text-zinc-400">Producto</th>
+                    <th className="h-8 p-2 text-center text-[9px] uppercase font-bold text-zinc-400 w-[60px]">Cant.</th>
+                    <th className="h-8 p-2 text-right text-[9px] uppercase font-bold text-zinc-400 w-[85px]">P. Unit</th>
+                    <th className="h-8 p-2 text-right text-[9px] uppercase font-bold text-zinc-400 w-[90px]">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#79716b]/5">
+                  {!selectedSale?.items || selectedSale.items.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="h-16 text-center text-xs text-zinc-500 italic p-2">
+                        No hay productos registrados en esta venta
+                      </td>
+                    </tr>
+                  ) : (
+                    selectedSale.items.map((item: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-muted/10">
+                        <td className="p-2 text-xs font-semibold text-zinc-200">
+                          {item.name}
+                          {item.variantName && (
+                            <span className="block text-[9px] font-normal text-zinc-500">
+                              Variante: {item.variantName}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-2 text-center text-xs text-zinc-300 font-mono">
+                          {item.quantity}
+                        </td>
+                        <td className="p-2 text-right text-xs text-zinc-300 font-mono">
+                          {formatPrice(item.price)}
+                        </td>
+                        <td className="p-2 text-right text-xs font-bold text-white font-mono">
+                          {formatPrice(item.subtotal)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Payment & Totals */}
+          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#79716b]/10">
+            <div className="space-y-2">
+              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider block">Método de Pago</span>
+              <div className="space-y-1">
+                {selectedSale?.payments && selectedSale.payments.length > 0 ? (
+                  selectedSale.payments.map((p: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-muted/20 border border-[#79716b]/5">
+                      <span className="text-zinc-400 font-medium">
+                        {p.method === "CASH" ? "Efectivo" :
+                          p.method === "CARD" ? "Tarjeta / Punto" :
+                            p.method === "TRANSFER" ? "Transferencia" :
+                              p.method === "WALLET" ? "Billetera" :
+                                p.method === "CREDIT" ? "Fiado" :
+                                  p.method === "PAGO_MOVIL" ? "Pago Móvil" :
+                                    p.method === "BINANCE" ? "Binance" :
+                                      p.method === "ZINLI" ? "Zinli" :
+                                        p.method === "PAYPAL" ? "Paypal" : p.method}
+                      </span>
+                      <span className="font-bold text-white font-mono">{formatPrice(p.amount)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-xs text-zinc-500 italic">No especificado</span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5 text-right text-xs">
+              <div className="flex justify-between text-zinc-500">
+                <span>Subtotal:</span>
+                <span className="font-mono text-zinc-300">{formatPrice(selectedSale?.subtotal || 0)}</span>
+              </div>
+              <div className="flex justify-between text-zinc-500">
+                <span>IVA:</span>
+                <span className="font-mono text-zinc-300">{formatPrice(selectedSale?.taxAmount || 0)}</span>
+              </div>
+              {selectedSale?.discountAmt > 0 && (
+                <div className="flex justify-between text-rose-400">
+                  <span>Descuento:</span>
+                  <span className="font-mono">-{formatPrice(selectedSale.discountAmt)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-[#79716b]/10 pt-2 text-sm font-black">
+                <span className="text-zinc-300">TOTAL:</span>
+                <span className="text-emerald-400 font-mono text-lg">{formatPrice(selectedSale?.total || 0)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Other Purchases Section */}
+          {selectedSale?.clientId && (
+            <div className="py-4 border-t border-[#79716b]/10 space-y-2.5">
+              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider block">
+                Historial de Compras del Cliente ({clientHistory.length})
+              </span>
+              {loadingHistory ? (
+                <div className="text-[11px] text-zinc-500 animate-pulse">Cargando historial...</div>
+              ) : clientHistory.length <= 1 ? (
+                <div className="text-[11px] text-zinc-500 italic">No se registran otras compras para este cliente.</div>
+              ) : (
+                <div className="flex flex-col gap-2 max-h-44 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+                  {clientHistory.map((histSale) => {
+                    const isCurrent = histSale.id === selectedSale.id;
+                    const dateFormatted = format(new Date(histSale.date), "dd 'de' MMMM 'de' yyyy, hh:mm a", { locale: es });
+                    return (
+                      <button
+                        key={histSale.id}
+                        onClick={() => setSelectedSale(histSale)}
+                        className={cn(
+                          "w-full text-left px-3.5 py-2.5 rounded-xl border text-[11px] font-bold transition-all uppercase tracking-tight cursor-pointer flex items-center justify-between",
+                          isCurrent
+                            ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                            : "bg-[#121110]/60 border-[#79716b]/20 hover:border-zinc-500 text-zinc-400 hover:text-white"
+                        )}
+                      >
+                        <span className="truncate font-semibold">{dateFormatted}</span>
+                        <span className="font-black text-right min-w-[75px]">{formatPrice(histSale.total)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: WAITLIST BROWSER */}
+      <Dialog open={isWaitlistOpen} onOpenChange={setIsWaitlistOpen}>
+        <DialogContent className="sm:max-w-[650px] max-h-[80vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600">
+                <IconAlertCircle size={24} />
+              </div>
+              <div className="space-y-1 text-left">
+                <DialogTitle className="text-lg font-black uppercase tracking-tight">Lista de Espera</DialogTitle>
+                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Productos escaneados no registrados en el sistema
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-auto py-4">
+            {loadingWaitlist ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <IconRefresh className="animate-spin text-muted-foreground opacity-20" size={40} />
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Cargando lista...</p>
+              </div>
+            ) : waitlist.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4 grayscale opacity-40">
+                <IconBox size={60} strokeWidth={1} />
+                <p className="text-xs font-bold uppercase tracking-widest">No hay productos en espera</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3">
+                {waitlist.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-4 rounded-xl border bg-muted/5 hover:bg-muted/10 transition-all cursor-pointer active:scale-[0.98]"
+                    onClick={() => {
+                      addWaitlistItemToCart(item);
+                      setIsWaitlistOpen(false);
+                    }}
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-black uppercase truncate">{item.name}</h4>
+                        <Badge variant="outline" className="text-[9px] px-1.5 h-5 font-bold uppercase tracking-tighter bg-background">
+                          {item.barcode}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-medium uppercase tracking-tight">
+                        <span className="flex items-center gap-1"><IconBuilding size={10} /> {item.branch?.name || "Todas"}</span>
+                        <span>•</span>
+                        <span>Stock Sugerido: {item.stock}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 shrink-0">
+                      <div className="text-right">
+                        <p className="text-lg font-black tabular-nums text-foreground">${item.price.toFixed(2)}</p>
+                        <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest">Precio Sugerido</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="pt-2 border-t">
+            <Button variant="ghost" onClick={() => setIsWaitlistOpen(false)} className="font-bold text-[10px] uppercase">Cerrar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: PARKED TICKETS (REDISEÑADO) */}
+      <Dialog open={isParkedModalOpen} onOpenChange={setIsParkedModalOpen}>
+        <DialogContent className="sm:max-w-[550px] max-h-[85vh] flex flex-col overflow-hidden border shadow-2xl p-0">
+          <DialogHeader className="p-6 pb-4 border-b bg-muted/30">
+            <div className="flex items-center gap-4">
+              <div className="size-12 rounded-2xl bg-primary/10 border flex items-center justify-center text-primary">
+                <IconPlayerPause size={24} />
+              </div>
+              <div className="space-y-1 text-left">
+                <DialogTitle className="text-xl font-semibold">Ventas en Suspenso</DialogTitle>
+                <DialogDescription className="text-sm text-muted-foreground">
+                  Gestión de carritos pausados para facturación posterior
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-auto p-6 bg-muted/10 font-sans">
+            {parkedTickets.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 gap-4 opacity-40">
+                <IconReceiptOff size={80} strokeWidth={1} />
+                <p className="text-sm font-medium text-muted-foreground">No hay colas de espera</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {parkedTickets.map((ticket) => (
+                  <div key={ticket.id} className="group relative flex flex-col p-5 rounded-2xl border bg-background hover:border-primary/50 hover:shadow-md transition-all duration-300">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-primary text-primary-foreground">#{ticket.id}</span>
+                          <span className="text-xs text-muted-foreground font-medium">{new Date(ticket.parkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <h4 className="text-sm font-semibold">
+                          {clients.find(c => (c.id || (c as any)._id) === ticket.selectedClientId)?.name || "Consumidor Final"}
+                        </h4>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xl font-bold tabular-nums">
+                          ${ticket.cart.reduce((acc: number, item: any) => acc + (item.product.price * item.quantity), 0).toFixed(2)}
+                        </p>
+                        <p className="text-xs font-medium text-muted-foreground">{ticket.cart.length} productos</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 pt-4 border-t">
+                      <Button
+                        variant="default"
+                        className="flex-1 h-10 font-medium text-sm"
+                        onClick={() => resumeTicket(ticket)}
+                      >
+                        Recuperar Venta
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all border-destructive/20"
+                        onClick={() => setParkedTickets(prev => prev.filter(t => t.id !== ticket.id))}
+                      >
+                        <IconTrash size={18} />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="p-4 border-t bg-muted/30">
+            <Button
+              variant="ghost"
+              onClick={() => setIsParkedModalOpen(false)}
+              className="w-full font-medium text-sm"
+            >
+              Cerrar Ventana
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── PIN Authorization Modal ─── */}
+      <Dialog open={isPinModalOpen} onOpenChange={(open) => {
+        if (!open) { setIsPinModalOpen(false); setPinInput(''); setPinError(''); setPinCallback(null); }
+      }}>
+        <DialogContent className="max-w-[340px] w-[calc(100%-2rem)] p-0 overflow-hidden gap-0">
+          <div className="px-6 pt-6 pb-5 border-b bg-muted/20" style={{ paddingRight: '3.5rem' }}>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
+                <IconLock size={18} />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-semibold leading-snug">Verificación Requerida</DialogTitle>
+                <p className="text-xs text-muted-foreground">Ingrese el PIN del propietario para continuar.</p>
+              </div>
+            </div>
+          </div>
+          <div className="px-6 py-6 space-y-5">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">PIN de 4 Dígitos</Label>
+              <Input
+                ref={pinInputRef}
+                type="password"
+                maxLength={4}
+                inputMode="numeric"
+                placeholder="••••"
+                value={pinInput}
+                onChange={e => { setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4)); setPinError(''); }}
+                className={cn("text-center font-mono text-2xl tracking-[0.7em] h-14", pinError ? "border-destructive" : "")}
+                onKeyDown={e => { if (e.key === 'Enter') handlePinConfirm(); }}
+              />
+              {pinError && (
+                <p className="text-[11px] text-destructive flex items-center gap-1">
+                  <IconAlertCircle size={12} /> {pinError}
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, '', 0, '⌫'].map((k, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  disabled={k === ''}
+                  onClick={() => {
+                    if (k === '⌫') { setPinInput(p => p.slice(0, -1)); setPinError(''); }
+                    else if (k !== '') { const next = (pinInput + k).slice(0, 4); setPinInput(next); setPinError(''); }
+                  }}
+                  className={cn(
+                    "h-12 rounded-xl font-bold text-lg transition-all",
+                    k === '' ? "invisible" : "bg-muted/40 hover:bg-muted border border-border/40 active:scale-95",
+                    k === '⌫' ? "text-muted-foreground text-base" : ""
+                  )}
+                >{k}</button>
+              ))}
+            </div>
+            <Button
+              className="w-full h-11 font-semibold"
+              disabled={pinInput.length !== 4}
+              onClick={handlePinConfirm}
+            >
+              Verificar PIN
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Discount Modal ─── */}
+      <Dialog open={isDiscountModalOpen} onOpenChange={open => {
+        setIsDiscountModalOpen(open);
+        if (!open) { setDiscountValueInput(''); setTargetDiscountId(null); }
+      }}>
+        <DialogContent className="max-w-[340px] w-[calc(100%-2rem)] p-0 overflow-hidden gap-0">
+          <div className="px-6 pt-6 pb-5 border-b bg-muted/20">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
+                <IconDiscount size={18} />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-semibold leading-snug">Aplicar Descuento</DialogTitle>
+                <p className="text-xs text-muted-foreground">
+                  {targetDiscountId === 'GLOBAL' ? 'A toda la compra' : 'Al producto seleccionado'}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="px-6 py-6 space-y-5">
+            <div className="flex bg-muted p-1 rounded-xl">
+              <button
+                type="button"
+                className={cn("flex-1 h-9 rounded-lg text-sm font-semibold transition-all", discountType === 'pct' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground")}
+                onClick={() => { setDiscountType('pct'); setDiscountValueInput(''); }}
+              >
+                Porcentaje (%)
+              </button>
+              <button
+                type="button"
+                className={cn("flex-1 h-9 rounded-lg text-sm font-semibold transition-all", discountType === 'amt' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground")}
+                onClick={() => { setDiscountType('amt'); setDiscountValueInput(''); }}
+              >
+                Monto Fijo ($)
+              </button>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Valor del Descuento
+              </Label>
+              <div className="relative">
+                {discountType === 'amt' && (
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">$</span>
+                )}
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={discountValueInput}
+                  onChange={e => setDiscountValueInput(e.target.value)}
+                  className={cn("h-14 font-semibold text-lg", discountType === 'amt' ? "pl-8" : "pr-8")}
+                  onKeyDown={e => { if (e.key === 'Enter') handleApplyDiscount(); }}
+                />
+                {discountType === 'pct' && (
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">%</span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground">Deje en 0 para eliminar el descuento actual.</p>
+            </div>
+            <Button
+              className="w-full h-11 font-semibold bg-emerald-500 hover:bg-emerald-600 text-white"
+              onClick={handleApplyDiscount}
+            >
+              Aplicar Descuento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Weight / Quantity Modal — Redesigned */}
+      <Dialog open={isWeightModalOpen} onOpenChange={(open) => {
+        setIsWeightModalOpen(open);
+        if (!open) { setEditingCartItemId(null); setEditingCartItemName(''); setWeighableProduct(null); }
+      }}>
+        <DialogContent className="max-w-[420px] w-[calc(100%-2rem)] p-0 overflow-hidden gap-0">
+          {/* Header */}
+          <div className="px-6 pt-6 pb-5 border-b bg-muted/20" style={{ paddingRight: '3.5rem' }}>
+            <div className="space-y-1.5">
+              <DialogTitle className="text-base font-semibold leading-snug">
+                {editingCartItemId ? 'Editar Cantidad / Peso' : 'Ingresar Peso'}
+              </DialogTitle>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm text-muted-foreground font-medium truncate max-w-[220px]">
+                  {editingCartItemId ? editingCartItemName : weighableProduct?.name}
+                </p>
+                <Badge variant="outline" className="shrink-0 text-[10px] font-bold uppercase tracking-wider border-primary/30 text-primary bg-primary/5 flex items-center gap-1">
+                  {weightUnit === 'kg' ? <><IconScale size={11} /> Por Peso</> : <><IconPackage size={11} /> Por Unidad</>}
+                </Badge>
+              </div>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="px-6 py-6 space-y-5">
+            {/* Unit selector */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tipo de Medida</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setWeightUnit('ud')}
+                  className={cn(
+                    "flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all text-sm font-semibold gap-1.5",
+                    weightUnit === 'ud'
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border bg-muted/10 text-muted-foreground hover:bg-muted/20"
+                  )}
+                >
+                  <IconPackage size={22} stroke={1.5} />
+                  <span>Unidades</span>
+                  <span className="text-[10px] font-normal opacity-70">Piezas, bultos, etc.</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWeightUnit('kg')}
+                  className={cn(
+                    "flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all text-sm font-semibold gap-1.5",
+                    weightUnit === 'kg'
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border bg-muted/10 text-muted-foreground hover:bg-muted/20"
+                  )}
+                >
+                  <IconScale size={22} stroke={1.5} />
+                  <span>Kilogramos</span>
+                  <span className="text-[10px] font-normal opacity-70">Fracciones decimales</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Input */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {weightUnit === 'kg' ? 'Peso (Kg)' : 'Cantidad (Unidades)'}
+              </Label>
+              <div className="relative">
+                <Input
+                  ref={weightInputRef}
+                  type="number"
+                  step={weightUnit === 'kg' ? '0.001' : '1'}
+                  min={0}
+                  value={weightValue}
+                  onChange={(e) => setWeightValue(e.target.value)}
+                  placeholder={weightUnit === 'kg' ? 'Ej: 1.250' : 'Ej: 5'}
+                  className="h-14 text-2xl font-mono font-bold pr-14 text-right tabular-nums"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmWeight(); }}
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">
+                  {weightUnit === 'kg' ? 'Kg' : 'Ud'}
+                </span>
+              </div>
+              {weightUnit === 'kg' && (
+                <p className="text-[11px] text-muted-foreground flex items-start gap-1.5 leading-relaxed">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mt-1 shrink-0"></span>
+                  Ingrese el peso exacto mostrado en la balanza (Ej: 0.750 = 750 gramos)
+                </p>
+              )}
+            </div>
+
+            {/* Preview */}
+            {weightValue && parseFloat(weightValue) > 0 && (
+              <div className="rounded-xl bg-muted/30 border border-border/50 px-4 py-3 space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Vista Previa</p>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">
+                    {parseFloat(weightValue || '0').toFixed(weightUnit === 'kg' ? 3 : 0)} {weightUnit === 'kg' ? 'Kg' : 'Ud'} × ${editingCartItemPrice > 0 ? editingCartItemPrice.toFixed(2) : (weighableProduct?.variants?.[0]?.price || 0).toFixed(2)}
+                  </span>
+                  <span className="text-base font-bold text-foreground tabular-nums">
+                    ${((parseFloat(weightValue || '0')) * (editingCartItemPrice > 0 ? editingCartItemPrice : (weighableProduct?.variants?.[0]?.price || 0))).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 pb-6">
+            <Button
+              onClick={handleConfirmWeight}
+              className="w-full h-11 font-semibold text-sm"
+            >
+              Confirmar {weightUnit === 'kg' ? 'Peso' : 'Cantidad'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {isCalculatorOpen && <PosCalculator onClose={() => setIsCalculatorOpen(false)} />}
+      {isNumpadOpen && <PosNumpad onClose={() => setIsNumpadOpen(false)} onEnter={handleNumpadEnter} />}
+    </div>
+  );
+}

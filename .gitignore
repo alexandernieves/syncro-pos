@@ -43,3 +43,5 @@ backend/test-*.txt
 
 # Old build caches
 frontend/.next-old-root/
+frontend/.next.old/
+**/.next.old

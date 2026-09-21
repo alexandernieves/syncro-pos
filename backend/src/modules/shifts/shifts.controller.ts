@@ -30,7 +30,10 @@ export class ShiftsController {
 
   @Post('close/:id')
   @UseGuards(AuthGuard('jwt'))
-  async close(@Param('id') id: string, @Body() body: { closingBalance: number }) {
+  async close(
+    @Param('id') id: string,
+    @Body() body: { closingBalance: number; cashBreakdown?: any; declaredDetails?: any; notes?: string }
+  ) {
     if (!id) {
       throw new BadRequestException('ID de turno es requerido');
     }
@@ -39,7 +42,13 @@ export class ShiftsController {
       throw new BadRequestException('Monto de cierre inválido');
     }
     
-    return this.shiftsService.close(id, body.closingBalance);
+    return this.shiftsService.close(
+      id,
+      body.closingBalance,
+      body.cashBreakdown,
+      body.declaredDetails,
+      body.notes
+    );
   }
 
   @Get('active')

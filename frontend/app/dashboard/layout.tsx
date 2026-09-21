@@ -3,6 +3,7 @@
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { MikeWidget } from "@/components/mike-widget";
 
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -59,7 +60,7 @@ export default function DashboardLayout({
     const userStr = isMqlStandalone ? sessionStorage.getItem("user") : localStorage.getItem("user");
 
     if (!token || !userStr) {
-      router.replace("/");
+      router.replace("/login");
       return;
     }
 
@@ -88,7 +89,7 @@ export default function DashboardLayout({
 
       setIsAuthenticated(true);
     } catch (e) {
-      router.replace("/");
+      router.replace("/login");
     }
   }, [router]);
 
@@ -122,6 +123,7 @@ export default function DashboardLayout({
           </div>
         </div>
       </SidebarInset>
+      <MikeWidget />
     </SidebarProvider>
   );
 }

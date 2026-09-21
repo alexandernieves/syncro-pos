@@ -77,7 +77,8 @@ export default function IngresoPage() {
         body: JSON.stringify({
           variantId: selectedVariant,
           branchId: selectedBranch,
-          quantity: parseInt(quantity)
+          // Weighable stock arrives with decimals; parseInt would floor it.
+          quantity: parseFloat(quantity)
         })
       });
 
@@ -171,6 +172,8 @@ export default function IngresoPage() {
                       <IconCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary" size={16} />
                       <Input 
                         type="number" 
+                        step="any"
+                        min={0}
                         placeholder="0" 
                         className="pl-10 h-11 bg-muted/20 border-none shadow-none text-base font-bold focus:ring-1 focus:ring-primary/20"
                         value={quantity}

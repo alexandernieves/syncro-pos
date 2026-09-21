@@ -222,38 +222,77 @@ export class AuthService {
 
   // ── Register ───────────────────────────────────────────────────────────────
   async register(userData: any) {
+    const {
+      businessName: rawBusinessName,
+      // Pulled out and dropped on purpose. The trade is no longer asked for,
+      // but an older client may still post it, and anything left in
+      // `userFields` is forwarded straight into the user record.
+      businessType: _discardedBusinessType,
+      ...userFields
+    } = userData;
+    void _discardedBusinessType;
+
+    const businessName = rawBusinessName || userFields.name || 'Mi Negocio';
+
     // 1. Create the business
     const business = await this.prisma.business.create({
       data: {
-        name:         userData.name || 'Mi Negocio',
-        email:        userData.email,
+        name:         businessName,
+        email:        userFields.email,
         status:       'ACTIVE',
         subscription: 'BASIC',
       },
     });
 
-    // 2. Create settings for this business
+    /*
+     * 2. Settings for the new business.
+     *
+     * Registration no longer asks what trade the shop is in, and no longer
+     * branches on it. The same base covers a bodega, a minimarket, a hardware
+     * store and a boutique, so everyone starts with every module switched on
+     * and turns off what they do not want from Configuración.
+     *
+     * Branching here was also quietly harmful: the old BODEGA preset shipped
+     * without credit, WhatsApp or the agent, which meant the one trade that
+     * lives on fiado was the only one registering without it.
+     *
+     * Blind close is on by default. A till that reconciles against a declared
+     * count is the safer starting position for any shop, and it is one switch
+     * away in settings for anyone who does not want it.
+     */
+    const businessType = 'GENERAL';
+    const enabledModules = [
+      'pos', 'products', 'inventory', 'clients', 'credit', 'suppliers',
+      'accounting', 'reports', 'historial', 'whatsapp', 'deliveries', 'ai_agent'
+    ];
+    const blindShiftClose = true;
+
+    // 3. Create settings for this business
     await this.prisma.setting.create({
       data: {
         businessId: business.id,
-        country:    userData.country || 'Venezuela',
+        country:    userFields.country || 'Venezuela',
+        businessType,
+        enabledModules,
+        blindShiftClose,
+        businessName,
       },
     });
 
-    // 3. Create main branch
+    // 4. Create main branch
     await this.prisma.branch.create({
       data: {
         businessId: business.id,
         name:       'Sucursal Principal',
-        location:   userData.city || 'Sede Central',
+        location:   userFields.city || 'Sede Central',
         isMain:     true,
-        country:    userData.country || 'Venezuela',
+        country:    userFields.country || 'Venezuela',
       },
     });
 
-    // 4. Create the user linked to the business
+    // 5. Create the user linked to the business
     return await this.usersService.create({
-      ...userData,
+      ...userFields,
       businessId: business.id,
     });
   }

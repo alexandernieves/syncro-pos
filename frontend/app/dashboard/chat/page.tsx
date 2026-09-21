@@ -1163,7 +1163,7 @@ export default function WhatsAppChatPage() {
   });
 
   return (
-    <div className="flex bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-2xl overflow-hidden h-[calc(100vh-var(--header-height,100px))] font-sans shadow-md">
+    <div className="flex bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-2xl overflow-hidden h-[calc(100vh-100px)] font-sans shadow-md">
       {showLockScreen ? (
         <div className="flex-1 flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-6 animate-in fade-in duration-200">
           <div className="max-w-sm w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-2xl flex flex-col items-center text-center space-y-4">
