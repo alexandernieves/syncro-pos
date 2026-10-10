@@ -297,7 +297,7 @@ export default function GymReceptionPage() {
                 <Avatar src={c.member?.photoUrl} name={c.member?.client.name || "?"} size={34} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{c.member?.client.name ?? "Socio eliminado"}</p>
-                  <p className="truncate text-xs text-muted-foreground">{c.reason}</p>
+                  <p className="truncate text-xs text-muted-foreground">{c.method === "FACE" ? "Por rostro · " : ""}{c.reason}</p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end">
                   {c.granted ? <IconCircleCheckFilled size={18} className="text-emerald-600" /> : <IconCircleXFilled size={18} className="text-rose-600" />}

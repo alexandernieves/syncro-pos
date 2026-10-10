@@ -1,0 +1,17 @@
+[Unit]
+Description=Syncro gym bridge (lector facial Hikvision)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=syncro
+WorkingDirectory=/opt/syncro-gym-bridge
+ExecStart=/usr/bin/node src/bridge.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+# Logs: journalctl -u syncro-gym-bridge -f
+
+[Install]
+WantedBy=multi-user.target

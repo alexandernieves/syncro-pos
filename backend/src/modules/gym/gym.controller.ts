@@ -12,6 +12,7 @@ import { DOCUMENT_STARTERS, GymDocumentsService } from './gym-documents.service'
 import { GymEquipmentService } from './gym-equipment.service';
 import { GymTrainingService } from './gym-training.service';
 import { GymReportsService } from './gym-reports.service';
+import { GymDevicesService } from './gym-devices.service';
 
 @UseGuards(JwtAuthGuard, GymStaffGuard)
 @Controller('gym')
@@ -28,7 +29,44 @@ export class GymController {
     private readonly equipment: GymEquipmentService,
     private readonly training: GymTrainingService,
     private readonly reports: GymReportsService,
+    private readonly devices: GymDevicesService,
   ) {}
+
+  // Face readers (Hikvision) and their local bridge
+  @Get('devices')
+  listDevices(@Request() req: any) {
+    return this.devices.list(req.user.businessId);
+  }
+
+  @Get('devices/events')
+  deviceEvents(@Query('deviceId') deviceId: string, @Request() req: any) {
+    return this.devices.events(req.user.businessId, deviceId || undefined);
+  }
+
+  @Get('devices/faces')
+  faceIssues(@Request() req: any) {
+    return this.devices.faceIssues(req.user.businessId);
+  }
+
+  @Post('devices')
+  createDevice(@Body() body: any, @Request() req: any) {
+    return this.devices.create(req.user.businessId, body);
+  }
+
+  @Put('devices/:id')
+  updateDevice(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.devices.update(req.user.businessId, id, body);
+  }
+
+  @Post('devices/:id/key')
+  rotateDeviceKey(@Param('id') id: string, @Request() req: any) {
+    return this.devices.rotateKey(req.user.businessId, id);
+  }
+
+  @Post('devices/:id/command')
+  deviceCommand(@Param('id') id: string, @Body('type') type: 'OPEN_DOOR' | 'RESYNC', @Request() req: any) {
+    return this.devices.command(req.user.businessId, id, type);
+  }
 
   // Reports
   @Get('reports/attendance')

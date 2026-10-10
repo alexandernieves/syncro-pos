@@ -17,12 +17,14 @@ import { GymDocumentsService } from './gym-documents.service';
 import { GymEquipmentService } from './gym-equipment.service';
 import { GymTrainingService } from './gym-training.service';
 import { GymReportsService } from './gym-reports.service';
+import { GymDevicesService } from './gym-devices.service';
+import { DeviceKeyGuard, GymBridgeController } from './gym-bridge.controller';
 import { GymService } from './gym.service';
 
 @Module({
   imports: [PrismaModule, WhatsAppModule, UploadsModule],
-  controllers: [GymPortalController, GymController],
-  providers: [GymService, GymRemindersService, GymClassesService, GymNotificationsService, GymPortalService, GymCrmService, GymStaffService, GymVisitsService, GymAutomationService, GymDocumentsService, GymEquipmentService, GymTrainingService, GymReportsService, GymStaffGuard, GymMemberGuard],
+  controllers: [GymPortalController, GymBridgeController, GymController],
+  providers: [GymService, GymRemindersService, GymClassesService, GymNotificationsService, GymPortalService, GymCrmService, GymStaffService, GymVisitsService, GymAutomationService, GymDocumentsService, GymEquipmentService, GymTrainingService, GymReportsService, GymDevicesService, DeviceKeyGuard, GymStaffGuard, GymMemberGuard],
   exports: [GymService],
 })
 export class GymModule {}

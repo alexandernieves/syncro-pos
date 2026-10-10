@@ -216,6 +216,7 @@ export class GymService {
       photoUrl: member.photoUrl,
       accessEnabled: member.accessEnabled,
       faceSyncedAt: member.faceSyncedAt,
+      faceError: member.faceError,
       createdAt: member.createdAt,
       client: member.client,
       status,
@@ -280,7 +281,8 @@ export class GymService {
 
   private memberData(data: MemberInput) {
     return {
-      ...(data.photoUrl !== undefined && { photoUrl: data.photoUrl || null }),
+      // A new photo has to be loaded into the face reader again
+      ...(data.photoUrl !== undefined && { photoUrl: data.photoUrl || null, faceSyncedAt: null, faceError: null }),
       ...(data.birthDate !== undefined && { birthDate: data.birthDate ? parseDay(data.birthDate) : null }),
       ...(data.gender !== undefined && { gender: data.gender || null }),
       ...(data.emergencyContact !== undefined && { emergencyContact: data.emergencyContact || null }),
@@ -575,7 +577,7 @@ export class GymService {
   /** Fields to resume a frozen membership at `at`: days paused (within the plan's limit) go to the end date. */
   resumeData(m: { frozenAt: Date | null; frozenDaysUsed: number; endDate: Date; plan: { maxFreezeDays: number } }, at: Date) {
     const allowed = Math.max(0, m.plan.maxFreezeDays - m.frozenDaysUsed);
-    const days = Math.min(allowed, Math.max(0, Math.ceil((at.getTime() - (m.frozenAt ?? at).getTime()) / DAY)));
+    const days = Math.min(allowed, Math.max(0, Math.round((at.getTime() - (m.frozenAt ?? at).getTime()) / DAY)));
     return { status: 'ACTIVE', frozenAt: null, freezeFrom: null, freezeUntil: null, frozenDaysUsed: m.frozenDaysUsed + days, endDate: addDays(m.endDate, days) };
   }
 

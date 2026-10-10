@@ -52,6 +52,7 @@ export type GymMemberRow = {
   photoUrl: string | null;
   accessEnabled: boolean;
   faceSyncedAt: string | null;
+  faceError?: string | null;
   createdAt: string;
   client: { id: string; name: string; documentId: string | null; phone: string | null; email: string | null };
   status: MemberStatus;

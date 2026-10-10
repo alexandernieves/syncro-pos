@@ -64,6 +64,8 @@ model Business {
   gymRoutines           GymRoutine[]
   gymWorkoutLogs        GymWorkoutLog[]
   gymAssessments        GymAssessment[]
+  gymDevices            GymDevice[]
+  gymDeviceEvents       GymDeviceEvent[]
 }
 
 model Conversation {
@@ -1299,6 +1301,8 @@ model GymMember {
   /// Person id on the face reader (Hikvision employeeNo)
   deviceUserId     String?
   faceSyncedAt     DateTime?
+  /// Last error from the face reader when loading this member (bad photo, no face found…)
+  faceError        String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @default(now()) @updatedAt
   business         Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -1843,4 +1847,54 @@ model GymAssessment {
   trainer       GymTrainer? @relation(fields: [trainerId], references: [id], onDelete: SetNull)
 
   @@index([memberId, date], map: "GymAssessment_member_date_idx")
+}
+
+/// A face reader at the door (Hikvision), managed through the local bridge on the gym's server
+model GymDevice {
+  id         String           @id @default(uuid())
+  businessId String
+  name       String
+  model      String           @default("DS-K1T341CMFW")
+  location   String?
+  /// VALIDITY: the reader decides with the dates Syncro loads; STRICT: Syncro decides each entry
+  mode       String           @default("VALIDITY")
+  doorNo     Int              @default(1)
+  /// The bridge authenticates with this key (only its hash is kept)
+  keyPrefix  String           @unique
+  keyHash    String
+  isActive   Boolean          @default(true)
+  lastSeenAt DateTime?
+  lastSyncAt DateTime?
+  /// What the bridge reports: device online, firmware, users and faces on the reader, last error
+  status     Json?
+  /// Pending orders for the bridge: [{ id, type: "OPEN_DOOR" | "RESYNC", at }]
+  commands   Json?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @default(now()) @updatedAt
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  events     GymDeviceEvent[]
+
+  @@index([businessId], map: "GymDevice_business_idx")
+}
+
+/// Each recognition sent by the reader (kept once, by its serial number on the device)
+model GymDeviceEvent {
+  id            String    @id @default(uuid())
+  businessId    String
+  deviceId      String
+  serialNo      String
+  employeeNo    String?
+  memberId      String?
+  /// What the reader did and what Syncro decided
+  deviceGranted Boolean
+  syncroGranted Boolean?
+  reason        String?
+  minor         Int?
+  occurredAt    DateTime
+  createdAt     DateTime  @default(now())
+  business      Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  device        GymDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, serialNo], map: "GymDeviceEvent_device_serial_key")
+  @@index([businessId, occurredAt], map: "GymDeviceEvent_business_time_idx")
 }

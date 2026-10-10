@@ -1,0 +1,16 @@
+{
+  "name": "syncro-gym-bridge",
+  "version": "1.0.0",
+  "description": "Conecta el lector facial Hikvision del gimnasio con Syncro, desde un servidor en la red local",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/bridge.js",
+    "simulator": "node src/simulator.js",
+    "check": "node src/check.js"
+  },
+  "dependencies": {
+    "sharp": "^0.33.5"
+  }
+}

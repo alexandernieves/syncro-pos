@@ -502,7 +502,12 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
               <div className="min-w-0 flex-1">
                 <p className="truncate text-lg font-bold">{member.client.name}</p>
                 <p className="text-sm text-muted-foreground">Socio n.º {member.memberNumber}{member.client.documentId ? ` · ${member.client.documentId}` : ""}</p>
-                <div className="mt-1.5"><StatusBadge status={member.status} /></div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                  <StatusBadge status={member.status} />
+                  <span className={cn("text-xs", member.faceError ? "text-rose-600" : member.faceSyncedAt ? "text-emerald-700" : "text-muted-foreground")} title={member.faceError ?? undefined}>
+                    {member.faceError ? "Rostro con error en el lector" : member.faceSyncedAt ? "Rostro cargado en el lector" : member.photoUrl ? "Rostro pendiente de cargar" : "Sin foto para el lector"}
+                  </span>
+                </div>
               </div>
               <div className="flex shrink-0 flex-col gap-1.5">
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditing(true)}><IconPencil size={14} /> Editar</Button>

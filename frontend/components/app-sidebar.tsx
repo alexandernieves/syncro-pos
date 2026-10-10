@@ -13,6 +13,7 @@ import {
   IconHistory,
   IconSettings,
   IconTarget,
+  IconFaceId,
   IconChartBar,
   IconTool,
   IconUsersGroup,
@@ -169,6 +170,7 @@ const data = {
   navGym: [
     { title: "Resumen", url: "/dashboard/gimnasio", icon: IconLayoutDashboard },
     { title: "Recepción", url: "/dashboard/gimnasio/recepcion", icon: IconDoorEnter },
+    { title: "Control de acceso", url: "/dashboard/gimnasio/acceso", icon: IconFaceId },
     { title: "Socios", url: "/dashboard/gimnasio/socios", icon: IconId },
     { title: "Clases", url: "/dashboard/gimnasio/clases", icon: IconCalendarEvent },
     { title: "Prospectos", url: "/dashboard/gimnasio/prospectos", icon: IconTarget },
