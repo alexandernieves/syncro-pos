@@ -18,8 +18,8 @@ import { GymPage, GymPageHeader } from "@/components/gym/gym-ui";
 const COLORS = ["#E4572E", "#2563EB", "#059669", "#7C3AED", "#DB2777", "#D97706", "#16140F"];
 const DURATIONS: [number, string][] = [[1, "Pase diario"], [7, "Semanal"], [15, "Quincenal"], [30, "Mensual"], [90, "Trimestral"], [180, "Semestral"], [365, "Anual"]];
 
-type Draft = { id?: string; name: string; description: string; durationDays: number; price: string; color: string; maxFreezeDays: string; isActive: boolean };
-const emptyDraft: Draft = { name: "", description: "", durationDays: 30, price: "", color: COLORS[0], maxFreezeDays: "0", isActive: true };
+type Draft = { id?: string; name: string; description: string; durationDays: number; price: string; color: string; maxFreezeDays: string; guestPassesPerMonth: string; isActive: boolean };
+const emptyDraft: Draft = { name: "", description: "", durationDays: 30, price: "", color: COLORS[0], maxFreezeDays: "0", guestPassesPerMonth: "0", isActive: true };
 
 export default function GymPlansPage() {
   const [plans, setPlans] = useState<GymPlan[] | null>(null);
@@ -40,6 +40,7 @@ export default function GymPlansPage() {
         price: Number(draft.price),
         color: draft.color,
         maxFreezeDays: Number(draft.maxFreezeDays) || 0,
+        guestPassesPerMonth: Number(draft.guestPassesPerMonth) || 0,
         isActive: draft.isActive,
       };
       await gymApi(draft.id ? `/plans/${draft.id}` : "/plans", { method: draft.id ? "PUT" : "POST", json: body });
@@ -81,7 +82,7 @@ export default function GymPlansPage() {
                 <CardDescription>{durationLabel(p.durationDays)}</CardDescription>
                 <CardTitle className="text-xl font-semibold">{p.name}</CardTitle>
                 <CardAction>
-                  <Button variant="ghost" size="icon" className="size-8" title="Editar plan" onClick={() => setDraft({ id: p.id, name: p.name, description: p.description || "", durationDays: p.durationDays, price: String(p.price), color: p.color || COLORS[0], maxFreezeDays: String(p.maxFreezeDays), isActive: p.isActive })}>
+                  <Button variant="ghost" size="icon" className="size-8" title="Editar plan" onClick={() => setDraft({ id: p.id, name: p.name, description: p.description || "", durationDays: p.durationDays, price: String(p.price), color: p.color || COLORS[0], maxFreezeDays: String(p.maxFreezeDays), guestPassesPerMonth: String(p.guestPassesPerMonth ?? 0), isActive: p.isActive })}>
                     <IconPencil size={16} />
                   </Button>
                 </CardAction>
@@ -99,6 +100,7 @@ export default function GymPlansPage() {
               <CardFooter className="flex flex-wrap gap-1.5">
                 <Badge variant="outline">{p._count?.memberships ?? 0} vendidas</Badge>
                 {p.maxFreezeDays > 0 && <Badge variant="outline" className="gap-1"><IconSnowflake size={12} /> Congela hasta {p.maxFreezeDays} días</Badge>}
+                {(p.guestPassesPerMonth ?? 0) > 0 && <Badge variant="outline">{p.guestPassesPerMonth} {p.guestPassesPerMonth === 1 ? "invitado" : "invitados"} al mes</Badge>}
                 {!p.isActive && <Badge variant="outline">Desactivado</Badge>}
               </CardFooter>
             </Card>
@@ -137,6 +139,11 @@ export default function GymPlansPage() {
                 <div className="space-y-1.5">
                   <Label>Días para congelar</Label>
                   <Input type="number" min={0} value={draft.maxFreezeDays} onChange={(e) => setDraft({ ...draft, maxFreezeDays: e.target.value })} />
+                </div>
+                <div className="col-span-2 space-y-1.5">
+                  <Label>Invitados gratis al mes</Label>
+                  <Input type="number" min={0} value={draft.guestPassesPerMonth} onChange={(e) => setDraft({ ...draft, guestPassesPerMonth: e.target.value })} />
+                  <p className="text-xs text-muted-foreground">Pases para que el socio traiga a alguien sin costo. Después se cobra el pase de día.</p>
                 </div>
               </div>
               <div className="space-y-1.5">

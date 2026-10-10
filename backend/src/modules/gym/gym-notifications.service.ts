@@ -108,6 +108,34 @@ export class GymNotificationsService {
     }
   }
 
+  /** Confirms a prospect's trial class (they aren't members, so they're messaged by phone). */
+  async notifyTrial(businessId: string, lead: { id: string; name: string; phone: string | null }, sessionId: string) {
+    const settings = await this.settings.getSettings(businessId);
+    if (!settings.notices.TRIAL_BOOKED) return false;
+    const session = await this.prisma.gymClassSession.findFirst({ where: { id: sessionId, businessId }, include: { class: { select: { name: true } } } });
+    if (!session) return false;
+    const businessName = (await this.prisma.setting.findFirst({ where: { businessId }, select: { businessName: true } }))?.businessName || 'tu gimnasio';
+    const text = settings.notices.templates.TRIAL_BOOKED
+      .replace(/\{nombre\}/g, lead.name.trim().split(/\s+/)[0] || lead.name)
+      .replace(/\{clase\}/g, session.class.name)
+      .replace(/\{fecha\}/g, GymNotificationsService.when(session.startsAt, settings.timeZone))
+      .replace(/\{gimnasio\}/g, businessName);
+    const base = { businessId, leadId: lead.id, sessionId, kind: 'TRIAL_BOOKED', phone: lead.phone, text };
+    const connected = (await this.whatsapp.getStatus(businessId).catch(() => ({ connected: false }))).connected;
+    if (!lead.phone || !connected) {
+      await this.prisma.gymNotification.create({ data: { ...base, status: 'SKIPPED', error: !lead.phone ? 'El prospecto no tiene WhatsApp' : 'WhatsApp desconectado' } });
+      return false;
+    }
+    try {
+      await this.whatsapp.sendTextMessage(lead.phone, text, businessId);
+      await this.prisma.gymNotification.create({ data: { ...base, status: 'SENT' } });
+      return true;
+    } catch (e) {
+      await this.prisma.gymNotification.create({ data: { ...base, status: 'FAILED', error: String(e.message).slice(0, 300) } });
+      return false;
+    }
+  }
+
   list(businessId: string, sessionId?: string) {
     return this.prisma.gymNotification.findMany({
       where: { businessId, ...(sessionId && { sessionId }) },

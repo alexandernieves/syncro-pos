@@ -5,7 +5,7 @@ import { WhatsAppService } from '../whatsapp/whatsapp.service';
 
 export type ReminderKind = 'BEFORE' | 'EXPIRY' | 'AFTER';
 
-export type ClassNoticeKind = 'CLASS_CANCELLED' | 'CLASS_MOVED' | 'WAITLIST_PROMOTED';
+export type ClassNoticeKind = 'CLASS_CANCELLED' | 'CLASS_MOVED' | 'WAITLIST_PROMOTED' | 'TRIAL_BOOKED';
 
 export type GymSettings = {
   timeZone: string;
@@ -32,6 +32,13 @@ export type GymSettings = {
   };
   /** WhatsApp notices about classes. */
   notices: Record<ClassNoticeKind, boolean> & { templates: Record<ClassNoticeKind, string> };
+  /** People who come in without a membership. */
+  visits: {
+    /** Price of a day pass (also charged to a guest when the host has no free passes left). */
+    dayPassPrice: number;
+    /** Save guests and day passes as prospects to follow up. */
+    leadFromVisit: boolean;
+  };
 };
 
 export const DEFAULT_GYM_SETTINGS: GymSettings = {
@@ -53,12 +60,15 @@ export const DEFAULT_GYM_SETTINGS: GymSettings = {
     CLASS_CANCELLED: true,
     CLASS_MOVED: true,
     WAITLIST_PROMOTED: true,
+    TRIAL_BOOKED: true,
     templates: {
       CLASS_CANCELLED: 'Hola {nombre}, la clase de *{clase}* del *{fecha}* fue cancelada.{motivo} Disculpa las molestias 🙏 — {gimnasio}',
       CLASS_MOVED: 'Hola {nombre}, la clase de *{clase}* cambió de horario: ahora es el *{fecha}* (antes {antes}). Tu cupo sigue reservado ✅ — {gimnasio}',
       WAITLIST_PROMOTED: '¡Buenas noticias, {nombre}! 🎉 Se liberó un cupo y ya estás anotado en *{clase}* el *{fecha}*. Si no puedes ir, cancela desde tu app para dárselo a otro socio — {gimnasio}',
+      TRIAL_BOOKED: 'Hola {nombre} 👋 Te esperamos en *{gimnasio}* para tu clase de prueba de *{clase}* el *{fecha}*. Trae ropa cómoda, toalla e hidratación 💧',
     },
   },
+  visits: { dayPassPrice: 5, leadFromVisit: true },
 };
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -99,7 +109,9 @@ export class GymRemindersService {
     const n = saved?.notices ?? {};
     const dn = DEFAULT_GYM_SETTINGS.notices;
     const int = (v: any, min: number, max: number, def: number) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Math.min(max, Math.max(min, Math.round(Number(v)))) : def);
-    const kinds: ClassNoticeKind[] = ['CLASS_CANCELLED', 'CLASS_MOVED', 'WAITLIST_PROMOTED'];
+    const kinds: ClassNoticeKind[] = ['CLASS_CANCELLED', 'CLASS_MOVED', 'WAITLIST_PROMOTED', 'TRIAL_BOOKED'];
+    const v = saved?.visits ?? {};
+    const money = (x: any, def: number) => (Number.isFinite(Number(x)) && x !== null && x !== '' ? Math.max(0, Math.round(Number(x) * 100) / 100) : def);
     return {
       timeZone: typeof saved?.timeZone === 'string' && saved.timeZone ? saved.timeZone : DEFAULT_GYM_SETTINGS.timeZone,
       reminders: {
@@ -123,6 +135,10 @@ export class GymRemindersService {
       notices: {
         ...(Object.fromEntries(kinds.map((k) => [k, n[k] !== false])) as Record<ClassNoticeKind, boolean>),
         templates: Object.fromEntries(kinds.map((k) => [k, n.templates?.[k]?.trim() || dn.templates[k]])) as Record<ClassNoticeKind, string>,
+      },
+      visits: {
+        dayPassPrice: money(v.dayPassPrice, DEFAULT_GYM_SETTINGS.visits.dayPassPrice),
+        leadFromVisit: v.leadFromVisit !== false,
       },
     };
   }

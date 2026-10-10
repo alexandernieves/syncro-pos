@@ -51,6 +51,11 @@ model Business {
   gymClassSessions      GymClassSession[]
   gymBookings           GymBooking[]
   gymNotifications      GymNotification[]
+  gymStaffAvailability  GymStaffAvailability[]
+  gymStaffShifts        GymStaffShift[]
+  gymLeads              GymLead[]
+  gymLeadActivities     GymLeadActivity[]
+  gymVisits             GymVisit[]
 }
 
 model Conversation {
@@ -1238,20 +1243,22 @@ model ProductReview {
 // ─── Gym module ──────────────────────────────────────────────────────────────
 
 model GymPlan {
-  id            String          @id @default(uuid())
-  businessId    String
-  name          String
-  description   String?
-  durationDays  Int
-  price         Float
-  color         String?
+  id                  String          @id @default(uuid())
+  businessId          String
+  name                String
+  description         String?
+  durationDays        Int
+  price               Float
+  color               String?
   /// Days a membership of this plan can be frozen (0 = not allowed)
-  maxFreezeDays Int             @default(0)
-  isActive      Boolean         @default(true)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @default(now()) @updatedAt
-  business      Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  memberships   GymMembership[]
+  maxFreezeDays       Int             @default(0)
+  /// Free guest passes per month for members on this plan
+  guestPassesPerMonth Int             @default(0)
+  isActive            Boolean         @default(true)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @default(now()) @updatedAt
+  business            Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  memberships         GymMembership[]
 
   @@index([businessId])
 }
@@ -1283,6 +1290,8 @@ model GymMember {
   reminders        GymReminder[]
   bookings         GymBooking[]
   notifications    GymNotification[]
+  leads            GymLead[]
+  hostedVisits     GymVisit[]        @relation("VisitHost")
 
   @@unique([businessId, memberNumber])
 }
@@ -1317,9 +1326,11 @@ model GymMembership {
 }
 
 model GymPayment {
-  id                String        @id @default(uuid())
+  id                String         @id @default(uuid())
   businessId        String
-  membershipId      String
+  membershipId      String?
+  /// Day pass or guest pass charged at reception (instead of a membership)
+  visitId           String?
   amount            Float
   method            String
   reference         String?
@@ -1329,9 +1340,10 @@ model GymPayment {
   branchId          String?
   shiftId           String?
   accountingEntryId String?
-  createdAt         DateTime      @default(now())
-  business          Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  membership        GymMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdAt         DateTime       @default(now())
+  business          Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  membership        GymMembership? @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  visit             GymVisit?      @relation(fields: [visitId], references: [id], onDelete: SetNull)
 
   @@index([businessId, createdAt], map: "GymPayment_business_created_idx")
   @@index([shiftId], map: "GymPayment_shiftId_idx")
@@ -1376,19 +1388,25 @@ model GymReminder {
 }
 
 model GymTrainer {
-  id         String            @id @default(uuid())
-  businessId String
-  name       String
-  phone      String?
-  specialty  String?
-  photoUrl   String?
-  color      String?
-  isActive   Boolean           @default(true)
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @default(now()) @updatedAt
-  business   Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  classes    GymClass[]
-  sessions   GymClassSession[]
+  id           String                 @id @default(uuid())
+  businessId   String
+  name         String
+  phone        String?
+  specialty    String?
+  photoUrl     String?
+  color        String?
+  /// TRAINER, RECEPTION, MANAGER, CLEANING or OTHER (the gym's staff, not only trainers)
+  role         String                 @default("TRAINER")
+  /// Pay per hour, to estimate the cost of the shifts
+  hourlyRate   Float?
+  isActive     Boolean                @default(true)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @default(now()) @updatedAt
+  business     Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  classes      GymClass[]
+  sessions     GymClassSession[]
+  availability GymStaffAvailability[]
+  shifts       GymStaffShift[]
 
   @@index([businessId])
 }
@@ -1438,6 +1456,7 @@ model GymClassSession {
   business         Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   class            GymClass     @relation(fields: [classId], references: [id], onDelete: Cascade)
   trainer          GymTrainer?  @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  trialLeads       GymLead[]
   bookings         GymBooking[]
 
   @@unique([classId, startsAt])
@@ -1469,8 +1488,10 @@ model GymNotification {
   id         String     @id @default(uuid())
   businessId String
   memberId   String?
+  /// For prospects (trial class confirmations)
+  leadId     String?
   sessionId  String?
-  /// CLASS_CANCELLED, CLASS_MOVED or WAITLIST_PROMOTED
+  /// CLASS_CANCELLED, CLASS_MOVED, WAITLIST_PROMOTED or TRIAL_BOOKED
   kind       String
   /// SENT, FAILED or SKIPPED (no phone, WhatsApp off)
   status     String
@@ -1482,4 +1503,116 @@ model GymNotification {
   member     GymMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
 
   @@index([businessId, createdAt], map: "GymNotification_business_created_idx")
+}
+
+/// Weekly hours a staff member can work (one row per day and range)
+model GymStaffAvailability {
+  id         String     @id @default(uuid())
+  businessId String
+  staffId    String
+  /// 0 = Sunday … 6 = Saturday
+  dayOfWeek  Int
+  startTime  String
+  endTime    String
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  staff      GymTrainer @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId], map: "GymStaffAvailability_staff_idx")
+}
+
+/// A work shift of a staff member, with clock in and out
+model GymStaffShift {
+  id         String     @id @default(uuid())
+  businessId String
+  staffId    String
+  startsAt   DateTime
+  endsAt     DateTime
+  /// Where they work: Recepción, Piso, Clases, Limpieza…
+  area       String?
+  notes      String?
+  /// SCHEDULED, DONE or ABSENT
+  status     String     @default("SCHEDULED")
+  clockInAt  DateTime?
+  clockOutAt DateTime?
+  createdAt  DateTime   @default(now())
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  staff      GymTrainer @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, startsAt], map: "GymStaffShift_business_starts_idx")
+  @@index([staffId, startsAt], map: "GymStaffShift_staff_starts_idx")
+}
+
+/// A prospect: someone interested who isn't a member yet
+model GymLead {
+  id             String            @id @default(uuid())
+  businessId     String
+  name           String
+  phone          String?
+  email          String?
+  documentId     String?
+  /// WALK_IN, INSTAGRAM, FACEBOOK, REFERRAL, WHATSAPP, WEB, GUEST or OTHER
+  source         String            @default("WALK_IN")
+  interest       String?
+  /// NEW, CONTACTED, TRIAL_SCHEDULED, TRIAL_DONE, WON or LOST
+  stage          String            @default("NEW")
+  lostReason     String?
+  notes          String?
+  ownerName      String?
+  nextFollowUpAt DateTime?
+  trialSessionId String?
+  trialAt        DateTime?
+  memberId       String?
+  wonAt          DateTime?
+  lostAt         DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @default(now()) @updatedAt
+  business       Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  trialSession   GymClassSession?  @relation(fields: [trialSessionId], references: [id], onDelete: SetNull)
+  member         GymMember?        @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  activities     GymLeadActivity[]
+  visits         GymVisit[]
+
+  @@index([businessId, stage], map: "GymLead_business_stage_idx")
+  @@index([trialSessionId], map: "GymLead_trial_session_idx")
+}
+
+/// Timeline of a prospect: notes, calls, messages, stage changes
+model GymLeadActivity {
+  id         String   @id @default(uuid())
+  businessId String
+  leadId     String
+  /// NOTE, CALL, WHATSAPP, STAGE, TRIAL or VISIT
+  type       String
+  text       String
+  userName   String?
+  createdAt  DateTime @default(now())
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  lead       GymLead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt], map: "GymLeadActivity_lead_created_idx")
+}
+
+/// Someone who came in without a membership: a member's guest, a day pass or a visitor
+model GymVisit {
+  id           String       @id @default(uuid())
+  businessId   String
+  /// GUEST (invited by a member), DAY_PASS (paid) or VISITOR (doesn't train)
+  kind         String
+  name         String
+  documentId   String?
+  phone        String?
+  hostMemberId String?
+  leadId       String?
+  price        Float        @default(0)
+  notes        String?
+  checkedInAt  DateTime     @default(now())
+  checkedOutAt DateTime?
+  createdById  String?
+  business     Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  hostMember   GymMember?   @relation("VisitHost", fields: [hostMemberId], references: [id], onDelete: SetNull)
+  lead         GymLead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  payments     GymPayment[]
+
+  @@index([businessId, checkedInAt], map: "GymVisit_business_checkin_idx")
+  @@index([hostMemberId, checkedInAt], map: "GymVisit_host_checkin_idx")
 }

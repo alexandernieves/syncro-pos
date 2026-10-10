@@ -282,7 +282,7 @@ export function ClassCalendar({ sessions, loading, trainers, classes, onRangeCha
 }
 
 /** FullCalendar themed with the dashboard tokens; events drawn by EventCard. */
-const CALENDAR_CSS = `
+export const CALENDAR_CSS = `
 .gym-calendar .fc { --fc-border-color: var(--border); --fc-page-bg-color: transparent; --fc-neutral-bg-color: var(--muted); --fc-today-bg-color: color-mix(in oklab, var(--primary) 4%, transparent); --fc-now-indicator-color: var(--primary); --fc-list-event-hover-bg-color: var(--muted); font-family: inherit; }
 .gym-calendar .fc .fc-scrollgrid { border: 0; }
 .gym-calendar .fc th { border-left: 0; border-right: 0; }

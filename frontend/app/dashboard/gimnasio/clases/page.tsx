@@ -259,7 +259,7 @@ function TrainerDialog({ draft, setDraft, onSaved }: { draft: TrainerDraft | nul
 // ── Session detail ──────────────────────────────────────────────────────────
 
 function SessionSheet({ sessionId, timeZone, onClose, onChanged }: { sessionId: string | null; timeZone?: string; onClose: () => void; onChanged: () => void }) {
-  const [session, setSession] = useState<(Session & { bookings: Booking[] }) | null>(null);
+  const [session, setSession] = useState<(Session & { bookings: Booking[]; trialLeads?: { id: string; name: string; phone: string | null; stage: string }[] }) | null>(null);
   const [q, setQ] = useState("");
   const [matches, setMatches] = useState<GymMemberRow[]>([]);
   const [busy, setBusy] = useState(false);
@@ -397,6 +397,19 @@ function SessionSheet({ sessionId, timeZone, onClose, onChanged }: { sessionId: 
                 </div>
               ))}
             </div>
+
+            {!!session.trialLeads?.length && (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold">Clase de prueba ({session.trialLeads.length})</p>
+                {session.trialLeads.map((l) => (
+                  <a key={l.id} href="/dashboard/gimnasio/prospectos" className="flex items-center gap-3 rounded-lg bg-amber-500/10 px-2 py-1.5 hover:bg-amber-500/15">
+                    <Avatar name={l.name} size={30} />
+                    <p className="min-w-0 flex-1 truncate text-sm">{l.name}</p>
+                    <span className="text-[11px] font-medium text-amber-800">{l.stage === "TRIAL_DONE" ? "Vino" : "Prospecto"}</span>
+                  </a>
+                ))}
+              </div>
+            )}
 
             {session.bookings.some((b) => b.status === "WAITLIST") && (
               <div className="space-y-2">

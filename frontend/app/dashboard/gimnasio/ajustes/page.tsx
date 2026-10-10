@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { IconBrandWhatsapp, IconDeviceFloppy, IconDeviceMobile, IconLoader2, IconWorld } from "@tabler/icons-react";
+import { IconBrandWhatsapp, IconDeviceFloppy, IconDeviceMobile, IconLoader2, IconTicket, IconWorld } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { gymApi } from "@/lib/gym";
@@ -16,11 +16,12 @@ import { PosTable } from "@/components/pos-table";
 import { GymPage, GymPageHeader, PersonCell } from "@/components/gym/gym-ui";
 import { WhatsAppPreview } from "@/components/gym/whatsapp-preview";
 
-type NoticeKind = "CLASS_CANCELLED" | "CLASS_MOVED" | "WAITLIST_PROMOTED";
+type NoticeKind = "CLASS_CANCELLED" | "CLASS_MOVED" | "WAITLIST_PROMOTED" | "TRIAL_BOOKED";
 type Settings = {
   timeZone: string;
   booking: { portalEnabled: boolean; daysAhead: number; cancelHours: number; maxActive: number };
   notices: Record<NoticeKind, boolean> & { templates: Record<NoticeKind, string> };
+  visits: { dayPassPrice: number; leadFromVisit: boolean };
 };
 type NoticeRow = {
   id: string;
@@ -67,9 +68,16 @@ const NOTICES: { kind: NoticeKind; title: string; when: string; placeholders: [s
     placeholders: [["{nombre}", "Nombre"], ["{clase}", "Clase"], ["{fecha}", "Fecha y hora"], ["{gimnasio}", "Gimnasio"]],
     sample: { nombre: "Carlos", clase: "Crossfit", fecha: "lunes, 12 de octubre, 7:00 p. m.", gimnasio: "" },
   },
+  {
+    kind: "TRIAL_BOOKED",
+    title: "Clase de prueba",
+    when: "Cuando le agendas una clase de prueba a un prospecto.",
+    placeholders: [["{nombre}", "Nombre"], ["{clase}", "Clase"], ["{fecha}", "Fecha y hora"], ["{gimnasio}", "Gimnasio"]],
+    sample: { nombre: "Andrés", clase: "Funcional", fecha: "miércoles, 14 de octubre, 6:00 p. m.", gimnasio: "" },
+  },
 ];
 
-const KIND_LABEL: Record<NoticeKind, string> = { CLASS_CANCELLED: "Clase cancelada", CLASS_MOVED: "Cambio de horario", WAITLIST_PROMOTED: "Cupo liberado" };
+const KIND_LABEL: Record<NoticeKind, string> = { CLASS_CANCELLED: "Clase cancelada", CLASS_MOVED: "Cambio de horario", WAITLIST_PROMOTED: "Cupo liberado", TRIAL_BOOKED: "Clase de prueba" };
 const STATUS_BADGE: Record<NoticeRow["status"], { label: string; cls: string }> = {
   SENT: { label: "Enviado", cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700" },
   FAILED: { label: "Falló", cls: "border-rose-500/30 bg-rose-500/10 text-rose-700" },
@@ -102,9 +110,10 @@ export default function GymSettingsPage() {
     try { setBusinessName(localStorage.getItem("businessName") || "tu gimnasio"); } catch {}
   }, []);
 
-  const pick = (s: Settings) => ({ timeZone: s.timeZone, booking: s.booking, notices: s.notices });
+  const pick = (s: Settings) => ({ timeZone: s.timeZone, booking: s.booking, notices: s.notices, visits: s.visits });
   const dirty = !!settings && JSON.stringify(pick(settings)) !== saved;
   const setBooking = (patch: Partial<Settings["booking"]>) => setSettings((s) => (s ? { ...s, booking: { ...s.booking, ...patch } } : s));
+  const setVisits = (patch: Partial<Settings["visits"]>) => setSettings((s) => (s ? { ...s, visits: { ...s.visits, ...patch } } : s));
   const setNotice = (kind: NoticeKind, on: boolean) => setSettings((s) => (s ? { ...s, notices: { ...s.notices, [kind]: on } } : s));
   const setTemplate = (kind: NoticeKind, text: string) => setSettings((s) => (s ? { ...s, notices: { ...s.notices, templates: { ...s.notices.templates, [kind]: text } } } : s));
 
@@ -202,10 +211,34 @@ export default function GymSettingsPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="flex items-center gap-2"><IconTicket size={18} className="text-muted-foreground" /> Visitas y pases</CardTitle>
+          <CardDescription>Para quien entra sin membresía: invitados de socios, pases de día y visitas.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium">Precio del pase de día</p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">$</span>
+              <Input value={settings.visits.dayPassPrice} onChange={(e) => setVisits({ dayPassPrice: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} className="h-9 w-24 text-right tabular-nums" inputMode="decimal" />
+            </div>
+            <p className="text-xs text-muted-foreground">También se cobra a un invitado cuando el socio ya usó sus pases gratis del mes (se configuran en cada plan).</p>
+          </div>
+          <label className="flex items-start justify-between gap-4">
+            <span className="space-y-1">
+              <span className="block text-sm font-medium">Guardar como prospecto</span>
+              <span className="block text-xs text-muted-foreground">Los invitados y pases de día con WhatsApp quedan como prospectos para invitarlos a inscribirse.</span>
+            </span>
+            <Switch checked={settings.visits.leadFromVisit} onCheckedChange={(v) => setVisits({ leadFromVisit: v })} />
+          </label>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="flex items-center gap-2"><IconBrandWhatsapp size={18} className="text-muted-foreground" /> Avisos de clases por WhatsApp</CardTitle>
           <CardDescription>Se envían solos desde el WhatsApp del negocio, de uno en uno y espaciados para cuidar tu número.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 xl:grid-cols-3">
+        <CardContent className="grid gap-4 md:grid-cols-2">
           {NOTICES.map((n) => {
             const on = settings.notices[n.kind];
             return (

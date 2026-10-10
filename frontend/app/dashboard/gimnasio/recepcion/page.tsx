@@ -10,6 +10,7 @@ import {
   IconLoader2,
   IconRefresh,
   IconSearch,
+  IconTicket,
   IconUser,
   IconUsers,
 } from "@tabler/icons-react";
@@ -21,6 +22,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { StatCard, StatGrid } from "@/components/stat-card";
 import { GymPage, GymPageHeader, MemberAvatar } from "@/components/gym/gym-ui";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { VisitDialog } from "@/components/gym/visit-dialog";
+import { money } from "@/lib/gym";
 
 type CheckInResult = {
   member: GymMemberRow;
@@ -40,6 +44,19 @@ type CheckInRow = {
   member: { id: string; memberNumber: number; photoUrl: string | null; client: { name: string } } | null;
 };
 
+type VisitRow = {
+  id: string;
+  kind: "GUEST" | "DAY_PASS" | "VISITOR";
+  name: string;
+  price: number;
+  checkedInAt: string;
+  checkedOutAt: string | null;
+  hostMember: { id: string; memberNumber: number; client: { name: string } } | null;
+  lead: { id: string; stage: string } | null;
+};
+type OnDuty = { id: string; startsAt: string; endsAt: string; area: string | null; clockInAt: string | null; staff: { id: string; name: string; role: string } };
+const VISIT_LABEL: Record<VisitRow["kind"], string> = { GUEST: "Invitado", DAY_PASS: "Pase de día", VISITOR: "Visita" };
+
 const time = (d: string) => new Date(d).toLocaleTimeString("es-VE", { hour: "numeric", minute: "2-digit" });
 
 function Avatar({ src, name, size }: { src?: string | null; name: string; size: number }) {
@@ -56,11 +73,21 @@ export default function GymReceptionPage() {
   const [overrideNote, setOverrideNote] = useState("");
   const [showOverride, setShowOverride] = useState(false);
   const [feed, setFeed] = useState<{ items: CheckInRow[]; granted: number; denied: number; uniqueMembers: number } | null>(null);
+  const [visits, setVisits] = useState<{ items: VisitRow[]; revenue: number; inside: number } | null>(null);
+  const [visitOpen, setVisitOpen] = useState(false);
+  const [dayPassPrice, setDayPassPrice] = useState(5);
+  const [feedTab, setFeedTab] = useState<"entries" | "visits">("entries");
+  const [onDuty, setOnDuty] = useState<OnDuty[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const requestRef = useRef(0);
 
   const loadFeed = useCallback(() => {
     gymApi("/check-ins").then(setFeed).catch(() => {});
+    gymApi("/visits").then(setVisits).catch(() => {});
+    gymApi<OnDuty[]>("/shifts/on-duty").then(setOnDuty).catch(() => {});
+  }, []);
+  useEffect(() => {
+    gymApi<{ visits: { dayPassPrice: number } }>("/settings").then((s) => setDayPassPrice(s.visits.dayPassPrice)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -110,11 +137,16 @@ export default function GymReceptionPage() {
 
   return (
     <GymPage>
-      <GymPageHeader title="Recepción" description="Busca al socio por nombre, cédula o número para registrar su entrada." />
-      <StatGrid cols={3}>
+      <GymPageHeader
+        title="Recepción"
+        description="Busca al socio por nombre, cédula o número para registrar su entrada."
+        actions={<Button variant="outline" className="gap-2" onClick={() => setVisitOpen(true)}><IconTicket size={16} /> Registrar visita</Button>}
+      />
+      <StatGrid>
         <StatCard label="Entradas hoy" value={feed?.granted ?? "—"} tone="good" icon={<IconDoorEnter size={20} />} title="Accesos permitidos" hint="Se actualiza cada 15 segundos" />
         <StatCard label="Socios distintos" value={feed?.uniqueMembers ?? "—"} icon={<IconUsers size={20} />} title="Personas que entraron hoy" hint="Cada socio cuenta una vez" />
         <StatCard label="Denegados" value={feed?.denied ?? "—"} tone={feed?.denied ? "bad" : "default"} icon={<IconCircleXFilled size={20} />} title="Intentos sin acceso" hint="Vencidos, congelados o bloqueados" />
+        <StatCard label="Visitas hoy" value={visits?.items.length ?? "—"} icon={<IconTicket size={20} />} tone="primary" title={visits?.revenue ? `${money(visits.revenue)} en pases` : "Invitados y pases de día"} hint="Gente que entra sin membresía" onClick={() => setFeedTab("visits")} />
       </StatGrid>
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className="flex flex-col gap-5">
@@ -216,10 +248,42 @@ export default function GymReceptionPage() {
       {/* Today's entries */}
       <Card className="h-fit gap-0 pb-0 xl:sticky xl:top-[calc(var(--header-height)+1rem)]">
         <CardHeader className="border-b pb-4">
-          <CardTitle>Entradas de hoy</CardTitle>
-          <CardDescription>Las más recientes primero.</CardDescription>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle>Hoy</CardTitle>
+            <Tabs value={feedTab} onValueChange={(v) => setFeedTab(v as "entries" | "visits")}>
+              <TabsList className="h-8">
+                <TabsTrigger value="entries" className="text-xs">Entradas</TabsTrigger>
+                <TabsTrigger value="visits" className="text-xs">Visitas{visits?.inside ? ` · ${visits.inside}` : ""}</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+          {onDuty.length > 0 && (
+            <CardDescription className="pt-1">En turno: {onDuty.map((d) => `${d.staff.name.split(" ")[0]}${d.area ? ` (${d.area.toLowerCase()})` : ""}`).join(", ")}</CardDescription>
+          )}
         </CardHeader>
         <CardContent className="p-0">
+          {feedTab === "visits" ? (
+            <div className="max-h-[calc(100vh-260px)] divide-y overflow-y-auto">
+              {visits && visits.items.length === 0 && <p className="px-4 py-10 text-center text-sm text-muted-foreground">Todavía no hay visitas hoy.</p>}
+              {visits?.items.map((v) => (
+                <div key={v.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <Avatar name={v.name} size={34} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{v.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{VISIT_LABEL[v.kind]}{v.hostMember ? ` de ${v.hostMember.client.name}` : ""}{v.price > 0 ? ` · ${money(v.price)}` : ""}</p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-0.5">
+                    {v.checkedOutAt ? (
+                      <span className="text-[11px] text-muted-foreground">Salió {time(v.checkedOutAt)}</span>
+                    ) : (
+                      <button type="button" className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground" onClick={() => gymApi(`/visits/${v.id}/checkout`, { method: "POST" }).then(loadFeed).catch((e) => toast.error(e.message))}>Marcar salida</button>
+                    )}
+                    <span className="text-[11px] text-muted-foreground">Entró {time(v.checkedInAt)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className="max-h-[calc(100vh-260px)] divide-y overflow-y-auto">
             {feed && feed.items.length === 0 && <p className="px-4 py-10 text-center text-sm text-muted-foreground">Todavía no hay entradas hoy.</p>}
             {feed?.items.map((c) => (
@@ -236,9 +300,11 @@ export default function GymReceptionPage() {
               </div>
             ))}
           </div>
+          )}
         </CardContent>
       </Card>
     </div>
+      <VisitDialog open={visitOpen} onClose={() => setVisitOpen(false)} onSaved={() => { loadFeed(); setFeedTab("visits"); }} dayPassPrice={dayPassPrice} />
     </GymPage>
   );
 }

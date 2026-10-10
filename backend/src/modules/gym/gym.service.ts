@@ -17,7 +17,7 @@ export function membershipState(m: { status: string; startDate: Date; endDate: D
   return 'ACTIVE';
 }
 
-type PlanInput = { name: string; description?: string; durationDays: number; price: number; color?: string; maxFreezeDays?: number; isActive?: boolean };
+type PlanInput = { name: string; description?: string; durationDays: number; price: number; color?: string; maxFreezeDays?: number; guestPassesPerMonth?: number; isActive?: boolean };
 type MemberInput = {
   clientId?: string;
   name?: string;
@@ -83,6 +83,7 @@ export class GymService {
         price: Number(data.price),
         color: data.color || null,
         maxFreezeDays: Math.max(0, Math.round(Number(data.maxFreezeDays) || 0)),
+        guestPassesPerMonth: Math.max(0, Math.round(Number(data.guestPassesPerMonth) || 0)),
       },
     });
   }
@@ -99,6 +100,7 @@ export class GymService {
         ...(data.price !== undefined && { price: Number(data.price) }),
         ...(data.color !== undefined && { color: data.color || null }),
         ...(data.maxFreezeDays !== undefined && { maxFreezeDays: Math.max(0, Math.round(Number(data.maxFreezeDays) || 0)) }),
+        ...(data.guestPassesPerMonth !== undefined && { guestPassesPerMonth: Math.max(0, Math.round(Number(data.guestPassesPerMonth) || 0)) }),
         ...(data.isActive !== undefined && { isActive: !!data.isActive }),
       },
     });
@@ -316,7 +318,7 @@ export class GymService {
         },
       });
       if (data.payment) {
-        await this.recordPayment(tx, businessId, { id: membership.id, planName: plan.name, memberName }, { ...data.payment, amount: paid }, userId);
+        await this.recordPayment(tx, businessId, { membershipId: membership.id, description: `Membresía ${plan.name}${memberName ? ` · ${memberName}` : ''}` }, { ...data.payment, amount: paid }, userId);
       }
       return tx.gymMembership.findUnique({ where: { id: membership.id }, include: { payments: true } });
     });
@@ -326,10 +328,10 @@ export class GymService {
    * Saves a membership payment in the cashier's open shift (so the shift close counts it)
    * and as income in accounting, like a POS sale.
    */
-  private async recordPayment(
+  async recordPayment(
     tx: Prisma.TransactionClient,
     businessId: string,
-    membership: { id: string; planName: string; memberName: string },
+    target: { membershipId?: string; visitId?: string; description: string; category?: string },
     payment: PaymentInput,
     userId?: string,
   ) {
@@ -346,10 +348,10 @@ export class GymService {
     const entry = userId
       ? await tx.accountingEntry.create({
           data: {
-            description: `Membresía ${membership.planName}${membership.memberName ? ` · ${membership.memberName}` : ''}`,
+            description: target.description,
             amount: payment.amount,
             type: 'INCOME',
-            category: 'MEMBRESIA_GYM',
+            category: target.category || 'MEMBRESIA_GYM',
             branchId,
             userId,
           },
@@ -359,7 +361,8 @@ export class GymService {
     return tx.gymPayment.create({
       data: {
         businessId,
-        membershipId: membership.id,
+        membershipId: target.membershipId ?? null,
+        visitId: target.visitId ?? null,
         amount: payment.amount,
         method,
         reference: payment.reference?.trim() || null,
@@ -390,7 +393,7 @@ export class GymService {
     const balance = m.price - m.discount - m.payments.reduce((s, p) => s + p.amount, 0);
     if (amount - balance > 0.009) throw new BadRequestException(`El saldo pendiente es $${Math.max(0, balance).toFixed(2)}`);
     return this.prisma.$transaction((tx) =>
-      this.recordPayment(tx, businessId, { id: m.id, planName: m.planName, memberName: m.member.client.name }, { ...payment, amount }, userId),
+      this.recordPayment(tx, businessId, { membershipId: m.id, description: `Membresía ${m.planName} · ${m.member.client.name}` }, { ...payment, amount }, userId),
     );
   }
 

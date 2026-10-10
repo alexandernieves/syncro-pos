@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { GymRemindersService } from './gym-reminders.service';
 import { GymNotificationsService } from './gym-notifications.service';
+import { GymCrmService } from './gym-crm.service';
 import { membershipState } from './gym.service';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -24,7 +25,8 @@ function parseDay(value: string) {
   return { y: Number(match[1]), m: Number(match[2]), d: Number(match[3]) };
 }
 
-type TrainerInput = { name: string; phone?: string; specialty?: string; photoUrl?: string | null; color?: string; isActive?: boolean };
+type TrainerInput = { name: string; phone?: string; specialty?: string; photoUrl?: string | null; color?: string; role?: string; hourlyRate?: number | null; isActive?: boolean };
+export const STAFF_ROLES = ['TRAINER', 'RECEPTION', 'MANAGER', 'CLEANING', 'OTHER'];
 type ClassInput = {
   name: string;
   description?: string;
@@ -55,19 +57,34 @@ export class GymClassesService {
   // ── Trainers ───────────────────────────────────────────────────────────────
 
   listTrainers(businessId: string) {
-    return this.prisma.gymTrainer.findMany({ where: { businessId }, orderBy: [{ isActive: 'desc' }, { name: 'asc' }], include: { _count: { select: { classes: true } } } });
+    return this.prisma.gymTrainer.findMany({
+      where: { businessId },
+      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+      include: { _count: { select: { classes: true } }, availability: { orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }] } },
+    });
   }
 
   createTrainer(businessId: string, data: TrainerInput) {
-    if (!data.name?.trim()) throw new BadRequestException('Escribe el nombre del entrenador');
+    if (!data.name?.trim()) throw new BadRequestException('Escribe el nombre');
+    if (data.role && !STAFF_ROLES.includes(data.role)) throw new BadRequestException('Rol inválido');
     return this.prisma.gymTrainer.create({
-      data: { businessId, name: data.name.trim(), phone: data.phone?.trim() || null, specialty: data.specialty?.trim() || null, photoUrl: data.photoUrl || null, color: data.color || null },
+      data: {
+        businessId,
+        name: data.name.trim(),
+        phone: data.phone?.trim() || null,
+        specialty: data.specialty?.trim() || null,
+        photoUrl: data.photoUrl || null,
+        color: data.color || null,
+        role: data.role || 'TRAINER',
+        hourlyRate: data.hourlyRate != null && Number(data.hourlyRate) > 0 ? Math.round(Number(data.hourlyRate) * 100) / 100 : null,
+      },
     });
   }
 
   async updateTrainer(businessId: string, id: string, data: Partial<TrainerInput>) {
     if (!(await this.prisma.gymTrainer.findFirst({ where: { id, businessId } }))) throw new NotFoundException('Entrenador no encontrado');
-    if (data.name !== undefined && !data.name.trim()) throw new BadRequestException('Escribe el nombre del entrenador');
+    if (data.name !== undefined && !data.name.trim()) throw new BadRequestException('Escribe el nombre');
+    if (data.role !== undefined && !STAFF_ROLES.includes(data.role)) throw new BadRequestException('Rol inválido');
     return this.prisma.gymTrainer.update({
       where: { id },
       data: {
@@ -76,6 +93,8 @@ export class GymClassesService {
         ...(data.specialty !== undefined && { specialty: data.specialty?.trim() || null }),
         ...(data.photoUrl !== undefined && { photoUrl: data.photoUrl || null }),
         ...(data.color !== undefined && { color: data.color || null }),
+        ...(data.role !== undefined && { role: data.role }),
+        ...(data.hourlyRate !== undefined && { hourlyRate: data.hourlyRate != null && Number(data.hourlyRate) > 0 ? Math.round(Number(data.hourlyRate) * 100) / 100 : null }),
         ...(data.isActive !== undefined && { isActive: !!data.isActive }),
       },
     });
@@ -196,14 +215,17 @@ export class GymClassesService {
         class: { select: { id: true, name: true, color: true, room: true } },
         trainer: { select: { id: true, name: true } },
         bookings: { where: { status: { in: ['BOOKED', 'ATTENDED', 'WAITLIST'] } }, select: { status: true } },
+        _count: { select: { trialLeads: { where: { stage: { in: ['TRIAL_SCHEDULED', 'TRIAL_DONE'] } } } } },
       },
     });
     return {
       timeZone,
       from: fromDay,
-      sessions: sessions.map(({ bookings, ...s }) => ({
+      sessions: sessions.map(({ bookings, _count, ...s }) => ({
         ...s,
-        booked: bookings.filter((b) => b.status !== 'WAITLIST').length,
+        // Prospects on a trial class hold a spot too
+        booked: bookings.filter((b) => b.status !== 'WAITLIST').length + _count.trialLeads,
+        trials: _count.trialLeads,
         waitlist: bookings.filter((b) => b.status === 'WAITLIST').length,
       })),
     };
@@ -278,10 +300,11 @@ export class GymClassesService {
           orderBy: { createdAt: 'asc' },
           include: { member: { select: { id: true, memberNumber: true, photoUrl: true, client: { select: { name: true, phone: true } } } } },
         },
+        trialLeads: { where: { stage: { in: ['TRIAL_SCHEDULED', 'TRIAL_DONE'] } }, select: { id: true, name: true, phone: true, stage: true } },
       },
     });
     if (!session) throw new NotFoundException('Clase no encontrada');
-    const booked = session.bookings.filter((b) => b.status === 'BOOKED' || b.status === 'ATTENDED').length;
+    const booked = session.bookings.filter((b) => b.status === 'BOOKED' || b.status === 'ATTENDED').length + session.trialLeads.length;
     const waitlist = session.bookings.filter((b) => b.status === 'WAITLIST').length;
     return { ...session, booked, waitlist };
   }
@@ -307,7 +330,7 @@ export class GymClassesService {
       if (existing && existing.status === 'WAITLIST') throw new BadRequestException(`${member.client.name} ya está en la lista de espera`);
       if (existing && existing.status !== 'CANCELLED') throw new BadRequestException(`${member.client.name} ya está anotado en esta clase`);
       // Full: the member goes to the waiting list and gets the first spot that frees up
-      const taken = await tx.gymBooking.count({ where: { sessionId, status: { in: ['BOOKED', 'ATTENDED'] } } });
+      const taken = await GymCrmService.takenSpots(tx, sessionId);
       const status = taken >= session.capacity ? 'WAITLIST' : 'BOOKED';
 
       return existing
@@ -326,7 +349,7 @@ export class GymClassesService {
       let promotedId: string | null = null;
       // A spot freed up: the first one on the waiting list takes it
       if (status === 'CANCELLED' && booking.status !== 'WAITLIST' && booking.session.endsAt > new Date()) {
-        const taken = await tx.gymBooking.count({ where: { sessionId: booking.sessionId, status: { in: ['BOOKED', 'ATTENDED'] } } });
+        const taken = await GymCrmService.takenSpots(tx, booking.sessionId);
         if (taken < booking.session.capacity) {
           const next = await tx.gymBooking.findFirst({ where: { sessionId: booking.sessionId, status: 'WAITLIST' }, orderBy: { createdAt: 'asc' }, include: { member: { include: { client: { select: { name: true } } } } } });
           if (next) {

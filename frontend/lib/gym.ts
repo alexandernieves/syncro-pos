@@ -8,6 +8,7 @@ export type GymPlan = {
   price: number;
   color: string | null;
   maxFreezeDays: number;
+  guestPassesPerMonth?: number;
   isActive: boolean;
   _count?: { memberships: number };
 };
@@ -115,3 +116,72 @@ export async function gymApi<T = any>(path: string, init: RequestInit & { json?:
   if (!res.ok) throw new Error(Array.isArray(data.message) ? data.message[0] : data.message || "No se pudo completar la operación");
   return data as T;
 }
+
+// ── Prospects (CRM) ──────────────────────────────────────────────────────────
+
+export type LeadStage = "NEW" | "CONTACTED" | "TRIAL_SCHEDULED" | "TRIAL_DONE" | "WON" | "LOST";
+export type GymLead = {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  documentId: string | null;
+  source: string;
+  interest: string | null;
+  stage: LeadStage;
+  lostReason: string | null;
+  notes: string | null;
+  ownerName: string | null;
+  nextFollowUpAt: string | null;
+  trialSessionId: string | null;
+  trialAt: string | null;
+  memberId: string | null;
+  wonAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  trialSession: { id: string; startsAt: string; status: string; class: { name: string; color: string | null } } | null;
+  member: { id: string; memberNumber: number } | null;
+  _count: { activities: number; visits: number };
+};
+export type LeadActivity = { id: string; type: string; text: string; userName: string | null; createdAt: string };
+
+export const LEAD_STAGES: [LeadStage, string][] = [
+  ["NEW", "Nuevo"],
+  ["CONTACTED", "Contactado"],
+  ["TRIAL_SCHEDULED", "Prueba agendada"],
+  ["TRIAL_DONE", "Prueba hecha"],
+  ["WON", "Inscrito"],
+  ["LOST", "Perdido"],
+];
+export const leadStageLabel = (s: string) => LEAD_STAGES.find(([k]) => k === s)?.[1] ?? s;
+export const LEAD_STAGE_CLASS: Record<LeadStage, string> = {
+  NEW: "bg-sky-500/10 text-sky-700 border-sky-500/30",
+  CONTACTED: "bg-indigo-500/10 text-indigo-700 border-indigo-500/30",
+  TRIAL_SCHEDULED: "bg-amber-500/10 text-amber-700 border-amber-500/30",
+  TRIAL_DONE: "bg-orange-500/10 text-orange-700 border-orange-500/30",
+  WON: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
+  LOST: "bg-muted text-muted-foreground border-border",
+};
+export const LEAD_SOURCES: [string, string][] = [
+  ["WALK_IN", "Vino al gimnasio"],
+  ["INSTAGRAM", "Instagram"],
+  ["FACEBOOK", "Facebook"],
+  ["TIKTOK", "TikTok"],
+  ["REFERRAL", "Referido de un socio"],
+  ["WHATSAPP", "WhatsApp"],
+  ["WEB", "Página web"],
+  ["GUEST", "Invitado de un socio"],
+  ["OTHER", "Otro"],
+];
+export const leadSourceLabel = (s: string) => LEAD_SOURCES.find(([k]) => k === s)?.[1] ?? s;
+
+// ── Staff ────────────────────────────────────────────────────────────────────
+
+export const STAFF_ROLES: [string, string][] = [
+  ["TRAINER", "Entrenador"],
+  ["RECEPTION", "Recepción"],
+  ["MANAGER", "Encargado"],
+  ["CLEANING", "Limpieza"],
+  ["OTHER", "Otro"],
+];
+export const staffRoleLabel = (r: string) => STAFF_ROLES.find(([k]) => k === r)?.[1] ?? r;

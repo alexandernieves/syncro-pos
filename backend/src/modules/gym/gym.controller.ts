@@ -1,10 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GymService } from './gym.service';
 import { GymRemindersService } from './gym-reminders.service';
 import { GymClassesService } from './gym-classes.service';
 import { GymNotificationsService } from './gym-notifications.service';
 import { GymStaffGuard } from './gym-guards';
+import { GymCrmService } from './gym-crm.service';
+import { GymStaffService } from './gym-staff.service';
+import { GymVisitsService } from './gym-visits.service';
 
 @UseGuards(JwtAuthGuard, GymStaffGuard)
 @Controller('gym')
@@ -14,7 +17,128 @@ export class GymController {
     private readonly reminders: GymRemindersService,
     private readonly classes: GymClassesService,
     private readonly notices: GymNotificationsService,
+    private readonly crm: GymCrmService,
+    private readonly staff: GymStaffService,
+    private readonly visits: GymVisitsService,
   ) {}
+
+  // Prospects (CRM) and trial classes
+  @Get('leads/stats')
+  leadStats(@Request() req: any) {
+    return this.crm.stats(req.user.businessId);
+  }
+
+  @Get('leads/duplicate')
+  leadDuplicate(@Query('phone') phone: string, @Query('documentId') documentId: string, @Query('except') except: string, @Request() req: any) {
+    return this.crm.findDuplicate(req.user.businessId, { phone, documentId }, except || undefined);
+  }
+
+  @Get('leads')
+  listLeads(@Query() query: any, @Request() req: any) {
+    return this.crm.list(req.user.businessId, query);
+  }
+
+  @Get('leads/:id')
+  getLead(@Param('id') id: string, @Request() req: any) {
+    return this.crm.get(req.user.businessId, id);
+  }
+
+  @Post('leads')
+  createLead(@Body() body: any, @Request() req: any) {
+    return this.crm.create(req.user.businessId, body, req.user.name);
+  }
+
+  @Put('leads/:id')
+  updateLead(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.crm.update(req.user.businessId, id, body, req.user.name);
+  }
+
+  @Post('leads/:id/activities')
+  addLeadActivity(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.crm.addActivity(req.user.businessId, id, body, req.user.name);
+  }
+
+  @Post('leads/:id/trial')
+  scheduleTrial(@Param('id') id: string, @Body('sessionId') sessionId: string, @Request() req: any) {
+    return this.crm.scheduleTrial(req.user.businessId, id, sessionId, req.user.name);
+  }
+
+  @Post('leads/:id/trial-result')
+  trialResult(@Param('id') id: string, @Body('attended') attended: boolean, @Request() req: any) {
+    return this.crm.trialResult(req.user.businessId, id, !!attended, req.user.name);
+  }
+
+  @Post('leads/:id/message')
+  messageLead(@Param('id') id: string, @Body('text') text: string, @Request() req: any) {
+    return this.crm.message(req.user.businessId, id, text, req.user.name);
+  }
+
+  @Post('leads/:id/convert')
+  convertLead(@Param('id') id: string, @Request() req: any) {
+    return this.crm.convert(req.user.businessId, id, req.user.name);
+  }
+
+  // Staff: availability and shifts
+  @Put('trainers/:id/availability')
+  setAvailability(@Param('id') id: string, @Body('rows') rows: any[], @Request() req: any) {
+    return this.staff.setAvailability(req.user.businessId, id, rows);
+  }
+
+  @Get('shifts/on-duty')
+  onDuty(@Request() req: any) {
+    return this.staff.onDuty(req.user.businessId);
+  }
+
+  @Get('shifts')
+  listShifts(@Query('from') from: string, @Query('to') to: string, @Request() req: any) {
+    return this.staff.listShifts(req.user.businessId, from, to);
+  }
+
+  @Post('shifts/copy-week')
+  copyWeek(@Body('from') from: string, @Body('to') to: string, @Request() req: any) {
+    return this.staff.copyWeek(req.user.businessId, from, to);
+  }
+
+  @Post('shifts')
+  createShift(@Body() body: any, @Request() req: any) {
+    return this.staff.createShift(req.user.businessId, body);
+  }
+
+  @Put('shifts/:id')
+  updateShift(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.staff.updateShift(req.user.businessId, id, body);
+  }
+
+  @Delete('shifts/:id')
+  deleteShift(@Param('id') id: string, @Request() req: any) {
+    return this.staff.deleteShift(req.user.businessId, id);
+  }
+
+  @Post('shifts/:id/punch')
+  punch(@Param('id') id: string, @Body('action') action: 'in' | 'out' | 'absent' | 'reset', @Request() req: any) {
+    return this.staff.punch(req.user.businessId, id, action);
+  }
+
+  // Visits: guests, day passes, visitors
+  @Get('visits')
+  listVisits(@Query('day') day: string, @Request() req: any) {
+    return this.visits.list(req.user.businessId, day || undefined);
+  }
+
+  @Post('visits')
+  createVisit(@Body() body: any, @Request() req: any) {
+    return this.visits.create(req.user.businessId, body, req.user.id, req.user.name);
+  }
+
+  @Post('visits/:id/checkout')
+  checkoutVisit(@Param('id') id: string, @Request() req: any) {
+    return this.visits.checkout(req.user.businessId, id);
+  }
+
+  @Get('members/:id/guest-quota')
+  guestQuota(@Param('id') id: string, @Request() req: any) {
+    return this.visits.guestQuota(req.user.businessId, id);
+  }
 
   @Get('notifications')
   listNotifications(@Query('sessionId') sessionId: string, @Request() req: any) {
