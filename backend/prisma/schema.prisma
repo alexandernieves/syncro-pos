@@ -56,6 +56,8 @@ model Business {
   gymLeads              GymLead[]
   gymLeadActivities     GymLeadActivity[]
   gymVisits             GymVisit[]
+  gymDocumentTemplates  GymDocumentTemplate[]
+  gymSignatures         GymSignature[]
 }
 
 model Conversation {
@@ -1254,6 +1256,16 @@ model GymPlan {
   maxFreezeDays       Int             @default(0)
   /// Free guest passes per month for members on this plan
   guestPassesPerMonth Int             @default(0)
+  /// When members can come in: [{ days: [1..5], start: "06:00", end: "12:00" }]; empty = any time
+  accessWindows       Json?
+  /// Entries allowed per day and per week (0 = no limit)
+  maxEntriesPerDay    Int             @default(0)
+  maxEntriesPerWeek   Int             @default(0)
+  /// Pack of visits (e.g. 12 entries) used up by check-ins; 0 = unlimited
+  totalEntries        Int             @default(0)
+  /// Whether members can book group classes, and which ones (empty = all)
+  includesClasses     Boolean         @default(true)
+  allowedClassIds     String[]        @default([])
   isActive            Boolean         @default(true)
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @default(now()) @updatedAt
@@ -1292,6 +1304,7 @@ model GymMember {
   notifications    GymNotification[]
   leads            GymLead[]
   hostedVisits     GymVisit[]        @relation("VisitHost")
+  signatures       GymSignature[]
 
   @@unique([businessId, memberNumber])
 }
@@ -1306,10 +1319,18 @@ model GymMembership {
   endDate        DateTime
   price          Float
   discount       Float         @default(0)
+  /// Extra charges: enrollment, reactivation, freeze fee… ([{ label, amount }])
+  fees           Float         @default(0)
+  feeItems       Json?
   /// ACTIVE, FROZEN or CANCELLED; "expired" and "scheduled" come from the dates
   status         String        @default("ACTIVE")
   frozenAt       DateTime?
   frozenDaysUsed Int           @default(0)
+  /// Scheduled freeze: starts and ends on its own
+  freezeFrom     DateTime?
+  freezeUntil    DateTime?
+  freezeReason   String?
+  freezeCount    Int           @default(0)
   cancelledAt    DateTime?
   notes          String?
   createdById    String?
@@ -1615,4 +1636,50 @@ model GymVisit {
 
   @@index([businessId, checkedInAt], map: "GymVisit_business_checkin_idx")
   @@index([hostMemberId, checkedInAt], map: "GymVisit_host_checkin_idx")
+}
+
+/// Contract, waiver or consent the members sign (versioned: editing the text asks for a new signature)
+model GymDocumentTemplate {
+  id         String         @id @default(uuid())
+  businessId String
+  /// CONTRACT, WAIVER, HEALTH, PHOTO or OTHER
+  kind       String         @default("WAIVER")
+  title      String
+  /// Text with {nombre}, {cedula}, {plan}, {fecha}, {gimnasio}
+  body       String
+  /// Every member must sign it
+  required   Boolean        @default(true)
+  version    Int            @default(1)
+  isActive   Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @default(now()) @updatedAt
+  business   Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  signatures GymSignature[]
+
+  @@index([businessId], map: "GymDocumentTemplate_business_idx")
+}
+
+/// A signed copy: the exact text the member accepted, with the signature image
+model GymSignature {
+  id             String              @id @default(uuid())
+  businessId     String
+  templateId     String
+  memberId       String
+  version        Int
+  title          String
+  body           String
+  signerName     String
+  signerDocument String?
+  signatureUrl   String
+  /// RECEPTION or PORTAL
+  method         String              @default("RECEPTION")
+  ip             String?
+  userAgent      String?
+  signedAt       DateTime            @default(now())
+  business       Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  template       GymDocumentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  member         GymMember           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId], map: "GymSignature_member_idx")
+  @@index([templateId, memberId], map: "GymSignature_template_member_idx")
 }

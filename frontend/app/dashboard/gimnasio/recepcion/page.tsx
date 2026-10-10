@@ -24,6 +24,7 @@ import { GymPage, GymPageHeader, MemberAvatar } from "@/components/gym/gym-ui";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VisitDialog } from "@/components/gym/visit-dialog";
+import { SignDocumentDialog } from "@/components/gym/sign-document-dialog";
 import { money } from "@/lib/gym";
 
 type CheckInResult = {
@@ -32,6 +33,7 @@ type CheckInResult = {
   overridden?: boolean;
   reason: string;
   warnings: string[];
+  pendingDocuments?: { id: string; title: string }[];
   checkIn: { id: string; createdAt: string };
 };
 
@@ -75,6 +77,7 @@ export default function GymReceptionPage() {
   const [feed, setFeed] = useState<{ items: CheckInRow[]; granted: number; denied: number; uniqueMembers: number } | null>(null);
   const [visits, setVisits] = useState<{ items: VisitRow[]; revenue: number; inside: number } | null>(null);
   const [visitOpen, setVisitOpen] = useState(false);
+  const [signing, setSigning] = useState<string | null>(null);
   const [dayPassPrice, setDayPassPrice] = useState(5);
   const [feedTab, setFeedTab] = useState<"entries" | "visits">("entries");
   const [onDuty, setOnDuty] = useState<OnDuty[]>([]);
@@ -225,6 +228,9 @@ export default function GymReceptionPage() {
                 {result.warnings.map((w) => (
                   <p key={w} className="flex items-center gap-1.5 text-sm font-medium text-amber-700"><IconAlertTriangle size={16} /> {w}</p>
                 ))}
+                {!!result.pendingDocuments?.length && (
+                  <Button size="sm" variant="outline" className="mt-1" onClick={() => setSigning(result.pendingDocuments![0].id)}>Firmar {result.pendingDocuments[0].title.toLowerCase()} ahora</Button>
+                )}
               </div>
             </CardContent>
             {!result.granted && m && (
@@ -304,6 +310,7 @@ export default function GymReceptionPage() {
         </CardContent>
       </Card>
     </div>
+      {m && <SignDocumentDialog memberId={m.id} templateId={signing} onClose={() => setSigning(null)} onSigned={() => { setResult((r) => (r ? { ...r, pendingDocuments: r.pendingDocuments?.filter((d) => d.id !== signing), warnings: r.warnings.filter((w) => !w.startsWith("Falta firmar")) } : r)); }} />}
       <VisitDialog open={visitOpen} onClose={() => setVisitOpen(false)} onSaved={() => { loadFeed(); setFeedTab("visits"); }} dayPassPrice={dayPassPrice} />
     </GymPage>
   );

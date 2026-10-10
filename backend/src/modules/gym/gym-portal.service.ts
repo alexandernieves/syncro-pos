@@ -1,8 +1,9 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { GymService } from './gym.service';
+import { GymService, membershipOwed } from './gym.service';
 import { GymClassesService } from './gym-classes.service';
 import { GymRemindersService } from './gym-reminders.service';
+import { GymDocumentsService } from './gym-documents.service';
 
 const DAY = 24 * 60 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
@@ -23,7 +24,19 @@ export class GymPortalService {
     private gym: GymService,
     private classes: GymClassesService,
     private settings: GymRemindersService,
+    private docs: GymDocumentsService,
   ) {}
+
+  async documents(clientId: string, businessId: string) {
+    const { id } = await this.memberFor(clientId, businessId);
+    return this.docs.pendingForPortal(businessId, id);
+  }
+
+  async sign(clientId: string, businessId: string, templateId: string, body: any, ip?: string, userAgent?: string) {
+    const { id } = await this.memberFor(clientId, businessId);
+    const s = await this.docs.sign(businessId, templateId, id, { ...body, signerName: undefined, signerDocument: undefined }, { method: 'PORTAL', ip, userAgent });
+    return { id: s.id, signedAt: s.signedAt };
+  }
 
   private async memberFor(clientId: string, businessId: string) {
     const member = await this.prisma.gymMember.findFirst({ where: { clientId, businessId }, select: { id: true } });
@@ -48,7 +61,7 @@ export class GymPortalService {
       }),
     ]);
     const current = member.currentMembership as any;
-    const owed = current ? Math.max(0, Math.round((current.price - current.discount - (member.memberships.find((m: any) => m.id === current.id)?.payments ?? []).reduce((t: number, p: any) => t + p.amount, 0)) * 100) / 100) : 0;
+    const owed = current ? membershipOwed({ ...current, payments: member.memberships.find((m: any) => m.id === current.id)?.payments ?? [] }) : 0;
     return {
       gym: { name: business?.name || 'Gimnasio', logo: business?.logo ?? null, timeZone: settings.timeZone },
       rules: settings.booking,

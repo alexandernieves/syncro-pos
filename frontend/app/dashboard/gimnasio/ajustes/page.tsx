@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { IconBrandWhatsapp, IconDeviceFloppy, IconDeviceMobile, IconLoader2, IconTicket, IconWorld } from "@tabler/icons-react";
+import { IconBrandWhatsapp, IconDeviceFloppy, IconDeviceMobile, IconFileText, IconLoader2, IconPlus, IconRefresh, IconShieldCheck, IconSnowflake, IconTicket, IconWorld } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { gymApi } from "@/lib/gym";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PosTable } from "@/components/pos-table";
 import { GymPage, GymPageHeader, PersonCell } from "@/components/gym/gym-ui";
 import { WhatsAppPreview } from "@/components/gym/whatsapp-preview";
@@ -22,7 +23,12 @@ type Settings = {
   booking: { portalEnabled: boolean; daysAhead: number; cancelHours: number; maxActive: number };
   notices: Record<NoticeKind, boolean> & { templates: Record<NoticeKind, string> };
   visits: { dayPassPrice: number; leadFromVisit: boolean };
+  access: { graceDays: number; blockIfOwed: boolean; owedTolerance: number; reentryMinutes: number; requireSignatures: boolean };
+  freeze: { minDays: number; maxTimes: number; fee: number; requireReason: boolean };
+  renewal: { startFrom: "END" | "TODAY" | "END_IF_GRACE"; graceDays: number; earlyDays: number; earlyDiscountPct: number; enrollmentFee: number; reactivationFee: number; reactivationAfterDays: number };
 };
+type DocTemplate = { id: string; kind: string; title: string; body: string; required: boolean; version: number; isActive: boolean; _count: { signatures: number } };
+const DOC_KINDS: [string, string][] = [["WAIVER", "Exoneración"], ["CONTRACT", "Contrato"], ["HEALTH", "Salud"], ["PHOTO", "Fotos y datos"], ["OTHER", "Otro"]];
 type NoticeRow = {
   id: string;
   kind: NoticeKind;
@@ -97,6 +103,118 @@ function NumberField({ label, hint, value, min, max, suffix, onChange }: { label
   );
 }
 
+function MoneyField({ label, hint, value, onChange }: { label: string; hint: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-sm font-medium">{label}</p>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">$</span>
+        <Input value={value} onChange={(e) => onChange(Number(e.target.value.replace(/[^\d.]/g, "")) || 0)} className="h-9 w-24 text-right tabular-nums" inputMode="decimal" />
+      </div>
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </div>
+  );
+}
+
+function SwitchField({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-start justify-between gap-4">
+      <span className="space-y-1">
+        <span className="block text-sm font-medium">{label}</span>
+        <span className="block text-xs text-muted-foreground">{hint}</span>
+      </span>
+      <Switch checked={checked} onCheckedChange={onChange} />
+    </label>
+  );
+}
+
+/** Contracts and consents: versioned texts the members sign at reception or in their app. */
+function DocumentsCard() {
+  const [docs, setDocs] = useState<DocTemplate[] | null>(null);
+  const [starters, setStarters] = useState<{ kind: string; title: string; body: string }[]>([]);
+  const [draft, setDraft] = useState<Partial<DocTemplate> | null>(null);
+  const [saving, setSaving] = useState(false);
+  const load = () => gymApi<DocTemplate[]>("/documents").then(setDocs).catch(() => setDocs([]));
+  useEffect(() => { load(); gymApi<typeof starters>("/documents/starters").then(setStarters).catch(() => {}); }, []);
+  const save = async () => {
+    if (!draft) return;
+    setSaving(true);
+    try {
+      const body = { kind: draft.kind, title: draft.title, body: draft.body, required: draft.required, isActive: draft.isActive };
+      const before = docs?.find((d) => d.id === draft.id);
+      const saved = await gymApi<DocTemplate>(draft.id ? `/documents/${draft.id}` : "/documents", { method: draft.id ? "PUT" : "POST", json: body });
+      toast.success(before && saved.version > before.version ? `Guardado como versión ${saved.version}: los socios deberán firmarlo de nuevo` : "Documento guardado");
+      setDraft(null);
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const unused = starters.filter((st) => !docs?.some((d) => d.title === st.title));
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1.5">
+            <CardTitle className="flex items-center gap-2"><IconFileText size={18} className="text-muted-foreground" /> Contratos y consentimientos</CardTitle>
+            <CardDescription>Los socios los firman en la pantalla de recepción o desde su app. Si cambias el texto, se pide una firma nueva.</CardDescription>
+          </div>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setDraft({ kind: "OTHER", title: "", body: "", required: true, isActive: true })}><IconPlus size={14} /> Nuevo documento</Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {docs?.map((d) => (
+          <div key={d.id} className={cn("flex items-center gap-3 rounded-xl bg-muted/40 p-3", !d.isActive && "opacity-60")}>
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground"><IconFileText size={18} /></span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{d.title}</p>
+              <p className="text-xs text-muted-foreground">{DOC_KINDS.find(([k]) => k === d.kind)?.[1]} · versión {d.version} · {d._count.signatures} {d._count.signatures === 1 ? "firma" : "firmas"} · {d.required ? "obligatorio" : "opcional"}{d.isActive ? "" : " · desactivado"}</p>
+            </div>
+            <Button size="sm" variant="ghost" onClick={() => setDraft(d)}>Editar</Button>
+          </div>
+        ))}
+        {docs && !docs.length && <p className="text-sm text-muted-foreground">Todavía no tienes documentos. Empieza con una plantilla:</p>}
+        {unused.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {unused.map((st) => (
+              <button key={st.title} type="button" onClick={() => setDraft({ ...st, required: true, isActive: true })} className="flex items-center gap-1.5 rounded-full border border-dashed px-3 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary">
+                <IconPlus size={12} /> {st.title}
+              </button>
+            ))}
+          </div>
+        )}
+      </CardContent>
+      <Dialog open={!!draft} onOpenChange={(o) => !o && setDraft(null)}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{draft?.id ? "Editar documento" : "Nuevo documento"}</DialogTitle>
+            <DialogDescription>Usa {"{nombre}"}, {"{cedula}"}, {"{plan}"}, {"{fecha}"} y {"{gimnasio}"}: se completan con los datos del socio al firmar.</DialogDescription>
+          </DialogHeader>
+          {draft && (
+            <div className="grid gap-3">
+              <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
+                <Input value={draft.title ?? ""} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="Título" />
+                <select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value })} className="h-9 rounded-md border bg-background px-2 text-sm">
+                  {DOC_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                </select>
+              </div>
+              <textarea value={draft.body ?? ""} onChange={(e) => setDraft({ ...draft, body: e.target.value })} rows={14} className="w-full resize-y rounded-lg border bg-background px-3 py-2 text-sm leading-relaxed outline-none focus:border-primary" />
+              <SwitchField label="Obligatorio" hint="Todos los socios deben firmarlo. En recepción verás quién falta." checked={!!draft.required} onChange={(v) => setDraft({ ...draft, required: v })} />
+              {draft.id && <SwitchField label="Activo" hint="Desactívalo para dejar de pedirlo; las firmas anteriores se guardan." checked={!!draft.isActive} onChange={(v) => setDraft({ ...draft, isActive: v })} />}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDraft(null)}>Cancelar</Button>
+            <Button onClick={save} disabled={saving || !draft?.title?.trim() || !draft?.body?.trim()} className="gap-2">{saving && <IconLoader2 size={16} className="animate-spin" />} Guardar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
 export default function GymSettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saved, setSaved] = useState("");
@@ -110,9 +228,10 @@ export default function GymSettingsPage() {
     try { setBusinessName(localStorage.getItem("businessName") || "tu gimnasio"); } catch {}
   }, []);
 
-  const pick = (s: Settings) => ({ timeZone: s.timeZone, booking: s.booking, notices: s.notices, visits: s.visits });
+  const pick = (s: Settings) => ({ timeZone: s.timeZone, booking: s.booking, notices: s.notices, visits: s.visits, access: s.access, freeze: s.freeze, renewal: s.renewal });
   const dirty = !!settings && JSON.stringify(pick(settings)) !== saved;
   const setBooking = (patch: Partial<Settings["booking"]>) => setSettings((s) => (s ? { ...s, booking: { ...s.booking, ...patch } } : s));
+  const setSection = <K extends "access" | "freeze" | "renewal">(key: K, patch: Partial<Settings[K]>) => setSettings((s) => (s ? { ...s, [key]: { ...s[key], ...patch } } : s));
   const setVisits = (patch: Partial<Settings["visits"]>) => setSettings((s) => (s ? { ...s, visits: { ...s.visits, ...patch } } : s));
   const setNotice = (kind: NoticeKind, on: boolean) => setSettings((s) => (s ? { ...s, notices: { ...s.notices, [kind]: on } } : s));
   const setTemplate = (kind: NoticeKind, text: string) => setSettings((s) => (s ? { ...s, notices: { ...s.notices, templates: { ...s.notices.templates, [kind]: text } } } : s));
@@ -155,7 +274,7 @@ export default function GymSettingsPage() {
   if (!settings) {
     return (
       <GymPage>
-        <GymPageHeader title="Ajustes del gimnasio" description="Reglas de reservas y avisos a tus socios." />
+        <GymPageHeader title="Ajustes del gimnasio" description="Reglas de acceso, reservas, renovaciones, documentos y avisos a tus socios." />
         {[0, 1, 2].map((i) => <Skeleton key={i} className="h-48 rounded-xl" />)}
       </GymPage>
     );
@@ -166,7 +285,7 @@ export default function GymSettingsPage() {
     <GymPage>
       <GymPageHeader
         title="Ajustes del gimnasio"
-        description="Reglas de reservas y avisos a tus socios."
+        description="Reglas de acceso, reservas, renovaciones, documentos y avisos a tus socios."
         actions={
           <Button onClick={save} disabled={!dirty || saving} className="gap-2">
             {saving ? <IconLoader2 size={16} className="animate-spin" /> : <IconDeviceFloppy size={16} />} {dirty ? "Guardar cambios" : "Guardado"}
@@ -208,6 +327,59 @@ export default function GymSettingsPage() {
           <NumberField label="Reservas a la vez" suffix="por socio" min={0} max={50} value={b.maxActive} onChange={(v) => setBooking({ maxActive: v })} hint="Clases futuras que puede tener reservadas. Con 0 no hay límite." />
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><IconShieldCheck size={18} className="text-muted-foreground" /> Acceso en la entrada</CardTitle>
+          <CardDescription>Reglas para todos los planes. Los horarios y límites de entradas se configuran en cada plan.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
+          <NumberField label="Días de gracia" suffix={settings.access.graceDays === 1 ? "día" : "días"} min={0} max={30} value={settings.access.graceDays} onChange={(v) => setSection("access", { graceDays: v })} hint="Después de vencer puede seguir entrando estos días, con aviso de renovar." />
+          <NumberField label="Tiempo entre entradas" suffix="minutos" min={0} max={600} value={settings.access.reentryMinutes} onChange={(v) => setSection("access", { reentryMinutes: v })} hint="Evita que dos personas usen la misma membresía. Con 0 no se revisa." />
+          <SwitchField label="Bloquear si debe dinero" hint="Si está apagado, recepción solo ve un aviso de la deuda." checked={settings.access.blockIfOwed} onChange={(v) => setSection("access", { blockIfOwed: v })} />
+          {settings.access.blockIfOwed ? <MoneyField label="Deuda tolerada" hint="Puede entrar si debe hasta este monto." value={settings.access.owedTolerance} onChange={(v) => setSection("access", { owedTolerance: v })} /> : <span />}
+          <SwitchField label="Exigir documentos firmados" hint="No entra hasta firmar los documentos obligatorios. Si está apagado, solo se avisa." checked={settings.access.requireSignatures} onChange={(v) => setSection("access", { requireSignatures: v })} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><IconSnowflake size={18} className="text-muted-foreground" /> Congelamiento</CardTitle>
+          <CardDescription>Los días que se pueden congelar se definen en cada plan. Se puede programar con fecha de regreso y se reactiva solo.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
+          <NumberField label="Mínimo por congelamiento" suffix="días" min={1} max={90} value={settings.freeze.minDays} onChange={(v) => setSection("freeze", { minDays: v })} hint="Congelamientos más cortos no se aceptan." />
+          <NumberField label="Veces por membresía" suffix="veces" min={0} max={12} value={settings.freeze.maxTimes} onChange={(v) => setSection("freeze", { maxTimes: v })} hint="Con 0 no hay límite de veces (sí de días)." />
+          <MoneyField label="Costo por congelar" hint="Se suma a lo que debe el socio. Con 0 es gratis." value={settings.freeze.fee} onChange={(v) => setSection("freeze", { fee: v })} />
+          <SwitchField label="Pedir motivo" hint="Viaje, lesión, trabajo… queda en la ficha del socio." checked={settings.freeze.requireReason} onChange={(v) => setSection("freeze", { requireReason: v })} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><IconRefresh size={18} className="text-muted-foreground" /> Renovaciones e inscripción</CardTitle>
+          <CardDescription>Se aplican solas al vender un plan; recepción ve el detalle antes de cobrar.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
+          <div className="space-y-1.5 sm:col-span-2">
+            <p className="text-sm font-medium">Si renueva después de vencer, el plan nuevo empieza…</p>
+            <div className="flex flex-wrap gap-1.5">
+              {([["END_IF_GRACE", "Desde el vencimiento si vuelve a tiempo"], ["TODAY", "El día que paga"], ["END", "Siempre desde el vencimiento"]] as const).map(([k, l]) => (
+                <button key={k} type="button" onClick={() => setSection("renewal", { startFrom: k })} className={cn("rounded-full border px-3 py-1.5 text-xs", settings.renewal.startFrom === k ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")}>{l}</button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">Quien renueva antes de vencer nunca pierde días: el plan nuevo empieza cuando termina el actual.</p>
+          </div>
+          {settings.renewal.startFrom === "END_IF_GRACE" && <NumberField label="Volver a tiempo" suffix="días después" min={0} max={60} value={settings.renewal.graceDays} onChange={(v) => setSection("renewal", { graceDays: v })} hint="Hasta cuántos días después de vencer se mantiene la fecha." />}
+          <NumberField label="Descuento por renovar antes" suffix="%" min={0} max={50} value={settings.renewal.earlyDiscountPct} onChange={(v) => setSection("renewal", { earlyDiscountPct: v })} hint="Con 0 no hay descuento." />
+          <NumberField label="Para el descuento, renovar con" suffix="días de anticipación" min={0} max={60} value={settings.renewal.earlyDays} onChange={(v) => setSection("renewal", { earlyDays: v })} hint="Cuántos días antes de vencer debe renovar como mínimo." />
+          <MoneyField label="Inscripción" hint="Cobro único la primera vez que alguien compra un plan." value={settings.renewal.enrollmentFee} onChange={(v) => setSection("renewal", { enrollmentFee: v })} />
+          <MoneyField label="Reinscripción" hint="Para quien vuelve después de mucho tiempo vencido." value={settings.renewal.reactivationFee} onChange={(v) => setSection("renewal", { reactivationFee: v })} />
+          <NumberField label="Se cobra la reinscripción después de" suffix="días vencido" min={1} max={365} value={settings.renewal.reactivationAfterDays} onChange={(v) => setSection("renewal", { reactivationAfterDays: v })} hint="Antes de eso solo paga el plan." />
+        </CardContent>
+      </Card>
+
+      <DocumentsCard />
 
       <Card>
         <CardHeader>

@@ -8,6 +8,7 @@ import { GymStaffGuard } from './gym-guards';
 import { GymCrmService } from './gym-crm.service';
 import { GymStaffService } from './gym-staff.service';
 import { GymVisitsService } from './gym-visits.service';
+import { DOCUMENT_STARTERS, GymDocumentsService } from './gym-documents.service';
 
 @UseGuards(JwtAuthGuard, GymStaffGuard)
 @Controller('gym')
@@ -20,7 +21,49 @@ export class GymController {
     private readonly crm: GymCrmService,
     private readonly staff: GymStaffService,
     private readonly visits: GymVisitsService,
+    private readonly documents: GymDocumentsService,
   ) {}
+
+  // Contracts and consents
+  @Get('documents/starters')
+  documentStarters() {
+    return DOCUMENT_STARTERS;
+  }
+
+  @Get('documents')
+  listDocuments(@Request() req: any) {
+    return this.documents.listTemplates(req.user.businessId);
+  }
+
+  @Post('documents')
+  createDocument(@Body() body: any, @Request() req: any) {
+    return this.documents.createTemplate(req.user.businessId, body);
+  }
+
+  @Put('documents/:id')
+  updateDocument(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.documents.updateTemplate(req.user.businessId, id, body);
+  }
+
+  @Get('members/:id/documents')
+  memberDocuments(@Param('id') id: string, @Request() req: any) {
+    return this.documents.forMember(req.user.businessId, id);
+  }
+
+  @Get('members/:id/documents/:templateId')
+  renderDocument(@Param('id') id: string, @Param('templateId') templateId: string, @Request() req: any) {
+    return this.documents.render(req.user.businessId, templateId, id).then((r) => ({ title: r.template.title, version: r.template.version, body: r.body }));
+  }
+
+  @Post('members/:id/documents/:templateId/sign')
+  signDocument(@Param('id') id: string, @Param('templateId') templateId: string, @Body() body: any, @Request() req: any) {
+    return this.documents.sign(req.user.businessId, templateId, id, body, { method: 'RECEPTION', ip: req.ip, userAgent: req.headers['user-agent'] });
+  }
+
+  @Get('signatures/:id')
+  getSignature(@Param('id') id: string, @Request() req: any) {
+    return this.documents.getSignature(req.user.businessId, id);
+  }
 
   // Prospects (CRM) and trial classes
   @Get('leads/stats')
@@ -133,6 +176,11 @@ export class GymController {
   @Post('visits/:id/checkout')
   checkoutVisit(@Param('id') id: string, @Request() req: any) {
     return this.visits.checkout(req.user.businessId, id);
+  }
+
+  @Get('members/:id/quote')
+  quote(@Param('id') id: string, @Query('planId') planId: string, @Query('startDate') startDate: string, @Request() req: any) {
+    return this.gym.quoteMembership(req.user.businessId, id, planId, startDate || undefined);
   }
 
   @Get('members/:id/guest-quota')
@@ -312,8 +360,8 @@ export class GymController {
   }
 
   @Patch('memberships/:id/freeze')
-  freeze(@Param('id') id: string, @Request() req: any) {
-    return this.gym.freeze(req.user.businessId, id);
+  freeze(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.gym.freeze(req.user.businessId, id, body || {}, req.user.id);
   }
 
   @Patch('memberships/:id/unfreeze')

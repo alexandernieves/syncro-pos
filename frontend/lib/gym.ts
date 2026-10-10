@@ -9,6 +9,12 @@ export type GymPlan = {
   color: string | null;
   maxFreezeDays: number;
   guestPassesPerMonth?: number;
+  accessWindows?: { days: number[]; start: string; end: string }[] | null;
+  maxEntriesPerDay?: number;
+  maxEntriesPerWeek?: number;
+  totalEntries?: number;
+  includesClasses?: boolean;
+  allowedClassIds?: string[];
   isActive: boolean;
   _count?: { memberships: number };
 };
@@ -26,9 +32,16 @@ export type GymMembership = {
   endDate: string;
   price: number;
   discount: number;
+  fees?: number;
+  feeItems?: { label: string; amount: number }[] | null;
   status: string;
   state: MembershipState;
   frozenDaysUsed: number;
+  frozenAt?: string | null;
+  freezeFrom?: string | null;
+  freezeUntil?: string | null;
+  freezeReason?: string | null;
+  freezeCount?: number;
   notes: string | null;
   payments?: GymPayment[];
 };
@@ -89,6 +102,9 @@ export const PAYMENT_METHODS: [string, string][] = [
 ];
 
 export const methodLabel = (m: string) => PAYMENT_METHODS.find(([k]) => k === m)?.[1] ?? m;
+
+/** Total of a membership: price, minus discount, plus extra charges. */
+export const membershipTotal = (m: { price: number; discount: number; fees?: number | null }) => Math.round((m.price - m.discount + (m.fees || 0)) * 100) / 100;
 
 export const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`;
 export const shortDate = (d: string | Date) => new Date(d).toLocaleDateString("es-VE", { day: "numeric", month: "short", year: "numeric" });

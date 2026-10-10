@@ -18,13 +18,51 @@ import { GymPage, GymPageHeader } from "@/components/gym/gym-ui";
 const COLORS = ["#E4572E", "#2563EB", "#059669", "#7C3AED", "#DB2777", "#D97706", "#16140F"];
 const DURATIONS: [number, string][] = [[1, "Pase diario"], [7, "Semanal"], [15, "Quincenal"], [30, "Mensual"], [90, "Trimestral"], [180, "Semestral"], [365, "Anual"]];
 
-type Draft = { id?: string; name: string; description: string; durationDays: number; price: string; color: string; maxFreezeDays: string; guestPassesPerMonth: string; isActive: boolean };
-const emptyDraft: Draft = { name: "", description: "", durationDays: 30, price: "", color: COLORS[0], maxFreezeDays: "0", guestPassesPerMonth: "0", isActive: true };
+type Window = { days: number[]; start: string; end: string };
+type Draft = {
+  id?: string;
+  name: string;
+  description: string;
+  durationDays: number;
+  price: string;
+  color: string;
+  maxFreezeDays: string;
+  guestPassesPerMonth: string;
+  isActive: boolean;
+  windows: Window[];
+  maxEntriesPerDay: string;
+  maxEntriesPerWeek: string;
+  totalEntries: string;
+  includesClasses: boolean;
+  allowedClassIds: string[];
+};
+const WEEK: [number, string][] = [[1, "L"], [2, "M"], [3, "M"], [4, "J"], [5, "V"], [6, "S"], [0, "D"]];
+const hm = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "a. m." : "p. m."}`; };
+const toDraft = (p: GymPlan): Draft => ({
+  id: p.id,
+  name: p.name,
+  description: p.description || "",
+  durationDays: p.durationDays,
+  price: String(p.price),
+  color: p.color || COLORS[0],
+  maxFreezeDays: String(p.maxFreezeDays),
+  guestPassesPerMonth: String(p.guestPassesPerMonth ?? 0),
+  isActive: p.isActive,
+  windows: (p.accessWindows as Window[] | null) ?? [],
+  maxEntriesPerDay: String(p.maxEntriesPerDay ?? 0),
+  maxEntriesPerWeek: String(p.maxEntriesPerWeek ?? 0),
+  totalEntries: String(p.totalEntries ?? 0),
+  includesClasses: p.includesClasses ?? true,
+  allowedClassIds: p.allowedClassIds ?? [],
+});
+const emptyDraft: Draft = { name: "", description: "", durationDays: 30, price: "", color: COLORS[0], maxFreezeDays: "0", guestPassesPerMonth: "0", isActive: true, windows: [], maxEntriesPerDay: "0", maxEntriesPerWeek: "0", totalEntries: "0", includesClasses: true, allowedClassIds: [] };
 
 export default function GymPlansPage() {
   const [plans, setPlans] = useState<GymPlan[] | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
+  const [classes, setClasses] = useState<{ id: string; name: string; isActive: boolean }[]>([]);
+  useEffect(() => { gymApi<{ id: string; name: string; isActive: boolean }[]>("/classes").then(setClasses).catch(() => {}); }, []);
 
   const load = () => gymApi<GymPlan[]>("/plans").then(setPlans).catch((e) => toast.error(e.message));
   useEffect(() => { load(); }, []);
@@ -42,6 +80,12 @@ export default function GymPlansPage() {
         maxFreezeDays: Number(draft.maxFreezeDays) || 0,
         guestPassesPerMonth: Number(draft.guestPassesPerMonth) || 0,
         isActive: draft.isActive,
+        accessWindows: draft.windows,
+        maxEntriesPerDay: Number(draft.maxEntriesPerDay) || 0,
+        maxEntriesPerWeek: Number(draft.maxEntriesPerWeek) || 0,
+        totalEntries: Number(draft.totalEntries) || 0,
+        includesClasses: draft.includesClasses,
+        allowedClassIds: draft.includesClasses ? draft.allowedClassIds : [],
       };
       await gymApi(draft.id ? `/plans/${draft.id}` : "/plans", { method: draft.id ? "PUT" : "POST", json: body });
       toast.success(draft.id ? "Plan actualizado" : "Plan creado");
@@ -82,7 +126,7 @@ export default function GymPlansPage() {
                 <CardDescription>{durationLabel(p.durationDays)}</CardDescription>
                 <CardTitle className="text-xl font-semibold">{p.name}</CardTitle>
                 <CardAction>
-                  <Button variant="ghost" size="icon" className="size-8" title="Editar plan" onClick={() => setDraft({ id: p.id, name: p.name, description: p.description || "", durationDays: p.durationDays, price: String(p.price), color: p.color || COLORS[0], maxFreezeDays: String(p.maxFreezeDays), guestPassesPerMonth: String(p.guestPassesPerMonth ?? 0), isActive: p.isActive })}>
+                  <Button variant="ghost" size="icon" className="size-8" title="Editar plan" onClick={() => setDraft(toDraft(p))}>
                     <IconPencil size={16} />
                   </Button>
                 </CardAction>
@@ -101,6 +145,10 @@ export default function GymPlansPage() {
                 <Badge variant="outline">{p._count?.memberships ?? 0} vendidas</Badge>
                 {p.maxFreezeDays > 0 && <Badge variant="outline" className="gap-1"><IconSnowflake size={12} /> Congela hasta {p.maxFreezeDays} días</Badge>}
                 {(p.guestPassesPerMonth ?? 0) > 0 && <Badge variant="outline">{p.guestPassesPerMonth} {p.guestPassesPerMonth === 1 ? "invitado" : "invitados"} al mes</Badge>}
+                {(p.accessWindows as Window[] | null)?.length ? <Badge variant="outline">{(p.accessWindows as Window[]).map((w) => `${hm(w.start)}–${hm(w.end)}`).join(", ")}</Badge> : null}
+                {(p.maxEntriesPerWeek ?? 0) > 0 && <Badge variant="outline">{p.maxEntriesPerWeek} veces por semana</Badge>}
+                {(p.totalEntries ?? 0) > 0 && <Badge variant="outline">Paquete de {p.totalEntries} entradas</Badge>}
+                {p.includesClasses === false && <Badge variant="outline">Sin clases</Badge>}
                 {!p.isActive && <Badge variant="outline">Desactivado</Badge>}
               </CardFooter>
             </Card>
@@ -109,7 +157,7 @@ export default function GymPlansPage() {
       )}
 
       <Dialog open={!!draft} onOpenChange={(open) => !open && setDraft(null)}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader><DialogTitle>{draft?.id ? "Editar plan" : "Nuevo plan"}</DialogTitle></DialogHeader>
           {draft && (
             <div className="grid gap-4">
@@ -145,6 +193,51 @@ export default function GymPlansPage() {
                   <Input type="number" min={0} value={draft.guestPassesPerMonth} onChange={(e) => setDraft({ ...draft, guestPassesPerMonth: e.target.value })} />
                   <p className="text-xs text-muted-foreground">Pases para que el socio traiga a alguien sin costo. Después se cobra el pase de día.</p>
                 </div>
+              </div>
+              <div className="space-y-3 rounded-xl bg-muted/40 p-3">
+                <p className="text-sm font-semibold">Reglas de acceso</p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Horario en que puede entrar</Label>
+                    <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => setDraft({ ...draft, windows: [...draft.windows, { days: [1, 2, 3, 4, 5], start: "06:00", end: "12:00" }] })}>Agregar horario</button>
+                  </div>
+                  {draft.windows.length === 0 && <p className="text-xs text-muted-foreground">A cualquier hora que abra el gimnasio.</p>}
+                  {draft.windows.map((w, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg bg-background p-2">
+                      <div className="flex gap-1">
+                        {WEEK.map(([d, l]) => {
+                          const on = w.days.includes(d);
+                          return <button key={d} type="button" onClick={() => setDraft({ ...draft, windows: draft.windows.map((x, j) => (j === i ? { ...x, days: on ? x.days.filter((y) => y !== d) : [...x.days, d] } : x)) })} className={cn("size-7 rounded-md text-[11px] font-semibold", on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>{l}</button>;
+                        })}
+                      </div>
+                      <Input type="time" value={w.start} onChange={(e) => setDraft({ ...draft, windows: draft.windows.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)) })} className="h-8 w-28" />
+                      <span className="text-xs text-muted-foreground">a</span>
+                      <Input type="time" value={w.end} onChange={(e) => setDraft({ ...draft, windows: draft.windows.map((x, j) => (j === i ? { ...x, end: e.target.value } : x)) })} className="h-8 w-28" />
+                      <button type="button" className="ml-auto text-xs text-rose-600 hover:underline" onClick={() => setDraft({ ...draft, windows: draft.windows.filter((_, j) => j !== i) })}>Quitar</button>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1"><Label className="text-xs">Entradas por día</Label><Input type="number" min={0} value={draft.maxEntriesPerDay} onChange={(e) => setDraft({ ...draft, maxEntriesPerDay: e.target.value })} className="h-8" /></div>
+                  <div className="space-y-1"><Label className="text-xs">Por semana</Label><Input type="number" min={0} value={draft.maxEntriesPerWeek} onChange={(e) => setDraft({ ...draft, maxEntriesPerWeek: e.target.value })} className="h-8" /></div>
+                  <div className="space-y-1"><Label className="text-xs">Paquete total</Label><Input type="number" min={0} value={draft.totalEntries} onChange={(e) => setDraft({ ...draft, totalEntries: e.target.value })} className="h-8" /></div>
+                </div>
+                <p className="text-xs text-muted-foreground">Con 0 no hay límite. El paquete sirve para planes de, por ejemplo, 12 entradas en el mes.</p>
+                <label className="flex items-center justify-between gap-3 text-sm">
+                  Incluye clases grupales
+                  <Switch checked={draft.includesClasses} onCheckedChange={(v) => setDraft({ ...draft, includesClasses: v })} />
+                </label>
+                {draft.includesClasses && classes.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground">{draft.allowedClassIds.length ? "Solo las clases marcadas:" : "Todas las clases. Marca algunas para limitarlo:"}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {classes.filter((c) => c.isActive).map((c) => {
+                        const on = draft.allowedClassIds.includes(c.id);
+                        return <button key={c.id} type="button" onClick={() => setDraft({ ...draft, allowedClassIds: on ? draft.allowedClassIds.filter((x) => x !== c.id) : [...draft.allowedClassIds, c.id] })} className={cn("rounded-full border px-3 py-1 text-xs", on ? "border-primary bg-primary/10 text-primary" : "bg-background text-muted-foreground")}>{c.name}</button>;
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>Descripción (opcional)</Label>

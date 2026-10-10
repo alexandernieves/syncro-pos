@@ -39,6 +39,40 @@ export type GymSettings = {
     /** Save guests and day passes as prospects to follow up. */
     leadFromVisit: boolean;
   };
+  /** Door rules that apply to every plan. */
+  access: {
+    /** Days after the end date a member can still come in (with a warning). */
+    graceDays: number;
+    /** Deny entry when the member owes more than `owedTolerance`. */
+    blockIfOwed: boolean;
+    owedTolerance: number;
+    /** Minutes before the same member can enter again (0 = off); stops sharing a membership. */
+    reentryMinutes: number;
+    /** Deny entry until the required documents are signed. */
+    requireSignatures: boolean;
+  };
+  freeze: {
+    /** Shortest freeze in days. */
+    minDays: number;
+    /** Freezes allowed per membership (0 = no limit). */
+    maxTimes: number;
+    /** Fee charged for each freeze (0 = free). */
+    fee: number;
+    requireReason: boolean;
+  };
+  renewal: {
+    /** Where a renewal starts: at the end of the current one, today, or at the end if within the grace days. */
+    startFrom: 'END' | 'TODAY' | 'END_IF_GRACE';
+    graceDays: number;
+    /** Discount for renewing at least `earlyDays` before the end. */
+    earlyDays: number;
+    earlyDiscountPct: number;
+    /** One-time fee for new members. */
+    enrollmentFee: number;
+    /** Fee for coming back after being expired more than `reactivationAfterDays`. */
+    reactivationFee: number;
+    reactivationAfterDays: number;
+  };
 };
 
 export const DEFAULT_GYM_SETTINGS: GymSettings = {
@@ -69,6 +103,9 @@ export const DEFAULT_GYM_SETTINGS: GymSettings = {
     },
   },
   visits: { dayPassPrice: 5, leadFromVisit: true },
+  access: { graceDays: 0, blockIfOwed: false, owedTolerance: 0, reentryMinutes: 0, requireSignatures: false },
+  freeze: { minDays: 7, maxTimes: 2, fee: 0, requireReason: true },
+  renewal: { startFrom: 'END_IF_GRACE', graceDays: 5, earlyDays: 0, earlyDiscountPct: 0, enrollmentFee: 0, reactivationFee: 0, reactivationAfterDays: 60 },
 };
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -111,6 +148,12 @@ export class GymRemindersService {
     const int = (v: any, min: number, max: number, def: number) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Math.min(max, Math.max(min, Math.round(Number(v)))) : def);
     const kinds: ClassNoticeKind[] = ['CLASS_CANCELLED', 'CLASS_MOVED', 'WAITLIST_PROMOTED', 'TRIAL_BOOKED'];
     const v = saved?.visits ?? {};
+    const a = saved?.access ?? {};
+    const da = DEFAULT_GYM_SETTINGS.access;
+    const f = saved?.freeze ?? {};
+    const df = DEFAULT_GYM_SETTINGS.freeze;
+    const rn = saved?.renewal ?? {};
+    const dr = DEFAULT_GYM_SETTINGS.renewal;
     const money = (x: any, def: number) => (Number.isFinite(Number(x)) && x !== null && x !== '' ? Math.max(0, Math.round(Number(x) * 100) / 100) : def);
     return {
       timeZone: typeof saved?.timeZone === 'string' && saved.timeZone ? saved.timeZone : DEFAULT_GYM_SETTINGS.timeZone,
@@ -139,6 +182,28 @@ export class GymRemindersService {
       visits: {
         dayPassPrice: money(v.dayPassPrice, DEFAULT_GYM_SETTINGS.visits.dayPassPrice),
         leadFromVisit: v.leadFromVisit !== false,
+      },
+      access: {
+        graceDays: int(a.graceDays, 0, 30, da.graceDays),
+        blockIfOwed: a.blockIfOwed === true,
+        owedTolerance: money(a.owedTolerance, da.owedTolerance),
+        reentryMinutes: int(a.reentryMinutes, 0, 600, da.reentryMinutes),
+        requireSignatures: a.requireSignatures === true,
+      },
+      freeze: {
+        minDays: int(f.minDays, 1, 90, df.minDays),
+        maxTimes: int(f.maxTimes, 0, 12, df.maxTimes),
+        fee: money(f.fee, df.fee),
+        requireReason: f.requireReason !== false,
+      },
+      renewal: {
+        startFrom: ['END', 'TODAY', 'END_IF_GRACE'].includes(rn.startFrom) ? rn.startFrom : dr.startFrom,
+        graceDays: int(rn.graceDays, 0, 60, dr.graceDays),
+        earlyDays: int(rn.earlyDays, 0, 60, dr.earlyDays),
+        earlyDiscountPct: int(rn.earlyDiscountPct, 0, 50, dr.earlyDiscountPct),
+        enrollmentFee: money(rn.enrollmentFee, dr.enrollmentFee),
+        reactivationFee: money(rn.reactivationFee, dr.reactivationFee),
+        reactivationAfterDays: int(rn.reactivationAfterDays, 1, 365, dr.reactivationAfterDays),
       },
     };
   }

@@ -34,6 +34,7 @@ import {
   STATUS_LABEL,
   durationLabel,
   gymApi,
+  membershipTotal,
   methodLabel,
   money,
   shortDate,
@@ -52,6 +53,7 @@ import { PosTable } from "@/components/pos-table";
 import { StatCard, StatGrid } from "@/components/stat-card";
 import { FilterChips, GymPage, GymPageHeader, MemberAvatar, PersonCell, StatusBadge } from "@/components/gym/gym-ui";
 import { printMembershipReceipt, sendMembershipReceipt } from "@/lib/gym-receipt";
+import { SignDocumentDialog, SignedDocumentDialog } from "@/components/gym/sign-document-dialog";
 
 const FILTERS: [string, string][] = [
   ["", "Todos"],
@@ -79,7 +81,9 @@ async function uploadPhoto(file: File) {
 
 // ── Sell / renew a plan ─────────────────────────────────────────────────────
 
-function SellPlanForm({ plans, onSubmit, saving }: { plans: GymPlan[]; saving: boolean; onSubmit: (body: any) => void }) {
+type Quote = { start: string; end: string; price: number; autoDiscount: number; feeItems: { label: string; amount: number }[]; fees: number; total: number; notes: string[] };
+
+function SellPlanForm({ memberId, plans, onSubmit, saving }: { memberId: string; plans: GymPlan[]; saving: boolean; onSubmit: (body: any) => void }) {
   const active = plans.filter((p) => p.isActive);
   const [planId, setPlanId] = useState(active[0]?.id || "");
   const [discount, setDiscount] = useState("");
@@ -87,10 +91,18 @@ function SellPlanForm({ plans, onSubmit, saving }: { plans: GymPlan[]; saving: b
   const [method, setMethod] = useState("CASH");
   const [reference, setReference] = useState("");
   const [startDate, setStartDate] = useState("");
+  const [quote, setQuote] = useState<Quote | null>(null);
   const plan = active.find((p) => p.id === planId);
-  const total = Math.max(0, (plan?.price || 0) - (Number(discount) || 0));
+  const manual = Number(discount) || 0;
+  const total = quote ? Math.max(0, Math.round((quote.total - manual) * 100) / 100) : Math.max(0, (plan?.price || 0) - manual);
 
-  useEffect(() => setPaid(total ? total.toFixed(2) : ""), [planId, discount]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The server applies the renewal policy: start date, early discount, enrollment fees
+  useEffect(() => {
+    if (!planId) return;
+    setQuote(null);
+    gymApi<Quote>(`/members/${memberId}/quote?${new URLSearchParams({ planId, ...(startDate && { startDate }) })}`).then(setQuote).catch(() => {});
+  }, [memberId, planId, startDate]);
+  useEffect(() => setPaid(total ? total.toFixed(2) : ""), [total]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (active.length === 0) return <p className="rounded-lg bg-muted px-3 py-3 text-sm text-muted-foreground">Primero crea un plan en planes y membresías.</p>;
 
@@ -106,14 +118,24 @@ function SellPlanForm({ plans, onSubmit, saving }: { plans: GymPlan[]; saving: b
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label className="text-xs">Descuento ($)</Label>
+          <Label className="text-xs">Descuento extra ($)</Label>
           <Input type="number" min={0} step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="0.00" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Inicia (opcional)</Label>
-          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          <Label className="text-xs">Inicia</Label>
+          <Input type="date" value={startDate || (quote ? quote.start.slice(0, 10) : "")} onChange={(e) => setStartDate(e.target.value)} />
         </div>
       </div>
+      {quote && (
+        <div className="space-y-1 rounded-xl bg-muted/40 p-3 text-sm">
+          <div className="flex justify-between"><span>{plan?.name}</span><span className="tabular-nums">{money(quote.price)}</span></div>
+          {quote.autoDiscount > 0 && <div className="flex justify-between text-emerald-700"><span>Renovación anticipada</span><span className="tabular-nums">−{money(quote.autoDiscount)}</span></div>}
+          {manual > 0 && <div className="flex justify-between text-emerald-700"><span>Descuento</span><span className="tabular-nums">−{money(manual)}</span></div>}
+          {quote.feeItems.map((f) => <div key={f.label} className="flex justify-between"><span>{f.label}</span><span className="tabular-nums">{money(f.amount)}</span></div>)}
+          <div className="flex justify-between border-t pt-1 font-semibold"><span>Total</span><span className="tabular-nums">{money(total)}</span></div>
+          <p className="pt-1 text-xs text-muted-foreground">Del {shortDate(quote.start)} al {shortDate(quote.end)}{quote.notes.length ? `. ${quote.notes.join(". ")}.` : "."}</p>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label className="text-xs">Pagado ahora ($)</Label>
@@ -129,16 +151,13 @@ function SellPlanForm({ plans, onSubmit, saving }: { plans: GymPlan[]; saving: b
       {method !== "CASH" && (
         <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Referencia del pago" />
       )}
-      <p className="text-xs text-muted-foreground">
-        Total {money(total)}. {!startDate && "Si el socio tiene una membresía vigente, la nueva empieza cuando esa termine."}
-      </p>
       <Button
         disabled={saving || !planId}
         className="gap-2"
         onClick={() =>
           onSubmit({
             planId,
-            discount: Number(discount) || 0,
+            discount: manual,
             ...(startDate && { startDate }),
             ...(Number(paid) > 0 && { payment: { amount: Number(paid), method, reference, branchId: localStorage.getItem("currentBranchId") || undefined } }),
           })
@@ -149,6 +168,50 @@ function SellPlanForm({ plans, onSubmit, saving }: { plans: GymPlan[]; saving: b
     </div>
   );
 }
+
+type FreezePolicy = { minDays: number; maxTimes: number; fee: number; requireReason: boolean };
+
+/** Freeze from today or a later date, until a return date (the days come back at the end). */
+function FreezeForm({ membership, maxDays, policy, saving, onSubmit, onCancel }: { membership: GymMembership; maxDays: number; policy: FreezePolicy | null; saving: boolean; onSubmit: (body: any) => void; onCancel: () => void }) {
+  const today = new Date().toLocaleDateString("en-CA");
+  const plus = (d: string, n: number) => { const x = new Date(`${d}T12:00:00`); x.setDate(x.getDate() + n); return x.toLocaleDateString("en-CA"); };
+  const [from, setFrom] = useState(today);
+  const [until, setUntil] = useState(plus(today, Math.min(maxDays, Math.max(policy?.minDays ?? 7, 7))));
+  const [reason, setReason] = useState("");
+  const [method, setMethod] = useState("CASH");
+  const days = Math.round((new Date(`${until}T12:00:00`).getTime() - new Date(`${from}T12:00:00`).getTime()) / 86400000);
+  const left = maxDays - membership.frozenDaysUsed;
+  const fee = policy?.fee ?? 0;
+  return (
+    <div className="space-y-3 border-t pt-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5"><Label className="text-xs">Desde</Label><Input type="date" min={today} value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+        <div className="space-y-1.5"><Label className="text-xs">Regresa el</Label><Input type="date" min={plus(from, 1)} value={until} onChange={(e) => setUntil(e.target.value)} /></div>
+      </div>
+      <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={policy?.requireReason ? "Motivo (viaje, lesión…)" : "Motivo (opcional)"} />
+      <p className={cn("text-xs", days > left || days < (policy?.minDays ?? 1) ? "text-rose-600" : "text-muted-foreground")}>
+        {days} {days === 1 ? "día" : "días"} · le quedan {left} de {maxDays} en su plan{policy?.minDays ? ` · mínimo ${policy.minDays}` : ""}. Esos días se suman al final.
+      </p>
+      {fee > 0 && (
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-sm">
+          <span>Congelar cuesta {money(fee)}</span>
+          <select value={method} onChange={(e) => setMethod(e.target.value)} className="h-8 rounded-md border bg-background px-2 text-sm">
+            <option value="">Cobrar después</option>
+            {PAYMENT_METHODS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+          </select>
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Button size="sm" disabled={saving || days < 1 || days > left || (policy?.requireReason && !reason.trim())} onClick={() => onSubmit({ from, until, reason, ...(fee > 0 && method && { payment: { method, branchId: localStorage.getItem("currentBranchId") || undefined } }) })}>
+          {from === today ? "Congelar ahora" : "Programar congelamiento"}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onCancel}>Cancelar</Button>
+      </div>
+    </div>
+  );
+}
+
+type MemberDocs = { documents: { id: string; title: string; required: boolean; version: number; status: "PENDING" | "OUTDATED" | "SIGNED"; signature: { id: string; signedAt: string; version: number } | null }[] };
 
 // ── New member ──────────────────────────────────────────────────────────────
 
@@ -254,8 +317,14 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
   const [settings, setSettings] = useState<any>(null);
   const [justSold, setJustSold] = useState<string | null>(null);
   const [sendingReceipt, setSendingReceipt] = useState<string | null>(null);
+  const [freezing, setFreezing] = useState(false);
+  const [freezePolicy, setFreezePolicy] = useState<FreezePolicy | null>(null);
+  const [docs, setDocs] = useState<MemberDocs | null>(null);
+  const [signing, setSigning] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<string | null>(null);
 
   useEffect(() => {
+    gymApi<{ freeze: FreezePolicy }>("/settings").then((x) => setFreezePolicy(x.freeze)).catch(() => {});
     fetch(`${API_URL}/settings`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } })
       .then((r) => (r.ok ? r.json() : null))
       .then(setSettings)
@@ -279,8 +348,9 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
   const load = useCallback(() => {
     if (!memberId) return;
     gymApi<GymMemberDetail>(`/members/${memberId}`).then(setMember).catch((e) => toast.error(e.message));
+    gymApi<MemberDocs>(`/members/${memberId}/documents`).then(setDocs).catch(() => setDocs(null));
   }, [memberId]);
-  useEffect(() => { setMember(null); setSelling(false); setPayFor(null); setJustSold(null); load(); }, [load]);
+  useEffect(() => { setMember(null); setDocs(null); setSelling(false); setFreezing(false); setPayFor(null); setJustSold(null); load(); }, [load]);
 
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
@@ -288,7 +358,8 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
   };
 
   const paidOf = (m: GymMembership) => (m.payments || []).reduce((s, p) => s + p.amount, 0);
-  const balanceOf = (m: GymMembership) => Math.max(0, Math.round((m.price - m.discount - paidOf(m)) * 100) / 100);
+  const balanceOf = (m: GymMembership) => Math.max(0, Math.round((membershipTotal(m) - paidOf(m)) * 100) / 100);
+  const planOf = (m: GymMembership) => plans.find((p) => p.id === m.planId);
 
   return (
     <Sheet open={!!memberId} onOpenChange={(open) => !open && onClose()}>
@@ -351,9 +422,18 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
                       </div>
                       {member.daysLeft !== null && <span className="text-sm font-bold text-emerald-600">{member.daysLeft} días</span>}
                     </div>
+                    {member.currentMembership.state === "FROZEN" && (
+                      <p className="rounded-lg bg-indigo-500/10 px-3 py-2 text-xs text-indigo-800">Congelada{member.currentMembership.freezeUntil ? ` hasta el ${shortDate(member.currentMembership.freezeUntil)}: se reactiva sola ese día` : ""}{member.currentMembership.freezeReason ? ` · ${member.currentMembership.freezeReason}` : ""}.</p>
+                    )}
+                    {member.currentMembership.freezeFrom && member.currentMembership.state !== "FROZEN" && (
+                      <div className="flex items-center justify-between gap-2 rounded-lg bg-indigo-500/10 px-3 py-2 text-xs text-indigo-800">
+                        <span>Se congela del {shortDate(member.currentMembership.freezeFrom)}{member.currentMembership.freezeUntil ? ` al ${shortDate(member.currentMembership.freezeUntil)}` : ""}.</span>
+                        <button type="button" className="font-semibold hover:underline" disabled={busy} onClick={() => run(() => gymApi(`/memberships/${member.currentMembership!.id}/unfreeze`, { method: "PATCH" }), "Congelamiento cancelado")}>Quitar</button>
+                      </div>
+                    )}
                     <div className="flex flex-wrap gap-2">
-                      {member.currentMembership.state === "ACTIVE" && (
-                        <Button size="sm" variant="outline" disabled={busy} className="gap-1.5" onClick={() => run(() => gymApi(`/memberships/${member.currentMembership!.id}/freeze`, { method: "PATCH" }), "Membresía congelada")}>
+                      {(member.currentMembership.state === "ACTIVE" || member.currentMembership.state === "SCHEDULED") && !member.currentMembership.freezeFrom && (planOf(member.currentMembership)?.maxFreezeDays ?? 0) > 0 && (
+                        <Button size="sm" variant="outline" disabled={busy} className="gap-1.5" onClick={() => { setFreezing((v) => !v); setSelling(false); }}>
                           <IconSnowflake size={14} /> Congelar
                         </Button>
                       )}
@@ -362,7 +442,7 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
                           <IconPlayerPlay size={14} /> Reactivar
                         </Button>
                       )}
-                      <Button size="sm" disabled={busy} className="gap-1.5" onClick={() => setSelling((v) => !v)}>
+                      <Button size="sm" disabled={busy} className="gap-1.5" onClick={() => { setSelling((v) => !v); setFreezing(false); }}>
                         <IconRefresh size={14} /> {member.currentMembership.state === "EXPIRED" || member.currentMembership.state === "CANCELLED" ? "Vender plan" : "Renovar"}
                       </Button>
                     </div>
@@ -373,9 +453,20 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
                     <Button size="sm" onClick={() => setSelling(true)}>Vender plan</Button>
                   </div>
                 )}
+                {freezing && member.currentMembership && (
+                  <FreezeForm
+                    membership={member.currentMembership}
+                    maxDays={planOf(member.currentMembership)?.maxFreezeDays ?? 0}
+                    policy={freezePolicy}
+                    saving={busy}
+                    onCancel={() => setFreezing(false)}
+                    onSubmit={(body) => run(async () => { await gymApi(`/memberships/${member.currentMembership!.id}/freeze`, { method: "PATCH", json: body }); setFreezing(false); }, body.from === new Date().toLocaleDateString("en-CA") ? "Membresía congelada" : "Congelamiento programado")}
+                  />
+                )}
                 {selling && (
                   <div className="border-t pt-3">
                     <SellPlanForm
+                      memberId={member.id}
                       plans={plans}
                       saving={busy}
                       onSubmit={(body) => run(async () => { const sold = await gymApi<GymMembership>(`/members/${member.id}/memberships`, { method: "POST", json: body }); setSelling(false); setJustSold(sold.id); }, "Membresía registrada")}
@@ -423,6 +514,27 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
               <Switch checked={member.accessEnabled} disabled={busy} onCheckedChange={(v) => run(() => gymApi(`/members/${member.id}`, { method: "PUT", json: { accessEnabled: v } }), v ? "Acceso permitido" : "Acceso bloqueado")} />
             </label>
 
+            {/* Contracts and consents */}
+            {docs && docs.documents.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold">Documentos</p>
+                {docs.documents.map((d) => (
+                  <div key={d.id} className="flex items-center gap-3 rounded-xl border p-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{d.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {d.status === "SIGNED" ? `Firmado el ${shortDate(d.signature!.signedAt)}` : d.status === "OUTDATED" ? `Firmó la versión ${d.signature!.version}; hay una nueva` : d.required ? "Obligatorio, sin firmar" : "Opcional, sin firmar"}
+                      </p>
+                    </div>
+                    {d.signature && <Button size="sm" variant="ghost" onClick={() => setViewing(d.signature!.id)}>Ver</Button>}
+                    {d.status !== "SIGNED" && <Button size="sm" variant={d.required ? "default" : "outline"} onClick={() => setSigning(d.id)}>Firmar</Button>}
+                  </div>
+                ))}
+              </div>
+            )}
+            <SignDocumentDialog memberId={member.id} templateId={signing} onClose={() => setSigning(null)} onSigned={() => { load(); onChanged(); }} />
+            <SignedDocumentDialog signatureId={viewing} onClose={() => setViewing(null)} />
+
             {/* History */}
             <div className="space-y-2">
               <p className="text-sm font-semibold">Historial de membresías</p>
@@ -440,7 +552,7 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
                     </div>
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                       <span className="text-muted-foreground">
-                        {money(m.price - m.discount)}{m.discount > 0 ? ` (desc. ${money(m.discount)})` : ""} · pagado {money(paidOf(m))}
+                        {money(membershipTotal(m))}{m.discount > 0 ? ` (desc. ${money(m.discount)})` : ""}{m.feeItems?.length ? ` (incluye ${m.feeItems.map((f) => f.label.toLowerCase()).join(" y ")})` : ""} · pagado {money(paidOf(m))}
                         {(m.payments || []).length > 0 && ` en ${[...new Set((m.payments || []).map((p) => methodLabel(p.method)))].join(", ")}`}
                       </span>
                       <span className="flex gap-1.5">

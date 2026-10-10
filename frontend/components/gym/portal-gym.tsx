@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { IconBarbell, IconCalendarEvent, IconCheck, IconChevronRight, IconClock, IconHourglass, IconLoader2, IconMapPin, IconUser } from "@tabler/icons-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SignaturePad, type SignaturePadHandle } from "@/components/gym/signature-pad";
+import { IconBarbell, IconCalendarEvent, IconCheck, IconChevronRight, IconClock, IconFileText, IconHourglass, IconLoader2, IconMapPin, IconUser, IconX } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { API_URL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -38,9 +39,9 @@ type PortalMe = {
   visits: string[];
 };
 
-async function portalApi<T>(path: string, method = "GET"): Promise<T> {
+async function portalApi<T>(path: string, method = "GET", body?: unknown): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("client_token") : null;
-  const res = await fetch(`${API_URL}/gym/portal${path}`, { method, headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(`${API_URL}/gym/portal${path}`, { method, headers: { Authorization: `Bearer ${token}`, ...(body !== undefined && { "Content-Type": "application/json" }) }, ...(body !== undefined && { body: JSON.stringify(body) }) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(data.message || "No se pudo completar"), { status: res.status });
   return data as T;
@@ -105,6 +106,74 @@ export function PortalGymTeaser({ onOpen }: { onOpen: () => void }) {
       </span>
       <IconChevronRight size={18} className="shrink-0 text-zinc-400" />
     </button>
+  );
+}
+
+// ── Documents to sign ────────────────────────────────────────────────────────
+
+type PendingDoc = { id: string; title: string; version: number; signedVersion: number | null; body: string };
+
+/** Full-screen reader with the signature pad, made for a phone. */
+function SignSheet({ doc, onClose, onSigned }: { doc: PendingDoc; onClose: () => void; onSigned: () => void }) {
+  const pad = useRef<SignaturePadHandle>(null);
+  const [accepted, setAccepted] = useState(false);
+  const [empty, setEmpty] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const sign = async () => {
+    const signature = pad.current?.toDataURL();
+    if (!signature) return;
+    setSaving(true);
+    try {
+      await portalApi(`/documents/${doc.id}/sign`, "POST", { signature, accepted });
+      toast.success(`Firmaste ${doc.title}`);
+      onSigned();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-[80] flex flex-col bg-[#faf9f5]">
+      <div className="flex items-center justify-between px-5 pb-2 pt-4">
+        <p className="truncate text-base font-bold text-zinc-900">{doc.title}</p>
+        <button type="button" onClick={onClose} className="rounded-full p-2 text-zinc-500 hover:bg-zinc-200" title="Cerrar"><IconX size={18} /></button>
+      </div>
+      <div className="flex-1 overflow-y-auto whitespace-pre-wrap px-5 pb-4 text-sm leading-relaxed text-zinc-700">{doc.body}</div>
+      <div className="space-y-3 border-t border-zinc-200 bg-white px-5 pb-6 pt-4">
+        <label className="flex items-start gap-2.5 text-sm text-zinc-700">
+          <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} className="mt-0.5 size-4 accent-amber-500" />
+          Leí el documento y estoy de acuerdo.
+        </label>
+        <SignaturePad ref={pad} className="h-36" onChange={setEmpty} />
+        <button type="button" disabled={!accepted || empty || saving} onClick={sign} className="flex w-full items-center justify-center gap-2 rounded-full bg-amber-400 py-3 text-sm font-bold text-amber-950 disabled:opacity-40">
+          {saving && <IconLoader2 size={16} className="animate-spin" />} Firmar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PendingDocuments({ onChange }: { onChange?: () => void }) {
+  const [docs, setDocs] = useState<PendingDoc[] | null>(null);
+  const [open, setOpen] = useState<PendingDoc | null>(null);
+  const load = useCallback(() => { portalApi<PendingDoc[]>("/documents").then(setDocs).catch(() => setDocs([])); }, []);
+  useEffect(load, [load]);
+  if (!docs?.length) return null;
+  return (
+    <section className="space-y-2">
+      {docs.map((d) => (
+        <button key={d.id} type="button" onClick={() => setOpen(d)} className="flex w-full items-center gap-3 rounded-2xl bg-amber-100 p-3 text-left">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white text-amber-700"><IconFileText size={20} /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-bold text-amber-950">{d.title}</span>
+            <span className="block text-xs text-amber-900/80">{d.signedVersion ? "Hay una versión nueva para firmar" : "Fírmalo aquí, toma un minuto"}</span>
+          </span>
+          <IconChevronRight size={18} className="shrink-0 text-amber-800" />
+        </button>
+      ))}
+      {open && <SignSheet doc={open} onClose={() => setOpen(null)} onSigned={() => { setOpen(null); load(); onChange?.(); }} />}
+    </section>
   );
 }
 
@@ -188,6 +257,7 @@ export function PortalGym() {
 
   return (
     <div className="space-y-5">
+      <PendingDocuments />
       {/* Membership */}
       <section className="rounded-3xl bg-zinc-900 p-5 text-white shadow-lg">
         <div className="flex items-start justify-between gap-3">

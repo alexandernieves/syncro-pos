@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GymMemberGuard } from './gym-guards';
 import { GymPortalService } from './gym-portal.service';
@@ -22,6 +22,16 @@ export class GymPortalController {
   @Post('sessions/:id/book')
   book(@Param('id') id: string, @Request() req: any) {
     return this.portal.book(req.user.id, req.user.businessId, id);
+  }
+
+  @Get('documents')
+  documents(@Request() req: any) {
+    return this.portal.documents(req.user.id, req.user.businessId);
+  }
+
+  @Post('documents/:id/sign')
+  sign(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.portal.sign(req.user.id, req.user.businessId, id, body, req.ip, req.headers['user-agent']);
   }
 
   @Post('bookings/:id/cancel')

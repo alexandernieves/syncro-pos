@@ -317,10 +317,16 @@ export class GymClassesService {
       if (session.status === 'CANCELLED') throw new BadRequestException('Esta clase fue cancelada');
       if (session.endsAt < new Date()) throw new BadRequestException('Esta clase ya terminó');
 
-      const member = await tx.gymMember.findFirst({ where: { id: memberId, businessId }, include: { memberships: true, client: { select: { name: true } } } });
+      const member = await tx.gymMember.findFirst({ where: { id: memberId, businessId }, include: { memberships: { include: { plan: true } }, client: { select: { name: true } } } });
       if (!member) throw new NotFoundException('Socio no encontrado');
       if (!member.accessEnabled) throw new BadRequestException(`${member.client.name} tiene el acceso bloqueado`);
-      const covered = member.memberships.some((m) => m.status !== 'CANCELLED' && m.status !== 'FROZEN' && m.startDate <= session.startsAt && m.endDate >= session.startsAt);
+      const covering = member.memberships.filter((m) => m.status !== 'CANCELLED' && m.status !== 'FROZEN' && m.startDate <= session.startsAt && m.endDate >= session.startsAt);
+      const covered = covering.length > 0;
+      // The plan decides whether classes are included, and which ones
+      if (covered && !covering.some((m) => m.plan.includesClasses && (!m.plan.allowedClassIds.length || m.plan.allowedClassIds.includes(session.classId)))) {
+        const p = covering[0].plan;
+        throw new BadRequestException(p.includesClasses ? `El plan ${p.name} no incluye ${session.class.name}` : `El plan ${p.name} no incluye clases grupales`);
+      }
       if (!covered) {
         const current = member.memberships.map((m) => membershipState(m)).includes('FROZEN') ? 'tiene la membresía congelada' : 'no tiene una membresía vigente para ese día';
         throw new BadRequestException(`${member.client.name} ${current}`);
