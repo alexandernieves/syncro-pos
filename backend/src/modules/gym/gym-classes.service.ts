@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GymRemindersService } from './gym-reminders.service';
+import { GymNotificationsService } from './gym-notifications.service';
 import { membershipState } from './gym.service';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -42,7 +43,14 @@ export class GymClassesService {
   constructor(
     private prisma: PrismaService,
     private settings: GymRemindersService,
+    private notices: GymNotificationsService,
   ) {}
+
+  /** Members holding a spot (or waiting for one) in a session. */
+  private async activeMemberIds(sessionId: string) {
+    const rows = await this.prisma.gymBooking.findMany({ where: { sessionId, status: { in: ['BOOKED', 'WAITLIST'] } }, select: { memberId: true } });
+    return rows.map((r) => r.memberId);
+  }
 
   // ── Trainers ───────────────────────────────────────────────────────────────
 
@@ -236,7 +244,8 @@ export class GymClassesService {
     });
     const { timeZone } = await this.settings.getSettings(businessId);
     const warning = this.conflictWarning(await this.trainerConflicts(businessId, updated.trainerId, startsAt, endsAt, id), timeZone);
-    return { session: updated, warning };
+    const notified = await this.notices.notifyMoved(businessId, id, session.startsAt);
+    return { session: updated, warning, notified };
   }
 
   /** One-time session outside the weekly schedule (a special class, a make-up class…). */
@@ -309,11 +318,12 @@ export class GymClassesService {
 
   async setBookingStatus(businessId: string, id: string, status: string) {
     if (!['BOOKED', 'CANCELLED', 'ATTENDED', 'NO_SHOW'].includes(status)) throw new BadRequestException('Estado inválido');
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const booking = await tx.gymBooking.findFirst({ where: { id, businessId }, include: { session: true } });
       if (!booking) throw new NotFoundException('Reserva no encontrada');
       const updated = await tx.gymBooking.update({ where: { id }, data: { status } });
       let promoted: string | null = null;
+      let promotedId: string | null = null;
       // A spot freed up: the first one on the waiting list takes it
       if (status === 'CANCELLED' && booking.status !== 'WAITLIST' && booking.session.endsAt > new Date()) {
         const taken = await tx.gymBooking.count({ where: { sessionId: booking.sessionId, status: { in: ['BOOKED', 'ATTENDED'] } } });
@@ -322,18 +332,26 @@ export class GymClassesService {
           if (next) {
             await tx.gymBooking.update({ where: { id: next.id }, data: { status: 'BOOKED' } });
             promoted = next.member.client.name;
+            promotedId = next.memberId;
           }
         }
       }
-      return { ...updated, promoted };
+      return { ...updated, promoted, promotedId };
     });
+    if (result.promotedId) await this.notices.notify(businessId, result.sessionId, 'WAITLIST_PROMOTED', [{ memberId: result.promotedId }]);
+    return result;
   }
 
 
   async cancelSession(businessId: string, id: string, reason?: string) {
     const session = await this.prisma.gymClassSession.findFirst({ where: { id, businessId } });
     if (!session) throw new NotFoundException('Clase no encontrada');
-    return this.prisma.gymClassSession.update({ where: { id }, data: { status: 'CANCELLED', cancelReason: reason?.trim() || null } });
+    const updated = await this.prisma.gymClassSession.update({ where: { id }, data: { status: 'CANCELLED', cancelReason: reason?.trim() || null } });
+    // Members already booked hear about it right away (only for classes still ahead)
+    const notified = session.status !== 'CANCELLED' && session.endsAt > new Date()
+      ? await this.notices.notify(businessId, id, 'CLASS_CANCELLED', (await this.activeMemberIds(id)).map((memberId) => ({ memberId, extra: { motivo: reason?.trim() || undefined } })))
+      : 0;
+    return { ...updated, notified };
   }
 
   async restoreSession(businessId: string, id: string) {

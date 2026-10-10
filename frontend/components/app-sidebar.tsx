@@ -169,6 +169,7 @@ const data = {
     { title: "Clases", url: "/dashboard/gimnasio/clases", icon: IconCalendarEvent },
     { title: "Planes y membresías", url: "/dashboard/gimnasio/planes", icon: IconCalendarRepeat },
     { title: "Recordatorios", url: "/dashboard/gimnasio/recordatorios", icon: IconBellRinging },
+    { title: "Ajustes", url: "/dashboard/gimnasio/ajustes", icon: IconSettings },
     { title: "Punto de venta", url: "/pos", icon: IconShoppingCart },
   ],
   navSecondary: [

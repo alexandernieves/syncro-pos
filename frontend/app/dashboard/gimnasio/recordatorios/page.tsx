@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { StatCard, StatGrid } from "@/components/stat-card";
 import { GymPage, GymPageHeader } from "@/components/gym/gym-ui";
+import { WhatsAppPreview } from "@/components/gym/whatsapp-preview";
 
 type Kind = "BEFORE" | "EXPIRY" | "AFTER";
 type Settings = {
@@ -37,21 +38,7 @@ const PLACEHOLDERS: [string, string][] = [["{nombre}", "Nombre"], ["{plan}", "Pl
 const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12}:00 ${h < 12 ? "a. m." : "p. m."}`;
 
 function Preview({ text, businessName, days }: { text: string; businessName: string; days: number }) {
-  const rendered = text
-    .replace(/\{nombre\}/g, "Laura")
-    .replace(/\{plan\}/g, "Mensual")
-    .replace(/\{fecha\}/g, "13 de octubre")
-    .replace(/\{dias\}/g, String(days))
-    .replace(/\{gimnasio\}/g, businessName);
-  // WhatsApp shows *text* in bold
-  const parts = rendered.split(/(\*[^*\n]+\*)/g);
-  return (
-    <div className="rounded-xl bg-[#EFEAE2] p-3">
-      <div className="ml-auto w-fit max-w-[90%] whitespace-pre-wrap rounded-lg rounded-tr-none bg-[#D9FDD3] px-3 py-2 text-[13px] leading-snug text-[#111B21] shadow-sm">
-        {parts.map((p, i) => (p.startsWith("*") && p.endsWith("*") ? <strong key={i}>{p.slice(1, -1)}</strong> : <span key={i}>{p}</span>))}
-      </div>
-    </div>
-  );
+  return <WhatsAppPreview text={text} vars={{ nombre: "Laura", plan: "Mensual", fecha: "13 de octubre", dias: String(days), gimnasio: businessName }} />;
 }
 
 export default function GymRemindersPage() {
@@ -90,7 +77,7 @@ export default function GymRemindersPage() {
   const save = async () => {
     setSaving(true);
     try {
-      const next = await gymApi<Settings>("/settings", { method: "PUT", json: settings });
+      const next = await gymApi<Settings>("/settings", { method: "PUT", json: { reminders: settings.reminders } });
       setSettings(next);
       setSaved(JSON.stringify(next));
       toast.success(next.reminders.enabled ? "Recordatorios automáticos activados" : "Configuración guardada");

@@ -391,7 +391,7 @@ function SessionSheet({ sessionId, timeZone, onClose, onChanged }: { sessionId: 
                   {!ended && b.status === "BOOKED" && (
                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground" title="Quitar de la clase" disabled={busy} onClick={() => run(async () => {
                       const r = await gymApi<{ promoted: string | null }>(`/bookings/${b.id}`, { method: "PATCH", json: { status: "CANCELLED" } });
-                      toast.success(r.promoted ? `Reserva cancelada. ${r.promoted} pasó de la lista de espera a la clase` : "Reserva cancelada");
+                      toast.success(r.promoted ? `Reserva cancelada. ${r.promoted} pasó de la lista de espera a la clase y le avisaremos por WhatsApp` : "Reserva cancelada");
                     })}><IconX size={16} /></Button>
                   )}
                 </div>
@@ -425,7 +425,11 @@ function SessionSheet({ sessionId, timeZone, onClose, onChanged }: { sessionId: 
                   disabled={busy}
                   onClick={() => {
                     const reason = prompt("¿Por qué se cancela la clase? (el motivo lo verán los socios)");
-                    if (reason !== null) run(() => gymApi(`/sessions/${session.id}/cancel`, { method: "PATCH", json: { reason } }), "Clase cancelada");
+                    if (reason !== null)
+                      run(async () => {
+                        const r = await gymApi<{ notified: number }>(`/sessions/${session.id}/cancel`, { method: "PATCH", json: { reason } });
+                        toast.success("Clase cancelada", { description: r.notified ? `Avisaremos a ${r.notified} ${r.notified === 1 ? "socio" : "socios"} por WhatsApp.` : undefined });
+                      });
                   }}
                 >
                   <IconBan size={16} /> Cancelar esta clase
@@ -528,10 +532,10 @@ export default function GymClassesPage() {
   const moveSession = async (session: CalendarSession, startsAt: Date, endsAt: Date, revert: () => void) => {
     const before = { startsAt: session.startsAt, endsAt: session.endsAt };
     try {
-      const res = await gymApi<{ warning: string | null }>(`/sessions/${session.id}/move`, { method: "PATCH", json: { startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() } });
+      const res = await gymApi<{ warning: string | null; notified: number }>(`/sessions/${session.id}/move`, { method: "PATCH", json: { startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() } });
       const when = startsAt.toLocaleString("es-VE", { weekday: "long", hour: "numeric", minute: "2-digit" });
       toast.success(`${session.class.name} pasó al ${when}`, {
-        description: [res.warning, session.booked ? `Avísales a los ${session.booked} anotados del cambio.` : null].filter(Boolean).join(" ") || undefined,
+        description: [res.warning, res.notified ? `En un minuto avisaremos por WhatsApp a ${res.notified === 1 ? "la persona anotada" : `los ${res.notified} anotados`}. Si deshaces, no se envía.` : null].filter(Boolean).join(" ") || undefined,
         action: {
           label: "Deshacer",
           onClick: () => gymApi(`/sessions/${session.id}/move`, { method: "PATCH", json: before }).then(loadSchedule).catch((e) => toast.error(e.message)),

@@ -29,6 +29,7 @@ import {
     PolarGrid, PolarRadiusAxis, PolarAngleAxis, RadialBar, RadialBarChart, Label as RechartsLabel 
 } from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
+import { PortalGym, PortalGymTeaser } from "@/components/gym/portal-gym";
 
 const API = API_URL;
 const MAPBOX_TOKEN = "pk.eyJ1Ijoic3luY3JvcG9zIiwiYSI6ImNtcW80eHJoazF0MjQycXB6b2Q2c3loc3UifQ.RuEyWvPOieOxbOXf9Rq8rQ";
@@ -241,7 +242,7 @@ export default function ClientPortal() {
     const [loading, setLoading] = useState(false);
     const [isInitializing, setIsInitializing] = useState(true);
     const [view, setView] = useState<"login" | "dashboard">("login");
-    const [activeTab, setActiveTab] = useState<"home" | "payments" | "rewards" | "profile" | "auth-purchase">("home");
+    const [activeTab, setActiveTab] = useState<"home" | "payments" | "rewards" | "profile" | "auth-purchase" | "gym">("home");
     
     // Credit Purchase PIN Authentication states
     const [authPin, setAuthPin] = useState("");
@@ -2234,6 +2235,7 @@ export default function ClientPortal() {
                         {activeTab === "rewards" && `¡Compra en nuestras tiendas${client ? `, ${client.name.split(" ")[0]}` : ""}!`}
                         {activeTab === "profile" && `¡Tu perfil${client ? `, ${client.name.split(" ")[0]}` : ""}!`}
                         {activeTab === "auth-purchase" && `¡Autoriza tu compra${client ? `, ${client.name.split(" ")[0]}` : ""}!`}
+                        {activeTab === "gym" && `¡A entrenar${client ? `, ${client.name.split(" ")[0]}` : ""}!`}
                     </span>
                 </div>
             )}
@@ -2398,6 +2400,7 @@ export default function ClientPortal() {
                         {/* TAB 1: HOME */}
                         {activeTab === "home" && (
                     <div className="space-y-5 animate-in slide-in-from-bottom duration-500">
+                        <PortalGymTeaser onOpen={() => setActiveTab("gym")} />
                         
                         {/* PREMIUM CREDITO CARD */}
                         <div className="w-full flex flex-col items-center justify-center text-center pt-1 pb-3 relative">
@@ -4394,6 +4397,13 @@ export default function ClientPortal() {
                                 </div>
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* GYM: membership and class bookings */}
+                {activeTab === "gym" && (
+                    <div className="animate-in slide-in-from-bottom duration-500">
+                        <PortalGym />
                     </div>
                 )}
 

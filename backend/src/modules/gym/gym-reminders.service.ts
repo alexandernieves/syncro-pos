@@ -5,13 +5,10 @@ import { WhatsAppService } from '../whatsapp/whatsapp.service';
 
 export type ReminderKind = 'BEFORE' | 'EXPIRY' | 'AFTER';
 
+export type ClassNoticeKind = 'CLASS_CANCELLED' | 'CLASS_MOVED' | 'WAITLIST_PROMOTED';
+
 export type GymSettings = {
   timeZone: string;
-  /** Image shown at the top of the gym menu (the gym's brand) */
-  brandImageUrl: string | null;
-  /** Space around that image, in px (0 = edge to edge) */
-  brandPaddingX: number;
-  brandPaddingY: number;
   reminders: {
     enabled: boolean;
     /** Days before the end date for the "vence pronto" message (0 = off). */
@@ -23,13 +20,22 @@ export type GymSettings = {
     hour: number;
     templates: Record<ReminderKind, string>;
   };
+  /** Rules for bookings made by members from their app (reception can always book). */
+  booking: {
+    portalEnabled: boolean;
+    /** How many days ahead a member can book. */
+    daysAhead: number;
+    /** Members can cancel until this many hours before the class (0 = until it starts). */
+    cancelHours: number;
+    /** Future bookings a member can hold at once (0 = no limit). */
+    maxActive: number;
+  };
+  /** WhatsApp notices about classes. */
+  notices: Record<ClassNoticeKind, boolean> & { templates: Record<ClassNoticeKind, string> };
 };
 
 export const DEFAULT_GYM_SETTINGS: GymSettings = {
   timeZone: 'America/Caracas',
-  brandImageUrl: null,
-  brandPaddingX: 0,
-  brandPaddingY: 0,
   reminders: {
     enabled: false,
     daysBefore: 3,
@@ -40,6 +46,17 @@ export const DEFAULT_GYM_SETTINGS: GymSettings = {
       BEFORE: 'Hola {nombre} 👋 Tu plan *{plan}* en *{gimnasio}* vence el *{fecha}* (en {dias} días). Renuévalo en recepción para seguir entrenando sin interrupciones 💪',
       EXPIRY: 'Hola {nombre}, tu plan *{plan}* en *{gimnasio}* vence *hoy*. Pasa por recepción para renovarlo y mantener tu acceso 🏋️',
       AFTER: 'Hola {nombre}, te extrañamos en *{gimnasio}* 💙 Tu plan *{plan}* venció el {fecha}. Cuando quieras volver, te esperamos en recepción.',
+    },
+  },
+  booking: { portalEnabled: true, daysAhead: 7, cancelHours: 2, maxActive: 3 },
+  notices: {
+    CLASS_CANCELLED: true,
+    CLASS_MOVED: true,
+    WAITLIST_PROMOTED: true,
+    templates: {
+      CLASS_CANCELLED: 'Hola {nombre}, la clase de *{clase}* del *{fecha}* fue cancelada.{motivo} Disculpa las molestias 🙏 — {gimnasio}',
+      CLASS_MOVED: 'Hola {nombre}, la clase de *{clase}* cambió de horario: ahora es el *{fecha}* (antes {antes}). Tu cupo sigue reservado ✅ — {gimnasio}',
+      WAITLIST_PROMOTED: '¡Buenas noticias, {nombre}! 🎉 Se liberó un cupo y ya estás anotado en *{clase}* el *{fecha}*. Si no puedes ir, cancela desde tu app para dárselo a otro socio — {gimnasio}',
     },
   },
 };
@@ -77,12 +94,14 @@ export class GymRemindersService {
   normalizeSettings(saved: any): GymSettings {
     const r = saved?.reminders ?? {};
     const d = DEFAULT_GYM_SETTINGS.reminders;
-    const int = (v: any, min: number, max: number, def: number) => (Number.isFinite(Number(v)) ? Math.min(max, Math.max(min, Math.round(Number(v)))) : def);
+    const b = saved?.booking ?? {};
+    const db = DEFAULT_GYM_SETTINGS.booking;
+    const n = saved?.notices ?? {};
+    const dn = DEFAULT_GYM_SETTINGS.notices;
+    const int = (v: any, min: number, max: number, def: number) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Math.min(max, Math.max(min, Math.round(Number(v)))) : def);
+    const kinds: ClassNoticeKind[] = ['CLASS_CANCELLED', 'CLASS_MOVED', 'WAITLIST_PROMOTED'];
     return {
       timeZone: typeof saved?.timeZone === 'string' && saved.timeZone ? saved.timeZone : DEFAULT_GYM_SETTINGS.timeZone,
-      brandImageUrl: typeof saved?.brandImageUrl === 'string' && saved.brandImageUrl.trim() ? saved.brandImageUrl.trim() : null,
-      brandPaddingX: int(saved?.brandPaddingX, 0, 48, 0),
-      brandPaddingY: int(saved?.brandPaddingY, 0, 48, 0),
       reminders: {
         enabled: r.enabled === true,
         daysBefore: int(r.daysBefore, 0, 30, d.daysBefore),
@@ -95,6 +114,16 @@ export class GymRemindersService {
           AFTER: r.templates?.AFTER?.trim() || d.templates.AFTER,
         },
       },
+      booking: {
+        portalEnabled: b.portalEnabled !== false,
+        daysAhead: int(b.daysAhead, 1, 30, db.daysAhead),
+        cancelHours: int(b.cancelHours, 0, 72, db.cancelHours),
+        maxActive: int(b.maxActive, 0, 50, db.maxActive),
+      },
+      notices: {
+        ...(Object.fromEntries(kinds.map((k) => [k, n[k] !== false])) as Record<ClassNoticeKind, boolean>),
+        templates: Object.fromEntries(kinds.map((k) => [k, n.templates?.[k]?.trim() || dn.templates[k]])) as Record<ClassNoticeKind, string>,
+      },
     };
   }
 
@@ -103,10 +132,17 @@ export class GymRemindersService {
     return this.normalizeSettings(s?.gymSettings);
   }
 
+  /** Saves the sections sent; the ones left out keep their saved values. */
   async saveSettings(businessId: string, data: any) {
-    const settings = this.normalizeSettings(data);
-    const row = await this.prisma.setting.findFirst({ where: { businessId }, select: { id: true } });
+    const row = await this.prisma.setting.findFirst({ where: { businessId }, select: { id: true, gymSettings: true } });
     if (!row) throw new NotFoundException('Configuración del negocio no encontrada');
+    const current = this.normalizeSettings(row.gymSettings);
+    const merged: any = { ...current };
+    for (const key of Object.keys(data ?? {})) {
+      const value = data[key];
+      merged[key] = value && typeof value === 'object' && !Array.isArray(value) ? { ...(current as any)[key], ...value } : value;
+    }
+    const settings = this.normalizeSettings(merged);
     await this.prisma.setting.update({ where: { id: row.id }, data: { gymSettings: settings as any } });
     return settings;
   }

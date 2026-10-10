@@ -3,15 +3,23 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GymService } from './gym.service';
 import { GymRemindersService } from './gym-reminders.service';
 import { GymClassesService } from './gym-classes.service';
+import { GymNotificationsService } from './gym-notifications.service';
+import { GymStaffGuard } from './gym-guards';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, GymStaffGuard)
 @Controller('gym')
 export class GymController {
   constructor(
     private readonly gym: GymService,
     private readonly reminders: GymRemindersService,
     private readonly classes: GymClassesService,
+    private readonly notices: GymNotificationsService,
   ) {}
+
+  @Get('notifications')
+  listNotifications(@Query('sessionId') sessionId: string, @Request() req: any) {
+    return this.notices.list(req.user.businessId, sessionId || undefined);
+  }
 
   // Classes, trainers and bookings
   @Get('trainers')

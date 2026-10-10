@@ -50,6 +50,7 @@ model Business {
   gymClasses            GymClass[]
   gymClassSessions      GymClassSession[]
   gymBookings           GymBooking[]
+  gymNotifications      GymNotification[]
 }
 
 model Conversation {
@@ -76,30 +77,30 @@ model Message {
 }
 
 model Product {
-  id               String            @id @default(uuid())
-  name             String
-  description      String?
-  categoryId       String?
-  supplierId       String?
-  isWeighable      Boolean           @default(false)
-  isPublishedOnSyncroShop Boolean    @default(false)
-  isFeaturedOnSyncroShop  Boolean    @default(false)
+  id                      String            @id @default(uuid())
+  name                    String
+  description             String?
+  categoryId              String?
+  supplierId              String?
+  isWeighable             Boolean           @default(false)
+  isPublishedOnSyncroShop Boolean           @default(false)
+  isFeaturedOnSyncroShop  Boolean           @default(false)
   syncroShopBranchId      String?
   specifications          Json?
   landingBlocks           Json?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  image            String?
-  businessId       String?
-  business         Business?         @relation(fields: [businessId], references: [id])
-  category         Category?         @relation(fields: [categoryId], references: [id])
-  supplier         Supplier?         @relation(fields: [supplierId], references: [id])
-  syncroShopBranch Branch?           @relation("SyncroShopBranch", fields: [syncroShopBranchId], references: [id])
-  variants         ProductVariant[]
-  supplierProducts SupplierProduct[]
-  images           ProductImage[]
-  reviews          ProductReview[]
-  shopOrderItems   ShopOrderItem[]
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  image                   String?
+  businessId              String?
+  business                Business?         @relation(fields: [businessId], references: [id])
+  category                Category?         @relation(fields: [categoryId], references: [id])
+  supplier                Supplier?         @relation(fields: [supplierId], references: [id])
+  syncroShopBranch        Branch?           @relation("SyncroShopBranch", fields: [syncroShopBranchId], references: [id])
+  variants                ProductVariant[]
+  supplierProducts        SupplierProduct[]
+  images                  ProductImage[]
+  reviews                 ProductReview[]
+  shopOrderItems          ShopOrderItem[]
 }
 
 model ProductVariant {
@@ -113,8 +114,8 @@ model ProductVariant {
   cost               Float?
   promoPrice         Float?
   bulkPrice          Float?
-  stock              Float                     @default(0)
-  minStock           Float                     @default(5)
+  stock              Float                   @default(0)
+  minStock           Float                   @default(5)
   showOnSyncroShop   Boolean                 @default(true)
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
@@ -134,7 +135,7 @@ model Inventory {
   id        String         @id @default(uuid())
   variantId String
   branchId  String
-  quantity  Float            @default(0)
+  quantity  Float          @default(0)
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
   branch    Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
@@ -336,36 +337,36 @@ model Setting {
 }
 
 model Sale {
-  id              String           @id @default(uuid())
-  branchId        String
-  userId          String
-  clientId        String?
-  paymentMethod   PaymentMethod?
-  subtotal        Float            @default(0)
-  taxAmount       Float            @default(0)
-  igtfAmount      Float            @default(0)
-  discountAmt     Float            @default(0)
-  discountPct     Float            @default(0)
-  total           Float
-  status          String           @default("COMPLETED")
-  channel         String           @default("POS")
-  shiftId         String?
+  id                    String           @id @default(uuid())
+  branchId              String
+  userId                String
+  clientId              String?
+  paymentMethod         PaymentMethod?
+  subtotal              Float            @default(0)
+  taxAmount             Float            @default(0)
+  igtfAmount            Float            @default(0)
+  discountAmt           Float            @default(0)
+  discountPct           Float            @default(0)
+  total                 Float
+  status                String           @default("COMPLETED")
+  channel               String           @default("POS")
+  shiftId               String?
   /// SENT or FAILED: last attempt to send the invoice by WhatsApp
   whatsappInvoiceStatus String?
   whatsappInvoiceTo     String?
   whatsappInvoiceSentAt DateTime?
   whatsappInvoiceError  String?
-  createdAt       DateTime         @default(now())
-  businessId      String?
-  accountingEntry AccountingEntry?
-  branch          Branch           @relation(fields: [branchId], references: [id])
-  business        Business?        @relation(fields: [businessId], references: [id])
-  client          Client?          @relation(fields: [clientId], references: [id])
-  shift           Shift?           @relation(fields: [shiftId], references: [id])
-  user            User             @relation(fields: [userId], references: [id])
-  items           SaleItem[]
-  payments        SalePayment[]
-  returns         SaleReturn[]
+  createdAt             DateTime         @default(now())
+  businessId            String?
+  accountingEntry       AccountingEntry?
+  branch                Branch           @relation(fields: [branchId], references: [id])
+  business              Business?        @relation(fields: [businessId], references: [id])
+  client                Client?          @relation(fields: [clientId], references: [id])
+  shift                 Shift?           @relation(fields: [shiftId], references: [id])
+  user                  User             @relation(fields: [userId], references: [id])
+  items                 SaleItem[]
+  payments              SalePayment[]
+  returns               SaleReturn[]
 }
 
 model SaleReturn {
@@ -408,7 +409,7 @@ model ProductWaitlist {
   id        String     @id @default(uuid())
   name      String
   price     Float
-  stock     Float        @default(0)
+  stock     Float      @default(0)
   barcode   String
   status    String     @default("PENDING")
   branchId  String?
@@ -893,24 +894,24 @@ model WhatsAppChat {
 }
 
 model WhatsAppMessage {
-  id            String       @id @default(uuid())
-  chatId        String
-  senderType    String
-  agentId       String?
-  text          String?
-  type          String
-  mediaUrl      String?
-  status        String
-  whatsappMsgId String?
+  id               String       @id @default(uuid())
+  chatId           String
+  senderType       String
+  agentId          String?
+  text             String?
+  type             String
+  mediaUrl         String?
+  status           String
+  whatsappMsgId    String?
   /// Reply: the message it answers (our id), its text and who wrote it
   quotedMessageId  String?
   quotedText       String?
   quotedSenderType String?
   /// Emoji reactions: ours and the contact's
-  reaction        String?
-  contactReaction String?
-  createdAt     DateTime     @default(now())
-  chat          WhatsAppChat @relation(fields: [chatId], references: [id])
+  reaction         String?
+  contactReaction  String?
+  createdAt        DateTime     @default(now())
+  chat             WhatsAppChat @relation(fields: [chatId], references: [id])
 }
 
 model WhatsAppPendingAction {
@@ -926,32 +927,32 @@ model WhatsAppPendingAction {
 }
 
 model LandingPage {
-  id             String   @id @default(uuid())
-  businessId     String
-  branchId       String?
-  title          String
-  slug           String   @unique
-  productUrl     String?
+  id              String         @id @default(uuid())
+  businessId      String
+  branchId        String?
+  title           String
+  slug            String         @unique
+  productUrl      String?
   // Producto de tu propio inventario del que se generó esta landing (flujo
   // "Crear desde mi Inventario"). Sin relación formal de Prisma a propósito
   // (igual que productUrl): si el producto se borra más adelante, la landing
   // ya publicada sigue funcionando con su config ya generada.
   sourceProductId String?
-  config     Json
-  status     String   @default("DRAFT")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  business   Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  branch     Branch?        @relation(fields: [branchId], references: [id])
-  leads      LandingLead[]
-  visits     LandingVisit[]
+  config          Json
+  status          String         @default("DRAFT")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch          Branch?        @relation(fields: [branchId], references: [id])
+  leads           LandingLead[]
+  visits          LandingVisit[]
 }
 
 // Lead capturado desde el formulario de pedido de una landing page pública.
 // Reemplaza funcionalmente a ClientesPetgo (legacy, sin aislar), pero
 // vinculado siempre a su landing/negocio/sucursal de origen.
 model LandingLead {
-  id              String   @id @default(uuid())
+  id              String      @id @default(uuid())
   landingPageId   String
   businessId      String
   branchId        String
@@ -962,9 +963,9 @@ model LandingLead {
   productInterest String?
   packId          String?
   visitorId       String?
-  status          String   @default("NEW")
+  status          String      @default("NEW")
   saleId          String?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime    @default(now())
   landingPage     LandingPage @relation(fields: [landingPageId], references: [id], onDelete: Cascade)
   branch          Branch      @relation(fields: [branchId], references: [id])
 }
@@ -973,7 +974,7 @@ model LandingLead {
 // Reemplaza funcionalmente a VisitasPetgo (legacy, sin aislar), mismo set de
 // métricas pero vinculado siempre a su landing/negocio/sucursal de origen.
 model LandingVisit {
-  id            String   @id @default(uuid())
+  id            String      @id @default(uuid())
   landingPageId String
   businessId    String
   branchId      String
@@ -986,13 +987,13 @@ model LandingVisit {
   utmMedium     String?
   utmCampaign   String?
   fbclid        String?
-  timeOnPage    Float    @default(0)
-  formStarted   Boolean  @default(false)
-  formCompleted Boolean  @default(false)
-  clicks        Int      @default(0)
-  scrolled      Boolean  @default(false)
-  maxScroll     Int      @default(0)
-  createdAt     DateTime @default(now())
+  timeOnPage    Float       @default(0)
+  formStarted   Boolean     @default(false)
+  formCompleted Boolean     @default(false)
+  clicks        Int         @default(0)
+  scrolled      Boolean     @default(false)
+  maxScroll     Int         @default(0)
+  createdAt     DateTime    @default(now())
   landingPage   LandingPage @relation(fields: [landingPageId], references: [id], onDelete: Cascade)
   branch        Branch      @relation(fields: [branchId], references: [id])
 }
@@ -1256,9 +1257,9 @@ model GymPlan {
 }
 
 model GymMember {
-  id               String          @id @default(uuid())
+  id               String            @id @default(uuid())
   businessId       String
-  clientId         String          @unique
+  clientId         String            @unique
   memberNumber     Int
   photoUrl         String?
   birthDate        DateTime?
@@ -1269,24 +1270,25 @@ model GymMember {
   goal             String?
   notes            String?
   /// Manual block at the door regardless of the membership
-  accessEnabled    Boolean         @default(true)
+  accessEnabled    Boolean           @default(true)
   /// Person id on the face reader (Hikvision employeeNo)
   deviceUserId     String?
   faceSyncedAt     DateTime?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @default(now()) @updatedAt
-  business         Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  client           Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @default(now()) @updatedAt
+  business         Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  client           Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
   memberships      GymMembership[]
   checkIns         GymCheckIn[]
   reminders        GymReminder[]
   bookings         GymBooking[]
+  notifications    GymNotification[]
 
   @@unique([businessId, memberNumber])
 }
 
 model GymMembership {
-  id             String       @id @default(uuid())
+  id             String        @id @default(uuid())
   businessId     String
   memberId       String
   planId         String
@@ -1294,19 +1296,19 @@ model GymMembership {
   startDate      DateTime
   endDate        DateTime
   price          Float
-  discount       Float        @default(0)
+  discount       Float         @default(0)
   /// ACTIVE, FROZEN or CANCELLED; "expired" and "scheduled" come from the dates
-  status         String       @default("ACTIVE")
+  status         String        @default("ACTIVE")
   frozenAt       DateTime?
-  frozenDaysUsed Int          @default(0)
+  frozenDaysUsed Int           @default(0)
   cancelledAt    DateTime?
   notes          String?
   createdById    String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @default(now()) @updatedAt
-  business       Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  member         GymMember    @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  plan           GymPlan      @relation(fields: [planId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @default(now()) @updatedAt
+  business       Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  member         GymMember     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  plan           GymPlan       @relation(fields: [planId], references: [id])
   payments       GymPayment[]
   reminders      GymReminder[]
 
@@ -1315,21 +1317,21 @@ model GymMembership {
 }
 
 model GymPayment {
-  id           String        @id @default(uuid())
-  businessId   String
-  membershipId String
-  amount       Float
-  method       String
-  reference    String?
-  exchangeRate Float?
-  createdById  String?
+  id                String        @id @default(uuid())
+  businessId        String
+  membershipId      String
+  amount            Float
+  method            String
+  reference         String?
+  exchangeRate      Float?
+  createdById       String?
   /// Branch and open cash shift where it was charged; its income entry in accounting
   branchId          String?
   shiftId           String?
   accountingEntryId String?
-  createdAt    DateTime      @default(now())
-  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  membership   GymMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdAt         DateTime      @default(now())
+  business          Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  membership        GymMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
 
   @@index([businessId, createdAt], map: "GymPayment_business_created_idx")
   @@index([shiftId], map: "GymPayment_shiftId_idx")
@@ -1374,19 +1376,19 @@ model GymReminder {
 }
 
 model GymTrainer {
-  id        String            @id @default(uuid())
+  id         String            @id @default(uuid())
   businessId String
-  name      String
-  phone     String?
-  specialty String?
-  photoUrl  String?
-  color     String?
-  isActive  Boolean           @default(true)
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @default(now()) @updatedAt
-  business  Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  classes   GymClass[]
-  sessions  GymClassSession[]
+  name       String
+  phone      String?
+  specialty  String?
+  photoUrl   String?
+  color      String?
+  isActive   Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @default(now()) @updatedAt
+  business   Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  classes    GymClass[]
+  sessions   GymClassSession[]
 
   @@index([businessId])
 }
@@ -1418,25 +1420,25 @@ model GymClass {
 
 /// One dated occurrence of a class; bookings belong to it
 model GymClassSession {
-  id           String       @id @default(uuid())
-  businessId   String
-  classId      String
-  trainerId    String?
-  startsAt     DateTime
-  endsAt       DateTime
-  capacity     Int
+  id               String       @id @default(uuid())
+  businessId       String
+  classId          String
+  trainerId        String?
+  startsAt         DateTime
+  endsAt           DateTime
+  capacity         Int
   /// SCHEDULED or CANCELLED
-  status       String       @default("SCHEDULED")
-  cancelReason String?
+  status           String       @default("SCHEDULED")
+  cancelReason     String?
   /// Weekly slot it came from when it was moved to another time (so that slot isn't recreated)
   originalStartsAt DateTime?
   /// One-time session added outside the weekly schedule
-  isExtra      Boolean      @default(false)
-  createdAt    DateTime     @default(now())
-  business     Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  class        GymClass     @relation(fields: [classId], references: [id], onDelete: Cascade)
-  trainer      GymTrainer?  @relation(fields: [trainerId], references: [id], onDelete: SetNull)
-  bookings     GymBooking[]
+  isExtra          Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  business         Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  class            GymClass     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  trainer          GymTrainer?  @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  bookings         GymBooking[]
 
   @@unique([classId, startsAt])
   @@index([businessId, startsAt], map: "GymClassSession_business_starts_idx")
@@ -1460,4 +1462,24 @@ model GymBooking {
 
   @@unique([sessionId, memberId])
   @@index([memberId], map: "GymBooking_member_idx")
+}
+
+/// WhatsApp notices about classes (cancelled, moved, spot from the waiting list)
+model GymNotification {
+  id         String     @id @default(uuid())
+  businessId String
+  memberId   String?
+  sessionId  String?
+  /// CLASS_CANCELLED, CLASS_MOVED or WAITLIST_PROMOTED
+  kind       String
+  /// SENT, FAILED or SKIPPED (no phone, WhatsApp off)
+  status     String
+  phone      String?
+  text       String?
+  error      String?
+  createdAt  DateTime   @default(now())
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  member     GymMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, createdAt], map: "GymNotification_business_created_idx")
 }
