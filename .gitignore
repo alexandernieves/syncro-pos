@@ -50,3 +50,4 @@ frontend/.next.old/
 **/.env.bak*
 backend/uploads/
 storefront/
+backend/backups/

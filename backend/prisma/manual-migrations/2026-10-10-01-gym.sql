@@ -2,7 +2,7 @@
 -- Additive only. Safe to run more than once.
 CREATE TABLE IF NOT EXISTS "GymPlan" (
   "id" TEXT PRIMARY KEY,
-  "businessId" TEXT NOT NULL REFERENCES "Business"("id") ON DELETE CASCADE,
+  "businessId" TEXT NOT NULL REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE,
   "name" TEXT NOT NULL,
   "description" TEXT,
   "durationDays" INTEGER NOT NULL,
@@ -17,8 +17,8 @@ CREATE INDEX IF NOT EXISTS "GymPlan_businessId_idx" ON "GymPlan"("businessId");
 
 CREATE TABLE IF NOT EXISTS "GymMember" (
   "id" TEXT PRIMARY KEY,
-  "businessId" TEXT NOT NULL REFERENCES "Business"("id") ON DELETE CASCADE,
-  "clientId" TEXT NOT NULL REFERENCES "Client"("id") ON DELETE CASCADE,
+  "businessId" TEXT NOT NULL REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "clientId" TEXT NOT NULL REFERENCES "Client"("id") ON DELETE CASCADE ON UPDATE CASCADE,
   "memberNumber" INTEGER NOT NULL,
   "photoUrl" TEXT,
   "birthDate" TIMESTAMP(3),
@@ -39,9 +39,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS "GymMember_businessId_memberNumber_key" ON "Gy
 
 CREATE TABLE IF NOT EXISTS "GymMembership" (
   "id" TEXT PRIMARY KEY,
-  "businessId" TEXT NOT NULL REFERENCES "Business"("id") ON DELETE CASCADE,
-  "memberId" TEXT NOT NULL REFERENCES "GymMember"("id") ON DELETE CASCADE,
-  "planId" TEXT NOT NULL REFERENCES "GymPlan"("id"),
+  "businessId" TEXT NOT NULL REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "memberId" TEXT NOT NULL REFERENCES "GymMember"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "planId" TEXT NOT NULL REFERENCES "GymPlan"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
   "planName" TEXT NOT NULL,
   "startDate" TIMESTAMP(3) NOT NULL,
   "endDate" TIMESTAMP(3) NOT NULL,
@@ -61,8 +61,8 @@ CREATE INDEX IF NOT EXISTS "GymMembership_business_end_idx" ON "GymMembership"("
 
 CREATE TABLE IF NOT EXISTS "GymPayment" (
   "id" TEXT PRIMARY KEY,
-  "businessId" TEXT NOT NULL REFERENCES "Business"("id") ON DELETE CASCADE,
-  "membershipId" TEXT NOT NULL REFERENCES "GymMembership"("id") ON DELETE CASCADE,
+  "businessId" TEXT NOT NULL REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "membershipId" TEXT NOT NULL REFERENCES "GymMembership"("id") ON DELETE CASCADE ON UPDATE CASCADE,
   "amount" DOUBLE PRECISION NOT NULL,
   "method" TEXT NOT NULL,
   "reference" TEXT,
@@ -74,8 +74,8 @@ CREATE INDEX IF NOT EXISTS "GymPayment_business_created_idx" ON "GymPayment"("bu
 
 CREATE TABLE IF NOT EXISTS "GymCheckIn" (
   "id" TEXT PRIMARY KEY,
-  "businessId" TEXT NOT NULL REFERENCES "Business"("id") ON DELETE CASCADE,
-  "memberId" TEXT REFERENCES "GymMember"("id") ON DELETE SET NULL,
+  "businessId" TEXT NOT NULL REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "memberId" TEXT REFERENCES "GymMember"("id") ON DELETE SET NULL ON UPDATE CASCADE,
   "granted" BOOLEAN NOT NULL,
   "reason" TEXT,
   "method" TEXT NOT NULL DEFAULT 'MANUAL',
