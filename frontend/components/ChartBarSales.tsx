@@ -13,8 +13,8 @@ export function ChartBarSales({ data }: { data: any[] }) {
   return (
     <Card className="border-none bg-gradient-to-t from-primary/5 to-card shadow-sm">
       <CardHeader>
-        <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground">Productos Más Vendidos</CardTitle>
-        <CardDescription className="text-xs">Volumen de ventas por artículo (Top 5)</CardDescription>
+        <CardTitle className="text-sm font-black text-muted-foreground">Productos más vendidos</CardTitle>
+        <CardDescription className="text-xs">Volumen de ventas por artículo (top 5)</CardDescription>
       </CardHeader>
       <CardContent className="h-[300px] pt-4">
         <ResponsiveContainer width="100%" height="100%">

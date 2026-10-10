@@ -46,7 +46,7 @@ export function DatePickerWithRange({
                 format(date.from, "LLL dd, y")
               )
             ) : (
-              <span>Seleccionar Rango Histórico</span>
+              <span>Seleccionar rango histórico</span>
             )}
           </Button>
         </PopoverTrigger>

@@ -182,7 +182,7 @@ export class DashboardService {
       orderBy: { createdAt: 'desc' },
       include: { 
         client: true, 
-        user: true, 
+        user: { select: { id: true, name: true, email: true, role: true, avatar: true } }, 
         branch: true,
         payments: true,
         items: {

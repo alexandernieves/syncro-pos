@@ -76,7 +76,7 @@ type AccountingEntry = {
 };
 
 const originConfig: Record<string, { label: string; icon: any; color: string }> = {
-    POS: { label: "Punto de Venta", icon: IconDeviceDesktop, color: "text-blue-600" },
+    POS: { label: "Punto de venta", icon: IconDeviceDesktop, color: "text-blue-600" },
     INVENTARIO: { label: "Inventario", icon: IconPackage, color: "text-amber-600" },
     MANUAL: { label: "Manual", icon: IconUserCog, color: "text-purple-600" },
     SISTEMA: { label: "Sistema", icon: IconDatabase, color: "text-emerald-600" },
@@ -253,7 +253,7 @@ export default function AccountingPage() {
   const columns: ColumnDef<AccountingEntry>[] = [
     {
       accessorKey: "createdAt",
-      header: "Fecha / Registro",
+      header: "Fecha / registro",
       cell: ({ row }) => {
         return (
           <div className="flex flex-col text-[11px] font-medium leading-tight text-muted/80">
@@ -265,7 +265,7 @@ export default function AccountingPage() {
     },
     {
       accessorKey: "description",
-      header: "Descripción / Concepto",
+      header: "Descripción / concepto",
       cell: ({ row }) => {
           const origin = row.original.origin || "MANUAL";
           const config = originConfig[origin];
@@ -277,7 +277,7 @@ export default function AccountingPage() {
                 </div>
                 <div className="flex flex-col">
                   <span className="text-sm font-semibold tracking-tight">{row.getValue("description")}</span>
-                  <span className="text-[10px] text-muted-foreground uppercase">{row.original.category} {row.original.branch ? `• ${row.original.branch.name}` : ""}</span>
+                  <span className="text-[10px] text-muted-foreground">{row.original.category} {row.original.branch ? `• ${row.original.branch.name}` : ""}</span>
                 </div>
             </div>
           )
@@ -289,9 +289,9 @@ export default function AccountingPage() {
       cell: ({ row }) => {
         const type = row.getValue("type") as string;
         return (
-            <Badge variant="outline" className={`text-[10px] font-black tracking-widest px-1.5 h-6 gap-1.5 border-none ${type === 'INCOME' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'}`}>
+            <Badge variant="outline" className={`text-[10px] font-black  px-1.5 h-6 gap-1.5 border-none ${type === 'INCOME' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'}`}>
                 <div className={`size-1.5 rounded-full ${type === 'INCOME' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                {type === 'INCOME' ? 'INGRESO' : 'EGRESO'}
+                {type === 'INCOME' ? 'Ingreso' : 'Egreso'}
             </Badge>
         )
       }
@@ -379,7 +379,7 @@ export default function AccountingPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <IconReportAnalytics className="text-primary" size={24} />
-            Contabilidad y Finanzas
+            Contabilidad y finanzas
           </h1>
           <p className="text-sm text-muted-foreground">
             Visualiza el balance general, estado de resultados y flujos de caja de tu negocio.
@@ -391,7 +391,7 @@ export default function AccountingPage() {
 
           {/* Period Selector */}
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+            <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1">
               <IconCalendar size={12} /> Período
             </span>
             <Select value={period} onValueChange={(val: any) => handlePeriodChange(val)}>
@@ -399,8 +399,8 @@ export default function AccountingPage() {
                 <SelectValue placeholder="Seleccionar período" />
               </SelectTrigger>
               <SelectContent className="rounded-xl">
-                <SelectItem value="month">Este Mes</SelectItem>
-                <SelectItem value="year">Este Año</SelectItem>
+                <SelectItem value="month">Este mes</SelectItem>
+                <SelectItem value="year">Este año</SelectItem>
                 <SelectItem value="custom">Personalizado</SelectItem>
               </SelectContent>
             </Select>
@@ -410,7 +410,7 @@ export default function AccountingPage() {
           {period === "custom" && (
             <>
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Desde</span>
+                <span className="text-[10px] font-bold text-muted-foreground">Desde</span>
                 <Input 
                   type="date" 
                   value={startDate} 
@@ -419,7 +419,7 @@ export default function AccountingPage() {
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Hasta</span>
+                <span className="text-[10px] font-bold text-muted-foreground">Hasta</span>
                 <Input 
                   type="date" 
                   value={endDate} 
@@ -438,7 +438,7 @@ export default function AccountingPage() {
           {/* 1. VENTAS TOTALES */}
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
-              <CardDescription>Ventas Brutas</CardDescription>
+              <CardDescription>Ventas brutas</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-emerald-600">
                 ${(stats?.revenue.totalSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </CardTitle>
@@ -461,7 +461,7 @@ export default function AccountingPage() {
           {/* 2. MARGEN BRUTO */}
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
-              <CardDescription>Margen Bruto (Utilidad)</CardDescription>
+              <CardDescription>Margen bruto (utilidad)</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-blue-600">
                 ${(stats?.profitability.grossMargin || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </CardTitle>
@@ -484,7 +484,7 @@ export default function AccountingPage() {
           {/* 3. TICKET PROMEDIO / UPT */}
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
-              <CardDescription>Ticket Promedio</CardDescription>
+              <CardDescription>Ticket promedio</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-purple-600">
                 ${(stats?.revenue.ticketPromedio || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </CardTitle>
@@ -499,7 +499,7 @@ export default function AccountingPage() {
                  {(stats?.revenue.upt || 0).toFixed(1)} productos por compra
                </div>
                <div className="text-muted-foreground">
-                 Métrica UPT actual
+                 Métrica upt actual
                </div>
             </CardFooter>
           </Card>
@@ -507,7 +507,7 @@ export default function AccountingPage() {
           {/* 4. INVENTARIO VALORIZADO */}
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
-              <CardDescription>Valor de Inventario (Costo)</CardDescription>
+              <CardDescription>Valor de inventario (costo)</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-amber-600">
                 ${(stats?.inventory.totalValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </CardTitle>
@@ -540,24 +540,24 @@ export default function AccountingPage() {
           <div className="flex flex-col gap-6">
              <Card className="border-none shadow-sm bg-primary/5">
                 <CardHeader className="pb-2 text-center">
-                   <CardDescription className="text-[10px] font-black uppercase tracking-widest text-primary">Ganancia Neta Final</CardDescription>
+                   <CardDescription className="text-[10px] font-black text-primary">Ganancia neta final</CardDescription>
                    <CardTitle className="text-4xl font-black text-primary">${(stats?.profitability.netProfit || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</CardTitle>
                 </CardHeader>
                 <CardContent className="pb-6">
                    <div className="space-y-4">
                       <div className="flex justify-between items-center text-xs">
-                         <span className="text-muted-foreground font-medium">Margen Bruto</span>
+                         <span className="text-muted-foreground font-medium">Margen bruto</span>
                          <span className="font-bold text-emerald-600">+${(stats?.profitability.grossMargin || 0).toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs">
-                         <span className="text-muted-foreground font-medium">Gastos Operativos</span>
+                         <span className="text-muted-foreground font-medium">Gastos operativos</span>
                          <span className="font-bold text-rose-600">-${(stats?.profitability.operatingExpenses || 0).toLocaleString()}</span>
                       </div>
                       <div className="h-px bg-primary/10 w-full" />
                       <div className="flex justify-between items-center text-xs font-black">
-                         <span>SALUD DEL NEGOCIO</span>
+                         <span>Salud del negocio</span>
                          <Badge className={(stats?.profitability.netProfit || 0) > 0 ? "bg-emerald-500" : "bg-rose-500"}>
-                           {(stats?.profitability.netMarginPercentage || 0).toFixed(1)}% ROI
+                           {(stats?.profitability.netMarginPercentage || 0).toFixed(1)}% roi
                          </Badge>
                       </div>
                    </div>
@@ -568,14 +568,14 @@ export default function AccountingPage() {
                 <CardHeader className="pb-2">
                    <div className="flex items-center gap-2">
                      <IconWallet className="text-muted-foreground" size={18} />
-                     <CardTitle className="text-sm">Métodos de Cobro</CardTitle>
+                     <CardTitle className="text-sm">Métodos de cobro</CardTitle>
                    </div>
                 </CardHeader>
                 <CardContent>
                    <div className="space-y-2">
                       {Object.entries(stats?.payments || {}).map(([method, amount]: any) => (
                         <div key={method} className="flex justify-between items-center text-[11px]">
-                           <span className="font-medium text-muted-foreground uppercase">{method}</span>
+                           <span className="font-medium text-muted-foreground">{method}</span>
                            <span className="font-bold tabular-nums">${amount.toLocaleString()}</span>
                         </div>
                       ))}
@@ -594,7 +594,7 @@ export default function AccountingPage() {
           <CardHeader className="bg-muted/10 pb-4">
             <div className="flex justify-between items-center">
               <div>
-                <CardTitle className="text-lg font-bold">Top 5 Productos más Rentables</CardTitle>
+                <CardTitle className="text-lg font-bold">Top 5 productos más rentables</CardTitle>
                 <CardDescription>Productos que dejan más utilidad neta al negocio</CardDescription>
               </div>
               <IconTrendingUp className="text-emerald-500" size={24} />
@@ -603,11 +603,11 @@ export default function AccountingPage() {
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
-                <thead className="bg-muted/30 text-[10px] uppercase font-black tracking-widest text-muted-foreground border-b">
+                <thead className="bg-muted/30 text-[10px] font-black text-muted-foreground border-b">
                   <tr>
                     <th className="px-6 py-3">Producto</th>
                     <th className="px-6 py-3 text-center">Unid. Vendidas</th>
-                    <th className="px-6 py-3 text-right">Utilidad Total</th>
+                    <th className="px-6 py-3 text-right">Utilidad total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -634,16 +634,16 @@ export default function AccountingPage() {
       <Tabs defaultValue="movimientos" className="w-full flex flex-col gap-6">
         <div className="flex items-center justify-between px-4 lg:px-6 no-print">
           <TabsList>
-            <TabsTrigger value="movimientos">Libro Diario</TabsTrigger>
-            <TabsTrigger value="manual">Gestión de Gastos</TabsTrigger>
-            <TabsTrigger value="estado-resultados">Estado de Resultados</TabsTrigger>
-            <TabsTrigger value="balance-general">Balance General</TabsTrigger>
+            <TabsTrigger value="movimientos">Libro diario</TabsTrigger>
+            <TabsTrigger value="manual">Gestión de gastos</TabsTrigger>
+            <TabsTrigger value="estado-resultados">Estado de resultados</TabsTrigger>
+            <TabsTrigger value="balance-general">Balance general</TabsTrigger>
           </TabsList>
           
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={() => setIsModalOpen(true)} className="gap-2 h-9 shadow-sm font-medium">
                 <IconPlus size={16} />
-                <span className="hidden lg:inline">Registrar Gasto / Ingreso</span>
+                <span className="hidden lg:inline">Registrar gasto / ingreso</span>
                 <span className="lg:hidden">Nuevo</span>
             </Button>
           </div>
@@ -651,7 +651,7 @@ export default function AccountingPage() {
 
         <TabsContent value="movimientos" className="px-4 lg:px-6 space-y-4">
             <div className="flex flex-col gap-1 mb-2">
-                <h2 className="text-xl font-bold tracking-tight">Transacciones Maestras</h2>
+                <h2 className="text-xl font-bold tracking-tight">Transacciones maestras</h2>
                 <p className="text-sm text-muted-foreground font-medium">Auditoría completa de toda la actividad financiera del sistema.</p>
             </div>
             <div className="overflow-hidden">
@@ -678,16 +678,16 @@ export default function AccountingPage() {
           <Card className="border-none shadow-sm rounded-2xl bg-card p-6 print-report">
             {/* Report Header */}
             <div className="flex flex-col items-center text-center pb-6 border-b mb-6">
-              <h2 className="text-xl font-bold uppercase tracking-wide">Estado de Resultados</h2>
+              <h2 className="text-xl font-bold">Estado de resultados</h2>
               <p className="text-sm font-semibold text-primary mt-1">
-                {financialData?.branchName || "Consolidado - Todas las Sucursales"}
+                {financialData?.branchName || "Consolidado - todas las sucursales"}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Período: {financialData?.period ? `${new Date(financialData.period.from + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })} al ${new Date(financialData.period.to + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}` : ""}
               </p>
               <div className="no-print mt-4">
                 <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2 rounded-xl">
-                  <IconPrinter size={16} /> Exportar PDF / Imprimir
+                  <IconPrinter size={16} /> Exportar PDF / imprimir
                 </Button>
               </div>
             </div>
@@ -705,11 +705,11 @@ export default function AccountingPage() {
                 
                 {/* 1. INGRESOS */}
                 <div>
-                  <h3 className="font-bold border-b pb-1 text-xs uppercase tracking-wider text-muted-foreground">Ingresos</h3>
+                  <h3 className="font-bold border-b pb-1 text-xs text-muted-foreground">Ingresos</h3>
                   <div className="mt-3 space-y-2">
                     <div className="flex justify-between items-start py-1.5 border-b border-muted/10">
                       <div className="flex flex-col">
-                        <span className="font-semibold text-foreground">Total de Ventas</span>
+                        <span className="font-semibold text-foreground">Total de ventas</span>
                         <span className="text-[11px] text-muted-foreground">Dinero recibido de todos los clientes por las ventas realizadas en el período.</span>
                       </div>
                       <span className="font-semibold text-foreground">${(financialData.incomeStatement.grossRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -718,7 +718,7 @@ export default function AccountingPage() {
                     {(financialData.incomeStatement.salesTax || 0) > 0 && (
                       <div className="flex justify-between items-start py-1.5 text-rose-500 border-b border-muted/10">
                         <div className="flex flex-col">
-                          <span>(-) Impuestos Cobrados (IVA / IGTF)</span>
+                          <span>(-) Impuestos cobrados (IVA / IGTF)</span>
                           <span className="text-[11px] text-rose-400/80">Impuestos que cobraste al cliente y que debes entregar al fisco — no son ingresos tuyos.</span>
                         </div>
                         <span className="font-semibold">-${(financialData.incomeStatement.salesTax || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -726,7 +726,7 @@ export default function AccountingPage() {
                     )}
                     <div className="flex justify-between items-center py-2 border-t font-bold text-base text-emerald-600 bg-emerald-500/5 px-2 rounded-lg">
                       <div className="flex flex-col">
-                        <span>INGRESOS NETOS</span>
+                        <span>Ingresos netos</span>
                         <span className="text-[10px] text-emerald-600/70 font-medium">
                           {(financialData.incomeStatement.salesTax || 0) > 0
                             ? "Dinero real del negocio después de separar los impuestos cobrados."
@@ -740,19 +740,19 @@ export default function AccountingPage() {
 
                 {/* 2. COSTO DE VENTAS */}
                 <div>
-                  <h3 className="font-bold border-b pb-1 text-xs uppercase tracking-wider text-muted-foreground">Costo de lo Vendido</h3>
+                  <h3 className="font-bold border-b pb-1 text-xs text-muted-foreground">Costo de lo vendido</h3>
                   <div className="mt-3 space-y-2">
                     <div className="flex justify-between items-start py-1.5 text-rose-500 border-b border-muted/10">
                       <div className="flex flex-col">
-                        <span>(-) Costo de los Productos Vendidos</span>
+                        <span>(-) Costo de los productos vendidos</span>
                         <span className="text-[11px] text-rose-400/80">Lo que te costó comprar los productos que vendiste — precio de compra al proveedor.</span>
                       </div>
                       <span className="font-semibold">-${(financialData.incomeStatement.cogs || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between items-center py-2 border-t font-bold text-base text-blue-600 bg-blue-500/5 px-2 rounded-lg">
                       <div className="flex flex-col">
-                        <span>GANANCIA BRUTA</span>
-                        <span className="text-[10px] text-blue-600/70 font-medium">Lo que te queda después de pagar lo que costaron los productos (Ventas - Costo de Compra).</span>
+                        <span>Ganancia bruta</span>
+                        <span className="text-[10px] text-blue-600/70 font-medium">Lo que te queda después de pagar lo que costaron los productos (ventas - costo de compra).</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full dark:bg-blue-900/30 dark:text-blue-300">
@@ -766,7 +766,7 @@ export default function AccountingPage() {
 
                 {/* 3. GASTOS OPERATIVOS */}
                 <div>
-                  <h3 className="font-bold border-b pb-1 text-xs uppercase tracking-wider text-muted-foreground">Gastos del Negocio</h3>
+                  <h3 className="font-bold border-b pb-1 text-xs text-muted-foreground">Gastos del negocio</h3>
                   <div className="mt-3 space-y-2">
                     {financialData.incomeStatement.operatingExpenses.byCategory.map((cat: any) => (
                       <div key={cat.category} className="flex justify-between items-start py-1.5 border-b border-muted/10">
@@ -784,7 +784,7 @@ export default function AccountingPage() {
                     )}
                     <div className="flex justify-between items-center py-2 border-t font-bold text-rose-600 bg-rose-500/5 px-2 rounded-lg">
                       <div className="flex flex-col">
-                        <span>TOTAL GASTOS</span>
+                        <span>Total gastos</span>
                         <span className="text-[10px] text-rose-600/70 font-medium">Suma de todos los gastos que registraste: alquiler, salarios de empleados, servicios, etc.</span>
                       </div>
                       <span>-${(financialData.incomeStatement.operatingExpenses.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -796,8 +796,8 @@ export default function AccountingPage() {
                 <div className="pt-4">
                   <div className="flex justify-between items-center p-4 border border-primary/20 bg-primary/5 rounded-2xl shadow-sm">
                     <div className="flex flex-col gap-1">
-                      <span className="text-lg font-black tracking-tight text-primary uppercase">
-                        {(financialData.incomeStatement.netProfit || 0) >= 0 ? "✅ GANANCIA NETA" : "❌ PÉRDIDA NETA"}
+                      <span className="text-lg font-black tracking-tight text-primary">
+                        {(financialData.incomeStatement.netProfit || 0) >= 0 ? "✅ Ganancia neta" : "❌ Pérdida neta"}
                       </span>
                       <span className="text-xs text-muted-foreground font-medium">
                         Lo que realmente te quedó del negocio después de pagar productos y gastos. Es lo que puedes reinvertir o retirar.
@@ -831,9 +831,9 @@ export default function AccountingPage() {
           <Card className="border-none shadow-sm rounded-2xl bg-card p-6 print-report">
             {/* Report Header */}
             <div className="flex flex-col items-center text-center pb-6 border-b mb-6">
-              <h2 className="text-xl font-bold uppercase tracking-wide">Balance General</h2>
+              <h2 className="text-xl font-bold">Balance general</h2>
               <p className="text-sm font-semibold text-primary mt-1">
-                {financialData?.branchName || "Consolidado - Todas las Sucursales"}
+                {financialData?.branchName || "Consolidado - todas las sucursales"}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Al: {financialData?.period ? `${new Date(financialData.period.to + 'T23:59:59').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}` : ""}
@@ -844,7 +844,7 @@ export default function AccountingPage() {
                 <div className="mt-2.5">
                   {financialData.balanceSheet.isBalanced ? (
                     <Badge className="bg-emerald-500/10 text-emerald-600 border-none font-bold text-xs gap-1.5 px-3 py-1 rounded-full">
-                      <IconCheck size={14} /> Ecuación Contable Balanceada
+                      <IconCheck size={14} /> Ecuación contable balanceada
                     </Badge>
                   ) : (
                     <Badge className="bg-rose-500/10 text-rose-600 border-none font-bold text-xs gap-1.5 px-3 py-1 rounded-full animate-pulse">
@@ -856,7 +856,7 @@ export default function AccountingPage() {
 
               <div className="no-print mt-4">
                 <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2 rounded-xl">
-                  <IconPrinter size={16} /> Exportar PDF / Imprimir
+                  <IconPrinter size={16} /> Exportar PDF / imprimir
                 </Button>
               </div>
             </div>
@@ -875,36 +875,36 @@ export default function AccountingPage() {
                 {/* ─── COLUMNA 1: ACTIVOS ─── */}
                 <div className="space-y-6">
                   <div>
-                    <h3 className="font-bold border-b pb-1 text-xs uppercase tracking-wider text-muted-foreground">Activos</h3>
+                    <h3 className="font-bold border-b pb-1 text-xs text-muted-foreground">Activos</h3>
                     
                     {/* Activos Corrientes */}
                     <div className="mt-4 space-y-3">
-                      <h4 className="font-semibold text-xs text-primary/80 uppercase">Activos Corrientes</h4>
+                      <h4 className="font-semibold text-xs text-primary/80">Activos corrientes</h4>
                       <div className="pl-3 space-y-2">
                         <div className="flex justify-between items-start py-1 border-b border-muted/30 pb-2">
                           <div className="flex flex-col">
-                            <span className="font-semibold text-foreground">Efectivo en Caja (Ventas Cash)</span>
+                            <span className="font-semibold text-foreground">Efectivo en caja (ventas cash)</span>
                             <span className="text-[11px] text-muted-foreground">Dinero físico disponible en caja por cobros de ventas en efectivo.</span>
                           </div>
                           <span className="font-medium text-foreground">${(financialData.balanceSheet.assets.current.cash || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="flex justify-between items-start py-1 border-b border-muted/30 pb-2">
                           <div className="flex flex-col">
-                            <span className="font-semibold text-foreground">Cuentas por Cobrar (Créditos Clientes)</span>
+                            <span className="font-semibold text-foreground">Cuentas por cobrar (créditos clientes)</span>
                             <span className="text-[11px] text-muted-foreground">Dinero pendiente que tus clientes le deben al negocio por compras a crédito.</span>
                           </div>
                           <span className="font-medium text-foreground">${(financialData.balanceSheet.assets.current.accountsReceivable || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="flex justify-between items-start py-1 border-b border-muted/30 pb-2">
                           <div className="flex flex-col">
-                            <span className="font-semibold text-foreground">Préstamos por Cobrar</span>
+                            <span className="font-semibold text-foreground">Préstamos por cobrar</span>
                             <span className="text-[11px] text-muted-foreground">Saldos pendientes de financiamientos o préstamos activos otorgados a clientes.</span>
                           </div>
                           <span className="font-medium text-foreground">${(financialData.balanceSheet.assets.current.loansReceivable || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="flex justify-between items-start py-1 border-b border-muted/30 pb-2">
                           <div className="flex flex-col">
-                            <span className="font-semibold text-foreground">Inventario de Productos (a Costo)</span>
+                            <span className="font-semibold text-foreground">Inventario de productos (a costo)</span>
                             <span className="text-[11px] text-muted-foreground">El valor total de tus productos en stock calculados al costo de compra original.</span>
                           </div>
                           <span className="font-medium text-foreground">${(financialData.balanceSheet.assets.current.inventory || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -912,7 +912,7 @@ export default function AccountingPage() {
                       </div>
                       <div className="flex justify-between items-center font-semibold bg-muted/20 p-2 rounded-lg text-xs mt-2 pl-3">
                         <div className="flex flex-col">
-                          <span>TOTAL ACTIVOS CORRIENTES</span>
+                          <span>Total activos corrientes</span>
                           <span className="text-[10px] text-muted-foreground font-medium">Bienes de valor y dinero físico convertibles a efectivo en un corto plazo.</span>
                         </div>
                         <span>${(financialData.balanceSheet.assets.current.totalCurrent || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -921,11 +921,11 @@ export default function AccountingPage() {
 
                     {/* Activos No Corrientes */}
                     <div className="mt-6 space-y-3">
-                      <h4 className="font-semibold text-xs text-primary/80 uppercase">Activos No Corrientes</h4>
+                      <h4 className="font-semibold text-xs text-primary/80">Activos no corrientes</h4>
                       <div className="pl-3 space-y-2">
                         <div className="flex justify-between items-start py-1 border-b border-muted/30 pb-2">
                           <div className="flex flex-col">
-                            <span className="font-semibold text-foreground">Propiedades, Planta y Equipo</span>
+                            <span className="font-semibold text-foreground">Propiedades, planta y equipo</span>
                             <span className="text-[11px] text-muted-foreground">Bienes fijos tangibles del negocio (local, mobiliario, vehículos, computadoras).</span>
                           </div>
                           <span className="font-medium text-foreground">${(financialData.balanceSheet.assets.nonCurrent.totalNonCurrent || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -933,7 +933,7 @@ export default function AccountingPage() {
                       </div>
                       <div className="flex justify-between items-center font-semibold bg-muted/20 p-2 rounded-lg text-xs mt-2 pl-3">
                         <div className="flex flex-col">
-                          <span>TOTAL ACTIVOS NO CORRIENTES</span>
+                          <span>Total activos no corrientes</span>
                           <span className="text-[10px] text-muted-foreground font-medium">Activos permanentes que usa la empresa a largo plazo y no son para venta directa.</span>
                         </div>
                         <span>${(financialData.balanceSheet.assets.nonCurrent.totalNonCurrent || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -944,8 +944,8 @@ export default function AccountingPage() {
                   {/* TOTAL ACTIVOS */}
                   <div className="flex justify-between items-center p-3 font-bold text-base bg-emerald-500/5 text-emerald-600 border border-emerald-500/10 rounded-xl">
                     <div className="flex flex-col">
-                      <span>TOTAL ACTIVOS</span>
-                      <span className="text-[10px] text-emerald-600/70 font-medium">El valor de todo lo que tu negocio posee (Efectivo + Créditos + Inventario + Equipos).</span>
+                      <span>Total activos</span>
+                      <span className="text-[10px] text-emerald-600/70 font-medium">El valor de todo lo que tu negocio posee (efectivo + créditos + inventario + equipos).</span>
                     </div>
                     <span>${(financialData.balanceSheet.assets.totalAssets || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
@@ -956,15 +956,15 @@ export default function AccountingPage() {
                   <div className="space-y-6">
                     {/* Pasivos */}
                     <div>
-                      <h3 className="font-bold border-b pb-1 text-xs uppercase tracking-wider text-muted-foreground">Pasivos</h3>
+                      <h3 className="font-bold border-b pb-1 text-xs text-muted-foreground">Pasivos</h3>
                       
                       {/* Pasivos Corrientes */}
                       <div className="mt-4 space-y-3">
-                        <h4 className="font-semibold text-xs text-primary/80 uppercase">Pasivos Corrientes</h4>
+                        <h4 className="font-semibold text-xs text-primary/80">Pasivos corrientes</h4>
                         <div className="pl-3 space-y-2">
                           <div className="flex justify-between items-start py-1 border-b border-muted/30 pb-2">
                             <div className="flex flex-col">
-                              <span className="font-semibold text-foreground">Cuentas por Pagar (Proveedores)</span>
+                              <span className="font-semibold text-foreground">Cuentas por pagar (proveedores)</span>
                               <span className="text-[11px] text-muted-foreground">Facturas de compras de mercancía que le debes a tus proveedores.</span>
                             </div>
                             <span className="font-medium text-foreground">${(financialData.balanceSheet.liabilities.current.accountsPayable || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -972,7 +972,7 @@ export default function AccountingPage() {
                         </div>
                         <div className="flex justify-between items-center font-semibold bg-muted/20 p-2 rounded-lg text-xs mt-2 pl-3">
                           <div className="flex flex-col">
-                            <span>TOTAL PASIVOS CORRIENTES</span>
+                            <span>Total pasivos corrientes</span>
                             <span className="text-[10px] text-muted-foreground font-medium">Deudas u obligaciones financieras que el negocio debe pagar en un corto plazo.</span>
                           </div>
                           <span>${(financialData.balanceSheet.liabilities.current.totalCurrent || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -982,21 +982,21 @@ export default function AccountingPage() {
 
                     {/* Patrimonio */}
                     <div>
-                      <h3 className="font-bold border-b pb-1 text-xs uppercase tracking-wider text-muted-foreground">Patrimonio</h3>
+                      <h3 className="font-bold border-b pb-1 text-xs text-muted-foreground">Patrimonio</h3>
                       
                       <div className="mt-4 space-y-3">
                         <div className="pl-3 space-y-2">
                           <div className="flex justify-between items-start py-1 border-b border-muted/30 pb-2">
                             <div className="flex flex-col">
-                              <span className="font-semibold text-foreground">Utilidades Retenidas / Acumuladas</span>
-                              <span className="text-[11px] text-muted-foreground">Ganancias del negocio acumuladas y reinvertidas históricamente (Activos - Pasivos).</span>
+                              <span className="font-semibold text-foreground">Utilidades retenidas / acumuladas</span>
+                              <span className="text-[11px] text-muted-foreground">Ganancias del negocio acumuladas y reinvertidas históricamente (activos - pasivos).</span>
                             </div>
                             <span className="font-medium text-foreground">${(financialData.balanceSheet.equity.retainedEarnings || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                           </div>
                         </div>
                         <div className="flex justify-between items-center font-semibold bg-muted/20 p-2 rounded-lg text-xs mt-2 pl-3">
                           <div className="flex flex-col">
-                            <span>TOTAL PATRIMONIO NETO</span>
+                            <span>Total patrimonio neto</span>
                             <span className="text-[10px] text-muted-foreground font-medium">El valor neto real del negocio que pertenece directamente a los socios o dueños.</span>
                           </div>
                           <span>${(financialData.balanceSheet.equity.totalEquity || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -1008,8 +1008,8 @@ export default function AccountingPage() {
                   {/* TOTAL PASIVOS Y PATRIMONIO */}
                   <div className="flex justify-between items-center p-3 font-bold text-base bg-blue-500/5 text-blue-600 border border-blue-500/10 rounded-xl">
                     <div className="flex flex-col">
-                      <span>TOTAL PASIVOS Y PATRIMONIO</span>
-                      <span className="text-[10px] text-blue-600/70 font-medium">Suma de las deudas del negocio y el patrimonio (debe igualar exactamente al Total Activos).</span>
+                      <span>Total pasivos y patrimonio</span>
+                      <span className="text-[10px] text-blue-600/70 font-medium">Suma de las deudas del negocio y el patrimonio (debe igualar exactamente al total activos).</span>
                     </div>
                     <span>${(financialData.balanceSheet.totalLiabilitiesAndEquity || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
@@ -1025,37 +1025,37 @@ export default function AccountingPage() {
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="sm:max-w-md font-sans p-0 overflow-hidden border shadow-2xl rounded-2xl">
               <DialogHeader className="p-6 bg-muted/20 border-b">
-                  <DialogTitle className="text-xl font-bold font-black uppercase tracking-tight">Nuevo Registro Contable</DialogTitle>
+                  <DialogTitle className="text-xl font-bold font-black tracking-tight">Nuevo registro contable</DialogTitle>
                   <DialogDescription className="text-sm font-medium">Registra un movimiento manual fuera de ventas.</DialogDescription>
               </DialogHeader>
               <div className="p-6">
                 <form onSubmit={handleSave} className="space-y-4">
                     <div className="space-y-1.5">
-                        <Label htmlFor="desc" className="text-xs font-semibold uppercase opacity-50">Descripción / Concepto</Label>
-                        <Input id="desc" placeholder="Ej. Pago de Alquiler Abril" className="h-9 text-sm" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} required />
+                        <Label htmlFor="desc" className="text-xs font-semibold opacity-50">Descripción / concepto</Label>
+                        <Input id="desc" placeholder="Ej. Pago de alquiler abril" className="h-9 text-sm" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} required />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold uppercase opacity-50">Tipo</Label>
+                            <Label className="text-xs font-semibold opacity-50">Tipo</Label>
                             <Select value={formData.type} onValueChange={(val) => setFormData({...formData, type: val as any})}>
                                 <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                                 <SelectContent><SelectItem value="EXPENSE">Egreso (-)</SelectItem><SelectItem value="INCOME">Ingreso (+)</SelectItem></SelectContent>
                             </Select>
                         </div>
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold uppercase opacity-50">Monto (USD)</Label>
+                            <Label className="text-xs font-semibold opacity-50">Monto (USD)</Label>
                             <Input type="number" step="0.01" className="h-9 text-sm font-bold" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} required />
                         </div>
                     </div>
                     <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold uppercase opacity-50">Categoría</Label>
+                        <Label className="text-xs font-semibold opacity-50">Categoría</Label>
                         <Select value={formData.category} onValueChange={(val) => setFormData({...formData, category: val})}>
                             <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                               <SelectItem value="OPERATIVO">Gasto Operativo</SelectItem>
-                               <SelectItem value="SALARIO">Sueldos / Salarios</SelectItem>
-                               <SelectItem value="MARKETING">Marketing / Publicidad</SelectItem>
-                               <SelectItem value="SERVICIOS">Servicios (Luz, Agua, Internet)</SelectItem>
+                               <SelectItem value="OPERATIVO">Gasto operativo</SelectItem>
+                               <SelectItem value="SALARIO">Sueldos / salarios</SelectItem>
+                               <SelectItem value="MARKETING">Marketing / publicidad</SelectItem>
+                               <SelectItem value="SERVICIOS">Servicios (luz, agua, internet)</SelectItem>
                                <SelectItem value="OTROS">Otros</SelectItem>
                             </SelectContent>
                         </Select>
@@ -1065,7 +1065,7 @@ export default function AccountingPage() {
               <DialogFooter className="bg-muted/10 p-6 border-t gap-3">
                   <Button variant="ghost" size="sm" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
                   <Button size="sm" onClick={handleSave} disabled={submitting} className="shadow-sm font-semibold">
-                      {submitting ? <IconLoader2 className="animate-spin mr-2" size={16} /> : "Registrar Movimiento"}
+                      {submitting ? <IconLoader2 className="animate-spin mr-2" size={16} /> : "Registrar movimiento"}
                   </Button>
               </DialogFooter>
           </DialogContent>

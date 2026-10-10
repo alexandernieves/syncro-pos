@@ -170,14 +170,14 @@ export default function ConteoPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 px-4 lg:px-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <IconClipboardCheck size={24} className="text-primary" /> Conteo de Inventario
+            <IconClipboardCheck size={24} className="text-primary" /> Conteo de inventario
           </h1>
           <p className="text-sm text-muted-foreground font-medium">Auditoría física de existencias para conciliación de stocks.</p>
         </div>
         <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="gap-2 h-9 shadow-sm" onClick={fetchProducts} disabled={loading}>
                 <IconReload size={16} /> 
-                <span className="hidden lg:inline">Recargar Listado</span>
+                <span className="hidden lg:inline">Recargar listado</span>
             </Button>
             <Button 
               size="sm" 
@@ -186,7 +186,7 @@ export default function ConteoPage() {
               disabled={isSubmitting || loading}
             >
                 {isSubmitting ? <IconLoader className="animate-spin" size={16} /> : <IconDeviceFloppy size={16} />}
-                <span>{isSubmitting ? "Procesando..." : "Finalizar Auditoría"}</span>
+                <span>{isSubmitting ? "Procesando..." : "Finalizar auditoría"}</span>
             </Button>
         </div>
       </div>
@@ -265,19 +265,19 @@ export default function ConteoPage() {
                            <Card className="shadow-none border-dashed bg-emerald-500/5">
                               <CardContent className="pt-6 text-center space-y-2">
                                 <div className="text-3xl font-bold text-emerald-600">{stockStats.enStock}</div>
-                                <div className="text-xs font-medium text-emerald-600/70 uppercase">Productos en Stock</div>
+                                <div className="text-xs font-medium text-emerald-600/70">Productos en stock</div>
                               </CardContent>
                            </Card>
                            <Card className="shadow-none border-dashed bg-amber-500/5">
                               <CardContent className="pt-6 text-center space-y-2">
                                 <div className="text-3xl font-bold text-amber-600">{stockStats.bajo}</div>
-                                <div className="text-xs font-medium text-amber-600/70 uppercase">Stock Bajo</div>
+                                <div className="text-xs font-medium text-amber-600/70">Stock Bajo</div>
                               </CardContent>
                            </Card>
                            <Card className="shadow-none border-dashed bg-rose-500/5">
                               <CardContent className="pt-6 text-center space-y-2">
                                 <div className="text-3xl font-bold text-rose-600">{stockStats.agotado}</div>
-                                <div className="text-xs font-medium text-rose-600/70 uppercase">Productos Agotados</div>
+                                <div className="text-xs font-medium text-rose-600/70">Productos agotados</div>
                               </CardContent>
                            </Card>
                         </div>
@@ -292,16 +292,16 @@ export default function ConteoPage() {
               <Card className="shadow-none border-dashed bg-muted/20">
                   <CardHeader>
                       <CardTitle className="text-sm font-bold flex items-center gap-2">
-                        <IconChecklist size={16} /> Resumen de Auditoría
+                        <IconChecklist size={16} /> Resumen de auditoría
                       </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                       <div className="flex justify-between items-center text-xs font-medium">
-                          <span className="text-muted-foreground">Ítems Auditados:</span>
+                          <span className="text-muted-foreground">Ítems auditados:</span>
                           <span className="font-bold">{itemsAudited} / {auditData.length}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs font-medium">
-                          <span className="text-muted-foreground">Diferencias Totales:</span>
+                          <span className="text-muted-foreground">Diferencias totales:</span>
                           <span className={`font-bold ${totalDifferences > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
                             {totalDifferences} unidades
                           </span>
@@ -315,7 +315,7 @@ export default function ConteoPage() {
               </Card>
 
               <Button variant="outline" className="w-full h-11 border-dashed hover:border-primary/50 hover:bg-primary/5 transition-all text-sm font-bold gap-2">
-                  <IconQrcode size={18} /> Modo Escáner (QR)
+                  <IconQrcode size={18} /> Modo escáner (QR)
               </Button>
           </div>
       </div>

@@ -193,4 +193,42 @@ export class ProductsController {
   @UseGuards(JwtAuthGuard)
   @Delete('waitlist/:id') removeFromWaitlist(@Param('id') id: string) {
     return this.productsService.removeFromWaitlist(id);
-  }}
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('syncro-shop/bulk')
+  bulkSetSyncroShopPublished(
+    @Body() body: { productIds: string[]; published: boolean; branchId?: string },
+    @Request() req: any,
+  ) {
+    return this.productsService.bulkSetSyncroShopPublished(body.productIds, body.published, body.branchId, req.user?.businessId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('syncro-shop/featured-count')
+  getFeaturedCount(@Request() req: any) {
+    return this.productsService.getFeaturedCount(req.user?.businessId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Put(':id/syncro-shop')
+  setSyncroShopStatus(
+    @Param('id') id: string,
+    @Body() body: { published?: boolean; featured?: boolean; branchId?: string },
+    @Request() req: any,
+  ) {
+    return this.productsService.setSyncroShopStatus(id, body, req.user?.businessId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/images')
+  getImages(@Param('id') id: string, @Request() req: any) {
+    return this.productsService.getImages(id, req.user?.businessId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Put(':id/images')
+  setImages(@Param('id') id: string, @Body() body: { urls: string[] }, @Request() req: any) {
+    return this.productsService.setImages(id, body.urls, req.user?.businessId);
+  }
+}

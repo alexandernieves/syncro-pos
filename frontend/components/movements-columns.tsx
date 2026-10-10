@@ -22,7 +22,7 @@ export const movementsColumns: ColumnDef<any>[] = [
     cell: ({ row }) => (
       <div className="flex flex-col">
         <span className="text-sm font-bold">{row.original.variant?.product?.name}</span>
-        <span className="text-[10px] text-muted-foreground uppercase">{row.original.variant?.name !== 'Default' ? row.original.variant?.name : 'Único'}</span>
+        <span className="text-[10px] text-muted-foreground">{row.original.variant?.name !== 'Default' ? row.original.variant?.name : 'Único'}</span>
       </div>
     ),
   },
@@ -35,8 +35,8 @@ export const movementsColumns: ColumnDef<any>[] = [
         IN: { label: "Entrada", color: "text-emerald-600 bg-emerald-500/10", icon: IconArrowDownLeft },
         OUT: { label: "Salida", color: "text-rose-600 bg-rose-500/10", icon: IconArrowUpRight },
         ADJUSTMENT: { label: "Ajuste", color: "text-amber-600 bg-amber-500/10", icon: IconClipboardList },
-        TRANSFER_IN: { label: "Traslado (E)", color: "text-blue-600 bg-blue-500/10", icon: IconArrowsExchange },
-        TRANSFER_OUT: { label: "Traslado (S)", color: "text-blue-600 bg-blue-500/10", icon: IconArrowsExchange },
+        TRANSFER_IN: { label: "Traslado (e)", color: "text-blue-600 bg-blue-500/10", icon: IconArrowsExchange },
+        TRANSFER_OUT: { label: "Traslado (s)", color: "text-blue-600 bg-blue-500/10", icon: IconArrowsExchange },
       };
       const item = config[type] || { label: type, color: "text-muted-foreground bg-muted", icon: IconClipboardList };
       const Icon = item.icon;

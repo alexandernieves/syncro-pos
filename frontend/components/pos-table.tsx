@@ -40,6 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -64,6 +65,10 @@ interface PosTableProps<TData> {
   onRowSelectionChange?: (selection: any) => void;
   getRowId?: (row: TData) => string;
   bulkActions?: React.ReactNode;
+  /** Opens a row (e.g. a detail drawer); rows become clickable */
+  onRowClick?: (row: TData) => void;
+  /** Text when there are no rows */
+  emptyMessage?: React.ReactNode;
 }
 
 export function PosTable<TData>({
@@ -78,6 +83,8 @@ export function PosTable<TData>({
   onRowSelectionChange,
   getRowId,
   bulkActions,
+  onRowClick,
+  emptyMessage = "Sin resultados.",
 }: PosTableProps<TData>) {
   const [sorting, setSorting]               = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters]   = React.useState<ColumnFiltersState>([]);
@@ -190,7 +197,8 @@ export function PosTable<TData>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="hover:bg-muted/50 transition-colors"
+                  className={cn("hover:bg-muted/50 transition-colors", onRowClick && "cursor-pointer")}
+                  onClick={onRowClick ? () => onRowClick(row.original) : undefined}
                 >
                   {row.getVisibleCells().map(cell => (
                     <TableCell key={cell.id}>
@@ -202,7 +210,7 @@ export function PosTable<TData>({
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-28 text-center text-muted-foreground">
-                  Sin resultados.
+                  {emptyMessage}
                 </TableCell>
               </TableRow>
             )}

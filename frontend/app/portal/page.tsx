@@ -1477,7 +1477,7 @@ export default function ClientPortal() {
 
     const chartConfig = {
         value: {
-            label: "Crédito Disponible",
+            label: "Crédito disponible",
         }
     } satisfies ChartConfig;
 
@@ -1967,7 +1967,7 @@ export default function ClientPortal() {
                                         </span>
                                         <div className="mt-1 flex justify-center w-full">
                                             <MarkerHighlight className="font-handwritten text-[4.0rem]" color="#fbbf24" style={{ transform: "rotate(-1.5deg)", display: "inline-flex", alignItems: "center", transformOrigin: "center", ...textStrokeStyle }}>
-                                                de vuelta!
+                                                De vuelta!
                                                 <SplatterQuote />
                                             </MarkerHighlight>
                                         </div>
@@ -2047,7 +2047,7 @@ export default function ClientPortal() {
                             {loginStep === "document" && (
                                 <div className="space-y-4 w-full">
                                     <Input 
-                                        placeholder="Cédula de Identidad (ej. V12345678)" 
+                                        placeholder="Cédula de identidad (ej. V12345678)" 
                                         className="h-13 px-5 rounded-[1.25rem] bg-white border-zinc-200 text-sm font-semibold focus-visible:ring-amber-300 text-zinc-850 placeholder:text-zinc-450 transition-all duration-300 shadow-inner"
                                         value={idSearch}
                                         onChange={(e) => setIdSearch(e.target.value)}
@@ -2066,7 +2066,7 @@ export default function ClientPortal() {
                             {loginStep === "password" && (
                                 <div className="space-y-4 w-full animate-in fade-in slide-in-from-right-4 duration-300">
                                     <div className="text-left px-1 mb-1">
-                                        <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Cliente detectado</p>
+                                        <p className="text-[10px] text-zinc-400 font-bold">Cliente detectado</p>
                                         <p className="text-sm font-black text-zinc-850">{clientName}</p>
                                     </div>
                                     <Input 
@@ -2105,7 +2105,7 @@ export default function ClientPortal() {
                                             }}
                                             className="w-full text-center text-sm text-zinc-500 hover:text-zinc-700 font-handwritten underline bg-transparent border-none outline-none cursor-pointer py-1"
                                         >
-                                            Ingresar otra Cédula
+                                            Ingresar otra cédula
                                         </button>
                                     </div>
                                 </div>
@@ -2131,18 +2131,18 @@ export default function ClientPortal() {
                                                 />
                                             ))}
                                         </div>
-                                        <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider text-center pt-1">{isResettingPassword ? "Código de Restablecimiento" : "Código de Activación"}</p>
+                                        <p className="text-[10px] text-zinc-400 font-bold text-center pt-1">{isResettingPassword ? "Código de restablecimiento" : "Código de activación"}</p>
                                     </div>
                                     <Input 
                                         type="password"
-                                        placeholder="Nueva Contraseña" 
+                                        placeholder="Nueva contraseña" 
                                         className="h-12 px-5 rounded-[1.25rem] bg-white border-zinc-200 text-sm font-semibold focus-visible:ring-amber-300 text-zinc-850 placeholder:text-zinc-450 transition-all duration-300 shadow-inner"
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
                                     />
                                     <Input 
                                         type="password"
-                                        placeholder="Confirmar Contraseña" 
+                                        placeholder="Confirmar contraseña" 
                                         className="h-12 px-5 rounded-[1.25rem] bg-white border-zinc-200 text-sm font-semibold focus-visible:ring-amber-300 text-zinc-850 placeholder:text-zinc-450 transition-all duration-300 shadow-inner"
                                         value={confirmPassword}
                                         onChange={(e) => setConfirmPassword(e.target.value)}
@@ -2153,7 +2153,7 @@ export default function ClientPortal() {
                                         disabled={loading}
                                         className="w-full h-13 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none"
                                     >
-                                        {isResettingPassword ? "Restablecer" : "Activar Cuenta"}
+                                        {isResettingPassword ? "Restablecer" : "Activar cuenta"}
                                     </Button>
                                     <button 
                                         onClick={() => {
@@ -2165,7 +2165,7 @@ export default function ClientPortal() {
                                         }}
                                         className="w-full text-center text-sm text-zinc-500 hover:text-zinc-700 font-handwritten underline bg-transparent border-none outline-none cursor-pointer py-1"
                                     >
-                                        Ingresar otra Cédula
+                                        Ingresar otra cédula
                                     </button>
                                 </div>
                             )}
@@ -2175,7 +2175,7 @@ export default function ClientPortal() {
 
                 {/* Footer */}
                 <div className="w-full text-center pb-8 z-10 relative">
-                    <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest flex items-center justify-center gap-1.5">
+                    <p className="text-[9px] text-zinc-400 font-bold flex items-center justify-center gap-1.5">
                         <IconLock size={11} /> Conexión encriptada
                     </p>
                 </div>
@@ -2196,12 +2196,12 @@ export default function ClientPortal() {
                     <div className="relative w-[150px] h-[150px] select-none">
                         <img 
                             src="/mascot.png" 
-                            alt="Mascota Arepa Triste" 
+                            alt="Mascota arepa triste" 
                             className="w-full h-full object-contain grayscale opacity-80" 
                         />
                     </div>
                     <div className="space-y-2">
-                        <h2 className="text-2xl font-black text-rose-700 tracking-tight">Cuenta Pausada</h2>
+                        <h2 className="text-2xl font-black text-rose-700 tracking-tight">Cuenta pausada</h2>
                         <p className="text-zinc-650 text-sm font-bold max-w-xs mx-auto leading-snug">
                             Tu cuenta de SyncroCredit ha sido pausada temporalmente.
                         </p>
@@ -2214,7 +2214,7 @@ export default function ClientPortal() {
                         onClick={handleLogout}
                         className="w-full h-12 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 font-black text-sm shadow-sm transition-all border-none"
                     >
-                        Cerrar Sesión
+                        Cerrar sesión
                     </Button>
                 </div>
             </div>
@@ -2262,7 +2262,7 @@ export default function ClientPortal() {
                             >
                                 ← Volver
                             </Button>
-                            <span className="text-xs font-black uppercase text-zinc-400 tracking-wider">Solicitud</span>
+                            <span className="text-xs font-black text-zinc-400">Solicitud</span>
                         </div>
 
                         {pendingRequestLoan ? (
@@ -2278,17 +2278,17 @@ export default function ClientPortal() {
                                     <p className="text-xs text-zinc-500 leading-relaxed font-semibold">
                                         Tu solicitud de préstamo por <strong className="text-amber-850">${pendingRequestLoan.amount} USD</strong> está siendo evaluada por el comercio.
                                     </p>
-                                    <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mt-3">
+                                    <p className="text-[10px] text-zinc-400 font-bold mt-3">
                                         Te notificaremos aquí una vez sea aprobada.
                                     </p>
                                 </div>
                                 <div className="bg-zinc-50 border border-zinc-150/60 rounded-xl p-4 text-[10px] space-y-1.5 text-left text-zinc-500">
                                     <div className="flex justify-between">
-                                        <span>Monto Solicitado:</span>
+                                        <span>Monto solicitado:</span>
                                         <span className="font-extrabold text-zinc-700">${pendingRequestLoan.amount.toFixed(2)} USD</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span>Interés Estimado:</span>
+                                        <span>Interés estimado:</span>
                                         <span className="font-extrabold text-zinc-700">${(pendingRequestLoan.totalToPay - pendingRequestLoan.amount).toFixed(2)} USD</span>
                                     </div>
                                     <div className="flex justify-between border-t border-zinc-200 pt-1.5 mt-1 text-xs">
@@ -2306,7 +2306,7 @@ export default function ClientPortal() {
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <h3 className="text-lg font-black text-zinc-800">¡Préstamo Aprobado!</h3>
+                                    <h3 className="text-lg font-black text-zinc-800">¡Préstamo aprobado!</h3>
                                     <p className="text-xs text-zinc-550 leading-relaxed font-semibold">
                                         Tu préstamo por <strong className="text-emerald-750">${approvedRequestLoan.amount} USD</strong> ha sido aprobado.
                                     </p>
@@ -2317,11 +2317,11 @@ export default function ClientPortal() {
                                 </div>
                                 <div className="bg-zinc-50 border border-zinc-150/60 rounded-xl p-4 text-[10px] space-y-1.5 text-left text-zinc-500">
                                     <div className="flex justify-between">
-                                        <span>Monto a Entregar:</span>
+                                        <span>Monto a entregar:</span>
                                         <span className="font-extrabold text-zinc-700">${approvedRequestLoan.amount.toFixed(2)} USD</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span>Intereses Semanales (20%):</span>
+                                        <span>Intereses semanales (20%):</span>
                                         <span className="font-extrabold text-zinc-700">${(approvedRequestLoan.totalToPay - approvedRequestLoan.amount).toFixed(2)} USD</span>
                                     </div>
                                     <div className="flex justify-between border-t border-zinc-200 pt-1.5 mt-1 text-xs">
@@ -2335,7 +2335,7 @@ export default function ClientPortal() {
                                 <div className="text-center space-y-2">
                                     <h3 className="text-xl font-black text-zinc-850">¿Cuánto dinero necesitas?</h3>
                                     <p className="text-xs text-zinc-400 font-bold max-w-xs mx-auto leading-tight">
-                                        Como cliente Nivel 1, puedes solicitar préstamos rápidos en efectivo.
+                                        Como cliente nivel 1, puedes solicitar préstamos rápidos en efectivo.
                                     </p>
                                 </div>
 
@@ -2355,7 +2355,7 @@ export default function ClientPortal() {
                                                 }`}
                                             >
                                                 <div className="space-y-1">
-                                                    <p className="text-xs text-zinc-450 font-bold uppercase tracking-wider">Monto</p>
+                                                    <p className="text-xs text-zinc-450 font-bold">Monto</p>
                                                     <p className="text-3xl font-black text-zinc-850">${amt}</p>
                                                 </div>
                                                 <div className="border-t border-zinc-100 pt-2.5 space-y-1 text-[9px] text-zinc-400 font-bold text-left">
@@ -2376,7 +2376,7 @@ export default function ClientPortal() {
                                 <div className="bg-[#fffdf4] border border-amber-100/60 p-4 rounded-xl flex items-start gap-3">
                                     <IconInfoCircle size={18} className="text-amber-700 shrink-0 mt-0.5" />
                                     <div className="space-y-0.5 text-[10px] text-zinc-500 leading-normal font-semibold">
-                                        <p className="font-bold text-[#854d0e] uppercase tracking-wider">Información Importante</p>
+                                        <p className="font-bold text-[#854d0e]">Información importante</p>
                                         <p>• Los préstamos se entregan en efectivo dólares (USD) en la sucursal.</p>
                                         <p>• La tasa cobrada es del 20% semanal.</p>
                                         <p>• Al retirar acordarás el número de cuotas y fechas de pago.</p>
@@ -2440,9 +2440,9 @@ export default function ClientPortal() {
                                                                 <tspan
                                                                     x={viewBox.cx}
                                                                     y={viewBox.cy - 18}
-                                                                    className="fill-zinc-400 text-[11px] font-black uppercase tracking-wider"
+                                                                    className="fill-zinc-400 text-[11px] font-black"
                                                                 >
-                                                                    Crédito Disponible
+                                                                    Crédito disponible
                                                                 </tspan>
                                                                 <tspan
                                                                     x={viewBox.cx}
@@ -2462,15 +2462,15 @@ export default function ClientPortal() {
                                 {/* Credit info strip below radial — premium cards */}
                                 <div className="grid grid-cols-3 gap-2 mt-4 w-full">
                                     <div className="rounded-2xl bg-white border border-zinc-100 shadow-sm p-3 flex flex-col items-center gap-0.5">
-                                        <p className="text-[8px] text-zinc-400 font-black uppercase tracking-widest">Límite</p>
+                                        <p className="text-[8px] text-zinc-400 font-black">Límite</p>
                                         <p className="text-lg font-black text-zinc-800">${creditLimit.toFixed(0)}</p>
                                     </div>
                                     <div className="rounded-2xl bg-white border border-zinc-100 shadow-sm p-3 flex flex-col items-center gap-0.5">
-                                        <p className="text-[8px] text-rose-500/90 font-black uppercase tracking-widest">Usado</p>
+                                        <p className="text-[8px] text-rose-500/90 font-black">Usado</p>
                                         <p className="text-lg font-black text-rose-600">${(client?.currentDebt || 0).toFixed(0)}</p>
                                     </div>
                                     <div className="rounded-2xl bg-white border border-zinc-100 shadow-sm p-3 flex flex-col items-center gap-0.5">
-                                        <p className="text-[8px] text-emerald-500/90 font-black uppercase tracking-widest">Libre</p>
+                                        <p className="text-[8px] text-emerald-500/90 font-black">Libre</p>
                                         <p className="text-lg font-black text-emerald-600">${availableCredit.toFixed(0)}</p>
                                     </div>
                                 </div>
@@ -2548,7 +2548,7 @@ export default function ClientPortal() {
                                                             : 'bg-white border border-zinc-100 shadow-sm'
                                                     }`}
                                                 >
-                                                    <span className={`text-xs font-black uppercase tracking-widest ${
+                                                    <span className={`text-xs font-black   ${
                                                         isPay
                                                             ? isPast ? 'text-rose-400' : 'text-amber-500'
                                                             : isToday ? 'text-white/70' : 'text-zinc-400'
@@ -2559,7 +2559,7 @@ export default function ClientPortal() {
                                                             : isToday ? 'text-white' : isPast ? 'text-zinc-200' : 'text-zinc-700'
                                                     }`}>{dayNum}</span>
                                                     {isPay && (
-                                                        <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                                        <span className={`text-[8px] font-black   px-2 py-0.5 rounded-full ${
                                                             isPast ? 'bg-rose-100 text-rose-500' : 'bg-amber-200 text-amber-700'
                                                         }`}>
                                                             {isPast ? 'Vencida' : 'Cuota'}
@@ -2597,7 +2597,7 @@ export default function ClientPortal() {
                                 >
                                     ← Volver
                                 </button>
-                                <span className="text-xs font-black uppercase text-zinc-400 tracking-wider">
+                                <span className="text-xs font-black text-zinc-400">
                                     {paymentStep === "details" && "Detalles de Deuda"}
                                     {paymentStep === "pago_movil" && "Pago Móvil"}
                                     {paymentStep === "binance" && "Binance Pay"}
@@ -2622,14 +2622,14 @@ export default function ClientPortal() {
                                                 </p>
                                             </div>
                                             <div className="text-right">
-                                                <p className="text-[10px] text-zinc-400 font-bold">Monto Pendiente</p>
+                                                <p className="text-[10px] text-zinc-400 font-bold">Monto pendiente</p>
                                                 <p className="text-xl font-black text-zinc-950 font-mono">${selectedDebtForPayment.remainingBalance.toFixed(2)}</p>
                                             </div>
                                         </div>
 
                                         {selectedDebtForPayment.items && selectedDebtForPayment.items.length > 0 && (
                                             <div className="space-y-2">
-                                                <p className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider">Productos adquiridos</p>
+                                                <p className="text-[9px] font-bold text-zinc-450">Productos adquiridos</p>
                                                 <div className="space-y-1.5">
                                                     {selectedDebtForPayment.items.map((item: any, idx: number) => (
                                                         <div key={idx} className="flex justify-between items-center text-xs text-zinc-650">
@@ -2644,7 +2644,7 @@ export default function ClientPortal() {
                                     
                                     {/* Selector de Cuotas a Pagar */}
                                     <div className="space-y-3 animate-in fade-in duration-300">
-                                        <h4 className="text-xs font-black uppercase text-zinc-400 tracking-wider">¿Cuánto deseas abonar?</h4>
+                                        <h4 className="text-xs font-black text-zinc-400">¿Cuánto deseas abonar?</h4>
                                         <div className="space-y-2.5">
                                             {(() => {
                                                 const pendingInsts = (selectedDebtForPayment.installments && selectedDebtForPayment.installments.length > 0)
@@ -2700,7 +2700,7 @@ export default function ClientPortal() {
                                                                     }`}
                                                                 >
                                                                     <div className="flex flex-col text-left">
-                                                                        <span className="text-xs font-black uppercase tracking-tight">{opt.label}</span>
+                                                                        <span className="text-xs font-black tracking-tight">{opt.label}</span>
                                                                         <span className="text-[10px] text-zinc-400 font-bold mt-0.5">
                                                                             Abono de cuotas pendientes
                                                                         </span>
@@ -2723,7 +2723,7 @@ export default function ClientPortal() {
                                                             }`}
                                                         >
                                                             <div className="flex flex-col text-left">
-                                                                <span className="text-xs font-black uppercase tracking-tight">Otro monto</span>
+                                                                <span className="text-xs font-black tracking-tight">Otro monto</span>
                                                                 <span className="text-[10px] text-zinc-400 font-bold mt-0.5">
                                                                     Ingresa una cantidad personalizada
                                                                 </span>
@@ -2734,7 +2734,7 @@ export default function ClientPortal() {
                                                         {/* Custom Amount Input field */}
                                                         {selectedInstallmentOption === "custom" && (
                                                             <div className="rounded-2xl bg-white border border-zinc-150 p-4 space-y-3 animate-in slide-in-from-top duration-300 text-center">
-                                                                <p className="text-[10px] font-black uppercase text-zinc-450 tracking-wider">Monto Personalizado (USD)</p>
+                                                                <p className="text-[10px] font-black text-zinc-450">Monto personalizado (USD)</p>
                                                                 <div className="relative max-w-[180px] mx-auto">
                                                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xl font-black text-zinc-400">$</span>
                                                                     <input
@@ -2777,7 +2777,7 @@ export default function ClientPortal() {
                                         const enabledMethods = [
                                             settings?.pagoMovilEnabled && {
                                                 key: "pago_movil",
-                                                label: "Pago Móvil",
+                                                label: "Pago móvil",
                                                 desc: "Transferencia interbancaria rápida (Bs)",
                                                 icon: <IconDeviceMobile size={22} />,
                                                 color: "amber",
@@ -2788,7 +2788,7 @@ export default function ClientPortal() {
                                             },
                                             settings?.binanceEnabled && {
                                                 key: "binance",
-                                                label: "Binance Pay",
+                                                label: "Binance pay",
                                                 desc: "Pago con criptomonedas (USDT)",
                                                 icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L8.5 5.5 10.5 7.5 12 6l1.5 1.5 2-2L12 2zm-4 4L6 8l2 2 2-2-2-2zm8 0l-2 2 2 2 2-2-2-2zM12 10l-2 2 2 2 2-2-2-2zm-4 4l-2 2 2 2 2-2-2-2zm8 0l-2 2 2 2 2-2-2-2zM12 18l-1.5 1.5-2-2L12 22l3.5-4.5-2 2L12 18z"/></svg>,
                                                 color: "yellow",
@@ -2829,7 +2829,7 @@ export default function ClientPortal() {
 
                                         return (
                                             <div className="space-y-3 animate-in fade-in slide-in-from-bottom duration-300">
-                                                <h4 className="text-xs font-black uppercase text-zinc-400 tracking-wider">Selecciona Método de Pago</h4>
+                                                <h4 className="text-xs font-black text-zinc-400">Selecciona método de pago</h4>
                                                 {enabledMethods.map((method) => (
                                                     <button
                                                         key={method.key}
@@ -2849,7 +2849,7 @@ export default function ClientPortal() {
                                                                 {method.icon}
                                                             </div>
                                                             <div>
-                                                                <p className="text-xs font-black text-zinc-800 uppercase tracking-tight">{method.label}</p>
+                                                                <p className="text-xs font-black text-zinc-800 tracking-tight">{method.label}</p>
                                                                 <p className="text-[10px] text-zinc-500 font-medium mt-0.5">{method.desc}</p>
                                                             </div>
                                                         </div>
@@ -2869,23 +2869,23 @@ export default function ClientPortal() {
                                     <div className="rounded-2xl bg-gradient-to-br from-[#fffdf4] via-[#fffbeb] to-amber-50/30 border border-amber-200/50 p-5 space-y-4 shadow-sm animate-in fade-in duration-300">
                                         <div className="flex items-center gap-2 border-b border-zinc-100/60 pb-3">
                                             <IconDeviceMobile size={18} className="text-amber-700" />
-                                            <h3 className="text-xs font-black uppercase text-zinc-700 tracking-wider">Pago Móvil del Comercio</h3>
+                                            <h3 className="text-xs font-black text-zinc-700">Pago móvil del comercio</h3>
                                         </div>
                                         {settings?.pagoMovilEnabled ? (
                                             <div className="grid grid-cols-2 gap-4 text-xs">
                                                 <div>
-                                                    <p className="text-zinc-455 text-[9px] font-bold uppercase tracking-wider">Banco</p>
+                                                    <p className="text-zinc-455 text-[9px] font-bold">Banco</p>
                                                     <p className="font-extrabold text-zinc-700 mt-0.5">{settings.pagoMovilBank}</p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-zinc-455 text-[9px] font-bold uppercase tracking-wider">Cédula / RIF</p>
+                                                    <p className="text-zinc-455 text-[9px] font-bold">Cédula / RIF</p>
                                                     <div className="flex items-center gap-1 cursor-pointer mt-0.5" onClick={() => copyToClipboard(settings.pagoMovilId, "Cédula")}>
                                                         <p className="font-extrabold text-amber-700">{settings.pagoMovilId}</p>
                                                         <IconCopy size={12} className="text-zinc-400" />
                                                     </div>
                                                 </div>
                                                 <div className="col-span-2">
-                                                    <p className="text-zinc-455 text-[9px] font-bold uppercase tracking-wider">Teléfono de Pago</p>
+                                                    <p className="text-zinc-455 text-[9px] font-bold">Teléfono de pago</p>
                                                     <div className="flex items-center gap-1 cursor-pointer mt-0.5" onClick={() => copyToClipboard(settings.pagoMovilPhone, "Teléfono")}>
                                                         <p className="font-black text-amber-700 text-base">{settings.pagoMovilPhone}</p>
                                                         <IconCopy size={12} className="text-zinc-400" />
@@ -2894,14 +2894,14 @@ export default function ClientPortal() {
                                             </div>
                                         ) : (
                                             <p className="text-xs text-zinc-455 font-bold text-center py-2">
-                                                El comercio no tiene habilitado Pago Móvil actualmente.
+                                                El comercio no tiene habilitado pago móvil actualmente.
                                             </p>
                                         )}
                                     </div>
 
                                     {/* Amount in Bs (primary) with USD conversion */}
                                     <div className="rounded-2xl bg-white border border-zinc-100 p-5 space-y-4 shadow-sm text-center animate-in fade-in duration-300">
-                                        <p className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Monto a Transferir (Bs)</p>
+                                        <p className="text-[10px] font-black text-zinc-400">Monto a transferir (Bs)</p>
                                         <div className="relative max-w-[220px] mx-auto">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-black text-zinc-400">Bs</span>
                                             <input
@@ -2976,12 +2976,12 @@ export default function ClientPortal() {
                                     <div className="rounded-2xl bg-gradient-to-br from-[#fffef4] via-[#fefce8] to-yellow-50/30 border border-yellow-200/50 p-5 space-y-4 shadow-sm animate-in fade-in duration-300">
                                         <div className="flex items-center gap-2 border-b border-zinc-100/60 pb-3">
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-yellow-600"><path d="M12 2L8.5 5.5 10.5 7.5 12 6l1.5 1.5 2-2L12 2zm-4 4L6 8l2 2 2-2-2-2zm8 0l-2 2 2 2 2-2-2-2zM12 10l-2 2 2 2 2-2-2-2zm-4 4l-2 2 2 2 2-2-2-2zm8 0l-2 2 2 2 2-2-2-2zM12 18l-1.5 1.5-2-2L12 22l3.5-4.5-2 2L12 18z"/></svg>
-                                            <h3 className="text-xs font-black uppercase text-zinc-700 tracking-wider">Datos de Binance Pay</h3>
+                                            <h3 className="text-xs font-black text-zinc-700">Datos de Binance pay</h3>
                                         </div>
                                         <div className="grid grid-cols-1 gap-4 text-xs">
                                             {settings?.binanceId && (
                                                 <div>
-                                                    <p className="text-zinc-400 text-[9px] font-bold uppercase tracking-wider">Binance ID</p>
+                                                    <p className="text-zinc-400 text-[9px] font-bold">Binance ID</p>
                                                     <div className="flex items-center gap-1 cursor-pointer mt-0.5" onClick={() => copyToClipboard(settings.binanceId, "Binance ID")}>
                                                         <p className="font-extrabold text-yellow-700">{settings.binanceId}</p>
                                                         <IconCopy size={12} className="text-zinc-400" />
@@ -2990,7 +2990,7 @@ export default function ClientPortal() {
                                             )}
                                             {settings?.binanceEmail && (
                                                 <div>
-                                                    <p className="text-zinc-400 text-[9px] font-bold uppercase tracking-wider">Correo de la Cuenta</p>
+                                                    <p className="text-zinc-400 text-[9px] font-bold">Correo de la cuenta</p>
                                                     <div className="flex items-center gap-1 cursor-pointer mt-0.5" onClick={() => copyToClipboard(settings.binanceEmail, "Correo Binance")}>
                                                         <p className="font-extrabold text-yellow-700">{settings.binanceEmail}</p>
                                                         <IconCopy size={12} className="text-zinc-400" />
@@ -2998,14 +2998,14 @@ export default function ClientPortal() {
                                                 </div>
                                             )}
                                             {!settings?.binanceId && !settings?.binanceEmail && (
-                                                <p className="text-xs text-zinc-500 font-bold text-center py-2">El comercio no ha configurado sus datos de Binance Pay.</p>
+                                                <p className="text-xs text-zinc-500 font-bold text-center py-2">El comercio no ha configurado sus datos de Binance pay.</p>
                                             )}
                                         </div>
                                     </div>
 
                                     {/* Editable Amount */}
                                     <div className="rounded-2xl bg-white border border-zinc-100 p-5 space-y-4 shadow-sm text-center animate-in fade-in duration-300">
-                                        <p className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Monto a Abonar (USD)</p>
+                                        <p className="text-[10px] font-black text-zinc-400">Monto a abonar (USD)</p>
                                         <div className="relative max-w-[200px] mx-auto">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-black text-zinc-400">$</span>
                                             <input
@@ -3039,12 +3039,12 @@ export default function ClientPortal() {
                                     <div className="rounded-2xl bg-gradient-to-br from-[#fdf4ff] via-[#faf5ff] to-purple-50/30 border border-purple-200/50 p-5 space-y-4 shadow-sm animate-in fade-in duration-300">
                                         <div className="flex items-center gap-2 border-b border-zinc-100/60 pb-3">
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-600"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-                                            <h3 className="text-xs font-black uppercase text-zinc-700 tracking-wider">Datos de Zinli</h3>
+                                            <h3 className="text-xs font-black text-zinc-700">Datos de Zinli</h3>
                                         </div>
                                         <div className="text-xs">
                                             {settings?.zinliEmail ? (
                                                 <div>
-                                                    <p className="text-zinc-400 text-[9px] font-bold uppercase tracking-wider">Correo Zinli</p>
+                                                    <p className="text-zinc-400 text-[9px] font-bold">Correo Zinli</p>
                                                     <div className="flex items-center gap-1 cursor-pointer mt-0.5" onClick={() => copyToClipboard(settings.zinliEmail, "Correo Zinli")}>
                                                         <p className="font-black text-purple-700 text-base">{settings.zinliEmail}</p>
                                                         <IconCopy size={12} className="text-zinc-400" />
@@ -3058,7 +3058,7 @@ export default function ClientPortal() {
 
                                     {/* Editable Amount */}
                                     <div className="rounded-2xl bg-white border border-zinc-100 p-5 space-y-4 shadow-sm text-center animate-in fade-in duration-300">
-                                        <p className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Monto a Abonar (USD)</p>
+                                        <p className="text-[10px] font-black text-zinc-400">Monto a abonar (USD)</p>
                                         <div className="relative max-w-[200px] mx-auto">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-black text-zinc-400">$</span>
                                             <input
@@ -3092,12 +3092,12 @@ export default function ClientPortal() {
                                     <div className="rounded-2xl bg-gradient-to-br from-[#f4f8ff] via-[#eff6ff] to-blue-50/30 border border-blue-200/50 p-5 space-y-4 shadow-sm animate-in fade-in duration-300">
                                         <div className="flex items-center gap-2 border-b border-zinc-100/60 pb-3">
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-blue-700"><path d="M20.067 8.478c.492.88.556 2.014.3 3.327-.74 3.806-3.276 5.12-6.514 5.12h-.5a.805.805 0 0 0-.794.68l-.04.22-.63 3.993-.032.17a.804.804 0 0 1-.794.679H7.72a.483.483 0 0 1-.477-.558L7.418 21h1.518l.95-6.02h1.385c4.678 0 7.75-2.203 8.796-6.502zm-2.96-5.09c.762.868.983 1.81.73 3.138C17 10.325 14.913 12 11.589 12H9.52a.805.805 0 0 0-.795.68l-.217 1.375H6.862a.483.483 0 0 1-.476-.557l1.3-8.25A.805.805 0 0 1 8.48 4.57h5.057c1.174 0 2.152.313 2.57.818z"/></svg>
-                                            <h3 className="text-xs font-black uppercase text-zinc-700 tracking-wider">Datos de PayPal</h3>
+                                            <h3 className="text-xs font-black text-zinc-700">Datos de PayPal</h3>
                                         </div>
                                         <div className="text-xs">
                                             {settings?.paypalEmail ? (
                                                 <div>
-                                                    <p className="text-zinc-400 text-[9px] font-bold uppercase tracking-wider">Correo PayPal</p>
+                                                    <p className="text-zinc-400 text-[9px] font-bold">Correo PayPal</p>
                                                     <div className="flex items-center gap-1 cursor-pointer mt-0.5" onClick={() => copyToClipboard(settings.paypalEmail, "Correo PayPal")}>
                                                         <p className="font-black text-blue-700 text-base">{settings.paypalEmail}</p>
                                                         <IconCopy size={12} className="text-zinc-400" />
@@ -3111,7 +3111,7 @@ export default function ClientPortal() {
 
                                     {/* Editable Amount */}
                                     <div className="rounded-2xl bg-white border border-zinc-100 p-5 space-y-4 shadow-sm text-center animate-in fade-in duration-300">
-                                        <p className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Monto a Abonar (USD)</p>
+                                        <p className="text-[10px] font-black text-zinc-400">Monto a abonar (USD)</p>
                                         <div className="relative max-w-[200px] mx-auto">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-black text-zinc-400">$</span>
                                             <input
@@ -3143,7 +3143,7 @@ export default function ClientPortal() {
                             {paymentStep === "upload" && (
                                 <div className="space-y-4">
                                     <div className="rounded-2xl bg-white border border-zinc-100 p-5 space-y-4 shadow-sm text-center animate-in fade-in duration-300">
-                                        <h3 className="text-sm font-black text-zinc-800">Cargar Comprobante de Pago</h3>
+                                        <h3 className="text-sm font-black text-zinc-800">Cargar comprobante de pago</h3>
                                         <p className="text-xs text-zinc-500 font-semibold leading-relaxed">
                                             Sube una captura de pantalla o foto del comprobante de pago para verificar tu transacción de <strong className="text-zinc-700">${parseFloat(paymentAmount).toFixed(2)} USD</strong>.
                                         </p>
@@ -3173,14 +3173,14 @@ export default function ClientPortal() {
                                                         <IconCamera size={20} />
                                                     </div>
                                                     <p className="text-xs font-black text-zinc-655">Subir foto del comprobante</p>
-                                                    <p className="text-[10px] text-zinc-450 font-bold">Formatos permitidos: JPG, PNG</p>
+                                                    <p className="text-[10px] text-zinc-450 font-bold">Formatos permitidos: jpg, png</p>
                                                 </>
                                             )}
                                         </div>
 
                                         {/* Reference Number Input */}
                                         <div className="w-full space-y-1 text-left">
-                                            <label className="text-[10px] font-black uppercase text-zinc-400 tracking-wider block">N° de Referencia (opcional)</label>
+                                            <label className="text-[10px] font-black text-zinc-400 block">N° de referencia (opcional)</label>
                                             <input
                                                 type="text"
                                                 value={receiptReference}
@@ -3239,7 +3239,7 @@ export default function ClientPortal() {
                                             disabled={!receiptFile || isSubmittingPayment}
                                             className="w-full h-12 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
                                         >
-                                            {isSubmittingPayment ? "Registrando abono..." : "Enviar Comprobante"}
+                                            {isSubmittingPayment ? "Registrando abono..." : "Enviar comprobante"}
                                         </Button>
                                     </div>
                                 </div>
@@ -3256,12 +3256,12 @@ export default function ClientPortal() {
                                             </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <h3 className="text-lg font-black text-zinc-800">¡Abono en Validación!</h3>
+                                            <h3 className="text-lg font-black text-zinc-800">¡Abono en validación!</h3>
                                             <p className="text-xs text-zinc-550 leading-relaxed font-semibold">
                                                 Su orden está pendiente en ser abonada
                                             </p>
                                             <p className="text-[10px] text-zinc-400 font-bold leading-normal px-2">
-                                                Hemos recibido tu comprobante de Pago Móvil por <strong className="text-zinc-700">${parseFloat(paymentAmount).toFixed(2)} USD</strong>. El comercio validará la transacción a la brevedad y aplicará el saldo a tu cuenta.
+                                                Hemos recibido tu comprobante de pago móvil por <strong className="text-zinc-700">${parseFloat(paymentAmount).toFixed(2)} USD</strong>. El comercio validará la transacción a la brevedad y aplicará el saldo a tu cuenta.
                                             </p>
                                         </div>
 
@@ -3368,7 +3368,7 @@ export default function ClientPortal() {
                                                             isActive ? "text-zinc-900" : "text-zinc-450 hover:text-zinc-600"
                                                         }`}
                                                     >
-                                                        <p className="text-[11px] font-black tracking-wider">{monthNamesFull[group.month]} {group.year}</p>
+                                                        <p className="text-[11px] font-black">{monthNamesFull[group.month]} {group.year}</p>
                                                         <p className="text-[9px] font-bold text-zinc-400 mt-0.5">
                                                             {group.installmentsList.length} cuota{group.installmentsList.length > 1 ? "s" : ""}
                                                         </p>
@@ -3455,7 +3455,7 @@ export default function ClientPortal() {
                                                                                 {debt.description || "Compra a crédito"}
                                                                             </h4>
                                                                             {pendingSubmission && (
-                                                                                <span className="text-[9px] font-black uppercase tracking-wider text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100/50 mt-1 flex items-center gap-1 w-fit">
+                                                                                <span className="text-[9px] font-black text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100/50 mt-1 flex items-center gap-1 w-fit">
                                                                                     <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
                                                                                     Abono de ${pendingSubmission.amount.toFixed(2)} pendiente
                                                                                 </span>
@@ -3466,11 +3466,11 @@ export default function ClientPortal() {
                                                                         </div>
                                                                         <div className="flex flex-col items-end gap-1">
                                                                             {isOverdue ? (
-                                                                                <span className="text-[9px] font-black uppercase tracking-wider text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100/50">
+                                                                                <span className="text-[9px] font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100/50">
                                                                                     Vencida
                                                                                 </span>
                                                                             ) : (
-                                                                                <span className="text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100/50">
+                                                                                <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100/50">
                                                                                     Al día
                                                                                 </span>
                                                                             )}
@@ -3504,7 +3504,7 @@ export default function ClientPortal() {
                                                                                                     <span className={`font-mono font-bold ${isInstOverdue ? 'text-rose-650' : 'text-zinc-700'}`}>
                                                                                                         ${instRemaining.toFixed(2)}
                                                                                                     </span>
-                                                                                                    <p className={`text-[8px] font-black uppercase tracking-wider ${inst.status === 'PAID' ? 'text-emerald-600' : 'text-amber-500'}`}>
+                                                                                                    <p className={`text-[8px] font-black   ${inst.status === 'PAID' ? 'text-emerald-600' : 'text-amber-500'}`}>
                                                                                                         {inst.status === 'PAID' ? 'Pagado' : 'Pendiente'}
                                                                                                     </p>
                                                                                                 </div>
@@ -3536,7 +3536,7 @@ export default function ClientPortal() {
 
                         {/* HISTORIAL TRANSACCIONES */}
                         <div className="space-y-3">
-                            <h3 className="text-xs font-black uppercase text-zinc-400 tracking-wider">Historial de Transacciones</h3>
+                            <h3 className="text-xs font-black text-zinc-400">Historial de transacciones</h3>
                             
                             {client?.creditTransactions && client.creditTransactions.length > 0 && (
                                 <div className="relative">
@@ -3737,8 +3737,8 @@ export default function ClientPortal() {
 
                                         {/* Title row */}
                                         <div className="flex items-center justify-between">
-                                            <h3 className="text-sm font-black text-zinc-900">Confirmar Delivery</h3>
-                                            <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">
+                                            <h3 className="text-sm font-black text-zinc-900">Confirmar delivery</h3>
+                                            <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-black">
                                                 {checkoutItems.length} {checkoutItems.length === 1 ? 'artículo' : 'artículos'}
                                             </span>
                                         </div>
@@ -3832,7 +3832,7 @@ export default function ClientPortal() {
                                                 <IconMapPin size={16} className="text-white" />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <span className="text-[9px] font-black text-zinc-400 uppercase tracking-wider block">Ubicación de entrega</span>
+                                                <span className="text-[9px] font-black text-zinc-400 block">Ubicación de entrega</span>
                                                 <p className="text-xs font-bold text-zinc-800 mt-0.5 leading-snug line-clamp-2">
                                                     {isMapMoving
                                                         ? <span className="text-zinc-400 animate-pulse font-mono text-[9px]">{deliveryCoordinates ? `${deliveryCoordinates.lat.toFixed(5)}, ${deliveryCoordinates.lng.toFixed(5)}` : 'Moviendo...'}</span>
@@ -3844,7 +3844,7 @@ export default function ClientPortal() {
 
                                         {/* Order Items Summary */}
                                         <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-3.5 space-y-2">
-                                            <h4 className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Artículos</h4>
+                                            <h4 className="text-[9px] font-black text-zinc-400">Artículos</h4>
                                             <div className="space-y-1.5 max-h-[80px] overflow-y-auto pr-1">
                                                 {checkoutItems.map((item, idx) => {
                                                     const firstVariant = item.product.variants?.[0];
@@ -3858,7 +3858,7 @@ export default function ClientPortal() {
                                                 })}
                                             </div>
                                             <div className="pt-2 border-t border-zinc-150 flex justify-between items-baseline">
-                                                <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Total</span>
+                                                <span className="text-[10px] font-black text-zinc-500">Total</span>
                                                 <span className="text-base font-black text-zinc-900 font-mono">
                                                     ${checkoutItems.reduce((sum, item) => {
                                                         const firstVariant = item.product.variants?.[0];
@@ -3871,10 +3871,10 @@ export default function ClientPortal() {
 
                                         {/* Notes / Extra address detail */}
                                         <div className="space-y-1">
-                                            <Label className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Detalle adicional (apto, piso, ref.) <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
+                                            <Label className="text-[9px] font-black text-zinc-400">Detalle adicional (apto, piso, ref.) <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                                             <Input
                                                 type="text"
-                                                placeholder="Ej. Edif. Centro, Apto 4B, frente a la farmacia"
+                                                placeholder="Ej. Edif. Centro, apto 4b, frente a la farmacia"
                                                 value={deliveryNote}
                                                 onChange={(e) => setDeliveryNote(e.target.value)}
                                                 className="h-10 rounded-xl border-zinc-200 bg-zinc-50 text-xs font-semibold focus-visible:ring-amber-400"
@@ -3883,7 +3883,7 @@ export default function ClientPortal() {
 
                                         {/* Phone */}
                                         <div className="space-y-1">
-                                            <Label className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Teléfono de contacto <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
+                                            <Label className="text-[9px] font-black text-zinc-400">Teléfono de contacto <span className="text-rose-500 font-bold ml-0.5">*</span></Label>
                                             <Input
                                                 type="text"
                                                 inputMode="numeric"
@@ -3908,7 +3908,7 @@ export default function ClientPortal() {
                                             ) : (
                                                 <span className="flex items-center gap-2">
                                                     <IconTruck size={18} />
-                                                    Solicitar Envío
+                                                    Solicitar envío
                                                 </span>
                                             )}
                                         </Button>
@@ -3935,8 +3935,8 @@ export default function ClientPortal() {
                                                 <IconChevronLeft size={14} />
                                                 <span>Volver</span>
                                             </button>
-                                            <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-950 px-3 py-1 rounded-full font-black uppercase tracking-wider">
-                                                Detalle de Producto
+                                            <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-950 px-3 py-1 rounded-full font-black">
+                                                Detalle de producto
                                             </span>
                                         </div>
 
@@ -3958,7 +3958,7 @@ export default function ClientPortal() {
 
                                             <div className="space-y-3.5">
                                                 {product.category && (
-                                                    <span className="inline-block text-[9px] bg-zinc-100/80 text-zinc-550 font-extrabold uppercase px-2.5 py-0.5 rounded-md tracking-wider">
+                                                    <span className="inline-block text-[9px] bg-zinc-100/80 text-zinc-550 font-extrabold px-2.5 py-0.5 rounded-md">
                                                         {product.category.name}
                                                     </span>
                                                 )}
@@ -3995,7 +3995,7 @@ export default function ClientPortal() {
                                                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-100/40' 
                                                         : 'bg-rose-50 text-rose-600 border border-rose-100/40'
                                                 }`}>
-                                                    {inStock ? `En Stock (${product.totalStock})` : "Agotado"}
+                                                    {inStock ? `En stock (${product.totalStock})` : "Agotado"}
                                                 </span>
                                             </div>
                                         </div>
@@ -4027,7 +4027,7 @@ export default function ClientPortal() {
                             <div className="space-y-4">
                                 <div className="border-b border-zinc-100 pb-4.5 flex flex-col gap-4">
                                     <div>
-                                        <h3 className="text-base font-black text-zinc-800">Comercios Disponibles</h3>
+                                        <h3 className="text-base font-black text-zinc-800">Comercios disponibles</h3>
                                         <p className="text-xs text-zinc-400 font-semibold mt-0.5">
                                             Selecciona una tienda para ver su catálogo de productos.
                                         </p>
@@ -4037,7 +4037,7 @@ export default function ClientPortal() {
                                         className="w-full rounded-2xl bg-amber-400 hover:bg-amber-500 text-amber-955 font-black text-xs h-11 border-none shadow-md shadow-amber-450/20 flex items-center justify-center gap-2 active:scale-[0.97] transition-all duration-200 cursor-pointer animate-in fade-in"
                                     >
                                         <IconTruck size={18} />
-                                        <span>Mis Pedidos</span>
+                                        <span>Mis pedidos</span>
                                     </Button>
                                 </div>
 
@@ -4097,7 +4097,7 @@ export default function ClientPortal() {
                                                                         {branch.name}
                                                                     </h4>
                                                                     {branch.isMain && (
-                                                                        <span className="inline-block text-[8px] bg-amber-500 text-white font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm shadow-amber-500/10">
+                                                                        <span className="inline-block text-[8px] bg-amber-500 text-white font-black px-2 py-0.5 rounded-full shadow-sm shadow-amber-500/10">
                                                                             Principal
                                                                         </span>
                                                                     )}
@@ -4137,7 +4137,7 @@ export default function ClientPortal() {
                                         <IconChevronLeft size={16} />
                                         <span>Tiendas</span>
                                     </button>
-                                    <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-950 px-3 py-1 rounded-full font-black uppercase tracking-wider">
+                                    <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-950 px-3 py-1 rounded-full font-black">
                                         Catálogo
                                     </span>
                                 </div>
@@ -4164,7 +4164,7 @@ export default function ClientPortal() {
                                                     {selectedBranchForShop.name}
                                                 </h3>
                                                 {selectedBranchForShop.isMain && (
-                                                    <span className="text-[9px] bg-amber-500 text-white font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm shadow-amber-500/10">
+                                                    <span className="text-[9px] bg-amber-500 text-white font-black px-2.5 py-0.5 rounded-full shadow-sm shadow-amber-500/10">
                                                         Principal
                                                     </span>
                                                 )}
@@ -4209,8 +4209,8 @@ export default function ClientPortal() {
                                 ) : (
                                     businessBranchesForShop.length > 1 && (
                                         <div className="space-y-2">
-                                            <span className="text-[10px] uppercase font-black text-zinc-400 tracking-wider">
-                                                Sucursales Disponibles
+                                            <span className="text-[10px] font-black text-zinc-400">
+                                                Sucursales disponibles
                                             </span>
                                             <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
                                                 {businessBranchesForShop.map((b) => {
@@ -4250,7 +4250,7 @@ export default function ClientPortal() {
                                             </div>
                                             
                                             <div className="flex flex-col items-center shrink-0 bg-white border border-zinc-150/80 px-2.5 py-1.5 rounded-xl shadow-xs gap-0.5 min-w-[66px]">
-                                                <span className="text-[8px] font-black text-zinc-400 uppercase tracking-wider">En Stock</span>
+                                                <span className="text-[8px] font-black text-zinc-400">En stock</span>
                                                 <Switch
                                                     checked={onlyInStock}
                                                     onCheckedChange={setOnlyInStock}
@@ -4343,7 +4343,7 @@ export default function ClientPortal() {
                                                                 <div className="p-3.5 flex-1 flex flex-col justify-between space-y-3">
                                                                     <div className="space-y-1.5">
                                                                         {product.category && (
-                                                                            <span className="inline-block text-[8px] bg-zinc-100/80 text-zinc-500 font-extrabold uppercase px-2 py-0.5 rounded-md tracking-wider">
+                                                                            <span className="inline-block text-[8px] bg-zinc-100/80 text-zinc-500 font-extrabold px-2 py-0.5 rounded-md">
                                                                                 {product.category.name}
                                                                             </span>
                                                                         )}
@@ -4380,7 +4380,7 @@ export default function ClientPortal() {
                                                                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100/40' 
                                                                                 : 'bg-rose-50 text-rose-600 border border-rose-100/40'
                                                                         }`}>
-                                                                            {inStock ? `En Stock (${product.totalStock})` : "Agotado"}
+                                                                            {inStock ? `En stock (${product.totalStock})` : "Agotado"}
                                                                         </span>
                                                                     </div>
                                                                 </div>
@@ -4404,10 +4404,10 @@ export default function ClientPortal() {
                         {isEditingProfile ? (
                             <>
                                 <div className="rounded-xl bg-gradient-to-br from-[#fffdf4] via-[#fffbeb] to-amber-50/30 border border-amber-200/50 p-6 space-y-4">
-                                    <h3 className="text-sm font-black text-zinc-800 border-b border-zinc-150 pb-2">Editar Perfil</h3>
+                                    <h3 className="text-sm font-black text-zinc-800 border-b border-zinc-150 pb-2">Editar perfil</h3>
                                     <div className="space-y-3.5">
                                         <div className="space-y-1">
-                                            <label className="text-[10px] uppercase font-black text-zinc-400 tracking-wider">Nombre</label>
+                                            <label className="text-[10px] font-black text-zinc-400">Nombre</label>
                                             <Input 
                                                 value={editName} 
                                                 onChange={(e) => setEditName(e.target.value)} 
@@ -4416,7 +4416,7 @@ export default function ClientPortal() {
                                             />
                                         </div>
                                         <div className="space-y-1">
-                                            <label className="text-[10px] uppercase font-black text-zinc-400 tracking-wider">Email</label>
+                                            <label className="text-[10px] font-black text-zinc-400">Email</label>
                                             <Input 
                                                 value={editEmail} 
                                                 onChange={(e) => setEditEmail(e.target.value)} 
@@ -4425,7 +4425,7 @@ export default function ClientPortal() {
                                             />
                                         </div>
                                         <div className="space-y-1">
-                                            <label className="text-[10px] uppercase font-black text-zinc-400 tracking-wider">Teléfono</label>
+                                            <label className="text-[10px] font-black text-zinc-400">Teléfono</label>
                                             <Input 
                                                 value={editPhone} 
                                                 onChange={(e) => setEditPhone(e.target.value)} 
@@ -4434,7 +4434,7 @@ export default function ClientPortal() {
                                             />
                                         </div>
                                         <div className="space-y-1">
-                                            <label className="text-[10px] uppercase font-black text-zinc-400 tracking-wider">Dirección</label>
+                                            <label className="text-[10px] font-black text-zinc-400">Dirección</label>
                                             <Input 
                                                 value={editAddress} 
                                                 onChange={(e) => setEditAddress(e.target.value)} 
@@ -4496,7 +4496,7 @@ export default function ClientPortal() {
                                     onClick={handleStartEditProfile} 
                                     className="w-full h-12 rounded-xl text-xs font-black text-amber-950 hover:text-amber-950 border-amber-200 hover:bg-amber-50/50 transition-all duration-300 bg-transparent"
                                 >
-                                    Editar Perfil
+                                    Editar perfil
                                 </Button>
 
                                 <Button 
@@ -4504,7 +4504,7 @@ export default function ClientPortal() {
                                     onClick={handleLogout} 
                                     className="w-full h-12 rounded-xl text-xs font-black text-rose-600 hover:text-rose-700 border-rose-200 hover:bg-rose-50/50 transition-all duration-300 bg-transparent"
                                 >
-                                    Cerrar Sesión
+                                    Cerrar sesión
                                 </Button>
                             </>
                         )}
@@ -4521,7 +4521,7 @@ export default function ClientPortal() {
                                     </svg>
                                 </div>
                                 <div className="space-y-2">
-                                    <h3 className="text-xl font-black text-zinc-900">Operación Cancelada</h3>
+                                    <h3 className="text-xl font-black text-zinc-900">Operación cancelada</h3>
                                     <p className="text-xs text-zinc-500 max-w-[260px] leading-relaxed">
                                         El cajero ha cancelado esta operación. No se realizó ningún cargo a tu cuenta.
                                     </p>
@@ -4533,7 +4533,7 @@ export default function ClientPortal() {
                                     }}
                                     className="mt-2 w-full max-w-[220px] h-12 rounded-xl bg-zinc-900 hover:bg-zinc-700 text-white font-black text-xs transition-all duration-300 active:scale-95 shadow-md"
                                 >
-                                    Ir al Inicio
+                                    Ir al inicio
                                 </button>
                             </div>
                         ) : showApprovalSuccess ? (
@@ -4541,7 +4541,7 @@ export default function ClientPortal() {
                                 <div className="size-20 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
                                     <IconCheck size={40} stroke={3} />
                                 </div>
-                                <h3 className="text-lg font-black text-zinc-950">¡Compra Autorizada con Éxito!</h3>
+                                <h3 className="text-lg font-black text-zinc-950">¡Compra autorizada con éxito!</h3>
                                 <p className="text-xs text-zinc-500 max-w-[280px]">
                                     El crédito ha sido restado de tu cupo y los detalles de tu compra fiada se cargaron.
                                 </p>
@@ -4552,7 +4552,7 @@ export default function ClientPortal() {
                                     <IconLock size={32} />
                                 </div>
                                 <div className="space-y-1">
-                                    <h3 className="text-base font-black text-zinc-900">Autorizar Compra con PIN</h3>
+                                    <h3 className="text-base font-black text-zinc-900">Autorizar compra con PIN</h3>
                                     <p className="text-[11px] text-zinc-500 leading-normal max-w-[280px] mx-auto">
                                         Ingresa el PIN de 6 dígitos que te dictó el cajero para cargar el resumen de tu compra fiada.
                                     </p>
@@ -4563,7 +4563,7 @@ export default function ClientPortal() {
                                         type="text" 
                                         pattern="[0-9]*"
                                         maxLength={6}
-                                        className="h-14 text-center text-2xl font-black tracking-[0.5em] rounded-xl border-amber-200 bg-white"
+                                        className="h-14 text-center text-2xl font-black rounded-xl border-amber-200 bg-white"
                                         placeholder="000000"
                                         value={authPin}
                                         onChange={(e) => setAuthPin(e.target.value.replace(/[^0-9]/g, ""))}
@@ -4573,7 +4573,7 @@ export default function ClientPortal() {
                                         disabled={isLoadingPendingPurchase || authPin.length !== 6}
                                         className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-xs shadow-sm border-none transition-all duration-350 active:scale-95"
                                     >
-                                        {isLoadingPendingPurchase ? "Buscando..." : "Buscar Compra"}
+                                        {isLoadingPendingPurchase ? "Buscando..." : "Buscar compra"}
                                     </Button>
                                 </div>
                             </div>
@@ -4583,13 +4583,13 @@ export default function ClientPortal() {
                                 <div className="rounded-2xl border border-amber-150 bg-white p-5 space-y-4 shadow-sm">
                                     <div className="flex justify-between items-start pb-3 border-b border-zinc-100">
                                         <div className="space-y-0.5">
-                                            <span className="text-[9px] font-extrabold uppercase text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100/50">
+                                            <span className="text-[9px] font-extrabold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100/50">
                                                 {pendingPurchase.businessName}
                                             </span>
-                                            <h4 className="font-extrabold text-sm text-zinc-800 mt-1">Resumen de Compra</h4>
+                                            <h4 className="font-extrabold text-sm text-zinc-800 mt-1">Resumen de compra</h4>
                                         </div>
                                         <div className="text-right">
-                                            <span className="text-[10px] font-bold text-zinc-400 block uppercase leading-none">Total</span>
+                                            <span className="text-[10px] font-bold text-zinc-400 block leading-none">Total</span>
                                             <span className="text-lg font-black text-zinc-900 font-mono">${pendingPurchase.amount.toFixed(2)}</span>
                                         </div>
                                     </div>
@@ -4610,7 +4610,7 @@ export default function ClientPortal() {
 
                                     {/* FREQUENCY SELECTOR */}
                                     <div className="rounded-2xl border border-amber-150 bg-white p-5 space-y-4 shadow-sm animate-in fade-in duration-200">
-                                        <h4 className="font-black text-xs text-zinc-800 uppercase tracking-wider">Elige la frecuencia de pago</h4>
+                                        <h4 className="font-black text-xs text-zinc-800">Elige la frecuencia de pago</h4>
                                         
                                         <div className="grid grid-cols-4 gap-2">
                                             {(() => {
@@ -4641,7 +4641,7 @@ export default function ClientPortal() {
 
                                     {/* INSTALLMENTS SELECTOR */}
                                     <div className="rounded-2xl border border-amber-150 bg-white p-5 space-y-4 shadow-sm">
-                                        <h4 className="font-black text-xs text-zinc-800 uppercase tracking-wider">Elige el número de cuotas</h4>
+                                        <h4 className="font-black text-xs text-zinc-800">Elige el número de cuotas</h4>
                                         
                                         <div className="grid grid-cols-3 gap-2">
                                             {Array.from({ length: client?.syncroCreditMaxInstallments || settings?.syncroCreditMaxInstallments || 3 }, (_, i) => i + 1).map((num) => (
@@ -4662,7 +4662,7 @@ export default function ClientPortal() {
 
                                         {/* Installment Calendar Preview */}
                                         <div className="bg-amber-50/20 border border-amber-100/50 rounded-xl p-4 space-y-3">
-                                            <span className="text-[9px] font-extrabold uppercase text-amber-700 tracking-wider">Calendario de Pagos Estimado</span>
+                                            <span className="text-[9px] font-extrabold text-amber-700">Calendario de pagos estimado</span>
                                             <div className="space-y-2">
                                                 {(() => {
                                                     const preview = [];
@@ -4711,7 +4711,7 @@ export default function ClientPortal() {
                                             disabled={submittingApproval}
                                             className="flex-[2] h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md shadow-emerald-500/10 border-none transition-all"
                                         >
-                                            {submittingApproval ? "Autorizando..." : "Autorizar e Iniciar Crédito"}
+                                            {submittingApproval ? "Autorizando..." : "Autorizar e iniciar crédito"}
                                         </Button>
                                     </div>
                                 </div>
@@ -4811,7 +4811,7 @@ export default function ClientPortal() {
                             }`}
                         >
                             <IconLock size={22} className={activeTab === "auth-purchase" ? "animate-pulse" : ""} />
-                            <span className="text-[10px] font-black uppercase tracking-wider mt-0.5">PIN</span>
+                            <span className="text-[10px] font-black mt-0.5">PIN</span>
                         </button>
                     </div> 
                     <button 
@@ -4862,7 +4862,7 @@ export default function ClientPortal() {
                     <DialogHeader>
                         <DialogTitle className="text-lg font-black text-zinc-900 flex items-center gap-2">
                             <IconMapPin className="text-amber-700" size={20} />
-                            Tiendas Cercanas
+                            Tiendas cercanas
                         </DialogTitle>
                         <DialogDescription className="text-zinc-500 text-xs font-medium">
                             Encuentra nuestras sucursales físicas para realizar tus compras, abonos y retiros de premios.
@@ -4872,7 +4872,7 @@ export default function ClientPortal() {
                         {branches.length === 0 ? (
                             <div className="p-4 rounded-xl border border-dashed border-amber-200/60 bg-amber-50/20 text-center">
                                 <p className="font-extrabold text-sm text-zinc-800">
-                                    {settings?.businessName || "Syncro Principal"}
+                                    {settings?.businessName || "Syncro principal"}
                                 </p>
                                 <p className="text-xs text-zinc-500 mt-1">
                                     {settings?.address || settings?.businessAddress || "Ubicación principal de la tienda."}
@@ -4944,8 +4944,8 @@ export default function ClientPortal() {
                             <IconChevronLeft size={14} />
                             <span>Volver</span>
                         </button>
-                        <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-955 px-3 py-1 rounded-full font-black uppercase tracking-wider">
-                            Carrito de Compras
+                        <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-955 px-3 py-1 rounded-full font-black">
+                            Carrito de compras
                         </span>
                     </div>
 
@@ -5009,7 +5009,7 @@ export default function ClientPortal() {
                             {/* Total and Checkout */}
                             <div className="pt-4 border-t border-zinc-150/40 bg-[#faf9f5] space-y-4 shrink-0 mt-4">
                                 <div className="flex justify-between items-baseline">
-                                    <span className="text-xs font-bold text-zinc-450 uppercase tracking-wider">Total estimado:</span>
+                                    <span className="text-xs font-bold text-zinc-450">Total estimado:</span>
                                     <span className="text-xl font-black text-zinc-900 font-mono">
                                         ${cart.reduce((sum, item) => {
                                             const firstVariant = item.product.variants?.[0];
@@ -5023,7 +5023,7 @@ export default function ClientPortal() {
                                     onClick={() => handleCheckout(cart)}
                                     className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-955 font-black text-xs transition-all duration-200 border-none shadow-md shadow-amber-400/10"
                                 >
-                                    Proceder al Pago
+                                    Proceder al pago
                                 </Button>
                             </div>
                         </div>
@@ -5047,7 +5047,7 @@ export default function ClientPortal() {
                             </div>
 
                             <div className="space-y-2">
-                                <h3 className="text-xl font-black text-zinc-900 leading-tight">¡Orden Reservada Exitosamente!</h3>
+                                <h3 className="text-xl font-black text-zinc-900 leading-tight">¡Orden reservada exitosamente!</h3>
                                 <p className="text-xs text-zinc-500 leading-relaxed font-semibold max-w-xs mx-auto">
                                     Tu compra a crédito por un total de <strong className="text-zinc-900 font-black">${purchaseSuccessData.amount.toFixed(2)} USD</strong> ha sido pre-autorizada.
                                 </p>
@@ -5055,8 +5055,8 @@ export default function ClientPortal() {
 
                             {/* PIN Code display card */}
                             <div className="bg-emerald-50/40 border border-emerald-100 rounded-2xl p-5 space-y-2">
-                                <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider block">Código de Retiro / PIN</span>
-                                <span className="text-3xl font-black tracking-[0.2em] font-mono text-emerald-950 block">{purchaseSuccessData.pin}</span>
+                                <span className="text-[10px] font-black text-emerald-800 block">Código de retiro / PIN</span>
+                                <span className="text-3xl font-black font-mono text-emerald-950 block">{purchaseSuccessData.pin}</span>
                                 <p className="text-[10px] text-emerald-700/80 font-bold max-w-xs mx-auto leading-relaxed pt-1.5 border-t border-emerald-100/50 mt-1">
                                     Muestra este código al cajero o dile tu nombre para retirar tu pedido y formalizar el plan de pago.
                                 </p>
@@ -5094,7 +5094,7 @@ export default function ClientPortal() {
                                         <IconChevronLeft size={14} />
                                         <span>Volver</span>
                                     </button>
-                                    <span className={`text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-wider ${
+                                    <span className={`text-[10px] px-3 py-1 rounded-full font-black   ${
                                         activeDeliveryOrder.status === "PENDING"
                                             ? "bg-amber-50 border border-amber-100 text-amber-955"
                                             : activeDeliveryOrder.status === "APPROVED"
@@ -5109,8 +5109,8 @@ export default function ClientPortal() {
                                     }`}>
                                         {activeDeliveryOrder.status === "PENDING" ? "Verificando" :
                                          activeDeliveryOrder.status === "APPROVED" ? "Aprobado" :
-                                         activeDeliveryOrder.status === "SHIPPED" ? "Salida de Tienda" :
-                                         activeDeliveryOrder.status === "ON_THE_WAY" ? "En Camino" :
+                                         activeDeliveryOrder.status === "SHIPPED" ? "Salida de tienda" :
+                                         activeDeliveryOrder.status === "ON_THE_WAY" ? "En camino" :
                                          activeDeliveryOrder.status === "DELIVERED" ? "Entregado" :
                                          activeDeliveryOrder.status === "CANCELLED" ? "Cancelado" :
                                          activeDeliveryOrder.status === "REJECTED" ? "Rechazado" :
@@ -5181,7 +5181,7 @@ export default function ClientPortal() {
                                             <div ref={trackingMapContainerRef} className="w-full h-full" />
                                             {activeDeliveryOrder.address && (
                                                 <div className="absolute bottom-3 left-3 right-3 bg-white/95 backdrop-blur-sm px-4 py-2.5 rounded-xl shadow-md border border-zinc-100 text-xs text-zinc-700 font-semibold">
-                                                    <p className="font-bold text-zinc-800 text-[10px] uppercase tracking-wider mb-0.5">Dirección de Entrega</p>
+                                                    <p className="font-bold text-zinc-800 text-[10px] mb-0.5">Dirección de entrega</p>
                                                     <p className="text-zinc-600 leading-relaxed font-medium">{activeDeliveryOrder.address}</p>
                                                 </div>
                                             )}
@@ -5189,7 +5189,7 @@ export default function ClientPortal() {
 
                                         {/* Timeline route progress card */}
                                         <div className="bg-white border border-zinc-100 rounded-2xl p-5 space-y-4 shadow-sm">
-                                            <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">Estado del Envío</h4>
+                                            <h4 className="text-[10px] font-black text-zinc-400">Estado del envío</h4>
                                             <div className="relative pl-6 space-y-6">
                                                 {/* Vertical line */}
                                                 <div className="absolute left-2.5 top-2.5 bottom-2.5 w-0.5 bg-zinc-100" />
@@ -5198,7 +5198,7 @@ export default function ClientPortal() {
                                                 <div className="relative flex gap-3">
                                                     <div className="absolute -left-[20px] size-4 rounded-full bg-emerald-500 border-4 border-white flex items-center justify-center shadow-sm" />
                                                     <div>
-                                                        <span className="block text-xs font-bold text-zinc-800">Pedido Aprobado</span>
+                                                        <span className="block text-xs font-bold text-zinc-800">Pedido aprobado</span>
                                                         <span className="block text-[10px] text-zinc-500 font-semibold">El comercio aceptó tu solicitud</span>
                                                     </div>
                                                 </div>
@@ -5219,7 +5219,7 @@ export default function ClientPortal() {
                                                             (activeDeliveryOrder.status === "SHIPPED" || activeDeliveryOrder.status === "ON_THE_WAY" || activeDeliveryOrder.status === "DELIVERED")
                                                                 ? "text-zinc-800"
                                                                 : "text-zinc-400"
-                                                        }`}>Salida de Tienda</span>
+                                                        }`}>Salida de tienda</span>
                                                         <span className="block text-[10px] font-semibold text-zinc-500">El pedido salió del establecimiento</span>
                                                     </div>
                                                 </div>
@@ -5240,7 +5240,7 @@ export default function ClientPortal() {
                                                             (activeDeliveryOrder.status === "ON_THE_WAY" || activeDeliveryOrder.status === "DELIVERED")
                                                                 ? "text-zinc-800"
                                                                 : "text-zinc-400"
-                                                        }`}>En Camino</span>
+                                                        }`}>En camino</span>
                                                         <span className="block text-[10px] font-semibold text-zinc-500">El repartidor va hacia tu ubicación</span>
                                                     </div>
                                                 </div>
@@ -5278,7 +5278,7 @@ export default function ClientPortal() {
                                                             <span>Cancelando...</span>
                                                         </>
                                                     ) : (
-                                                        <span>Cancelar Pedido</span>
+                                                        <span>Cancelar pedido</span>
                                                     )}
                                                 </Button>
                                             </div>
@@ -5320,8 +5320,8 @@ export default function ClientPortal() {
                                         <IconChevronLeft size={14} />
                                         <span>Volver</span>
                                     </button>
-                                    <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-955 px-3 py-1 rounded-full font-black uppercase tracking-wider">
-                                        Mis Pedidos
+                                    <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-955 px-3 py-1 rounded-full font-black">
+                                        Mis pedidos
                                     </span>
                                 </div>
 
@@ -5382,14 +5382,14 @@ export default function ClientPortal() {
                                                 >
                                                     <div className="flex items-start justify-between gap-2">
                                                         <div className="space-y-0.5">
-                                                            <span className="text-[9px] text-zinc-400 font-extrabold uppercase font-mono tracking-wider">
+                                                            <span className="text-[9px] text-zinc-400 font-extrabold font-mono">
                                                                 Pedido #{order.id.slice(0, 8)}
                                                             </span>
                                                             <h4 className="text-xs font-black text-zinc-800 group-hover:text-amber-500 transition-colors">
-                                                                {order.address || "Dirección de Entrega"}
+                                                                {order.address || "Dirección de entrega"}
                                                             </h4>
                                                         </div>
-                                                        <span className={`text-[9px] px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider ${statusColor}`}>
+                                                        <span className={`text-[9px] px-2.5 py-0.5 rounded-full font-black   ${statusColor}`}>
                                                             {statusLabel}
                                                         </span>
                                                     </div>

@@ -74,7 +74,7 @@ export const getPurchaseOrdersColumns = (actions: {
   },
   {
     accessorKey: "header",
-    header: "Orden de Compra",
+    header: "Orden de compra",
     cell: ({ row }) => {
       const data = JSON.parse(row.original.header || '{}');
       return (
@@ -86,8 +86,8 @@ export const getPurchaseOrdersColumns = (actions: {
             <span className="text-sm font-medium tracking-tight text-foreground leading-none mb-1.5">
               {data.number || `OC-${row.original.id.substring(0, 4)}`}
             </span>
-            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">
-              PROCURA E INVENTARIO
+            <span className="text-[10px] text-muted-foreground font-medium tracking-tight">
+              Procura e inventario
             </span>
           </div>
         </div>
@@ -113,7 +113,7 @@ export const getPurchaseOrdersColumns = (actions: {
   },
   {
     accessorKey: "total",
-    header: "Inversión Total",
+    header: "Inversión total",
     cell: ({ row }) => {
       const data = JSON.parse(row.original.total || '{}');
       return (
@@ -136,10 +136,10 @@ export const getPurchaseOrdersColumns = (actions: {
       const status = data.status;
       
       const config: any = {
-        DRAFT: { label: "BORRADOR", color: "bg-slate-500/10 text-slate-600", icon: <IconClock size={14} /> },
-        SENT: { label: "ENVIADA", color: "bg-blue-500/10 text-blue-600", icon: <IconTruck size={14} /> },
-        RECEIVED: { label: "RECIBIDA", color: "bg-emerald-500/10 text-emerald-600", icon: <IconCircleCheckFilled size={14} /> },
-        CANCELLED: { label: "ANULADA", color: "bg-rose-500/10 text-rose-600", icon: <IconBan size={14} /> },
+        DRAFT: { label: "Borrador", color: "bg-slate-500/10 text-slate-600", icon: <IconClock size={14} /> },
+        SENT: { label: "Enviada", color: "bg-blue-500/10 text-blue-600", icon: <IconTruck size={14} /> },
+        RECEIVED: { label: "Recibida", color: "bg-emerald-500/10 text-emerald-600", icon: <IconCircleCheckFilled size={14} /> },
+        CANCELLED: { label: "Anulada", color: "bg-rose-500/10 text-rose-600", icon: <IconBan size={14} /> },
       };
 
       const style = config[status] || config.DRAFT;
@@ -181,7 +181,7 @@ export const getPurchaseOrdersColumns = (actions: {
           <DropdownMenuContent align="end" className="w-56 bg-zinc-950 border-[#79716b]/30 text-white shadow-2xl">
             <DropdownMenuItem onClick={() => router.push(`/dashboard/inventario/compras/detalle?id=${row.original.id}`)} className="cursor-pointer focus:bg-[#79716b]/20 focus:text-white">
               <IconExternalLink className="mr-2 h-4 w-4" />
-              Ver Detalles / Tracking
+              Ver detalles / tracking
             </DropdownMenuItem>
             
             <DropdownMenuSeparator className="bg-[#79716b]/20" />
@@ -189,7 +189,7 @@ export const getPurchaseOrdersColumns = (actions: {
             {(status === "SENT" || status === "DRAFT") && (
               <DropdownMenuItem onClick={() => actions.onReceive(row.original.id)} className="text-emerald-400 focus:text-emerald-400 focus:bg-emerald-500/10 cursor-pointer">
                 <IconCircleCheckFilled className="mr-2 h-4 w-4" />
-                Recibir Mercancía
+                Recibir mercancía
               </DropdownMenuItem>
             )}
 
@@ -197,12 +197,12 @@ export const getPurchaseOrdersColumns = (actions: {
               <>
                 <DropdownMenuItem onClick={() => actions.onSend(row.original.id)} className="text-blue-400 focus:text-blue-400 focus:bg-blue-500/10 cursor-pointer">
                   <IconTruck className="mr-2 h-4 w-4" />
-                  Marcar como ENVIADA
+                  Marcar como enviada
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-[#79716b]/20" />
                 <DropdownMenuItem className="text-rose-400 focus:text-rose-400 focus:bg-rose-500/10 cursor-pointer" onClick={() => actions.onDelete(row.original.id)}>
                   <IconBan className="mr-2 h-4 w-4" />
-                  Anular Orden
+                  Anular orden
                 </DropdownMenuItem>
               </>
             )}

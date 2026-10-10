@@ -89,24 +89,24 @@ export default function ReportsPage() {
       {/* Header with Dashboard Style Actions */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 px-4 lg:px-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Reportes de Inteligencia</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Reportes de inteligencia</h1>
           <p className="text-sm text-muted-foreground font-medium">Análisis de rendimiento, ventas y métricas clave en tiempo real.</p>
         </div>
         <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="gap-2 h-9">
-                <IconFilter size={16} /> Filtros Avanzados
+                <IconFilter size={16} /> Filtros avanzados
             </Button>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button size="sm" className="gap-2 h-9 shadow-md">
                         <IconDownload size={16} /> 
-                        <span className="hidden lg:inline">Exportar Datos</span>
+                        <span className="hidden lg:inline">Exportar datos</span>
                         <span className="lg:hidden">Exportar</span>
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48 border-none shadow-2xl rounded-xl">
-                    <DropdownMenuItem className="text-xs">Descargar PDF (Reporte)</DropdownMenuItem>
-                    <DropdownMenuItem className="text-xs">Excel / CSV (Libro)</DropdownMenuItem>
+                    <DropdownMenuItem className="text-xs">Descargar PDF (reporte)</DropdownMenuItem>
+                    <DropdownMenuItem className="text-xs">Excel / CSV (libro)</DropdownMenuItem>
                     <DropdownMenuItem className="text-xs font-semibold text-primary">Enviar a correo</DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
@@ -120,7 +120,7 @@ export default function ReportsPage() {
       <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card text-secondary-foreground">
           <Card className="@container/card shadow-sm border-none">
             <CardHeader>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Ventas Totales</CardDescription>
+              <CardDescription className="text-[10px] font-black text-muted-foreground">Ventas totales</CardDescription>
               <CardTitle className="text-2xl font-bold tabular-nums @[250px]/card:text-3xl">
                 ${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </CardTitle>
@@ -132,7 +132,7 @@ export default function ReportsPage() {
               </CardAction>
             </CardHeader>
             <CardFooter className="flex-col items-start gap-1 text-[10px] pb-5">
-              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground uppercase tracking-tight">
+              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground tracking-tight">
                 Crecimiento mensual sostenido <IconTrendingUp className="size-3 text-primary" />
               </div>
               <div className="text-muted-foreground/60 font-medium italic">
@@ -143,7 +143,7 @@ export default function ReportsPage() {
 
           <Card className="@container/card shadow-sm border-none">
             <CardHeader>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Órdenes Realizadas</CardDescription>
+              <CardDescription className="text-[10px] font-black text-muted-foreground">Órdenes realizadas</CardDescription>
               <CardTitle className="text-2xl font-bold tabular-nums @[250px]/card:text-3xl text-emerald-600">
                 {totalOrders}
               </CardTitle>
@@ -155,7 +155,7 @@ export default function ReportsPage() {
               </CardAction>
             </CardHeader>
             <CardFooter className="flex-col items-start gap-1 text-[10px] pb-5">
-              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground uppercase tracking-tight">
+              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground tracking-tight">
                 Volumen de transacciones <IconCheck className="size-3 text-emerald-500" />
               </div>
               <div className="text-muted-foreground/60 font-medium italic">
@@ -166,7 +166,7 @@ export default function ReportsPage() {
 
           <Card className="@container/card shadow-sm border-none">
             <CardHeader>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Ticket Promedio</CardDescription>
+              <CardDescription className="text-[10px] font-black text-muted-foreground">Ticket promedio</CardDescription>
               <CardTitle className="text-2xl font-bold tabular-nums @[250px]/card:text-3xl text-amber-600">
                 ${avgTicket.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </CardTitle>
@@ -178,7 +178,7 @@ export default function ReportsPage() {
               </CardAction>
             </CardHeader>
             <CardFooter className="flex-col items-start gap-1 text-[10px] pb-5">
-              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground uppercase tracking-tight">
+              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground tracking-tight">
                 Aumento en valor de cesta <IconTrendingUp className="size-3 text-amber-500" />
               </div>
               <div className="text-muted-foreground/60 font-medium italic">
@@ -189,7 +189,7 @@ export default function ReportsPage() {
 
           <Card className="@container/card shadow-sm border-none">
             <CardHeader>
-              <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Clientes Registrados</CardDescription>
+              <CardDescription className="text-[10px] font-black text-muted-foreground">Clientes registrados</CardDescription>
               <CardTitle className="text-2xl font-bold tabular-nums @[250px]/card:text-3xl text-primary font-black">
                 {Array.from(new Set(sales.map(s => s.clientId))).filter(Boolean).length || 0}
               </CardTitle>
@@ -201,7 +201,7 @@ export default function ReportsPage() {
               </CardAction>
             </CardHeader>
             <CardFooter className="flex-col items-start gap-1 text-[10px] pb-5">
-              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground uppercase tracking-tight">
+              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground tracking-tight">
                 Cartera de clientes con compras <IconCheck className="size-3 text-primary" />
               </div>
               <div className="text-muted-foreground/60 font-medium italic">
@@ -224,11 +224,11 @@ export default function ReportsPage() {
                   <IconReportAnalytics className="text-primary" />
               </div>
               <div className="text-center">
-                  <h3 className="font-bold text-lg">Reporte Detallado de Auditoría</h3>
+                  <h3 className="font-bold text-lg">Reporte detallado de auditoría</h3>
                   <p className="text-sm text-muted-foreground max-w-sm mx-auto">Consulte el desglose ítem por ítem de cada transacción realizada en el periodo actual con filtros avanzados de sucursal.</p>
               </div>
               <Button size="sm" variant="outline" className="gap-2 bg-background font-semibold">
-                  Acceder al Auditor <IconChevronsRight size={16} />
+                  Acceder al auditor <IconChevronsRight size={16} />
               </Button>
           </Card>
       </div>

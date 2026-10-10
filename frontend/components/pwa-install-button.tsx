@@ -42,7 +42,7 @@ export function PWAInstallButton() {
       className="w-full mt-2 gap-2 bg-primary/5 border-primary/20 hover:bg-primary/10 text-primary font-semibold text-[11px] h-8 rounded-lg"
     >
       <IconDeviceMobileDown size={14} />
-      Instalar App de Chat
+      Instalar app de chat
     </Button>
   );
 }

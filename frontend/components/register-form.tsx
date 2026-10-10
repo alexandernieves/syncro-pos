@@ -165,26 +165,22 @@ export function RegisterForm() {
       className="h-dvh w-full text-foreground flex flex-col overflow-hidden selection:bg-primary/20"
       style={{
         background: isDark
-          ? "radial-gradient(ellipse 90% 70% at 15% 0%, #24304e 0%, #171f34 38%, #0b0e17 100%)"
-          : "radial-gradient(ellipse 90% 70% at 15% 0%, #dde5f7 0%, #eaeef6 42%, #f8f9fb 100%)",
+          ? "radial-gradient(ellipse 90% 70% at 15% 0%, #351a10 0%, #22120b 38%, #0f0906 100%)"
+          : "radial-gradient(ellipse 90% 70% at 15% 0%, #fdebe4 0%, #f7eae4 42%, #f6f5f2 100%)",
       }}
     >
-      {/* Ambient background — the CSS gradient above is the visual source
-          of truth (always visible, zero dependency). The dot field is a
-          pure Canvas2D + SVG layer on top for interactive depth: no WebGL,
-          so it renders identically on every device and can never wash the
-          gradient out the way a shader can. */}
+      {/* Ambient background — warm orange brand gradient with interactive dot field */}
       <div className="fixed inset-0 pointer-events-none">
         <DotField
-          dotRadius={1.4}
-          dotSpacing={15}
-          cursorRadius={420}
+          dotRadius={2.8}
+          dotSpacing={16}
+          cursorRadius={380}
           bulgeOnly
-          bulgeStrength={60}
-          glowRadius={220}
-          gradientFrom={isDark ? "rgba(148, 168, 214, 0.28)" : "rgba(51, 69, 107, 0.4)"}
-          gradientTo={isDark ? "rgba(180, 195, 224, 0.16)" : "rgba(140, 155, 185, 0.35)"}
-          glowColor={isDark ? "#24304e" : "#dde5f7"}
+          bulgeStrength={85}
+          glowRadius={240}
+          gradientFrom={isDark ? "rgba(242, 107, 58, 0.7)" : "rgba(230, 95, 45, 0.55)"}
+          gradientTo={isDark ? "rgba(242, 107, 58, 0.4)" : "rgba(210, 80, 35, 0.35)"}
+          glowColor={isDark ? "#4d2215" : "#fcd8c9"}
         />
       </div>
 
@@ -193,9 +189,9 @@ export function RegisterForm() {
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <a href="/" className="flex items-center gap-2.5">
             <div className="size-8 rounded-lg overflow-hidden border border-border flex items-center justify-center bg-card">
-              <img src="/syncro.png" alt="SYNCRO POS" className="size-full object-cover" />
+              <img src="/syncro.png" alt="Syncro CRM" className="size-full object-cover" />
             </div>
-            <span className="font-bold text-sm tracking-tight text-foreground">SYNCRO POS</span>
+            <span className="font-bold text-sm tracking-tight text-foreground">Syncro CRM</span>
           </a>
 
 
@@ -219,7 +215,7 @@ export function RegisterForm() {
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
           className="w-full max-w-sm"
         >
-              <div className="rounded-xl border border-border bg-card p-6 shadow-md">
+              <div className="rounded-xl border border-border/80 bg-card p-6 shadow-sm">
                 <h2 className="text-lg font-bold tracking-tight text-foreground mb-4">
                   Crea tu cuenta
                 </h2>
@@ -233,7 +229,7 @@ export function RegisterForm() {
                       <IconBuildingStore className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                       <Input
                         id="name"
-                        placeholder="Ej. Bodega La Esquina"
+                        placeholder="Ej. Bodega la esquina"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         className="pl-9 h-9 text-sm"
@@ -346,7 +342,7 @@ export function RegisterForm() {
       </main>
 
       <footer className="relative z-10 shrink-0 w-full px-6 py-2.5 text-center text-[11px] text-muted-foreground">
-        SYNCRO POS © {new Date().getFullYear()}
+        Syncro CRM © {new Date().getFullYear()}
       </footer>
     </div>
   );

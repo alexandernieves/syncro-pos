@@ -76,7 +76,7 @@ export function NavSecondary({
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-center">
-              Centro de Ayuda
+              Centro de ayuda
             </DialogTitle>
             <DialogDescription className="text-center pt-1">
               ¿En qué podemos ayudarte hoy?
@@ -98,8 +98,8 @@ export function NavSecondary({
                   <IconBrandWhatsapp size={20} />
                 </div>
                 <div className="flex flex-col items-start gap-0.5">
-                  <span className="font-semibold">WhatsApp Business</span>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Soporte Inmediato</span>
+                  <span className="font-semibold">WhatsApp business</span>
+                  <span className="text-[10px] text-muted-foreground">Soporte inmediato</span>
                 </div>
               </a>
             </Button>
@@ -115,14 +115,14 @@ export function NavSecondary({
                   <IconMail size={20} />
                 </div>
                 <div className="flex flex-col items-start gap-0.5">
-                  <span className="font-semibold">Correo Electrónico</span>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Consultas Generales</span>
+                  <span className="font-semibold">Correo electrónico</span>
+                  <span className="text-[10px] text-muted-foreground">Consultas generales</span>
                 </div>
               </a>
             </Button>
           </div>
-          <div className="text-center text-[9px] text-muted-foreground/50 font-bold uppercase tracking-[0.2em]">
-            Desarrollado por Syncro Solution
+          <div className="text-center text-[9px] text-muted-foreground/50 font-bold">
+            Desarrollado por Syncro solution
           </div>
         </DialogContent>
       </Dialog>

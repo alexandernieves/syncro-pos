@@ -178,7 +178,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
   },
   {
     accessorKey: "type",
-    header: "Tipo de Sección",
+    header: "Tipo de sección",
     cell: ({ row }) => (
       <div className="w-32">
         <Badge variant="outline" className="text-muted-foreground px-1.5">
@@ -275,9 +275,9 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
               <SelectValue placeholder="Assign reviewer" />
             </SelectTrigger>
             <SelectContent align="end">
-              <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
+              <SelectItem value="Eddie Lake">Eddie lake</SelectItem>
               <SelectItem value="Jamik Tashpulatov">
-                Jamik Tashpulatov
+                Jamik tashpulatov
               </SelectItem>
             </SelectContent>
           </Select>
@@ -296,7 +296,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
             size="icon"
           >
             <IconDotsVertical />
-            <span className="sr-only">Open menu</span>
+            <span className="sr-only">Abrir menú</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-32">
@@ -420,27 +420,27 @@ export function DataTable({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="outline">Outline</SelectItem>
-            <SelectItem value="past-performance">Past Performance</SelectItem>
-            <SelectItem value="key-personnel">Key Personnel</SelectItem>
-            <SelectItem value="focus-documents">Focus Documents</SelectItem>
+            <SelectItem value="past-performance">Rendimiento anterior</SelectItem>
+            <SelectItem value="key-personnel">Key personnel</SelectItem>
+            <SelectItem value="focus-documents">Focus documents</SelectItem>
           </SelectContent>
         </Select>
         <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex">
           <TabsTrigger value="outline">Outline</TabsTrigger>
           <TabsTrigger value="past-performance">
-            Past Performance <Badge variant="secondary">3</Badge>
+            Rendimiento anterior <Badge variant="secondary">3</Badge>
           </TabsTrigger>
           <TabsTrigger value="key-personnel">
-            Key Personnel <Badge variant="secondary">2</Badge>
+            Key personnel <Badge variant="secondary">2</Badge>
           </TabsTrigger>
-          <TabsTrigger value="focus-documents">Focus Documents</TabsTrigger>
+          <TabsTrigger value="focus-documents">Focus documents</TabsTrigger>
         </TabsList>
         <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
                 <IconLayoutColumns />
-                <span className="hidden lg:inline">Personalizar Columnas</span>
+                <span className="hidden lg:inline">Personalizar columnas</span>
                 <span className="lg:hidden">Columnas</span>
                 <IconChevronDown />
               </Button>
@@ -471,7 +471,7 @@ export function DataTable({
           </DropdownMenu>
           <Button variant="outline" size="sm">
             <IconPlus />
-            <span className="hidden lg:inline">Agregar Sección</span>
+            <span className="hidden lg:inline">Agregar sección</span>
           </Button>
         </div>
       </div>
@@ -715,8 +715,8 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
                 </div>
                 <div className="text-muted-foreground">
                   Showing total visitors for the last 6 months. This is just
-                  some random text to test the layout. It spans multiple lines
-                  and should wrap around.
+                  Some random text to test the layout. It spans multiple lines
+                  And should wrap around.
                 </div>
               </div>
               <Separator />
@@ -739,15 +739,15 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
                       Tabla de contenidos
                     </SelectItem>
                     <SelectItem value="Executive Summary">
-                      Resumen Ejecutivo
+                      Resumen ejecutivo
                     </SelectItem>
                     <SelectItem value="Technical Approach">
-                      Enfoque Técnico
+                      Enfoque técnico
                     </SelectItem>
                     <SelectItem value="Design">Diseño</SelectItem>
                     <SelectItem value="Capabilities">Capacidades</SelectItem>
                     <SelectItem value="Focus Documents">
-                      Documentos de Enfoque
+                      Documentos de enfoque
                     </SelectItem>
                     <SelectItem value="Narrative">Narrativo</SelectItem>
                     <SelectItem value="Cover Page">Portada</SelectItem>
@@ -785,11 +785,11 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
                   <SelectValue placeholder="Seleccionar revisor" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
+                  <SelectItem value="Eddie Lake">Eddie lake</SelectItem>
                   <SelectItem value="Jamik Tashpulatov">
-                    Jamik Tashpulatov
+                    Jamik tashpulatov
                   </SelectItem>
-                  <SelectItem value="Emily Whalen">Emily Whalen</SelectItem>
+                  <SelectItem value="Emily Whalen">Emily whalen</SelectItem>
                 </SelectContent>
               </Select>
             </div>

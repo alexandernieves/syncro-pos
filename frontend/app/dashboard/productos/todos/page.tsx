@@ -24,13 +24,19 @@ import {
   IconTrendingUp, IconAlertCircle, IconBolt, IconScan, IconCamera,
   IconArrowRight, IconX, IconLayoutGrid, IconLayoutList,
   IconDownload, IconUpload, IconFileText, IconDeviceFloppy, IconArrowLeft,
-  IconSearch, IconAlertTriangle
+  IconSearch, IconAlertTriangle, IconBuildingStore
 } from "@tabler/icons-react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { PosTable } from "@/components/pos-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SyncroShopBadges } from "@/components/syncro-shop/syncro-shop-badges";
+import { SyncroShopPublishPanel } from "@/components/syncro-shop/syncro-shop-publish-panel";
+import { SpecificationsEditor, type Specification } from "@/components/syncro-shop/specifications-editor";
+import { ProductGalleryEditor, MAX_PRODUCT_IMAGES } from "@/components/syncro-shop/product-gallery-editor";
+import { LandingBlocksEditor, type LandingBlock } from "@/components/syncro-shop/landing-blocks-editor";
+import { IconStar, IconStarFilled } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
@@ -64,6 +70,11 @@ type Product = {
   totalStock: number;
   status: 'CRITICAL' | 'LOW' | 'NORMAL';
   image?: string;
+  isPublishedOnSyncroShop?: boolean;
+  isFeaturedOnSyncroShop?: boolean;
+  syncroShopBranchId?: string | null;
+  syncroShopBranchName?: string | null;
+  specifications?: Specification[];
   category?: { id: string, name: string };
   supplier?: { id: string, name: string };
   variants: Variant[];
@@ -162,7 +173,17 @@ export default function ProductosPage() {
   const [editCategoryId, setEditCategoryId] = useState("");
   const [editSupplierId, setEditSupplierId] = useState("");
   const [editIsWeighable, setEditIsWeighable] = useState(false);
-  const [editImage, setEditImage] = useState("");
+  const [isSyncroVendor, setIsSyncroVendor] = useState(false);
+  const [editIsPublishedOnSyncroShop, setEditIsPublishedOnSyncroShop] = useState(false);
+  const [editImages, setEditImages] = useState<string[]>([]);
+  const editImage = editImages[0] || "";
+  const [editIsFeatured, setEditIsFeatured] = useState(false);
+  const [editSpecifications, setEditSpecifications] = useState<Specification[]>([]);
+  const [editLandingBlocks, setEditLandingBlocks] = useState<LandingBlock[]>([]);
+  const [featuredCount, setFeaturedCount] = useState(0);
+  const [maxFeatured, setMaxFeatured] = useState(5);
+  const [branchNames, setBranchNames] = useState<Record<string, string>>({});
+  const [shopFilter, setShopFilter] = useState<'all' | 'published' | 'featured' | 'unpublished'>('all');
   const [editVariants, setEditVariants] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -170,6 +191,19 @@ export default function ProductosPage() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const editFileInputRef = React.useRef<HTMLInputElement>(null);
   const editCameraInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const storedVendor = localStorage.getItem("isSyncroVendor");
+    if (storedVendor !== null) {
+      setIsSyncroVendor(storedVendor === "true");
+    }
+    const handleUpdate = () => {
+      const stored = localStorage.getItem("isSyncroVendor");
+      if (stored !== null) setIsSyncroVendor(stored === "true");
+    };
+    window.addEventListener("settingsUpdated", handleUpdate);
+    return () => window.removeEventListener("settingsUpdated", handleUpdate);
+  }, []);
 
   // Image Search States
   const [isImageSearchOpen, setIsImageSearchOpen] = useState(false);
@@ -222,12 +256,17 @@ export default function ProductosPage() {
       try {
         const token = localStorage.getItem("token");
         const headers = { Authorization: `Bearer ${token}` };
-        const [cRes, sRes] = await Promise.all([
+        const [cRes, sRes, bRes] = await Promise.all([
           fetch(`${API}/categories`, { headers }),
           fetch(`${API}/suppliers`, { headers }),
+          fetch(`${API}/branches`, { headers }),
         ]);
         if (cRes.ok) setCategories(await cRes.json());
         if (sRes.ok) setSuppliers(await sRes.json());
+        if (bRes.ok) {
+          const branches = await bRes.json();
+          setBranchNames(Object.fromEntries((Array.isArray(branches) ? branches : []).map((b: any) => [b.id, b.name])));
+        }
       } catch (e) {
         console.error("Error loading categories/suppliers", e);
       }
@@ -245,7 +284,11 @@ export default function ProductosPage() {
     setEditCategoryId((p as any).categoryId || p.category?.id || "");
     setEditSupplierId((p as any).supplierId || p.supplier?.id || "");
     setEditIsWeighable((p as any).isWeighable || false);
-    setEditImage(p.image || "");
+    setEditIsPublishedOnSyncroShop(p.isPublishedOnSyncroShop || false);
+    setEditIsFeatured(p.isFeaturedOnSyncroShop || false);
+    setEditSpecifications(Array.isArray(p.specifications) ? p.specifications : []);
+    setEditLandingBlocks([]);
+    setEditImages(p.image ? [p.image] : []);
     setEditVariants(p.variants ? p.variants.map((v: any) => ({
       id: v.id,
       name: v.name,
@@ -258,9 +301,36 @@ export default function ProductosPage() {
       minStock: String(v.minStock),
       promoPrice: String(v.promoPrice || ""),
       bulkPrice: String(v.bulkPrice || ""),
+      showOnSyncroShop: v.showOnSyncroShop !== false,
     })) : []);
 
     setDetailOpen(true); 
+
+    // Gallery and featured counter for the Syncro Shop section
+    try {
+      const token = localStorage.getItem("token");
+      const headers = { "Authorization": `Bearer ${token}` };
+      const [imgRes, featRes, fullRes] = await Promise.all([
+        fetch(`${API}/products/${p.id}/images`, { headers }),
+        fetch(`${API}/products/syncro-shop/featured-count`, { headers }),
+        fetch(`${API}/products/${p.id}`, { headers }),
+      ]);
+      if (fullRes.ok) {
+        const full = await fullRes.json();
+        if (Array.isArray(full.landingBlocks)) setEditLandingBlocks(full.landingBlocks);
+        if (Array.isArray(full.specifications)) setEditSpecifications(full.specifications);
+      }
+      if (imgRes.ok) {
+        const imgs = await imgRes.json();
+        if (Array.isArray(imgs) && imgs.length > 0) setEditImages(imgs.map((i: any) => i.url));
+      }
+      if (featRes.ok) {
+        const { count, max } = await featRes.json();
+        setFeaturedCount(Math.max(0, count - (p.isFeaturedOnSyncroShop ? 1 : 0)));
+        setMaxFeatured(max);
+      }
+    } catch (e) {}
+
     
     // Fetch stats
     try {
@@ -272,6 +342,30 @@ export default function ProductosPage() {
       });
       if (res.ok) setStats(await res.json());
     } catch (e) {}
+  };
+
+  const addEditImage = (url: string) => {
+    setEditImages(prev => {
+      if (prev.includes(url)) return prev;
+      if (prev.length >= MAX_PRODUCT_IMAGES) {
+        toast.error(`Máximo ${MAX_PRODUCT_IMAGES} imágenes por producto`);
+        return prev;
+      }
+      return [...prev, url];
+    });
+  };
+
+  /** Uploads a file for the landing page editor and returns its public URL. */
+  const uploadFile = async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${API}/uploads`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` },
+      body: formData,
+    });
+    if (!res.ok) throw new Error("upload failed");
+    return (await res.json()).url as string;
   };
 
   const handleEditImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -294,7 +388,7 @@ export default function ProductosPage() {
 
       if (res.ok) {
         const data = await res.json();
-        setEditImage(data.url);
+        addEditImage(data.url);
         toast.success("Imagen subida exitosamente");
       } else {
         toast.error("Error al subir la imagen");
@@ -323,7 +417,7 @@ export default function ProductosPage() {
         const data = await res.json();
         setSearchResults(data);
       } else {
-        toast.error("Error al buscar imágenes en Internet");
+        toast.error("Error al buscar imágenes en internet");
       }
     } catch (e) {
       toast.error("Error de conexión al buscar imágenes");
@@ -348,8 +442,8 @@ export default function ProductosPage() {
 
       if (res.ok) {
         const data = await res.json();
-        setEditImage(data.url);
-        toast.success("Imagen de Internet vinculada con éxito");
+        addEditImage(data.url);
+        toast.success("Imagen de internet vinculada con éxito");
         setIsImageSearchOpen(false);
       } else {
         toast.error("Error al descargar e importar la imagen");
@@ -401,7 +495,11 @@ export default function ProductosPage() {
         categoryId: editCategoryId || null,
         supplierId: editSupplierId || null,
         isWeighable: editIsWeighable,
-        image: editImage || null,
+        isPublishedOnSyncroShop: isSyncroVendor ? editIsPublishedOnSyncroShop : false,
+        isFeaturedOnSyncroShop: isSyncroVendor && editIsPublishedOnSyncroShop ? editIsFeatured : false,
+        branchId: localStorage.getItem("currentBranchId") || undefined,
+        specifications: editSpecifications.filter(s => s.label.trim() && s.value.trim()),
+        landingBlocks: editLandingBlocks,
         variants: editVariants.map(v => ({
           id: v.id,
           name: v.name,
@@ -414,6 +512,7 @@ export default function ProductosPage() {
           minStock: Number(v.minStock),
           promoPrice: v.promoPrice ? Number(v.promoPrice) : null,
           bulkPrice: v.bulkPrice ? Number(v.bulkPrice) : null,
+          showOnSyncroShop: v.showOnSyncroShop !== false,
         }))
       };
 
@@ -427,7 +526,37 @@ export default function ProductosPage() {
       });
 
       if (res.ok) {
+        const saved = await res.json().catch(() => ({}));
+        const imgRes = await fetch(`${API}/products/${selectedProduct.id}/images`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify({ urls: editImages }),
+        });
+        if (!imgRes.ok) toast.error("El producto se guardó, pero no se pudieron guardar las imágenes");
         toast.success("Producto actualizado correctamente");
+        const shopFields = {
+          isPublishedOnSyncroShop: Boolean(saved.isPublishedOnSyncroShop),
+          isFeaturedOnSyncroShop: Boolean(saved.isFeaturedOnSyncroShop),
+          syncroShopBranchId: saved.syncroShopBranchId ?? null,
+          syncroShopBranchName: saved.syncroShopBranchId ? branchNames[saved.syncroShopBranchId] ?? null : null,
+          specifications: editSpecifications,
+        };
+        try {
+          await db.products.update(selectedProduct.id, { 
+            ...shopFields,
+            name: editName,
+            description: editDescription,
+            image: editImage,
+          });
+        } catch (dbErr) {}
+        setProducts(prev => prev.map(p => p.id === selectedProduct.id ? { 
+          ...p, 
+          ...shopFields,
+          name: editName,
+          description: editDescription,
+          image: editImage,
+          isWeighable: editIsWeighable,
+        } : p));
         setDetailOpen(false);
         load(); // Refresh products list
       } else {
@@ -852,6 +981,60 @@ export default function ProductosPage() {
     );
   };
 
+  const applyShopFields = async (id: string, saved: any) => {
+    const fields = {
+      isPublishedOnSyncroShop: Boolean(saved.isPublishedOnSyncroShop),
+      isFeaturedOnSyncroShop: Boolean(saved.isFeaturedOnSyncroShop),
+      syncroShopBranchId: saved.syncroShopBranchId ?? null,
+      syncroShopBranchName: saved.syncroShopBranchId ? branchNames[saved.syncroShopBranchId] ?? null : null,
+    };
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, ...fields } : p));
+    try { await db.products.update(id, fields); } catch (e) {}
+  };
+
+  const toggleSyncroShop = async (p: Product, change: { published?: boolean; featured?: boolean }) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/products/${p.id}/syncro-shop`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ ...change, branchId: localStorage.getItem("currentBranchId") || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return toast.error(data.message || "No se pudo actualizar Syncro Shop");
+      await applyShopFields(p.id, data);
+      if (change.published !== undefined) {
+        toast.success(change.published ? `"${p.name}" publicado en Syncro Shop` : `"${p.name}" retirado de Syncro Shop`);
+      } else {
+        toast.success(change.featured ? `"${p.name}" ahora es destacado` : `"${p.name}" ya no es destacado`);
+      }
+    } catch (e) {
+      toast.error("Error de conexión");
+    }
+  };
+
+  const handleBulkSyncroShop = async (published: boolean) => {
+    const productIds = Object.keys(rowSelection);
+    if (productIds.length === 0) return;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/products/syncro-shop/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ productIds, published, branchId: localStorage.getItem("currentBranchId") || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return toast.error(data.message || "No se pudo actualizar Syncro Shop");
+      toast.success(published
+        ? `${data.updated} producto(s) publicados${data.branch ? ` desde ${data.branch.name}` : ""}`
+        : `${data.updated} producto(s) retirados de Syncro Shop`);
+      setRowSelection({});
+      load();
+    } catch (e) {
+      toast.error("Error de conexión");
+    }
+  };
+
   const columns: ColumnDef<Product>[] = [
     {
       id: "select",
@@ -892,7 +1075,14 @@ export default function ProductosPage() {
               )}
             </div>
             <div>
-              <p className="font-bold text-sm leading-tight text-foreground group-hover/row:text-primary transition-colors">{p.name}</p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <p className="font-bold text-sm leading-tight text-foreground group-hover/row:text-primary transition-colors">{p.name}</p>
+                <SyncroShopBadges
+                  published={p.isPublishedOnSyncroShop}
+                  featured={p.isFeaturedOnSyncroShop}
+                  branchName={p.syncroShopBranchName}
+                />
+              </div>
               <p className="text-xs text-muted-foreground mt-1">
                 {p.variants?.length || 0} variantes
               </p>
@@ -911,7 +1101,7 @@ export default function ProductosPage() {
           <div className="flex flex-col">
             <span className="font-bold text-sm text-foreground">{formatPrice(price)}</span>
             {currency !== "VES" && (
-              <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tight">
+              <span className="text-[9px] text-muted-foreground font-medium tracking-tight">
                 Bs {(price * exchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
               </span>
             )}
@@ -930,7 +1120,7 @@ export default function ProductosPage() {
     },
     {
       accessorKey: "status",
-      header: "Estado Stock",
+      header: "Estado stock",
       cell: ({ row }) => {
         const { status, totalStock } = row.original;
         return (
@@ -947,6 +1137,27 @@ export default function ProductosPage() {
         const p = row.original;
         return (
           <div className="flex items-center justify-end gap-2">
+            {isSyncroVendor && (
+              <>
+                <Button
+                  variant="ghost" size="icon"
+                  className={cn("size-8", p.isPublishedOnSyncroShop ? "text-primary bg-primary/10 hover:bg-primary/15" : "text-muted-foreground")}
+                  title={p.isPublishedOnSyncroShop ? "Retirar de Syncro Shop" : "Publicar en Syncro Shop"}
+                  onClick={() => toggleSyncroShop(p, { published: !p.isPublishedOnSyncroShop })}
+                >
+                  <IconBuildingStore size={15} />
+                </Button>
+                <Button
+                  variant="ghost" size="icon"
+                  disabled={!p.isPublishedOnSyncroShop}
+                  className={cn("size-8", p.isFeaturedOnSyncroShop ? "text-amber-500 bg-amber-500/10 hover:bg-amber-500/15" : "text-muted-foreground")}
+                  title={p.isFeaturedOnSyncroShop ? "Quitar de destacados" : "Destacar en Syncro Shop"}
+                  onClick={() => toggleSyncroShop(p, { featured: !p.isFeaturedOnSyncroShop })}
+                >
+                  {p.isFeaturedOnSyncroShop ? <IconStarFilled size={15} /> : <IconStar size={15} />}
+                </Button>
+              </>
+            )}
             <Button variant="ghost" size="icon" className="size-8 text-primary" title="Ver ficha" onClick={() => openDetail(p)}>
               <IconEye size={16} />
             </Button>
@@ -1086,7 +1297,19 @@ export default function ProductosPage() {
     document.body.removeChild(link);
   };
 
-  const filteredProducts = products.filter(p =>
+  const shopFilteredProducts = products.filter(p =>
+    shopFilter === 'published' ? p.isPublishedOnSyncroShop
+    : shopFilter === 'featured' ? p.isPublishedOnSyncroShop && p.isFeaturedOnSyncroShop
+    : shopFilter === 'unpublished' ? !p.isPublishedOnSyncroShop
+    : true
+  );
+  const shopCounts = {
+    all: products.length,
+    published: products.filter(p => p.isPublishedOnSyncroShop).length,
+    featured: products.filter(p => p.isPublishedOnSyncroShop && p.isFeaturedOnSyncroShop).length,
+    unpublished: products.filter(p => !p.isPublishedOnSyncroShop).length,
+  };
+  const filteredProducts = shopFilteredProducts.filter(p =>
     p.name.toLowerCase().includes(gridSearch.toLowerCase()) ||
     p.category?.name?.toLowerCase().includes(gridSearch.toLowerCase())
   );
@@ -1101,9 +1324,9 @@ export default function ProductosPage() {
       <div className="flex justify-between items-end">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold font-heading">SYNCRO RETAIL HUB</h1>
+            <h1 className="text-2xl font-bold font-heading">Syncro retail hub</h1>
             <Badge variant="outline" className={cn(
-              "hidden sm:inline-flex text-[10px] h-5 py-0 px-1.5 font-bold uppercase tracking-wider",
+              "hidden sm:inline-flex text-[10px] h-5 py-0 px-1.5 font-bold",
               isOnline ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border-rose-500/20"
             )}>
               {isOnline ? 'Online' : 'Offline'}
@@ -1149,20 +1372,45 @@ export default function ProductosPage() {
             <IconScan size={16} /> Escaneo
           </Button>
           <Button variant="outline" className="gap-2 border-primary/20 text-orange-500 hover:bg-orange-500/10" onClick={loadWaitlist}>
-            <IconList size={16} /> Lista de Espera 
+            <IconList size={16} /> Lista de espera 
             {waitlistItems.length > 0 && <Badge className="ml-1 px-1 h-4 bg-orange-500">{waitlistItems.length}</Badge>}
           </Button>
           <Button className="gap-2 shadow-lg shadow-primary/20" onClick={() => router.push("/dashboard/productos/nuevo")}>
-            <IconPlus size={16} /> Nuevo Producto
+            <IconPlus size={16} /> Nuevo producto
           </Button>
         </div>
       </div>
+
+      {isSyncroVendor && (
+        <div className="flex items-center gap-2 flex-wrap -mt-2">
+          <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mr-1">
+            <IconBuildingStore size={14} className="text-primary" /> Syncro Shop:
+          </span>
+          {([
+            ['all', 'Todos'],
+            ['published', 'Publicados'],
+            ['featured', `Destacados (${shopCounts.featured}/${maxFeatured})`],
+            ['unpublished', 'No publicados'],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => { setShopFilter(key); setGridPage(1); }}
+              className={cn(
+                "h-7 px-3 rounded-full border text-xs font-semibold transition-colors",
+                shopFilter === key ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground hover:text-foreground hover:border-primary/40"
+              )}
+            >
+              {label}{key !== 'featured' && <span className="ml-1 opacity-70">{shopCounts[key]}</span>}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* TABLE VIEW */}
       {viewMode === 'table' && (
         <PosTable
           columns={columns}
-          data={products}
+          data={shopFilteredProducts}
           loading={loading}
           rowSelection={rowSelection}
           onRowSelectionChange={setRowSelection}
@@ -1170,14 +1418,26 @@ export default function ProductosPage() {
           searchPlaceholder="Buscar por nombre, SKU o código de barras..."
           bulkActions={
             Object.keys(rowSelection).length > 0 && (
-              <Button 
-                variant="destructive" 
-                size="sm" 
-                className="h-8 gap-2 font-bold text-xs"
-                onClick={handleBulkDelete}
-              >
-                <IconTrash size={14} /> Eliminar ({Object.keys(rowSelection).length})
-              </Button>
+              <div className="flex items-center gap-2">
+                {isSyncroVendor && (
+                  <>
+                    <Button variant="outline" size="sm" className="h-8 gap-2 font-bold text-xs text-primary border-primary/30" onClick={() => handleBulkSyncroShop(true)}>
+                      <IconBuildingStore size={14} /> Publicar
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-8 gap-2 font-bold text-xs" onClick={() => handleBulkSyncroShop(false)}>
+                      Retirar de Syncro Shop
+                    </Button>
+                  </>
+                )}
+                <Button 
+                  variant="destructive" 
+                  size="sm" 
+                  className="h-8 gap-2 font-bold text-xs"
+                  onClick={handleBulkDelete}
+                >
+                  <IconTrash size={14} /> Eliminar ({Object.keys(rowSelection).length})
+                </Button>
+              </div>
             )
           }
         />
@@ -1198,6 +1458,16 @@ export default function ProductosPage() {
                 className="w-full h-9 pl-9 pr-4 rounded-lg border bg-background text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-all"
               />
             </div>
+            {Object.keys(rowSelection).length > 0 && isSyncroVendor && (
+              <>
+                <Button variant="outline" size="sm" className="h-9 gap-2 font-bold text-xs text-primary border-primary/30" onClick={() => handleBulkSyncroShop(true)}>
+                  <IconBuildingStore size={14} /> Publicar ({Object.keys(rowSelection).length})
+                </Button>
+                <Button variant="outline" size="sm" className="h-9 gap-2 font-bold text-xs" onClick={() => handleBulkSyncroShop(false)}>
+                  Retirar de Syncro Shop
+                </Button>
+              </>
+            )}
             {Object.keys(rowSelection).length > 0 && (
               <Button 
                 variant="destructive" 
@@ -1205,7 +1475,7 @@ export default function ProductosPage() {
                 className="h-9 gap-2 font-bold text-xs px-4 shadow-lg shadow-rose-500/10"
                 onClick={handleBulkDelete}
               >
-                <IconTrash size={14} /> Eliminar Seleccionados ({Object.keys(rowSelection).length})
+                <IconTrash size={14} /> Eliminar seleccionados ({Object.keys(rowSelection).length})
               </Button>
             )}
           </div>
@@ -1258,9 +1528,16 @@ export default function ProductosPage() {
                           <IconPackage size={40} className="text-muted-foreground/30" stroke={1.2} />
                         )}
                         {/* Stock badge overlay */}
-                        <div className={cn("absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded-full border", statusColor)}>
+                        <div className={cn("absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded-full border z-10", statusColor)}>
                           {p.totalStock} u.
                         </div>
+                        {/* Syncro Shop badge overlay */}
+                        <SyncroShopBadges
+                          published={p.isPublishedOnSyncroShop}
+                          featured={p.isFeaturedOnSyncroShop}
+                          tone="solid"
+                          className="absolute top-2 left-2 z-10 right-12 flex-col items-start"
+                        />
                         {/* Hover actions overlay */}
                         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center justify-center gap-2">
                           <button
@@ -1270,6 +1547,26 @@ export default function ProductosPage() {
                           >
                             <IconEye size={14} />
                           </button>
+                          {isSyncroVendor && (
+                            <>
+                              <button
+                                onClick={e => { e.stopPropagation(); toggleSyncroShop(p, { published: !p.isPublishedOnSyncroShop }); }}
+                                className={cn("size-8 rounded-full border shadow-sm flex items-center justify-center transition-colors", p.isPublishedOnSyncroShop ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-primary")}
+                                title={p.isPublishedOnSyncroShop ? "Retirar de Syncro Shop" : "Publicar en Syncro Shop"}
+                              >
+                                <IconBuildingStore size={14} />
+                              </button>
+                              {p.isPublishedOnSyncroShop && (
+                                <button
+                                  onClick={e => { e.stopPropagation(); toggleSyncroShop(p, { featured: !p.isFeaturedOnSyncroShop }); }}
+                                  className={cn("size-8 rounded-full border shadow-sm flex items-center justify-center transition-colors", p.isFeaturedOnSyncroShop ? "bg-amber-500 text-white" : "bg-background text-muted-foreground hover:text-amber-500")}
+                                  title={p.isFeaturedOnSyncroShop ? "Quitar de destacados" : "Destacar"}
+                                >
+                                  {p.isFeaturedOnSyncroShop ? <IconStarFilled size={14} /> : <IconStar size={14} />}
+                                </button>
+                              )}
+                            </>
+                          )}
                           <button
                             onClick={e => { e.stopPropagation(); openDetail(p, true); }}
                             className="size-8 rounded-full bg-background border shadow-sm flex items-center justify-center hover:bg-foreground hover:text-background transition-colors"
@@ -1453,7 +1750,7 @@ export default function ProductosPage() {
                         className="gap-1.5 h-8 text-xs font-bold text-primary border-primary/20 hover:bg-primary/5 shadow-sm"
                         onClick={() => setIsEditing(true)}
                       >
-                        <IconPencil size={14} /> Editar Producto
+                        <IconPencil size={14} /> Editar producto
                       </Button>
                     </div>
                     <div className="flex items-start gap-4 pr-20">
@@ -1473,19 +1770,19 @@ export default function ProductosPage() {
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
                      <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10">
-                       <p className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1">Stock Total</p>
+                       <p className="text-[10px] font-bold text-primary mb-1">Stock total</p>
                        <p className="text-2xl font-black">{selectedProduct.totalStock}</p>
                      </div>
                      <div className="bg-muted/50 p-4 rounded-2xl border">
-                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Costo Estim.</p>
+                       <p className="text-[10px] font-bold text-muted-foreground mb-1">Costo estim.</p>
                        <p className="text-2xl font-black">${selectedProduct.variants?.[0]?.cost || 0}</p>
                      </div>
                      <div className="bg-muted/50 p-4 rounded-2xl border">
-                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Ventas (7d)</p>
+                       <p className="text-[10px] font-bold text-muted-foreground mb-1">Ventas (7d)</p>
                        <p className="text-2xl font-black">{stats?.totalSoldLast7Days || 0}</p>
                      </div>
                      <div className="bg-muted/50 p-4 rounded-2xl border">
-                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Margen</p>
+                       <p className="text-[10px] font-bold text-muted-foreground mb-1">Margen</p>
                        <p className="text-2xl font-black">
                          {selectedProduct.variants?.[0]?.cost 
                             ? `${Math.round(((selectedProduct.variants[0].price - selectedProduct.variants[0].cost) / selectedProduct.variants[0].price) * 100)}%` 
@@ -1510,29 +1807,29 @@ export default function ProductosPage() {
                                   {v.name.substring(0,2).toUpperCase()}
                                 </div>
                                 <div>
-                                  <p className="font-black text-sm uppercase tracking-tight">{v.name}</p>
+                                  <p className="font-black text-sm tracking-tight">{v.name}</p>
                                   <p className="text-[10px] text-muted-foreground font-mono flex items-center gap-2">
                                     <IconBarcode size={12}/> {v.sku} {v.barcode && `| ${v.barcode}`}
                                   </p>
                                 </div>
                               </div>
                               <div className="text-right">
-                                 <p className="text-[10px] font-bold text-muted-foreground/60 uppercase">Precio Unit.</p>
+                                 <p className="text-[10px] font-bold text-muted-foreground/60">Precio unit.</p>
                                  <p className="font-black text-xl text-primary leading-none">${v.price}</p>
                               </div>
                            </div>
 
                            <div className="grid grid-cols-3 gap-2 py-3 border-y border-dashed">
                               <div>
-                                <p className="text-[9px] font-bold text-muted-foreground uppercase">Costo</p>
+                                <p className="text-[9px] font-bold text-muted-foreground">Costo</p>
                                 <p className="font-bold text-sm text-foreground">${v.cost || 0}</p>
                               </div>
                               <div>
-                                <p className="text-[9px] font-bold text-muted-foreground uppercase">Utilidad</p>
+                                <p className="text-[9px] font-bold text-muted-foreground">Utilidad</p>
                                 <p className="font-bold text-sm text-green-600">${(v.price - (v.cost || 0)).toFixed(2)}</p>
                               </div>
                               <div className="text-right">
-                                <p className="text-[9px] font-bold text-muted-foreground uppercase">Existencia</p>
+                                <p className="text-[9px] font-bold text-muted-foreground">Existencia</p>
                                 <p className={cn(
                                   "font-bold text-sm",
                                   v.stock <= v.minStock ? "text-destructive" : "text-foreground"
@@ -1542,7 +1839,7 @@ export default function ProductosPage() {
 
                            {v.secondaryBarcodes && v.secondaryBarcodes.length > 0 && (
                               <div className="space-y-2">
-                                 <p className="text-[9px] font-bold text-muted-foreground uppercase">Códigos Adicionales</p>
+                                 <p className="text-[9px] font-bold text-muted-foreground">Códigos adicionales</p>
                                  <div className="flex flex-wrap gap-1.5">
                                     {v.secondaryBarcodes.map((bc: string) => (
                                        <Badge key={bc} variant="secondary" className="text-[9px] font-mono py-0 px-2 rounded-md bg-muted/50 border-none">
@@ -1558,18 +1855,18 @@ export default function ProductosPage() {
 
                     <TabsContent value="stats" className="mt-6 space-y-6">
                       <div className="p-6 rounded-2xl border bg-gradient-to-br from-primary/5 to-transparent">
-                        <h3 className="font-bold mb-4 flex items-center gap-2"><IconTrendingUp size={18} className="text-primary"/> Rendimiento de Venta</h3>
+                        <h3 className="font-bold mb-4 flex items-center gap-2"><IconTrendingUp size={18} className="text-primary"/> Rendimiento de venta</h3>
                         <div className="space-y-4 text-sm">
                           <div className="flex justify-between py-2 border-b">
-                            <span className="text-muted-foreground">Ventas Totales (Acumulado)</span>
+                            <span className="text-muted-foreground">Ventas totales (acumulado)</span>
                             <span className="font-bold">{stats?.totalQuantitySold || 0} unidades</span>
                           </div>
                           <div className="flex justify-between py-2 border-b">
-                            <span className="text-muted-foreground">Última Venta</span>
+                            <span className="text-muted-foreground">Última venta</span>
                             <span className="font-bold">{stats?.lastSale ? new Date(stats.lastSale).toLocaleDateString() : 'Sin ventas'}</span>
                           </div>
                           <div className="flex justify-between py-2 border-b">
-                            <span className="text-muted-foreground">Precio Promedio Venta</span>
+                            <span className="text-muted-foreground">Precio promedio venta</span>
                             <span className="font-bold text-primary">${stats?.averagePrice || 0}</span>
                           </div>
                         </div>
@@ -1583,7 +1880,7 @@ export default function ProductosPage() {
                   <div className="space-y-6 animate-in fade-in duration-300">
                     <div className="flex items-center justify-between pb-4 border-b border-border/60">
                       <div>
-                        <SheetTitle className="text-xl font-black">Editar Producto</SheetTitle>
+                        <SheetTitle className="text-xl font-black">Editar producto</SheetTitle>
                         <SheetDescription className="text-xs text-muted-foreground mt-0.5">Modifica los detalles generales y variantes.</SheetDescription>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1620,25 +1917,29 @@ export default function ProductosPage() {
                       <div className="md:col-span-2 space-y-5">
                         {/* Información General */}
                         <div className="p-5 bg-card rounded-2xl border shadow-sm space-y-4">
-                          <h3 className="text-xs font-bold uppercase tracking-wider text-primary">Información General</h3>
+                          <h3 className="text-xs font-bold text-primary">Información general</h3>
                           <div className="space-y-4">
                             <div className="space-y-1.5">
-                              <Label className="text-xs">Nombre del Producto</Label>
+                              <Label className="text-xs">Nombre del producto</Label>
                               <Input 
                                 value={editName} 
                                 onChange={e => setEditName(e.target.value)} 
-                                placeholder="Ej: Zapatos Deportivos XYZ" 
+                                placeholder="Ej: zapatos deportivos xyz" 
                                 className="h-10 text-sm font-bold bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all" 
                               />
                             </div>
                             <div className="space-y-1.5">
                               <Label className="text-xs">Descripción</Label>
-                              <Input 
+                              <textarea 
                                 value={editDescription} 
                                 onChange={e => setEditDescription(e.target.value)} 
-                                placeholder="Breve descripción para el cliente" 
-                                className="h-10 text-sm bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all"
+                                placeholder="Describe el producto: qué es, para qué sirve y qué lo hace especial. Se muestra completa en Syncro Shop."
+                                rows={4}
+                                className="w-full rounded-md px-3 py-2 text-sm bg-muted/20 border border-transparent focus:border-primary/20 focus:bg-background outline-none transition-all resize-y min-h-[96px]"
                               />
+                              {isSyncroVendor && editIsPublishedOnSyncroShop && !editDescription.trim() && (
+                                <p className="text-[10px] text-amber-600">Este producto está publicado sin descripción. Agrégala para que los clientes sepan qué compran.</p>
+                              )}
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-1.5">
@@ -1676,10 +1977,10 @@ export default function ProductosPage() {
                             <div className="flex items-center justify-between p-3.5 border border-border/50 rounded-xl bg-muted/10">
                               <div className="space-y-0.5">
                                 <Label htmlFor="edit-weighable-switch" className="font-bold text-xs cursor-pointer block">
-                                  Producto Pesable
+                                  Producto pesable
                                 </Label>
                                 <p className="text-[10px] text-muted-foreground leading-relaxed">
-                                  Activa si se vende por peso fraccionado (Ej: Kg).
+                                  Activa si se vende por peso fraccionado (ej: kg).
                                 </p>
                               </div>
                               <Switch 
@@ -1689,85 +1990,75 @@ export default function ProductosPage() {
                                 className="data-[state=checked]:bg-emerald-500 shrink-0"
                               />
                             </div>
+
+                            {isSyncroVendor && (
+                              <SyncroShopPublishPanel
+                                published={editIsPublishedOnSyncroShop}
+                                featured={editIsFeatured}
+                                onPublishedChange={setEditIsPublishedOnSyncroShop}
+                                onFeaturedChange={setEditIsFeatured}
+                                originBranchName={selectedProduct?.isPublishedOnSyncroShop ? selectedProduct?.syncroShopBranchName : null}
+                                currentBranchName={typeof window !== "undefined" ? branchNames[localStorage.getItem("currentBranchId") || ""] : null}
+                                featuredCount={featuredCount}
+                                maxFeatured={maxFeatured}
+                              />
+                            )}
                           </div>
                         </div>
+
+                        {/* Especificaciones */}
+                        <div className="p-5 bg-card rounded-2xl border shadow-sm space-y-4">
+                          <h3 className="text-xs font-bold text-primary">Especificaciones</h3>
+                          <SpecificationsEditor value={editSpecifications} onChange={setEditSpecifications} />
+                        </div>
+
+                        {/* Página de venta (landing) */}
+                        {isSyncroVendor && editIsPublishedOnSyncroShop && (
+                          <div className="p-5 bg-card rounded-2xl border shadow-sm space-y-4">
+                            <div>
+                              <h3 className="text-xs font-bold text-primary">Página de venta en Syncro Shop</h3>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">Contenido extra que convierte la ficha en una landing page.</p>
+                            </div>
+                            <LandingBlocksEditor
+                              value={editLandingBlocks}
+                              onChange={setEditLandingBlocks}
+                              upload={uploadFile}
+                              previewUrl={selectedProduct ? `https://syncro.shop/producto/${selectedProduct.id}` : undefined}
+                            />
+                          </div>
+                        )}
                       </div>
 
                       {/* Imagen Lateral */}
                       <div className="space-y-5">
                         <div className="p-5 bg-card rounded-2xl border shadow-sm space-y-3">
-                          <h3 className="text-xs font-bold uppercase tracking-wider text-primary">Imagen del Producto</h3>
-                          <div 
-                            className="relative border-2 border-dashed border-primary/20 hover:border-primary/40 rounded-2xl bg-muted/5 hover:bg-muted/10 transition-all flex flex-col items-center justify-center p-4 text-center cursor-pointer min-h-[140px] group overflow-hidden"
-                            onClick={() => editFileInputRef.current?.click()}
-                          >
-                            <input 
-                              type="file" 
-                              ref={editFileInputRef} 
-                              className="hidden" 
-                              accept="image/*" 
-                              onChange={handleEditImageUpload} 
-                            />
-                            <input 
-                              type="file" 
-                              ref={editCameraInputRef} 
-                              className="hidden" 
-                              accept="image/*" 
-                              capture="environment"
-                              onChange={handleEditImageUpload} 
-                            />
-                            {uploadingImage ? (
-                              <div className="space-y-2">
-                                <div className="size-6 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
-                                <p className="text-[11px] text-muted-foreground font-medium">Subiendo...</p>
-                              </div>
-                            ) : editImage ? (
-                              <div className="relative w-full flex items-center justify-center">
-                                <img src={editImage} alt="Producto" className="max-h-[110px] object-contain rounded-lg" />
-                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
-                                  <p className="text-white text-[10px] font-bold flex items-center gap-1"><IconPlus size={12} /> Cambiar Imagen</p>
-                                </div>
-                              </div>
-                            ) : (
-                              <>
-                                <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center mb-2 mx-auto">
-                                  <IconPlus className="text-primary size-5" />
-                                </div>
-                                <p className="text-xs font-bold">Subir Imagen</p>
-                                <p className="text-[10px] text-muted-foreground">PNG, JPG o WEBP</p>
-                              </>
-                            )}
-                          </div>
-
-                          <div className="flex flex-col gap-2 mt-2">
-                            {/* Search Internet Button */}
-                            <Button 
-                              type="button"
-                              variant="outline" 
-                              className="w-full text-xs font-bold gap-1.5 h-9 rounded-xl border-primary/20 hover:bg-primary/5 text-primary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSearchQuery(editName);
-                                setIsImageSearchOpen(true);
-                                handleSearchImages(editName);
-                              }}
-                            >
-                              <IconSearch size={14} /> Buscar en Internet
-                            </Button>
-
-                            {/* Take Photo Button */}
-                            <Button 
-                              type="button"
-                              variant="outline" 
-                              className="w-full text-xs font-bold gap-1.5 h-9 rounded-xl border-primary/20 hover:bg-primary/5 text-primary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                editCameraInputRef.current?.click();
-                              }}
-                            >
-                              <IconCamera size={14} /> Tomar Foto
-                            </Button>
-                          </div>
+                          <input 
+                            type="file" 
+                            ref={editFileInputRef} 
+                            className="hidden" 
+                            accept="image/*" 
+                            onChange={handleEditImageUpload} 
+                          />
+                          <input 
+                            type="file" 
+                            ref={editCameraInputRef} 
+                            className="hidden" 
+                            accept="image/*" 
+                            capture="environment"
+                            onChange={handleEditImageUpload} 
+                          />
+                          <ProductGalleryEditor
+                            images={editImages}
+                            onChange={setEditImages}
+                            uploading={uploadingImage || uploadingSearchImage}
+                            onUploadClick={() => editFileInputRef.current?.click()}
+                            onCameraClick={() => editCameraInputRef.current?.click()}
+                            onSearchClick={() => {
+                              setSearchQuery(editName);
+                              setIsImageSearchOpen(true);
+                              handleSearchImages(editName);
+                            }}
+                          />
                         </div>
                       </div>
                     </div>
@@ -1775,14 +2066,14 @@ export default function ProductosPage() {
                     {/* Variantes */}
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-primary">Variantes y Precios</h3>
+                        <h3 className="text-sm font-bold text-primary">Variantes y precios</h3>
                         <Button 
                           variant="outline" 
                           size="sm" 
                           onClick={handleAddVariant} 
                           className="gap-1.5 h-8 text-xs font-semibold border-primary/20 hover:bg-primary/5"
                         >
-                          <IconPlus size={14}/> Añadir Variante
+                          <IconPlus size={14}/> Añadir variante
                         </Button>
                       </div>
 
@@ -1802,10 +2093,25 @@ export default function ProductosPage() {
                                 <IconTrash size={15}/>
                               </Button>
                             )}
+                            {isSyncroVendor && editIsPublishedOnSyncroShop && (
+                              <label className="flex items-center gap-2 mb-4 text-[11px] font-semibold text-muted-foreground cursor-pointer w-fit">
+                                <Switch
+                                  checked={v.showOnSyncroShop !== false}
+                                  onCheckedChange={(checked) => {
+                                    const n = [...editVariants];
+                                    n[idx].showOnSyncroShop = checked;
+                                    setEditVariants(n);
+                                  }}
+                                  className="data-[state=checked]:bg-primary scale-75 -ml-1"
+                                />
+                                <IconBuildingStore size={13} className={v.showOnSyncroShop !== false ? "text-primary" : ""} />
+                                {v.showOnSyncroShop !== false ? "Visible en Syncro Shop" : "Oculta en Syncro Shop"}
+                              </label>
+                            )}
                             
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                               <div className="sm:col-span-2 space-y-1.5">
-                                <Label className="text-[11px] text-muted-foreground font-semibold">Nombre de Variante</Label>
+                                <Label className="text-[11px] text-muted-foreground font-semibold">Nombre de variante</Label>
                                 <Input 
                                   value={v.name} 
                                   onChange={e => {
@@ -1813,7 +2119,7 @@ export default function ProductosPage() {
                                     n[idx].name = e.target.value; 
                                     setEditVariants(n);
                                   }} 
-                                  placeholder="Ej: Rojo / 42" 
+                                  placeholder="Ej: rojo / 42" 
                                   className="h-9 text-xs bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all"
                                 />
                               </div>
@@ -1830,7 +2136,7 @@ export default function ProductosPage() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <Label className="text-[11px] text-muted-foreground font-semibold">Código de Barras principal</Label>
+                                <Label className="text-[11px] text-muted-foreground font-semibold">Código de barras principal</Label>
                                 <div className="relative">
                                   <IconBarcode size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                                   <Input 
@@ -1850,7 +2156,7 @@ export default function ProductosPage() {
                                       setScannerOpen(true);
                                     }}
                                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
-                                    title="Escanear Código de Barras"
+                                    title="Escanear código de barras"
                                   >
                                     <IconScan size={14} />
                                   </button>
@@ -1859,7 +2165,7 @@ export default function ProductosPage() {
 
                               {/* Códigos Adicionales */}
                               <div className="sm:col-span-2 space-y-1.5">
-                                <Label className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-wider">Códigos de Barras Secundarios</Label>
+                                <Label className="text-[10px] font-bold text-muted-foreground/60">Códigos de barras secundarios</Label>
                                 <div className="flex flex-wrap gap-1.5 p-2 bg-muted/10 rounded-xl border border-dashed border-muted-foreground/10">
                                   {v.secondaryBarcodes?.map((bc: string, bIdx: number) => (
                                     <div key={`${bc}-${bIdx}`} className="bg-background border px-2 py-1 rounded-lg text-[9px] font-mono flex items-center gap-1.5">
@@ -1903,7 +2209,7 @@ export default function ProductosPage() {
                               </div>
 
                               <div className="space-y-1.5">
-                                <Label className="text-[11px] text-primary font-bold">Precio Venta</Label>
+                                <Label className="text-[11px] text-primary font-bold">Precio venta</Label>
                                 <Input 
                                   type="number" 
                                   value={v.price} 
@@ -1931,7 +2237,7 @@ export default function ProductosPage() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <Label className="text-[11px] text-muted-foreground/60 font-semibold font-sans">Stock Actual</Label>
+                                <Label className="text-[11px] text-muted-foreground/60 font-semibold font-sans">Stock actual</Label>
                                 <Input 
                                   type="number" 
                                   step="any"
@@ -1941,7 +2247,7 @@ export default function ProductosPage() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <Label className="text-[11px] text-muted-foreground font-semibold font-mono">Stock Mínimo</Label>
+                                <Label className="text-[11px] text-muted-foreground font-semibold font-mono">Stock mínimo</Label>
                                 <Input 
                                   type="number" 
                                   step="any"
@@ -1955,7 +2261,7 @@ export default function ProductosPage() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <Label className="text-[11px] text-muted-foreground font-semibold">Precio Promo</Label>
+                                <Label className="text-[11px] text-muted-foreground font-semibold">Precio promo</Label>
                                 <Input 
                                   type="number" 
                                   value={v.promoPrice} 
@@ -1969,7 +2275,7 @@ export default function ProductosPage() {
                                 />
                               </div>
                               <div className="space-y-1.5">
-                                <Label className="text-[11px] text-muted-foreground font-semibold">Precio Mayor</Label>
+                                <Label className="text-[11px] text-muted-foreground font-semibold">Precio mayor</Label>
                                 <Input 
                                   type="number" 
                                   value={v.bulkPrice} 
@@ -2007,7 +2313,7 @@ export default function ProductosPage() {
       }}>
         <DialogContent className={cn("overflow-hidden bg-black/95 border-white/10 shadow-2xl p-0 transition-all duration-300", useCamera ? "sm:max-w-[320px]" : "sm:max-w-md")}>
           <DialogHeader className="sr-only">
-             <DialogTitle>Captura de Código de Barras</DialogTitle>
+             <DialogTitle>Captura de código de barras</DialogTitle>
           </DialogHeader>
           
           <Button variant="ghost" size="icon" className="absolute top-3 right-3 size-8 rounded-full bg-black/50 hover:bg-white/10 text-white z-50" onClick={() => setScannerOpen(false)}>
@@ -2040,7 +2346,7 @@ export default function ProductosPage() {
                    </div>
                    <div className="text-center space-y-2 relative z-10">
                      <p className="font-semibold text-lg tracking-tight">
-                        {quickCreateOpen ? `Escaneando para: ${quickFormData.name}` : "Escáner Listo"}
+                        {quickCreateOpen ? `Escaneando para: ${quickFormData.name}` : "Escáner listo"}
                      </p>
                      <p className="text-[11px] text-muted-foreground/50 font-normal tracking-tight">Esperando lector láser...</p>
                    </div>
@@ -2051,7 +2357,7 @@ export default function ProductosPage() {
                   size="icon" 
                   className="mx-auto size-14 hover:bg-primary/5 transition-all group" 
                   onClick={() => setUseCamera(true)}
-                  title="Usar Cámara"
+                  title="Usar cámara"
                 >
                   <IconCamera size={32} className="text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all duration-500" />
                 </Button>
@@ -2091,7 +2397,7 @@ export default function ProductosPage() {
                     {/* Contexto de Escaneo Iterativo */}
                     {quickCreateOpen && quickFormData.name && (
                         <div className="absolute bottom-4 left-0 right-0 text-center animate-in fade-in slide-in-from-top-1 duration-500 z-50 pointer-events-none">
-                            <p className="text-[10px] font-semibold text-white/60 uppercase tracking-widest bg-black/50 backdrop-blur px-3 py-1.5 rounded-full inline-block">
+                            <p className="text-[10px] font-semibold text-white/60 bg-black/50 backdrop-blur px-3 py-1.5 rounded-full inline-block">
                                 Asignando a: <span className="text-white">{quickFormData.name}</span>
                             </p>
                         </div>
@@ -2108,7 +2414,7 @@ export default function ProductosPage() {
           <DialogHeader>
             <DialogTitle className="text-lg font-black flex items-center gap-2 text-foreground">
               <IconBarcode className="text-primary size-5" />
-              Nuevo Código Secundario
+              Nuevo código secundario
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Escanea o ingresa un código de barras adicional para asociar a esta variante.
@@ -2116,7 +2422,7 @@ export default function ProductosPage() {
           </DialogHeader>
           <div className="space-y-4 py-3">
             <div className="space-y-2">
-              <Label htmlFor="secondary-barcode-input" className="text-xs font-bold text-muted-foreground uppercase">Código de Barras</Label>
+              <Label htmlFor="secondary-barcode-input" className="text-xs font-bold text-muted-foreground">Código de barras</Label>
               <Input
                 id="secondary-barcode-input"
                 placeholder="Escribe o escanea el código..."
@@ -2129,7 +2435,7 @@ export default function ProductosPage() {
                     handleAddBarcodeConfirm();
                   }
                 }}
-                className="h-10 text-sm font-semibold tracking-wide bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all"
+                className="h-10 text-sm font-semibold bg-muted/20 border-transparent focus:border-primary/20 focus:bg-background transition-all"
               />
             </div>
           </div>
@@ -2159,10 +2465,10 @@ export default function ProductosPage() {
           <DialogHeader>
             <DialogTitle className="text-lg font-black flex items-center gap-2 text-foreground">
               <IconAlertTriangle className="text-amber-500 size-5" />
-              Código no Registrado
+              Código no registrado
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              El código escaneado <span className="font-mono font-bold bg-muted px-1.5 py-0.5 rounded text-foreground">{scannedUnregisteredBarcode}</span> no coincide con ningún producto en el catálogo.
+              El código escaneado <span className="font-mono font-bold bg-muted px-1.5 py-0.5 rounded text-foreground">{scannedUnregisteredBarcode}</span> No coincide con ningún producto en el catálogo.
             </DialogDescription>
           </DialogHeader>
 
@@ -2178,7 +2484,7 @@ export default function ProductosPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
                   <IconPlus className="size-4" />
-                  Crear como Producto Nuevo
+                  Crear como producto nuevo
                 </span>
                 <span className="text-[10px] text-muted-foreground font-semibold px-2 py-0.5 rounded-full bg-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">Recomendado</span>
               </div>
@@ -2190,12 +2496,12 @@ export default function ProductosPage() {
             {/* Divisor */}
             <div className="relative my-2">
               <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-dashed" /></div>
-              <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-wider"><span className="bg-background px-2 text-muted-foreground/60">O Asócialo a tu Importación</span></div>
+              <div className="relative flex justify-center text-[10px] font-bold"><span className="bg-background px-2 text-muted-foreground/60">O asócialo a tu importación</span></div>
             </div>
 
             {/* Opción 2: Asociar a Existente */}
             <div className="space-y-2.5">
-              <Label className="text-xs font-bold text-muted-foreground uppercase">Buscar en tus {products.length} productos importados</Label>
+              <Label className="text-xs font-bold text-muted-foreground">Buscar en tus {products.length} productos importados</Label>
               <div className="relative">
                 <Input
                   placeholder="Buscar por nombre, categoría o SKU..."
@@ -2258,7 +2564,7 @@ export default function ProductosPage() {
              <IconPlus size={150} />
           </div>
           <DialogHeader>
-            <DialogTitle className="text-2xl font-semibold tracking-normal">NUEVO REGISTRO</DialogTitle>
+            <DialogTitle className="text-2xl font-semibold tracking-normal">Nuevo registro</DialogTitle>
             <DialogDescription className="font-normal opacity-70">
                 Complete los detalles finales para dar de alta el producto.
             </DialogDescription>
@@ -2267,10 +2573,10 @@ export default function ProductosPage() {
           <form onSubmit={handleQuickSave} className="space-y-6 pt-4">
             <div className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="q-name" className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Nombre del Producto</Label>
+                <Label htmlFor="q-name" className="text-xs font-medium tracking-normal text-muted-foreground">Nombre del producto</Label>
                 <Input 
                   id="q-name" 
-                  placeholder="Ej. Bebida Energética 500ml" 
+                  placeholder="Ej. Bebida energética 500ml" 
                   className="h-12 text-lg font-medium bg-muted/50 border-transparent focus:border-primary/30 focus:bg-background transition-all"
                   required 
                   value={quickFormData.name}
@@ -2280,7 +2586,7 @@ export default function ProductosPage() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Códigos de Barras Asignados</Label>
+                <Label className="text-xs font-medium tracking-normal text-muted-foreground">Códigos de barras asignados</Label>
                 <div className="flex flex-wrap gap-2 p-3 bg-muted/30 rounded-2xl border border-dashed border-muted-foreground/20">
                   {scannedBarcodes.map((code, idx) => (
                     <div key={`${code}-${idx}`} className="bg-background border px-3 py-1.5 rounded-xl shadow-sm flex items-center gap-2 group animate-in zoom-in-95 duration-200">
@@ -2319,7 +2625,7 @@ export default function ProductosPage() {
 
               <div className="grid grid-cols-2 gap-6">
                 <div className="grid gap-2">
-                  <Label htmlFor="q-price" className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Precio de Venta</Label>
+                  <Label htmlFor="q-price" className="text-xs font-medium tracking-normal text-muted-foreground">Precio de venta</Label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 font-medium text-muted-foreground">$</span>
                     <Input 
@@ -2335,7 +2641,7 @@ export default function ProductosPage() {
                   </div>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="q-stock" className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Existencia Inicial</Label>
+                  <Label htmlFor="q-stock" className="text-xs font-medium tracking-normal text-muted-foreground">Existencia inicial</Label>
                   <Input 
                     id="q-stock" 
                     type="number" 
@@ -2354,8 +2660,8 @@ export default function ProductosPage() {
               <Button type="button" variant="ghost" className="h-10 px-6 rounded-xl font-medium text-xs text-muted-foreground/60" onClick={() => setQuickCreateOpen(false)}>
                 Descartar
               </Button>
-              <Button type="submit" className="h-10 px-8 rounded-xl font-semibold text-xs uppercase tracking-tight bg-primary text-primary-foreground shadow-sm">
-                Confirmar Registro
+              <Button type="submit" className="h-10 px-8 rounded-xl font-semibold text-xs tracking-tight bg-primary text-primary-foreground shadow-sm">
+                Confirmar registro
               </Button>
             </div>
           </form>
@@ -2367,7 +2673,7 @@ export default function ProductosPage() {
           <DialogHeader>
             <DialogTitle>¿Eliminar producto?</DialogTitle>
             <DialogDescription>
-              Esta acción eliminará <span className="font-semibold text-foreground">"{productToDelete?.name}"</span> permanentemente del catálogo. No se puede deshacer.
+              Esta acción eliminará <span className="font-semibold text-foreground">"{productToDelete?.name}"</span> Permanentemente del catálogo. No se puede deshacer.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -2388,7 +2694,7 @@ export default function ProductosPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <IconBarcode className="text-primary" size={20}/>
-              Código Manual
+              Código manual
             </DialogTitle>
             <DialogDescription>
               Ingrese el número del código de barras del producto.
@@ -2396,19 +2702,19 @@ export default function ProductosPage() {
           </DialogHeader>
           <form onSubmit={handleManualBarcodeSubmit} className="space-y-6 py-4">
             <div className="space-y-2">
-              <Label htmlFor="manual-code" className="text-[10px] uppercase font-bold text-muted-foreground">Número de Código</Label>
+              <Label htmlFor="manual-code" className="text-[10px] font-bold text-muted-foreground">Número de código</Label>
               <Input
                 id="manual-code"
                 autoFocus
                 placeholder="Ej. 750123456789"
                 value={manualBarcodeValue}
                 onChange={(e) => setManualBarcodeValue(e.target.value)}
-                className="h-12 text-xl font-mono tracking-widest text-center bg-muted/50 border-transparent focus:border-primary/30"
+                className="h-12 text-xl font-mono text-center bg-muted/50 border-transparent focus:border-primary/30"
               />
             </div>
             <DialogFooter>
-              <Button type="submit" className="w-full h-11 rounded-xl font-bold uppercase tracking-tight">
-                Agregar Código
+              <Button type="submit" className="w-full h-11 rounded-xl font-bold tracking-tight">
+                Agregar código
               </Button>
             </DialogFooter>
           </form>
@@ -2420,7 +2726,7 @@ export default function ProductosPage() {
         <DialogContent className="sm:max-w-md border-none shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
-              <IconUpload className="text-primary" /> Importar Productos
+              <IconUpload className="text-primary" /> Importar productos
             </DialogTitle>
             <DialogDescription>
               Carga tus productos masivamente desde un archivo Excel o CSV.
@@ -2476,7 +2782,7 @@ export default function ProductosPage() {
                 </div>
                 <div className="text-center">
                   <p className="font-bold text-sm">Haz clic o arrastra tu archivo aquí</p>
-                  <p className="text-[10px] text-muted-foreground uppercase mt-1">Soporta .XLSX y .CSV</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Soporta .XLSX y .CSV</p>
                 </div>
               </div>
             )}
@@ -2491,7 +2797,7 @@ export default function ProductosPage() {
                 <IconDownload size={14} /> Descargar plantilla de ejemplo
               </Button>
               <p className="text-[9px] text-muted-foreground italic leading-relaxed">
-                * El sistema es flexible: detectará automáticamente columnas como "Nombre", "Precio" y "Stock". Las variantes y códigos adicionales son detectados si existen.
+                * El sistema es flexible: detectará automáticamente columnas como "nombre", "precio" y "stock". Las variantes y códigos adicionales son detectados si existen.
               </p>
             </div>
           </div>
@@ -2503,7 +2809,7 @@ export default function ProductosPage() {
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <IconList className="text-orange-500" /> Productos en Lista de Espera
+              <IconList className="text-orange-500" /> Productos en lista de espera
             </DialogTitle>
             <DialogDescription>
               Estos productos fueron vendidos en el POS pero aún no están registrados formalmente.
@@ -2579,10 +2885,10 @@ export default function ProductosPage() {
         <DialogContent className="sm:max-w-2xl border-none shadow-2xl rounded-2xl overflow-hidden bg-card text-foreground">
           <DialogHeader className="p-6 pb-2">
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
-              <IconSearch className="text-primary size-5" /> Buscar Imagen en Internet
+              <IconSearch className="text-primary size-5" /> Buscar imagen en internet
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Busca una imagen libre de derechos para este producto e impórtala a tu catálogo en AWS S3.
+              Busca una imagen libre de derechos para este producto e impórtala a tu catálogo en aws S3.
             </DialogDescription>
           </DialogHeader>
 
@@ -2671,7 +2977,7 @@ export default function ProductosPage() {
                         {uploadingSearchImage && isSelected && (
                           <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-1.5 z-10">
                             <div className="size-5 rounded-full border border-primary border-t-transparent animate-spin" />
-                            <p className="text-[8px] font-bold text-primary uppercase tracking-widest">Importando...</p>
+                            <p className="text-[8px] font-bold text-primary">Importando...</p>
                           </div>
                         )}
                       </div>

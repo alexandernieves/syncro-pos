@@ -1,7 +1,5 @@
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { ThemeSelector } from "./theme-selector";
-import { ModeSwitcher } from "./mode-switcher";
 import { BranchSwitcher } from "./branch-switcher";
 import { NotificationBell } from "./notification-bell";
 import { useCurrency } from "@/context/CurrencyContext";
@@ -64,7 +62,7 @@ export function SiteHeader() {
         {/* FECHA VALOR STACKED (AS REQUESTED) */}
         {!isSyncro && (
           <div className="hidden lg:flex flex-col items-end mr-2">
-            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-tight leading-none opacity-50">Fecha Valor</p>
+            <p className="text-[10px] text-muted-foreground font-semibold tracking-tight leading-none opacity-50">Fecha valor</p>
             <p className="text-[11px] font-bold text-foreground/80 leading-none mt-1.5">{bcvDate || "No disponible"}</p>
           </div>
         )}
@@ -82,7 +80,7 @@ export function SiteHeader() {
                   <DropdownMenuItem 
                     key={c} 
                     onClick={() => setCurrency(c)}
-                    className="text-[11px] font-bold uppercase py-2 rounded-lg cursor-pointer"
+                    className="text-[11px] font-bold py-2 rounded-lg cursor-pointer"
                   >
                     {c}
                   </DropdownMenuItem>
@@ -112,8 +110,6 @@ export function SiteHeader() {
         })()}
         {!isSyncro && <BranchSwitcher />}
         <div className="flex items-center gap-1.5">
-          <ThemeSelector />
-          <ModeSwitcher />
         </div>
       </div>
     </header>

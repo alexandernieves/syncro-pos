@@ -40,6 +40,10 @@ export class UploadsService {
     if (mimetype.includes('png')) ext = 'png';
     else if (mimetype.includes('webp')) ext = 'webp';
     else if (mimetype.includes('gif')) ext = 'gif';
+    // Short product videos for Syncro Shop landing pages
+    else if (mimetype === 'video/mp4') ext = 'mp4';
+    else if (mimetype === 'video/webm') ext = 'webm';
+    else if (mimetype === 'video/quicktime') ext = 'mov';
     return { buffer: fileBuffer, mimetype, extension: ext };
   }
 
@@ -93,6 +97,42 @@ export class UploadsService {
       return localUrl;
     }
   }
+
+  /**
+   * Stores any file (images, audio, video, documents) as is, under `folder`.
+   * Used for WhatsApp media so the chat keeps every file it sends or receives.
+   */
+  async uploadBuffer(buffer: Buffer, mimetype: string, folder: string, originalName?: string): Promise<string> {
+    const cleanMime = (mimetype || 'application/octet-stream').split(';')[0].trim().toLowerCase();
+    const fromName = originalName?.match(/\.([a-z0-9]{2,5})$/i)?.[1]?.toLowerCase();
+    const extension = fromName || UploadsService.EXTENSIONS[cleanMime] || cleanMime.split('/')[1]?.replace(/[^a-z0-9]/g, '') || 'bin';
+    const key = `${folder}/${uuidv4()}.${extension}`;
+    try {
+      await this.s3Client.send(new PutObjectCommand({ Bucket: this.bucketName, Key: key, Body: buffer, ContentType: cleanMime }));
+      const cdnUrl = this.configService.get<string>('CDN_URL');
+      if (cdnUrl) return `${cdnUrl.replace(/\/$/, '')}/${key}`;
+      const region = this.configService.get<string>('AWS_REGION') || 'us-east-1';
+      return `https://${this.bucketName}.s3.${region}.amazonaws.com/${key}`;
+    } catch (error) {
+      console.error('Error uploading to S3, falling back to local storage:', error);
+      const fs = require('fs');
+      const path = require('path');
+      const localPath = path.join(process.cwd(), 'uploads', key);
+      fs.mkdirSync(path.dirname(localPath), { recursive: true });
+      fs.writeFileSync(localPath, buffer);
+      return `${this.configService.get<string>('API_URL') || 'http://localhost:9000'}/uploads/${key}`;
+    }
+  }
+
+  private static readonly EXTENSIONS: Record<string, string> = {
+    'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+    'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/webm': 'webm',
+    'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov', 'video/3gpp': '3gp',
+    'application/pdf': 'pdf', 'application/msword': 'doc', 'text/plain': 'txt',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    'application/vnd.ms-excel': 'xls',
+  };
 
   async uploadFromUrl(imageUrl: string, userEmail: string): Promise<string> {
     try {

@@ -94,7 +94,7 @@ export const getSuppliersColumns = (onEdit: (supplier: any) => void, onDelete: (
   },
   {
     accessorKey: "header",
-    header: "Socio Comercial",
+    header: "Socio comercial",
     cell: ({ row }) => {
       const data = JSON.parse(row.original.header || '{}');
       return (
@@ -106,8 +106,8 @@ export const getSuppliersColumns = (onEdit: (supplier: any) => void, onDelete: (
             <span className="text-sm font-medium tracking-tight text-foreground leading-none mb-1.5">
               {data.name}
             </span>
-            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight border border-muted-foreground/30 w-fit px-2 py-0.5 rounded-md bg-transparent">
-              {data.category || "PROVEEDOR MASTER"}
+            <span className="text-[10px] text-muted-foreground font-medium tracking-tight border border-muted-foreground/30 w-fit px-2 py-0.5 rounded-md bg-transparent">
+              {data.category || "Proveedor master"}
             </span>
           </div>
         </div>
@@ -116,11 +116,11 @@ export const getSuppliersColumns = (onEdit: (supplier: any) => void, onDelete: (
   },
   {
     accessorKey: "type",
-    header: "ID Fiscal",
+    header: "ID fiscal",
     cell: ({ row }) => {
       const data = JSON.parse(row.original.type || '{}');
       return (
-        <div className="flex items-center gap-2 text-xs font-normal text-muted-foreground uppercase tracking-tighter">
+        <div className="flex items-center gap-2 text-xs font-normal text-muted-foreground tracking-tighter">
           <IconId size={14} className="opacity-30 text-muted-foreground" />
           {data.taxId || "N/A"}
         </div>
@@ -154,7 +154,7 @@ export const getSuppliersColumns = (onEdit: (supplier: any) => void, onDelete: (
       return (
         <div className="flex items-center gap-2 px-3 py-1 border border-muted-foreground/30 bg-muted/20 rounded-md w-fit">
           <IconPackage size={12} className="text-muted-foreground" />
-          <span className="text-[10px] font-normal text-muted-foreground tracking-tight">{data.productsCount || 0} PROD</span>
+          <span className="text-[10px] font-normal text-muted-foreground tracking-tight">{data.productsCount || 0} prod</span>
         </div>
       );
     },
@@ -191,34 +191,34 @@ export const getSuppliersColumns = (onEdit: (supplier: any) => void, onDelete: (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
+              <span className="sr-only">Abrir menú</span>
               <IconDotsVertical className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => router.push(`/dashboard/proveedores/perfil?id=${row.original.id}`)}>
               <IconExternalLink className="mr-2 h-4 w-4" />
-              Ficha Técnica del Proveedor
+              Ficha técnica del proveedor
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => {
               // We pass the raw supplier data to the edit handler
               onEdit(row.original.raw);
             }}>
               <IconUser className="mr-2 h-4 w-4" />
-              Editar Datos Generales
+              Editar datos generales
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push(`/dashboard/inventario?supplierId=${row.original.id}`)}>
               <IconPackage className="mr-2 h-4 w-4" />
-              Catálogo de Suministros
+              Catálogo de suministros
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push(`/dashboard/proveedores/perfil?id=${row.original.id}&tab=compras`)}>
               <IconPlus className="mr-2 h-4 w-4" />
-              Generar Orden Compra
+              Generar orden compra
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive" onClick={() => onDelete(row.original.id as string)}>
               <IconBan className="mr-2 h-4 w-4" />
-              Restringir / Eliminar
+              Restringir / eliminar
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

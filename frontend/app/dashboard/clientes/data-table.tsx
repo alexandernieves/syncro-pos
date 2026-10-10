@@ -150,7 +150,7 @@ export function DataTable<TData, TValue>({
               <TableRow key={headerGroup.id} className="hover:bg-transparent">
                 {headerGroup.headers.map((header) => {
                   return (
-                    <TableHead key={header.id} className="text-muted-foreground font-semibold h-10 px-4 text-[11px] uppercase tracking-wider">
+                    <TableHead key={header.id} className="text-muted-foreground font-semibold h-10 px-4 text-[11px]">
                       {header.isPlaceholder
                         ? null
                         : flexRender(
@@ -191,13 +191,13 @@ export function DataTable<TData, TValue>({
 
       {/* Footer Exactly as Dashboard */}
       <div className="flex items-center justify-between px-2 py-2">
-          <div className="text-muted-foreground flex-1 text-xs hidden lg:flex font-medium uppercase tracking-tight opacity-70">
+          <div className="text-muted-foreground flex-1 text-xs hidden lg:flex font-medium tracking-tight opacity-70">
             {table.getFilteredSelectedRowModel().rows.length} de{" "}
             {table.getFilteredRowModel().rows.length} fila(s) seleccionadas
           </div>
           <div className="flex items-center gap-8">
             <div className="hidden items-center gap-3 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-xs font-semibold uppercase opacity-60">
+                <Label htmlFor="rows-per-page" className="text-xs font-semibold opacity-60">
                     Filas
                 </Label>
                 <Select
@@ -218,7 +218,7 @@ export function DataTable<TData, TValue>({
                     </SelectContent>
                 </Select>
             </div>
-            <div className="flex items-center justify-center text-xs font-bold uppercase tracking-tighter opacity-80">
+            <div className="flex items-center justify-center text-xs font-bold tracking-tighter opacity-80">
                 Página {table.getState().pagination.pageIndex + 1} de {table.getPageCount() || 1}
             </div>
             <div className="flex items-center gap-1.5">

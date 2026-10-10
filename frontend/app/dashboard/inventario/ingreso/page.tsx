@@ -102,13 +102,13 @@ export default function IngresoPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 px-4 lg:px-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <IconPackageImport size={24} className="text-primary" /> Ingreso de Mercancía
+            <IconPackageImport size={24} className="text-primary" /> Ingreso de mercancía
           </h1>
           <p className="text-sm text-muted-foreground font-medium">Registro de entradas de productos y reabastecimiento de sucursales.</p>
         </div>
         <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="gap-2 h-9 shadow-sm">
-                <IconHistory size={16} /> Ver Historial
+                <IconHistory size={16} /> Ver historial
             </Button>
         </div>
       </div>
@@ -122,7 +122,7 @@ export default function IngresoPage() {
                     <IconTruckLoading size={24} stroke={1.5} />
                   </div>
                   <div>
-                    <CardTitle className="text-lg font-bold tracking-tight">Formulario de Recepción</CardTitle>
+                    <CardTitle className="text-lg font-bold tracking-tight">Formulario de recepción</CardTitle>
                     <CardDescription className="text-xs font-medium">Incremente el stock de sus variantes asociándolas a una sucursal.</CardDescription>
                   </div>
                 </div>
@@ -130,7 +130,7 @@ export default function IngresoPage() {
               <CardContent className="p-8 space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-2.5">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">Variante de Producto</Label>
+                    <Label className="text-[10px] font-black text-muted-foreground/80">Variante de producto</Label>
                     <Select onValueChange={setSelectedVariant} value={selectedVariant}>
                       <SelectTrigger className="h-11 bg-muted/20 border-none shadow-none text-xs font-semibold focus:ring-1 focus:ring-primary/20">
                         <SelectValue placeholder="Busque o seleccione la variante..." />
@@ -142,7 +142,7 @@ export default function IngresoPage() {
                           <SelectItem key={v.id || v._id} value={v.id || v._id} className="text-xs font-medium py-2.5">
                             <div className="flex flex-col gap-0.5">
                                 <span className="font-bold">{p.name}</span>
-                                <span className="text-[10px] opacity-60 uppercase">{v.name} • SKU: {v.sku}</span>
+                                <span className="text-[10px] opacity-60">{v.name} • SKU: {v.sku}</span>
                             </div>
                           </SelectItem>
                         )))}
@@ -151,7 +151,7 @@ export default function IngresoPage() {
                   </div>
 
                   <div className="space-y-2.5">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">Sucursal Destino</Label>
+                    <Label className="text-[10px] font-black text-muted-foreground/80">Sucursal destino</Label>
                     <Select onValueChange={setSelectedBranch} value={selectedBranch}>
                       <SelectTrigger className="h-11 bg-muted/20 border-none shadow-none text-xs font-semibold focus:ring-1 focus:ring-primary/20">
                         <SelectValue placeholder="Seleccione sucursal de recepción..." />
@@ -167,7 +167,7 @@ export default function IngresoPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
                   <div className="space-y-2.5">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">Cantidad Unidades</Label>
+                    <Label className="text-[10px] font-black text-muted-foreground/80">Cantidad unidades</Label>
                     <div className="relative">
                       <IconCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary" size={16} />
                       <Input 
@@ -182,11 +182,11 @@ export default function IngresoPage() {
                     </div>
                   </div>
                   <Button 
-                      className="h-11 font-black text-xs uppercase tracking-widest gap-2 shadow-lg shadow-primary/20 rounded-xl" 
+                      className="h-11 font-black text-xs gap-2 shadow-lg shadow-primary/20 rounded-xl" 
                       onClick={handleRestock}
                       disabled={submitting}
                   >
-                    {submitting ? "PROCESANDO..." : "CONFIRMAR ENTRADA"}
+                    {submitting ? "Procesando..." : "Confirmar entrada"}
                     <IconArrowRight size={16} />
                   </Button>
                 </div>
@@ -195,9 +195,9 @@ export default function IngresoPage() {
 
                 <Alert className="border-amber-200 bg-amber-50/50 text-amber-800">
                   <IconAlertCircle className="h-4 w-4" />
-                  <AlertTitle className="text-xs font-bold uppercase tracking-widest">Nota Técnica</AlertTitle>
+                  <AlertTitle className="text-xs font-bold">Nota técnica</AlertTitle>
                   <AlertDescription className="text-[11px] leading-normal">
-                    Esta acción generará un movimiento de tipo <strong>ENTRADA (IN)</strong> en el Kardex y actualizará inmediatamente el stock físico. Asegúrese de que la mercancía ya esté físicamente en el almacén antes de confirmar.
+                    Esta acción generará un movimiento de tipo <strong>entrada (IN)</strong> en el Kardex y actualizará inmediatamente el stock físico. Asegúrese de que la mercancía ya esté físicamente en el almacén antes de confirmar.
                   </AlertDescription>
                 </Alert>
               </CardContent>

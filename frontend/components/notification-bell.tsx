@@ -45,7 +45,7 @@ export function NotificationBell() {
         <div className="p-4 border-b flex items-center justify-between">
           <h4 className="font-bold text-sm">Notificaciones</h4>
           {unreadCount > 0 && (
-            <Button variant="ghost" size="sm" onClick={markAllAsRead} className="h-8 text-[10px] uppercase font-bold text-primary hover:text-primary hover:bg-primary/5">
+            <Button variant="ghost" size="sm" onClick={markAllAsRead} className="h-8 text-[10px] font-bold text-primary hover:text-primary hover:bg-primary/5">
               Marcar todo como leído
             </Button>
           )}

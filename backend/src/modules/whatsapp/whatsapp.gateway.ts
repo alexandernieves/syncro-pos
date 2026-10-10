@@ -1,5 +1,7 @@
 import { WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody, ConnectedSocket } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import * as jwt from 'jsonwebtoken';
+import { publicChat } from './public-chat';
 
 /**
  * WhatsApp WebSocket Gateway with multi-tenant isolation.
@@ -20,15 +22,25 @@ export class WhatsAppGateway {
   @WebSocketServer()
   server: Server;
 
-  /** Client joins a business-specific room for isolated event delivery. */
+  /**
+   * Client joins its business room. The business comes from the verified JWT sent in
+   * the handshake (auth.token), never from the payload, so nobody can listen to another business.
+   */
   @SubscribeMessage('joinBusiness')
   handleJoinBusiness(
-    @MessageBody() data: { businessId: string },
+    @MessageBody() _data: { businessId?: string },
     @ConnectedSocket() client: Socket,
   ) {
-    if (data?.businessId) {
-      const room = `whatsapp:${data.businessId}`;
-      client.join(room);
+    let token = client.handshake.auth?.token as string | undefined;
+    if (!token) return { joined: false };
+    if (token.startsWith('Bearer ')) token = token.slice(7);
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'syncro-pos-secret-key-2025') as any;
+      if (!decoded?.businessId) return { joined: false };
+      client.join(`whatsapp:${decoded.businessId}`);
+      return { joined: true };
+    } catch {
+      return { joined: false };
     }
   }
 
@@ -45,8 +57,9 @@ export class WhatsAppGateway {
   }
 
   /** Emit a chat update only to the business that owns the chat. */
-  emitChatUpdated(chat: any) {
+  emitChatUpdated(rawChat: any) {
     if (!this.server) return;
+    const chat = publicChat(rawChat);
     const businessId = chat?.businessId;
     if (businessId) {
       this.server.to(`whatsapp:${businessId}`).emit('whatsapp_chatUpdated', chat);
@@ -63,6 +76,12 @@ export class WhatsAppGateway {
     } else {
       this.server.emit('whatsapp_chatDeleted', { id: chatId });
     }
+  }
+
+  /** Contact online / typing / recording, only to the business that owns the chat. */
+  emitPresence(data: { businessId: string; chatId: string; phone: string; presence: string; lastSeen: string | null }) {
+    if (!this.server || !data.businessId) return;
+    this.server.to(`whatsapp:${data.businessId}`).emit('whatsapp_presence', data);
   }
 
   /** Emit a message status update only to the business that owns the message. */

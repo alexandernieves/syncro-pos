@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Punto de Venta | Syncro",
+  title: "Punto de venta | Syncro",
   description: "Terminal de venta de alta disponibilidad",
 };
 

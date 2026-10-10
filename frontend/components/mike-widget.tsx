@@ -243,8 +243,14 @@ function MikeCursor({ position }: { position: CursorPosition }) {
         <path d="M2 2L18 9L10 11L8 18L2 2Z" fill="#33456b" stroke="white" strokeWidth="1" />
       </svg>
       <span className="rounded-md bg-[#33456b] px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
-        Mike
+        test
+        <script
+  src="https://app.theandeans.com/api/widget/v1/widget.js"
+  data-widget-key="ww_hS5B_KHkjrAL5Mih10kiPnwY"
+  async
+></script>
       </span>
     </div>
   );
+  
 }

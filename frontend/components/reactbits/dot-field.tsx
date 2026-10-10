@@ -50,9 +50,9 @@ export const DotField = memo(function DotField({
   glowRadius = 160,
   sparkle = false,
   waveAmplitude = 0,
-  gradientFrom = "rgba(168, 85, 247, 0.35)",
-  gradientTo = "rgba(180, 151, 207, 0.25)",
-  glowColor = "#120F17",
+  gradientFrom = "rgba(242, 107, 58, 0.45)",
+  gradientTo = "rgba(242, 107, 58, 0.25)",
+  glowColor = "#fdebe4",
   className,
 }: DotFieldProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -135,9 +135,10 @@ export const DotField = memo(function DotField({
     }
 
     function onMouseMove(e: MouseEvent) {
-      const s = sizeRef.current;
-      mouseRef.current.x = e.pageX - s.offsetX;
-      mouseRef.current.y = e.pageY - s.offsetY;
+      if (!canvasRef.current) return;
+      const rect = canvasRef.current.getBoundingClientRect();
+      mouseRef.current.x = e.clientX - rect.left;
+      mouseRef.current.y = e.clientY - rect.top;
     }
 
     function updateMouseSpeed() {
@@ -164,12 +165,12 @@ export const DotField = memo(function DotField({
       const len = dots.length;
       const t = frameCount * 0.02;
 
-      const targetEngagement = Math.min(m.speed / 5, 1);
-      engagement.current += (targetEngagement - engagement.current) * 0.06;
-      if (engagement.current < 0.001) engagement.current = 0;
+      const isMouseOver = m.x > -500 && m.y > -500;
+      const targetEngagement = isMouseOver ? 1 : 0;
+      engagement.current += (targetEngagement - engagement.current) * 0.1;
       const eng = engagement.current;
 
-      glowOpacity.current += (eng - glowOpacity.current) * 0.08;
+      glowOpacity.current += (eng - glowOpacity.current) * 0.1;
 
       if (glowEl) {
         glowEl.setAttribute("cx", String(m.x));

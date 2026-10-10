@@ -25,7 +25,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { io, Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
+import { connectSocket } from "@/lib/socket";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
 
@@ -67,10 +68,9 @@ export default function SyncroAdminChatPage() {
   };
 
   const initSocket = () => {
-    const socketUrl = API;
     const token = localStorage.getItem("token");
     if (!token) return;
-    socketRef.current = io(socketUrl, { auth: { token } });
+    socketRef.current = connectSocket({ auth: { token } });
     socketRef.current.on("newMessage", (msg: any) => {
       setMessages((prev) => {
         if (prev.length && prev[0].conversationId === msg.conversationId) {
@@ -225,7 +225,7 @@ export default function SyncroAdminChatPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold tracking-tight">Mensajería</h2>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Panel de soporte SaaS</p>
+              <p className="text-[10px] text-muted-foreground font-semibold">Panel de soporte SaaS</p>
             </div>
             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={fetchConversations}>
               <IconRefresh size={16} className="text-muted-foreground" />
@@ -320,7 +320,7 @@ export default function SyncroAdminChatPage() {
                 <p className="font-semibold text-sm">{activeConv.business?.name ?? "Cliente"}</p>
                 <p className="text-[11px] text-emerald-500 font-medium flex items-center gap-1">
                   <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
-                  OwnerPOS · En línea
+                  OwnerPOS · en línea
                 </p>
               </div>
             </div>
@@ -450,7 +450,7 @@ export default function SyncroAdminChatPage() {
             <div className="size-20 rounded-3xl bg-primary/10 flex items-center justify-center mx-auto mb-5 border border-primary/10">
               <IconMessageCircle size={38} className="text-primary/50" />
             </div>
-            <h3 className="text-lg font-bold">Syncro Central · Mensajería</h3>
+            <h3 className="text-lg font-bold">Syncro central · mensajería</h3>
             <p className="text-sm text-muted-foreground mt-2 max-w-xs">
               Selecciona un negocio del panel izquierdo para ver la conversación y brindar soporte.
             </p>

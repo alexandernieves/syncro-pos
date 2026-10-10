@@ -59,8 +59,8 @@ export default function AlertasPage() {
     <div className="flex flex-col gap-6 py-4 md:gap-8 md:py-6 font-sans px-4 lg:px-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 uppercase">
-            <IconBell className="text-foreground/80" /> Alertas de Reabastecimiento
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <IconBell className="text-foreground/80" /> Alertas de reabastecimiento
           </h1>
           <p className="text-sm text-muted-foreground font-medium">Productos que requieren atención inmediata en esta sucursal.</p>
         </div>
@@ -82,7 +82,7 @@ export default function AlertasPage() {
               <div className="bg-background border shadow-sm p-5 rounded-2xl mb-6 text-muted-foreground/60">
                 <IconShoppingCart size={32} />
               </div>
-              <h3 className="text-lg font-bold tracking-tight">Inventario Saludable</h3>
+              <h3 className="text-lg font-bold tracking-tight">Inventario saludable</h3>
               <p className="text-sm text-muted-foreground max-w-xs mt-1.5 font-medium leading-relaxed opacity-70">
                 No hay alertas de reabastecimiento pendientes. Todos los productos superan el stock mínimo.
               </p>

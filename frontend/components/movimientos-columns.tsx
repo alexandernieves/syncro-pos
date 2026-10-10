@@ -52,10 +52,10 @@ export const movimientosSchema = z.object({
 })
 
 const typeConfig: Record<string, { label: string; icon: any; color: string; bg: string }> = {
-  IN:         { label: "ENTRADA",  icon: IconArrowUp,    color: "text-emerald-600",  bg: "bg-emerald-500/10" },
-  OUT:        { label: "SALIDA",   icon: IconArrowDown,  color: "text-rose-600",    bg: "bg-rose-500/10" },
-  ADJUSTMENT: { label: "AJUSTE",   icon: IconAdjustments,color: "text-amber-600", bg: "bg-amber-500/10" },
-  TRANSFER:   { label: "TRASLADO", icon: IconArrowLeftRight,        color: "text-blue-600",   bg: "bg-blue-500/10" },
+  IN:         { label: "Entrada",  icon: IconArrowUp,    color: "text-emerald-600",  bg: "bg-emerald-500/10" },
+  OUT:        { label: "Salida",   icon: IconArrowDown,  color: "text-rose-600",    bg: "bg-rose-500/10" },
+  ADJUSTMENT: { label: "Ajuste",   icon: IconAdjustments,color: "text-amber-600", bg: "bg-amber-500/10" },
+  TRANSFER:   { label: "Traslado", icon: IconArrowLeftRight,        color: "text-blue-600",   bg: "bg-blue-500/10" },
 };
 
 export const movimientosColumns: ColumnDef<z.infer<typeof movimientosSchema>>[] = [
@@ -109,7 +109,7 @@ export const movimientosColumns: ColumnDef<z.infer<typeof movimientosSchema>>[] 
   },
   {
     accessorKey: "header",
-    header: "Tipo / Movimiento",
+    header: "Tipo / movimiento",
     cell: ({ row }) => {
       const movementData = JSON.parse(row.original.header || '{}');
       const type = movementData.type || 'UNKNOWN';
@@ -117,7 +117,7 @@ export const movimientosColumns: ColumnDef<z.infer<typeof movimientosSchema>>[] 
       const Icon = t.icon;
       
       return (
-        <Badge variant="outline" className={`${t.bg} ${t.color} border-none font-light text-[9px] tracking-widest gap-2 h-7 px-2.5`}>
+        <Badge variant="outline" className={`${t.bg} ${t.color} border-none font-light text-[9px]  gap-2 h-7 px-2.5`}>
           <Icon size={12} stroke={2.5} />
           {t.label}
         </Badge>
@@ -126,7 +126,7 @@ export const movimientosColumns: ColumnDef<z.infer<typeof movimientosSchema>>[] 
   },
   {
     accessorKey: "type",
-    header: "Producto Afectado",
+    header: "Producto afectado",
     cell: ({ row }) => {
       const movementData = JSON.parse(row.original.type || '{}');
       const product = movementData.product || {};
@@ -136,7 +136,7 @@ export const movimientosColumns: ColumnDef<z.infer<typeof movimientosSchema>>[] 
           <span className="text-sm font-bold tracking-tight text-foreground/90 leading-none mb-1">
             {product.name || <span className="italic text-muted-foreground font-medium">No identificado</span>}
           </span>
-          <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-tighter flex items-center gap-1.5 opacity-60">
+          <span className="text-[10px] text-muted-foreground font-semibold tracking-tighter flex items-center gap-1.5 opacity-60">
             <IconBarcode size={10} /> {product.sku || "S/K"}
           </span>
         </div>
@@ -222,7 +222,7 @@ export const movimientosColumns: ColumnDef<z.infer<typeof movimientosSchema>>[] 
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44 border-none shadow-2xl rounded-xl">
             <DropdownMenuItem className="text-xs gap-2"><IconChecklist size={14} /> Detalle de flujo</DropdownMenuItem>
-            <DropdownMenuItem className="text-xs gap-2"><IconDatabase size={14} /> Trazabilidad SQL</DropdownMenuItem>
+            <DropdownMenuItem className="text-xs gap-2"><IconDatabase size={14} /> Trazabilidad sql</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

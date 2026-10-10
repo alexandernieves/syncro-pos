@@ -192,8 +192,8 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
   const getPaymentMethodBadge = (payments: any[]) => {
     if (!payments || payments.length === 0) {
       return (
-        <Badge variant="outline" className="text-[9px] border-zinc-700/30 text-zinc-400 font-semibold uppercase">
-          Sin Pago
+        <Badge variant="outline" className="text-[9px] border-zinc-700/30 text-zinc-400 font-semibold">
+          Sin pago
         </Badge>
       );
     }
@@ -244,7 +244,7 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
           }
 
           return (
-            <Badge key={idx} variant="outline" className={cn("text-[9px] gap-1 px-1.5 h-5 font-semibold uppercase", colorClass)}>
+            <Badge key={idx} variant="outline" className={cn("text-[9px] gap-1 px-1.5 h-5 font-semibold", colorClass)}>
               {label}
             </Badge>
           );
@@ -262,8 +262,8 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
     <div className="space-y-3">
       {/* Search Input for Advanced Filtering */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-1">
-        <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
-          {searchTerm.trim() ? "Búsqueda en Historial Global" : "Historial de Ventas del Día"}
+        <h3 className="text-xs font-semibold text-muted-foreground">
+          {searchTerm.trim() ? "Búsqueda en historial global" : "Historial de ventas del día"}
         </h3>
         <div className="relative w-full sm:w-72">
           {loadingGlobal ? (
@@ -273,7 +273,7 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
           )}
           <Input 
             placeholder="Buscar por cliente, cédula u orden..." 
-            className="pl-9 rounded-xl h-9 border-[#79716b]/20 bg-[#121110]/50 text-xs focus-visible:ring-emerald-500/50 text-white placeholder:text-zinc-500 focus:border-emerald-500/30 transition-all"
+            className="pl-9 rounded-xl h-9 bg-card text-xs focus-visible:ring-primary/40 placeholder:text-muted-foreground transition-all"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -282,7 +282,7 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
       <div className="rounded-xl border border-[#79716b]/10 bg-card overflow-hidden">
         <Table>
           <TableHeader className="bg-muted/50">
-            <TableRow className="hover:bg-transparent border-[#79716b]/10 font-semibold uppercase tracking-tight text-[10px] text-[#79716b]">
+            <TableRow className="hover:bg-transparent border-[#79716b]/10 font-semibold tracking-tight text-[10px] text-[#79716b]">
               <TableHead className="w-[100px] h-10 px-4">Orden</TableHead>
               <TableHead className="h-10 px-4">Cliente</TableHead>
               <TableHead className="h-10 px-4">Cajero</TableHead>
@@ -305,9 +305,9 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
                   className="hover:bg-muted/30 border-[#79716b]/5 transition-colors group cursor-pointer"
                 >
                   <TableCell className="px-4 py-3 font-mono text-[10px] text-primary">{sale.id?.substring(0, 8) || 'N/A'}</TableCell>
-                  <TableCell className="px-4 py-3 text-xs font-bold text-white uppercase tracking-tight">
+                  <TableCell className="px-4 py-3 text-xs font-bold text-white tracking-tight">
                     <div>
-                      <span>{sale.client || 'Consumidor Final'}</span>
+                      <span>{sale.client || 'Consumidor final'}</span>
                       {sale.clientDocument && (
                         <span className="block text-[9px] font-normal font-mono text-zinc-500 tracking-tight mt-0.5">{sale.clientDocument}</span>
                       )}
@@ -329,7 +329,7 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
                           sale.status === 'CANCELLED' ? "bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
                         )} />
                         <span className={cn(
-                          "text-[9px] font-black uppercase tracking-tight",
+                          "text-[9px] font-black tracking-tight",
                           sale.status === 'CANCELLED' ? "text-rose-500" : "text-emerald-500"
                         )}>{sale.status === 'CANCELLED' ? 'Anulada' : 'Completada'}</span>
                      </div>
@@ -353,8 +353,8 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
                 <IconReceipt size={20} />
               </div>
               <div>
-                <DialogTitle className="text-base font-bold tracking-tight text-white">Detalle de la Orden</DialogTitle>
-                <DialogDescription className="text-zinc-500 text-[10px] uppercase font-mono tracking-wider mt-0.5">
+                <DialogTitle className="text-base font-bold tracking-tight text-white">Detalle de la orden</DialogTitle>
+                <DialogDescription className="text-zinc-500 text-[10px] font-mono mt-0.5">
                   ID: {selectedSale?.id}
                 </DialogDescription>
               </div>
@@ -364,38 +364,38 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
           {/* Client & Date Info */}
           <div className="grid grid-cols-2 gap-4 py-4 border-b border-[#79716b]/10 text-xs">
             <div className="space-y-1">
-              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Cliente</span>
-              <div className="font-bold text-white uppercase">{selectedSale?.client || "Consumidor Final"}</div>
+              <span className="text-zinc-500 text-[10px] font-bold">Cliente</span>
+              <div className="font-bold text-white">{selectedSale?.client || "Consumidor final"}</div>
               {selectedSale?.clientDocument && (
                 <div className="text-zinc-500 font-mono text-[10px]">{selectedSale.clientDocument}</div>
               )}
               {selectedSale?.seller && (
                 <div className="text-[10px] text-zinc-400 mt-2">
-                  <span className="font-semibold text-zinc-500 uppercase text-[9px] tracking-wider block">Cajero / Vendedor</span>
+                  <span className="font-semibold text-zinc-500 text-[9px] block">Cajero / vendedor</span>
                   <span className="font-bold text-zinc-200">{selectedSale.seller}</span>
                 </div>
               )}
             </div>
             <div className="space-y-1 text-right">
-              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Fecha y Hora</span>
+              <span className="text-zinc-500 text-[10px] font-bold">Fecha y hora</span>
               <div className="font-semibold text-zinc-300">
                 {selectedSale && format(new Date(selectedSale.date), "dd 'de' MMMM 'de' yyyy, hh:mm a", { locale: es })}
               </div>
-              <div className="text-zinc-500 text-[10px] uppercase font-bold">Sucursal: {selectedSale?.branch || "N/A"}</div>
+              <div className="text-zinc-500 text-[10px] font-bold">Sucursal: {selectedSale?.branch || "N/A"}</div>
             </div>
           </div>
 
           {/* Products List */}
           <div className="py-4 space-y-3">
-            <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Productos Comprados</span>
+            <span className="text-zinc-500 text-[10px] font-bold">Productos comprados</span>
             <div className="rounded-xl border border-[#79716b]/10 overflow-hidden max-h-48 overflow-y-auto">
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow className="hover:bg-transparent border-[#79716b]/10">
-                    <TableHead className="h-8 text-[9px] uppercase font-bold text-zinc-400">Producto</TableHead>
-                    <TableHead className="h-8 text-center text-[9px] uppercase font-bold text-zinc-400 w-[60px]">Cant.</TableHead>
-                    <TableHead className="h-8 text-right text-[9px] uppercase font-bold text-zinc-400 w-[85px]">P. Unit</TableHead>
-                    <TableHead className="h-8 text-right text-[9px] uppercase font-bold text-zinc-400 w-[90px]">Subtotal</TableHead>
+                    <TableHead className="h-8 text-[9px] font-bold text-zinc-400">Producto</TableHead>
+                    <TableHead className="h-8 text-center text-[9px] font-bold text-zinc-400 w-[60px]">Cant.</TableHead>
+                    <TableHead className="h-8 text-right text-[9px] font-bold text-zinc-400 w-[85px]">P. Unit</TableHead>
+                    <TableHead className="h-8 text-right text-[9px] font-bold text-zinc-400 w-[90px]">Subtotal</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -436,21 +436,21 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
           {/* Payment & Totals */}
           <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#79716b]/10">
             <div className="space-y-2">
-              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider block">Método de Pago</span>
+              <span className="text-zinc-500 text-[10px] font-bold block">Método de pago</span>
               <div className="space-y-1">
                 {selectedSale?.payments && selectedSale.payments.length > 0 ? (
                   selectedSale.payments.map((p: any, idx: number) => (
                     <div key={idx} className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-muted/20 border border-[#79716b]/5">
                       <span className="text-zinc-400 font-medium">
                         {p.method === "CASH" ? "Efectivo" :
-                         p.method === "CARD" ? "Tarjeta / Punto" :
+                         p.method === "CARD" ? "Tarjeta / punto" :
                          p.method === "TRANSFER" ? "Transferencia" :
                          p.method === "WALLET" ? "Billetera" :
                          p.method === "CREDIT" ? "Fiado" :
-                         p.method === "PAGO_MOVIL" ? "Pago Móvil" :
+                         p.method === "PAGO_MOVIL" ? "Pago móvil" :
                          p.method === "BINANCE" ? "Binance" :
                          p.method === "ZINLI" ? "Zinli" :
-                         p.method === "PAYPAL" ? "Paypal" : p.method}
+                         p.method === "PAYPAL" ? "PayPal" : p.method}
                       </span>
                       <span className="font-bold text-white font-mono">{formatPrice(p.amount)}</span>
                     </div>
@@ -486,8 +486,8 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
           {/* Other Purchases Section */}
           {selectedSale?.clientId && (
             <div className="py-4 border-t border-[#79716b]/10 space-y-2.5">
-              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider block">
-                Historial de Compras del Cliente ({clientHistory.length})
+              <span className="text-zinc-500 text-[10px] font-bold block">
+                Historial de compras del cliente ({clientHistory.length})
               </span>
               {loadingHistory ? (
                 <div className="text-[11px] text-zinc-500 animate-pulse">Cargando historial...</div>
@@ -503,7 +503,7 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
                         key={histSale.id}
                         onClick={() => setSelectedSale(histSale)}
                         className={cn(
-                          "w-full text-left px-3.5 py-2.5 rounded-xl border text-[11px] font-bold transition-all uppercase tracking-tight cursor-pointer flex items-center justify-between",
+                          "w-full text-left px-3.5 py-2.5 rounded-xl border text-[11px] font-bold transition-all tracking-tight cursor-pointer flex items-center justify-between",
                           isCurrent
                             ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
                             : "bg-[#121110]/60 border-[#79716b]/20 hover:border-zinc-500 text-zinc-400 hover:text-white"
@@ -680,7 +680,7 @@ export default function Page() {
       <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
         <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
           <CardHeader>
-            <CardDescription>Ingresos Totales</CardDescription>
+            <CardDescription>Ingresos totales</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
               {formatPrice(stats?.revenue || 0)}
               {currency === "USD" && (
@@ -708,7 +708,7 @@ export default function Page() {
 
         <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
           <CardHeader>
-            <CardDescription>Ventas (Órdenes)</CardDescription>
+            <CardDescription>Ventas (órdenes)</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
               {stats?.salesCount}
             </CardTitle>
@@ -728,7 +728,7 @@ export default function Page() {
 
         <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
           <CardHeader>
-            <CardDescription>Total Clientes</CardDescription>
+            <CardDescription>Total clientes</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-primary font-black">
               {stats?.clientsCount}
             </CardTitle>
@@ -748,7 +748,7 @@ export default function Page() {
 
         <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
           <CardHeader>
-            <CardDescription>Productos en Almacén</CardDescription>
+            <CardDescription>Productos en almacén</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-orange-600">
               {stats?.productsCount}
             </CardTitle>
@@ -772,7 +772,7 @@ export default function Page() {
         <div className="px-4 lg:px-6">
           <div className="flex items-center gap-2 mb-4">
             <IconTarget size={18} className="text-blue-500" />
-            <h2 className="text-sm font-bold uppercase tracking-tight text-blue-500">Syncro Growth Partner (Métricas Clave)</h2>
+            <h2 className="text-sm font-bold tracking-tight text-blue-500">Métricas clave de tu negocio</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Sales Goal */}
@@ -780,7 +780,7 @@ export default function Page() {
               <Card className="bg-gradient-to-br from-blue-500/5 to-transparent border-blue-500/20">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center justify-between">
-                    Meta de Ventas del Mes
+                    Meta de ventas del mes
                     <span className="text-xs font-mono text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full">
                       {Math.min(Math.round(((stats?.revenue || 0) / (stats?.settings?.salesGoal || 10000)) * 100), 100)}%
                     </span>
@@ -802,7 +802,7 @@ export default function Page() {
               <Card className="bg-gradient-to-t from-primary/5 to-card border border-[#79716b]/10 shadow-xs">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold flex items-center justify-between">
-                    Margen y Ganancia Real (Neto)
+                    Margen y ganancia real (neto)
                     <span className="text-xs font-mono text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full font-bold">
                       {stats?.netMarginPercentage !== undefined ? `${stats.netMarginPercentage.toFixed(1)}%` : "0.0%"}
                     </span>
@@ -811,7 +811,7 @@ export default function Page() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex flex-col gap-1">
-                    <span className="text-[10px] uppercase text-muted-foreground font-semibold">Valor Neto Estimado</span>
+                    <span className="text-[10px] text-muted-foreground font-semibold">Valor neto estimado</span>
                     <span className="text-2xl font-semibold tabular-nums text-foreground tracking-tight">
                       {formatPrice(stats?.netProfit || 0)}
                     </span>
@@ -842,12 +842,8 @@ export default function Page() {
       <div className="px-4 lg:px-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-2">
-            <div className={cn(
-              "size-2 rounded-full",
-              stats?.hasActiveShift ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" : "bg-[#79716b]/40"
-            )} />
-            <h2 className="text-sm font-bold uppercase tracking-tight text-white">
-              Ventas del Día
+            <h2 className="text-sm font-semibold text-foreground">
+              Ventas del día
             </h2>
           </div>
 
@@ -856,30 +852,30 @@ export default function Page() {
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className="w-[260px] justify-start text-left font-semibold h-10 border border-[#79716b]/20 bg-card/40 hover:bg-card/75 backdrop-blur-md text-white text-xs rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:border-emerald-500/30 transition-all duration-300 gap-2.5 group active:scale-[0.98]"
+                className="w-[260px] justify-start text-left font-medium h-10 bg-card text-foreground text-xs rounded-xl hover:bg-accent transition-colors gap-2.5 group"
               >
-                <IconCalendar size={15} className="text-emerald-500 group-hover:scale-110 transition-transform duration-300" />
-                <span className="flex-1 capitalize text-white/90">
+                <IconCalendar size={15} className="text-primary" />
+                <span className="flex-1 capitalize">
                   {selectedDate ? (
                     format(selectedDate, "eeee, dd 'de' MMMM", { locale: es })
                   ) : (
-                    "Seleccionar Día"
+                    "Seleccionar día"
                   )}
                 </span>
-                <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
               </Button>
             </PopoverTrigger>
             <PopoverContent 
-              className="w-auto p-0 border border-white/5 bg-[#121110]/95 backdrop-blur-xl rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in fade-in-50 zoom-in-95 duration-200" 
+              className="w-auto p-0 border border-border bg-popover rounded-2xl overflow-hidden shadow-[0_18px_40px_-20px_rgba(26,24,21,0.25)] animate-in fade-in-50 zoom-in-95 duration-200" 
               align="end"
               sideOffset={8}
             >
               <Calendar
                 mode="single"
+                locale={es}
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
                 initialFocus
-                className="bg-transparent text-white font-sans p-4"
+                className="bg-transparent font-sans p-4"
                 modifiers={{
                   hasSales: isSalesDate
                 }}

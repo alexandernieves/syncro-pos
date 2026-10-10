@@ -261,14 +261,14 @@ function SupplierDetailContent() {
           </Button>
           <div>
             <h1 className="text-3xl font-bold">{supplier.name}</h1>
-            <p className="text-muted-foreground">Ficha Técnica del Proveedor</p>
+            <p className="text-muted-foreground">Ficha técnica del proveedor</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {getStatusBadge(supplier.status)}
           <Button variant="outline">Editar</Button>
           <Button variant="default" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setIsPaymentDialogOpen(true)}>
-            <IconCurrencyDollar className="h-4 w-4 mr-2" /> Registrar Pago
+            <IconCurrencyDollar className="h-4 w-4 mr-2" /> Registrar pago
           </Button>
         </div>
       </div>
@@ -278,14 +278,14 @@ function SupplierDetailContent() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <IconBuildingStore className="h-5 w-5" />
-            Información del Proveedor
+            Información del proveedor
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {supplier.taxId && (
               <div>
-                <p className="text-sm text-muted-foreground">RFC/Tax ID</p>
+                <p className="text-sm text-muted-foreground">RFC/tax ID</p>
                 <p className="font-medium">{supplier.taxId}</p>
               </div>
             )}
@@ -322,7 +322,7 @@ function SupplierDetailContent() {
         <div className="grid grid-cols-1 gap-4 px-0 lg:px-0 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
-              <CardDescription>Compras Totales</CardDescription>
+              <CardDescription>Compras totales</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
                 {formatCurrency(stats.purchaseStats.totalPurchased)}
               </CardTitle>
@@ -345,7 +345,7 @@ function SupplierDetailContent() {
 
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
-              <CardDescription>Balance Pendiente</CardDescription>
+              <CardDescription>Balance pendiente</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
                 {formatCurrency(stats.financialStats.outstandingBalance)}
               </CardTitle>
@@ -368,7 +368,7 @@ function SupplierDetailContent() {
 
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
-              <CardDescription>Tasa de Devolución</CardDescription>
+              <CardDescription>Tasa de devolución</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
                 {stats.returnStats.returnRate.toFixed(1)}%
               </CardTitle>
@@ -389,7 +389,7 @@ function SupplierDetailContent() {
 
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
-              <CardDescription>Inversión en Mercancía</CardDescription>
+              <CardDescription>Inversión en mercancía</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
                 {formatCurrency(stats.purchaseStats.totalPurchased)}
               </CardTitle>
@@ -426,10 +426,10 @@ function SupplierDetailContent() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <IconTruck className="h-5 w-5" /> Órdenes de Compra
+                    <IconTruck className="h-5 w-5" /> Órdenes de compra
                   </CardTitle>
                   <Button size="sm" onClick={() => router.push(`/dashboard/inventario/compras/nuevo?supplierId=${supplierId}`)}>
-                    <IconPlus className="h-4 w-4 mr-2" /> Nueva Orden
+                    <IconPlus className="h-4 w-4 mr-2" /> Nueva orden
                   </Button>
                 </CardHeader>
                 <CardContent>
@@ -458,11 +458,11 @@ function SupplierDetailContent() {
             <div className="space-y-4">
               <Card className="border-none bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent shadow-none">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-xs font-bold flex items-center gap-2 text-amber-600 uppercase tracking-widest leading-none">
+                  <CardTitle className="text-xs font-bold flex items-center gap-2 text-amber-600 leading-none">
                     <div className="size-6 rounded-lg bg-amber-500/10 flex items-center justify-center">
                       <IconAlertTriangle size={14} />
                     </div>
-                    Sugerencias de Reabastecimiento
+                    Sugerencias de reabastecimiento
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -487,7 +487,7 @@ function SupplierDetailContent() {
                         </div>
                       ))}
                       <Button className="w-full mt-2 text-xs h-8 bg-amber-600 hover:bg-amber-700" onClick={() => router.push(`/dashboard/inventario/compras/nuevo?supplierId=${supplierId}&auto=true`)}>
-                        Generar Orden Sugerida
+                        Generar orden sugerida
                       </Button>
                     </div>
                   )}
@@ -557,7 +557,7 @@ function SupplierDetailContent() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <IconPackage className="h-5 w-5" /> Productos y Precios
+                <IconPackage className="h-5 w-5" /> Productos y precios
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -647,14 +647,14 @@ function SupplierDetailContent() {
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Registrar Pago a Proveedor</DialogTitle>
+            <DialogTitle>Registrar pago a proveedor</DialogTitle>
             <DialogDescription>
               Este pago se aplicará a las facturas pendientes de {supplier.name} y se registrará en contabilidad.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="amount">Monto a Pagar</Label>
+              <Label htmlFor="amount">Monto a pagar</Label>
               <Input 
                 id="amount" 
                 type="number" 
@@ -664,7 +664,7 @@ function SupplierDetailContent() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="method">Método de Pago</Label>
+              <Label htmlFor="method">Método de pago</Label>
               <Select value={paymentData.method} onValueChange={(v) => setPaymentData({ ...paymentData, method: v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccione método" />
@@ -677,7 +677,7 @@ function SupplierDetailContent() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="reference">Referencia / Comprobante</Label>
+              <Label htmlFor="reference">Referencia / comprobante</Label>
               <Input 
                 id="reference" 
                 value={paymentData.reference} 
@@ -689,7 +689,7 @@ function SupplierDetailContent() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handlePayment} disabled={submitting} className="bg-emerald-600 hover:bg-emerald-700">
-              {submitting ? "Procesando..." : "Confirmar Pago"}
+              {submitting ? "Procesando..." : "Confirmar pago"}
             </Button>
           </DialogFooter>
         </DialogContent>

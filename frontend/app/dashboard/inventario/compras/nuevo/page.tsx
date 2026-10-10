@@ -248,17 +248,17 @@ export default function NewPurchaseOrderPage() {
     { id: "drag", header: () => null, cell: ({ row }) => <DragHandle id={row.original.variantId} /> },
     {
       accessorKey: "productName",
-      header: "PRODUCTO / VARIANTE",
+      header: "Producto / variante",
       cell: ({ row }) => (
         <div className="flex flex-col">
           <span className="text-[13px] font-medium text-foreground leading-none mb-1">{row.original.productName}</span>
-          <span className="text-[10px] text-muted-foreground uppercase font-medium tracking-tight border border-[#79716b]/30 w-fit px-1.5 py-0.5 rounded bg-transparent">{row.original.variantName}</span>
+          <span className="text-[10px] text-muted-foreground font-medium tracking-tight border border-[#79716b]/30 w-fit px-1.5 py-0.5 rounded bg-transparent">{row.original.variantName}</span>
         </div>
       ),
     },
     {
       accessorKey: "quantity",
-      header: () => <div className="text-center">CANTIDAD</div>,
+      header: () => <div className="text-center">Cantidad</div>,
       cell: ({ row }) => (
         <div className="flex justify-center">
           <Input 
@@ -270,7 +270,7 @@ export default function NewPurchaseOrderPage() {
     },
     {
       accessorKey: "cost",
-      header: () => <div className="text-right">COSTO UNIT.</div>,
+      header: () => <div className="text-right">Costo unit.</div>,
       cell: ({ row }) => (
         <div className="flex justify-end">
           <Input 
@@ -280,7 +280,7 @@ export default function NewPurchaseOrderPage() {
         </div>
       ),
     },
-    { id: "subtotal", header: () => <div className="text-right">SUBTOTAL</div>, cell: ({ row }) => (
+    { id: "subtotal", header: () => <div className="text-right">Subtotal</div>, cell: ({ row }) => (
       <div className="text-[13px] font-medium tabular-nums text-right text-foreground pr-2">
         USD {(row.original.quantity * row.original.cost).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
       </div>
@@ -341,8 +341,8 @@ export default function NewPurchaseOrderPage() {
             <IconArrowLeft size={16} className="mr-2" /> Volver
           </Button>
           <div className="flex flex-col">
-            <h1 className="text-2xl font-bold tracking-tight">Generar Orden de Compra</h1>
-            <Badge variant="outline" className="w-fit text-[9px] font-black uppercase tracking-[0.2em] border-[#79716b]/50 text-[#79716b] mt-1">Procura e Inventario</Badge>
+            <h1 className="text-2xl font-bold tracking-tight">Generar orden de compra</h1>
+            <Badge variant="outline" className="w-fit text-[9px] font-black border-[#79716b]/50 text-[#79716b] mt-1">Procura e inventario</Badge>
           </div>
         </div>
         
@@ -350,13 +350,13 @@ export default function NewPurchaseOrderPage() {
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="h-9 gap-2 border-[#79716b]/30 bg-card text-white hover:bg-muted/50 transition-colors">
-                <IconPlus size={16} /> Añadir Productos
+                <IconPlus size={16} /> Añadir productos
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl bg-zinc-950 border-[#79716b]/30 text-white max-h-[80vh] flex flex-col p-0 overflow-hidden">
               <DialogHeader className="p-6 pb-0">
                 <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                  <IconPackage className="text-[#79716b]" /> Catálogo de Productos
+                  <IconPackage className="text-[#79716b]" /> Catálogo de productos
                 </DialogTitle>
                 <div className="relative mt-4">
                   <IconSearch className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -406,7 +406,7 @@ export default function NewPurchaseOrderPage() {
           </Dialog>
 
           <Button onClick={handleSubmit} disabled={loading || items.length === 0} className="gap-2 h-9 shadow-none font-bold text-xs px-5">
-            {loading ? "Procesando..." : <>Emitir Orden de Compra <IconCheck size={16} /></>}
+            {loading ? "Procesando..." : <>Emitir orden de compra <IconCheck size={16} /></>}
           </Button>
         </div>
       </div>
@@ -415,13 +415,13 @@ export default function NewPurchaseOrderPage() {
         <div className="lg:col-span-3 space-y-6">
           <Card className="border-[#79716b]/20 shadow-sm bg-card/30 overflow-hidden">
             <CardHeader className="bg-muted h-12 flex items-center justify-start py-0 border-b border-[#79716b]/30 px-4">
-              <CardTitle className="text-[11px] font-normal uppercase tracking-wider text-white flex items-center gap-2">
-                <IconTruck size={14} className="opacity-70" /> Información del Proveedor y Destino
+              <CardTitle className="text-[11px] font-normal text-white flex items-center gap-2">
+                <IconTruck size={14} className="opacity-70" /> Información del proveedor y destino
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6">
               <div className="space-y-2 text-white">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground opacity-60 ">Socio Comercial (Proveedor)</Label>
+                <Label className="text-[10px] font-bold text-muted-foreground opacity-60">Socio comercial (proveedor)</Label>
                 <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
                   <SelectTrigger className="h-10 bg-muted/20 border-[#79716b]/30 shadow-none text-white">
                     <SelectValue placeholder="Seleccione un proveedor" className="text-white"/>
@@ -434,7 +434,7 @@ export default function NewPurchaseOrderPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground opacity-60">Sucursal de Recepción</Label>
+                <Label className="text-[10px] font-bold text-muted-foreground opacity-60">Sucursal de recepción</Label>
                 <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
                   <SelectTrigger className="h-10 bg-muted/20 border-[#79716b]/30 shadow-none text-white">
                     <SelectValue placeholder="Sucursal de entrega" />
@@ -453,7 +453,7 @@ export default function NewPurchaseOrderPage() {
           <Tabs defaultValue="items" className="w-full flex-col justify-start gap-6">
             <div className="flex items-center justify-between px-0">
                <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex border-[#79716b]/30 bg-card/30">
-                  <TabsTrigger value="items" className="text-white">Items de la Orden</TabsTrigger>
+                  <TabsTrigger value="items" className="text-white">Items de la orden</TabsTrigger>
                </TabsList>
             </div>
 
@@ -465,7 +465,7 @@ export default function NewPurchaseOrderPage() {
                         {table.getHeaderGroups().map((headerGroup) => (
                           <TableRow key={headerGroup.id} className="hover:bg-transparent border-none">
                             {headerGroup.headers.map((header) => (
-                              <TableHead key={header.id} className="text-white font-normal text-[10px] uppercase tracking-wider py-4">
+                              <TableHead key={header.id} className="text-white font-normal text-[10px] py-4">
                                 {flexRender(header.column.columnDef.header, header.getContext())}
                               </TableHead>
                             ))}
@@ -487,7 +487,7 @@ export default function NewPurchaseOrderPage() {
                   </DndContext>
                </div>
                <div className="flex items-center justify-between px-2">
-                  <div className="text-muted-foreground text-[10px] font-medium uppercase tracking-widest">{items.length} ITEM(S) CARGADOS</div>
+                  <div className="text-muted-foreground text-[10px] font-medium">{items.length} item(s) cargados</div>
                   <div className="flex items-center gap-2">
                      <Button variant="outline" size="sm" className="h-8 w-8 p-0 border-[#79716b]/20" disabled><IconChevronLeft size={14} /></Button>
                      <Button variant="outline" size="sm" className="h-8 w-8 p-0 border-[#79716b]/20" disabled><IconChevronRight size={14} /></Button>
@@ -500,24 +500,24 @@ export default function NewPurchaseOrderPage() {
         <div className="space-y-6">
           <Card className="border-[#79716b]/20 shadow-sm bg-card/50 overflow-hidden">
             <CardHeader className="bg-muted h-12 flex items-center justify-start py-0 border-b border-[#79716b]/30 px-4">
-              <CardTitle className="text-[11px] font-normal uppercase tracking-wider text-white flex items-center gap-2"><IconFileText size={14} className="opacity-70" /> Resumen de Inversión</CardTitle>
+              <CardTitle className="text-[11px] font-normal text-white flex items-center gap-2"><IconFileText size={14} className="opacity-70" /> Resumen de inversión</CardTitle>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
               <div className="flex justify-between items-center text-xs">
-                 <span className="text-muted-foreground font-medium uppercase tracking-tight">Imponible</span>
+                 <span className="text-muted-foreground font-medium tracking-tight">Imponible</span>
                  <span className="font-bold tabular-nums text-white">USD {subtotal.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
-                 <span className="text-muted-foreground font-medium uppercase tracking-tight">IVA (16%)</span>
+                 <span className="text-muted-foreground font-medium tracking-tight">IVA (16%)</span>
                  <span className="font-bold tabular-nums text-white">USD {tax.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
               </div>
               <Separator className="bg-[#79716b]/30" />
               <div className="flex justify-between items-center py-1">
-                 <span className="text-sm font-black uppercase tracking-tighter text-white">Total Orden</span>
+                 <span className="text-sm font-black tracking-tighter text-white">Total orden</span>
                  <span className="text-xl font-black tabular-nums text-emerald-400">USD {total.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="pt-4 space-y-2">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground opacity-60">Observaciones</Label>
+                  <Label className="text-[10px] font-bold text-muted-foreground opacity-60">Observaciones</Label>
                   <textarea 
                     className="w-full bg-muted/10 border border-[#79716b]/30 rounded-lg p-3 text-xs text-white min-h-[90px] focus:outline-none focus:border-[#79716b]/80 transition-all resize-none"
                     placeholder="Instrucciones para el proveedor..."

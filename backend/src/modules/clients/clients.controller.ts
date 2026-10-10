@@ -105,6 +105,18 @@ export class ClientsController {
     return this.clientsService.findAll(businessId);
   }
 
+  @Get('directory')
+  directory(
+    @Query('q') q: string,
+    @Query('filter') filter: string,
+    @Query('sort') sort: string,
+    @Query('page') page: string,
+    @Query('pageSize') pageSize: string,
+    @Request() req: any,
+  ) {
+    return this.clientsService.directory(req.user.businessId, { q, filter, sort, page, pageSize });
+  }
+
   @Get('search')
   search(@Query('q') q: string, @Request() req: any) {
     const businessId = req.user.businessId;
@@ -207,13 +219,13 @@ export class ClientsController {
   @Put(':id')
   update(@Param('id') id: string, @Body() body: any, @Request() req: any) {
     const businessId = req.user.businessId;
-    return this.clientsService.update(id, body, businessId);
+    return this.clientsService.update(id, body, businessId, req.user.role);
   }
 
   @Patch(':id')
   patch(@Param('id') id: string, @Body() body: any, @Request() req: any) {
     const businessId = req.user.businessId;
-    return this.clientsService.update(id, body, businessId);
+    return this.clientsService.update(id, body, businessId, req.user.role);
   }
 
   @Post(':id/payment')
@@ -288,7 +300,7 @@ export class ClientsController {
   @Post(':id/activation-code')
   generateActivationCode(@Param('id') id: string, @Body() body: any, @Request() req: any) {
     const businessId = req.user.businessId;
-    return this.clientsService.generateActivationCode(id, businessId, body?.creditLimit);
+    return this.clientsService.generateActivationCode(id, businessId, body?.creditLimit, body?.purpose === 'reset' ? 'reset' : 'activation', body?.supervisorPin, req.user.role);
   }
 
   @Patch(':id/toggle-suspension')

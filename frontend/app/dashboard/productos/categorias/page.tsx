@@ -265,7 +265,7 @@ export default function CategoriasPage() {
               className="h-8 gap-2 font-bold text-xs"
               onClick={handleBulkDelete}
             >
-              <IconTrash size={14} /> Eliminar Seleccionadas ({Object.keys(rowSelection).length})
+              <IconTrash size={14} /> Eliminar seleccionadas ({Object.keys(rowSelection).length})
             </Button>
           )
         }
@@ -275,7 +275,7 @@ export default function CategoriasPage() {
               <IconDownload size={16} /> Exportar
             </Button>
             <Button className="gap-2" onClick={openCreate}>
-              <IconPlus size={16} /> Nueva Categoría
+              <IconPlus size={16} /> Nueva categoría
             </Button>
           </div>
         }
@@ -285,7 +285,7 @@ export default function CategoriasPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <IconTag size={20} /> {editId ? "Editar Categoría" : "Registrar Nueva Categoría"}
+              <IconTag size={20} /> {editId ? "Editar categoría" : "Registrar nueva categoría"}
             </DialogTitle>
             <DialogDescription>
               {editId ? "Modifica el nombre y descripción de la categoría." : "Ingresa los datos para clasificar tus productos."}
@@ -294,9 +294,9 @@ export default function CategoriasPage() {
 
           <div className="flex flex-col gap-4 py-2">
             <div className="flex flex-col gap-1.5">
-              <Label>Nombre de la Categoría *</Label>
+              <Label>Nombre de la categoría *</Label>
               <Input
-                placeholder="Ej: Bebidas, Limpieza..."
+                placeholder="Ej: bebidas, limpieza..."
                 value={form.name}
                 onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
               />
@@ -318,7 +318,7 @@ export default function CategoriasPage() {
             </DialogClose>
             <Button onClick={handleSave} disabled={saving} className="gap-2">
               <IconDeviceFloppy size={16} />
-              {saving ? "Guardando..." : editId ? "Actualizar" : "Registrar Categoría"}
+              {saving ? "Guardando..." : editId ? "Actualizar" : "Registrar categoría"}
             </Button>
           </DialogFooter>
         </DialogContent>

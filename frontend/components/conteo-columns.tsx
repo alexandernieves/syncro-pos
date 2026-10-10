@@ -96,7 +96,7 @@ export const conteoColumns: ColumnDef<z.infer<typeof conteoSchema>>[] = [
   },
   {
     accessorKey: "header",
-    header: "Variante / Referencia",
+    header: "Variante / referencia",
     cell: ({ row }) => {
       return (
         <div className="flex items-center gap-3 cursor-pointer group/item">
@@ -105,7 +105,7 @@ export const conteoColumns: ColumnDef<z.infer<typeof conteoSchema>>[] = [
           </div>
           <div className="flex flex-col text-left">
             <span className="text-sm font-bold text-foreground group-hover/item:text-primary transition-colors line-clamp-1">{row.original.header}</span>
-            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-tighter opacity-70">{row.original.type}</span>
+            <span className="text-[10px] text-muted-foreground font-semibold tracking-tighter opacity-70">{row.original.type}</span>
           </div>
         </div>
       )
@@ -114,7 +114,7 @@ export const conteoColumns: ColumnDef<z.infer<typeof conteoSchema>>[] = [
   },
   {
     accessorKey: "type",
-    header: "SKU / Código",
+    header: "SKU / código",
     cell: ({ row }) => (
       <div className="w-32">
         <code className="text-[10px] font-light border border-muted-foreground/30 px-1.5 py-0.5 rounded text-muted-foreground bg-transparent">
@@ -125,7 +125,7 @@ export const conteoColumns: ColumnDef<z.infer<typeof conteoSchema>>[] = [
   },
   {
     accessorKey: "status",
-    header: "Estado Stock",
+    header: "Estado stock",
     cell: ({ row }) => {
       const isOk = row.original.status === "En Stock";
       const isLow = row.original.status === "Stock Bajo";
@@ -147,24 +147,24 @@ export const conteoColumns: ColumnDef<z.infer<typeof conteoSchema>>[] = [
   },
   {
     accessorKey: "target",
-    header: () => <div className="w-full text-center">Stock Teórico</div>,
+    header: () => <div className="w-full text-center">Stock teórico</div>,
     cell: ({ row }) => (
       <div className="w-full text-center">
-        <Badge variant="outline" className="h-6 px-2.5 text-[10px] font-light tracking-widest bg-muted/50 border-none">
-          {row.original.target} UNI
+        <Badge variant="outline" className="h-6 px-2.5 text-[10px] font-light bg-muted/50 border-none">
+          {row.original.target} uni
         </Badge>
       </div>
     ),
   },
   {
     accessorKey: "limit",
-    header: () => <div className="w-full text-center">Físico Real</div>,
+    header: () => <div className="w-full text-center">Físico real</div>,
     cell: ({ row, table }) => {
       const meta = table.options.meta as any;
       return (
         <div className="flex items-center justify-center">
           <Label htmlFor={`${row.original.id}-limit`} className="sr-only">
-            Físico Real
+            Físico real
           </Label>
           <Input
             type="number"
@@ -180,7 +180,7 @@ export const conteoColumns: ColumnDef<z.infer<typeof conteoSchema>>[] = [
   },
   {
     accessorKey: "reviewer",
-    header: () => <div className="w-full text-center">Ajuste / Dif.</div>,
+    header: () => <div className="w-full text-center">Ajuste / dif.</div>,
     cell: ({ row }) => (
       <div className="w-full text-center font-light text-xs text-muted-foreground italic">
         {row.original.reviewer || "--"}
@@ -202,9 +202,9 @@ export const conteoColumns: ColumnDef<z.infer<typeof conteoSchema>>[] = [
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48 border-none shadow-2xl rounded-xl">
-          <DropdownMenuItem className="text-xs">Editar Variante</DropdownMenuItem>
-          <DropdownMenuItem className="text-xs">Ver Historial</DropdownMenuItem>
-          <DropdownMenuItem className="text-xs">Imprimir Etiqueta</DropdownMenuItem>
+          <DropdownMenuItem className="text-xs">Editar variante</DropdownMenuItem>
+          <DropdownMenuItem className="text-xs">Ver historial</DropdownMenuItem>
+          <DropdownMenuItem className="text-xs">Imprimir etiqueta</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" className="text-xs text-rose-600">Eliminar</DropdownMenuItem>
         </DropdownMenuContent>

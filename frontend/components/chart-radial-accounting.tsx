@@ -56,7 +56,7 @@ export function ChartRadialAccounting() {
   return (
     <Card className="flex flex-col">
       <CardHeader className="items-center pb-0">
-        <CardTitle>Gastos por Categoría</CardTitle>
+        <CardTitle>Gastos por categoría</CardTitle>
         <CardDescription>Distribución porcentual del mes</CardDescription>
       </CardHeader>
       <CardContent className="flex-1 pb-0">

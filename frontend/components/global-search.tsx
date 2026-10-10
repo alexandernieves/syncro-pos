@@ -68,60 +68,60 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
       <CommandInput placeholder="Escribe para buscar en el sistema..." />
       <CommandList>
         <CommandEmpty>No se encontraron resultados.</CommandEmpty>
-        <CommandGroup heading="Acceso Rápido">
+        <CommandGroup heading="Acceso rápido">
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard"))}>
             <IconLayoutDashboard className="mr-2 h-4 w-4" />
-            <span>Dashboard Principal</span>
+            <span>Dashboard principal</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/pos"))}>
             <IconShoppingCart className="mr-2 h-4 w-4" />
-            <span>Punto de Venta (POS)</span>
+            <span>Punto de venta (POS)</span>
           </CommandItem>
         </CommandGroup>
         <CommandSeparator />
-        <CommandGroup heading="Ventas y Clientes">
+        <CommandGroup heading="Ventas y clientes">
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/clientes"))}>
             <IconUsers className="mr-2 h-4 w-4" />
-            <span>Clientes / Directorio</span>
+            <span>Clientes / directorio</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/clientes/creditos"))}>
             <IconCreditCard className="mr-2 h-4 w-4" />
-            <span>Cuentas por Cobrar (Fiados)</span>
+            <span>Cuentas por cobrar (fiados)</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/historial"))}>
             <IconHistory className="mr-2 h-4 w-4" />
-            <span>Historial de Ventas</span>
+            <span>Historial de ventas</span>
           </CommandItem>
         </CommandGroup>
         <CommandSeparator />
-        <CommandGroup heading="Inventario y Productos">
+        <CommandGroup heading="Inventario y productos">
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/productos/todos"))}>
             <IconPackage className="mr-2 h-4 w-4" />
-            <span>Todos los Productos</span>
+            <span>Todos los productos</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/productos/categorias"))}>
             <IconCategory className="mr-2 h-4 w-4" />
-            <span>Categorías de Productos</span>
+            <span>Categorías de productos</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/inventario/almacen"))}>
             <IconBox className="mr-2 h-4 w-4" />
-            <span>Almacén / Stock Actual</span>
+            <span>Almacén / stock actual</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/inventario/compras"))}>
             <IconTruckLoading className="mr-2 h-4 w-4" />
-            <span>Órdenes de Compra</span>
+            <span>Órdenes de compra</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/inventario/traslados"))}>
             <IconArrowsExchange className="mr-2 h-4 w-4" />
-            <span>Traslados entre Sucursales</span>
+            <span>Traslados entre sucursales</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/inventario/alertas"))}>
             <IconAlertTriangle className="mr-2 h-4 w-4" />
-            <span>Alertas de Stock Bajo</span>
+            <span>Alertas de stock bajo</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/inventario/movimientos"))}>
             <IconFileText className="mr-2 h-4 w-4" />
-            <span>Kardex / Movimientos</span>
+            <span>Kardex / movimientos</span>
           </CommandItem>
         </CommandGroup>
         <CommandSeparator />
@@ -132,26 +132,26 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/contabilidad/gastos"))}>
             <IconReceipt2 className="mr-2 h-4 w-4" />
-            <span>Gastos y Caja Chica</span>
+            <span>Gastos y caja chica</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/reportes"))}>
             <IconReportAnalytics className="mr-2 h-4 w-4" />
-            <span>Reportes y Estadísticas</span>
+            <span>Reportes y estadísticas</span>
           </CommandItem>
         </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading="Sistema">
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/configuracion"))}>
             <IconSettings className="mr-2 h-4 w-4" />
-            <span>Configuración del Sistema</span>
+            <span>Configuración del sistema</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/facturacion"))}>
             <IconCreditCard className="mr-2 h-4 w-4" />
-            <span>Mi Suscripción / Facturación SaaS</span>
+            <span>Mi suscripción / facturación SaaS</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard/cuenta"))}>
             <IconUserCircle className="mr-2 h-4 w-4" />
-            <span>Mi Perfil / Cuenta</span>
+            <span>Mi perfil / cuenta</span>
           </CommandItem>
         </CommandGroup>
       </CommandList>

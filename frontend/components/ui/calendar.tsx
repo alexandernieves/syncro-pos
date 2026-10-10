@@ -36,17 +36,20 @@ function Calendar({
         month_grid: "w-full border-collapse space-y-1",
         weekdays: "flex",
         weekday:
-          "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] uppercase tracking-wider opacity-60",
+          "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] opacity-60",
         week: "flex w-full mt-2",
         day: "h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20",
         day_button: cn(
           buttonVariants({ variant: "ghost" }),
-          "h-9 w-9 p-0 font-normal relative rounded-lg aria-selected:opacity-100 hover:bg-emerald-500 hover:text-white focus:bg-emerald-500 focus:text-white transition-all duration-200"
+          "h-9 w-9 p-0 font-normal relative rounded-lg aria-selected:opacity-100 hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary transition-colors duration-200"
         ),
         range_end: "range_end",
+        // Con "!" para que gane a today: un dia puede ser hoy y estar
+        // seleccionado a la vez, y sin esto se mezclaban el fondo palido de
+        // hoy con el texto blanco de seleccionado, que no se leia.
         selected:
-          "[&_button]:bg-emerald-500 [&_button]:text-white [&_button]:hover:bg-emerald-600 [&_button]:focus:bg-emerald-500 [&_button]:font-semibold [&_button]:shadow-[0_0_12px_rgba(16,185,129,0.4)] bg-transparent",
-        today: "[&_button]:border [&_button]:border-emerald-500/30 [&_button]:bg-emerald-500/10 [&_button]:text-emerald-500 [&_button]:dark:text-emerald-400 [&_button]:font-bold",
+          "[&_button]:!bg-primary [&_button]:!text-primary-foreground [&_button]:!border-transparent [&_button]:hover:!bg-primary [&_button]:font-semibold bg-transparent",
+        today: "[&_button]:border [&_button]:border-primary/30 [&_button]:bg-primary/10 [&_button]:text-primary [&_button]:font-semibold",
         outside:
           "outside text-muted-foreground/30",
         disabled: "[&_button]:text-muted-foreground/20 [&_button]:opacity-30 [&_button]:cursor-not-allowed",

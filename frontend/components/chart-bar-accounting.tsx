@@ -41,7 +41,7 @@ export function ChartBarAccounting() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Flujo de Caja Mensual</CardTitle>
+        <CardTitle>Flujo de caja mensual</CardTitle>
         <CardDescription>Comparativa de ingresos vs egresos (USD)</CardDescription>
       </CardHeader>
       <CardContent>

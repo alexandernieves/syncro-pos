@@ -1,7 +1,7 @@
 {
   "name": "Syncro Soporte",
   "short_name": "SyncroChat",
-  "description": "Mensajería en tiempo real con Soporte Syncro POS",
+  "description": "Mensajería en tiempo real con Soporte Syncro CRM",
   "start_url": "/dashboard/soporte?pwa=true",
   "display": "standalone",
   "background_color": "#09090b",

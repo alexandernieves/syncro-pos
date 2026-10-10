@@ -276,7 +276,7 @@ export function LoginForm({
   if (viewMode === "password" && selectedProfile) {
     return (
       <div className={cn("flex flex-col gap-6 w-full", className)} {...props}>
-        <Card className="border-none shadow-2xl relative overflow-hidden animate-in fade-in duration-200">
+        <Card className="border border-border/80 shadow-sm relative overflow-hidden animate-in fade-in duration-200">
           <Button
             variant="ghost"
             size="icon"
@@ -379,7 +379,7 @@ export function LoginForm({
   if (viewMode === "profiles" && savedProfiles.length > 0) {
     return (
       <div className={cn("flex flex-col gap-6 w-full", className)} {...props}>
-        <Card className="border-none shadow-2xl animate-in fade-in duration-200">
+        <Card className="border border-border/80 shadow-sm animate-in fade-in duration-200">
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-xl font-bold">
               Selecciona tu perfil
@@ -453,7 +453,7 @@ export function LoginForm({
   // ── 3️⃣ MODE: Classic login form ──────────────────────────────────────────
   return (
     <div className={cn("flex flex-col gap-6 w-full", className)} {...props}>
-      <Card className="border-none shadow-2xl animate-in fade-in duration-200">
+      <Card className="border border-border/80 shadow-sm animate-in fade-in duration-200">
         <CardHeader className="text-center">
           <CardTitle className="text-xl font-bold">Bienvenido de nuevo</CardTitle>
           <CardDescription>
@@ -561,14 +561,14 @@ export function LoginForm({
           href="#"
           className="underline underline-offset-4 hover:text-primary"
         >
-          Términos de servicio
+          términos de servicio
         </a>{" "}
         y nuestra{" "}
         <a
           href="#"
           className="underline underline-offset-4 hover:text-primary"
         >
-          Política de privacidad
+          política de privacidad
         </a>
         .
       </FieldDescription>

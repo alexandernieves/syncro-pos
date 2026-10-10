@@ -138,7 +138,7 @@ export function DataTable<TData, TValue>({
               <TableRow key={headerGroup.id} className="hover:bg-transparent border-b">
                 {headerGroup.headers.map((header) => {
                   return (
-                    <TableHead key={header.id} className="text-muted-foreground font-semibold h-11 px-4 text-[10px] uppercase tracking-widest">
+                    <TableHead key={header.id} className="text-muted-foreground font-semibold h-11 px-4 text-[10px]">
                       {header.isPlaceholder
                         ? null
                         : flexRender(
@@ -179,13 +179,13 @@ export function DataTable<TData, TValue>({
 
       {/* Footer Exactly as Dashboard */}
       <div className="flex items-center justify-between px-2 py-2 font-medium">
-          <div className="text-muted-foreground flex-1 text-xs hidden lg:flex uppercase tracking-tight opacity-70">
+          <div className="text-muted-foreground flex-1 text-xs hidden lg:flex tracking-tight opacity-70">
             {table.getFilteredSelectedRowModel().rows.length} de{" "}
             {table.getFilteredRowModel().rows.length} registros seleccionados
           </div>
           <div className="flex items-center gap-8">
             <div className="hidden items-center gap-3 lg:flex">
-                <Label htmlFor="rows-per-page" className="text-[10px] font-black uppercase tracking-widest opacity-60">
+                <Label htmlFor="rows-per-page" className="text-[10px] font-black opacity-60">
                     Registros
                 </Label>
                 <Select
@@ -206,7 +206,7 @@ export function DataTable<TData, TValue>({
                     </SelectContent>
                 </Select>
             </div>
-            <div className="flex items-center justify-center text-xs font-bold uppercase tracking-tighter opacity-80">
+            <div className="flex items-center justify-center text-xs font-bold tracking-tighter opacity-80">
                 Página {table.getState().pagination.pageIndex + 1} de {table.getPageCount() || 1}
             </div>
             <div className="flex items-center gap-1.5">

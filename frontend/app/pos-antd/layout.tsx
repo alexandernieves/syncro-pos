@@ -4,8 +4,8 @@ import { ConfigProvider } from "antd";
 import esES from "antd/locale/es_ES";
 
 export const metadata: Metadata = {
-  title: "Punto de Venta (Ant Design) | Syncro",
-  description: "Terminal de venta — variante de diseño Ant Design para comparación",
+  title: "Punto de venta (ant design) | Syncro",
+  description: "Terminal de venta — variante de diseño ant design para comparación",
 };
 
 // Variante de estilo visual Ant Design del POS. Ruta separada de /pos —

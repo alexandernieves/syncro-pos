@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, UseGuards, BadRequestException, ConflictException } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { WhatsAppService } from './whatsapp.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -9,6 +10,8 @@ export class WhatsAppController {
   // ─────────────────────────────────────────────────────────────────────────
   // 1. Chat Webhook (Public) — customer messages for the Chat module
   // ─────────────────────────────────────────────────────────────────────────
+  // Evolution sends bursts of events (QR, connection, messages): no rate limit
+  @SkipThrottle()
   @Post('webhook')
   async receiveWebhook(@Body() body: any, @Query('businessId') businessId: string) {
     return this.whatsappService.handleWebhook(body, businessId);
@@ -17,6 +20,8 @@ export class WhatsAppController {
   // ─────────────────────────────────────────────────────────────────────────
   // 1b. Bot Webhook (Public) — AI bot messages, separate instance
   // ─────────────────────────────────────────────────────────────────────────
+  // Evolution sends bursts of events (QR, connection, messages): no rate limit
+  @SkipThrottle()
   @Post('bot-webhook')
   async receiveBotWebhook(@Body() body: any, @Query('businessId') businessId: string) {
     return this.whatsappService.handleBotWebhook(body, businessId);
@@ -66,12 +71,35 @@ export class WhatsAppController {
   async sendMessage(
     @Param('id') chatId: string,
     @Body('text') text: string,
+    @Body('quotedMessageId') quotedMessageId: string | undefined,
     @Request() req: any,
   ) {
     const businessId = req.user.businessId;
-    const agentId = req.user.sub;
+    const agentId = req.user.id;
     const chat = await this.whatsappService.findChatByIdOrPhone(chatId, businessId);
-    return this.whatsappService.sendTextMessage(chat.phone, text, businessId, agentId);
+    return this.whatsappService.sendTextMessage(chat.phone, text, businessId, agentId, quotedMessageId);
+  }
+
+  // Our typing / online presence towards the contact
+  @UseGuards(JwtAuthGuard)
+  @Post('chats/:id/presence')
+  async sendPresence(@Param('id') id: string, @Body('presence') presence: 'composing' | 'paused' | 'available' | 'recording', @Request() req: any) {
+    const allowed = ['composing', 'paused', 'available', 'recording'];
+    return this.whatsappService.sendPresence(id, allowed.includes(presence) ? presence : 'paused', req.user.businessId);
+  }
+
+  // Read receipts: the contact sees blue ticks
+  @UseGuards(JwtAuthGuard)
+  @Post('chats/:id/read')
+  async markChatAsRead(@Param('id') id: string, @Request() req: any) {
+    return this.whatsappService.markChatAsRead(id, req.user.businessId);
+  }
+
+  // Emoji reaction to a message (empty emoji removes it)
+  @UseGuards(JwtAuthGuard)
+  @Post('messages/:id/react')
+  async reactToMessage(@Param('id') id: string, @Body('emoji') emoji: string, @Request() req: any) {
+    return this.whatsappService.reactToMessage(id, emoji, req.user.businessId);
   }
 
   // 7. Assign chat to an agent
@@ -100,10 +128,10 @@ export class WhatsAppController {
   @Get('messages/:id/media')
   async getMessageMedia(@Param('id') msgId: string, @Request() req: any) {
     const businessId = req.user.businessId;
-    const msg = await this.whatsappService.getMessageById(msgId);
-    if (!msg || !msg.whatsappMsgId) {
-      return { base64: null };
-    }
+    const msg = await this.whatsappService.getMessageById(msgId, businessId);
+    if (!msg) return { base64: null };
+    if (msg.mediaUrl) return { base64: msg.mediaUrl };
+    if (!msg.whatsappMsgId) return { base64: null };
     return this.whatsappService.getMessageMedia(msg.whatsappMsgId, businessId);
   }
 
@@ -116,7 +144,7 @@ export class WhatsAppController {
     @Request() req: any,
   ) {
     const businessId = req.user.businessId;
-    const agentId = req.user.sub;
+    const agentId = req.user.id;
     const chat = await this.whatsappService.findChatByIdOrPhone(chatId, businessId);
     return this.whatsappService.sendMediaMessage(
       chat.phone,
@@ -127,6 +155,29 @@ export class WhatsAppController {
       body.caption,
       agentId,
     );
+  }
+
+  // Receipt that isn't a POS sale (e.g. a gym membership), rendered as an image by the browser
+  @UseGuards(JwtAuthGuard)
+  @Post('receipts')
+  async sendReceipt(@Body() body: { phone: string; image: string; caption?: string; fileName?: string }, @Request() req: any) {
+    const phone = String(body.phone || '').replace(/\D/g, '');
+    if (phone.length < 8) throw new BadRequestException('Número de WhatsApp inválido');
+    if (!body.image) throw new BadRequestException('Falta la imagen del recibo');
+    const status = await this.whatsappService.getStatus(req.user.businessId);
+    if (!status.connected) throw new ConflictException('El WhatsApp del negocio no está conectado');
+    return this.whatsappService.sendMediaMessage(phone, 'image', body.image, req.user.businessId, body.fileName || 'recibo.png', body.caption?.slice(0, 1000), req.user.id, 'image/png');
+  }
+
+  // Invoice of a POS sale, rendered as an image by the POS
+  @UseGuards(JwtAuthGuard)
+  @Post('invoices/:saleId')
+  async sendInvoice(
+    @Param('saleId') saleId: string,
+    @Body() body: { image: string; caption?: string; phone?: string; fileName?: string },
+    @Request() req: any,
+  ) {
+    return this.whatsappService.sendSaleInvoice(saleId, req.user.businessId, body, req.user.id);
   }
 
   // 11. Update chat properties (pin, archive, restrict, favorite, mute, unread, lists)

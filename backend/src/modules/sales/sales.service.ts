@@ -71,7 +71,11 @@ export class SalesService {
 
       const result = await this.prisma.$transaction(async (tx) => {
       // 0. Get current settings for taxes
-      const settings = await tx.setting.findFirst();
+      // Taxes of the business that owns the branch (not whichever business comes first).
+      const saleBranch = await tx.branch.findUnique({ where: { id: branchId }, select: { businessId: true } });
+      const settings = await tx.setting.findFirst({
+        where: saleBranch?.businessId ? { businessId: saleBranch.businessId } : undefined,
+      });
       const taxRate = settings?.taxRate ?? 16;
       const igtfRate = settings?.igtfRate ?? 3;
 
@@ -246,6 +250,7 @@ export class SalesService {
           userId,
           clientId,
           shiftId: activeShift?.id,
+          channel: data.channel === 'ONLINE' ? 'ONLINE' : 'POS',
           subtotal: netSubtotal,
           taxAmount,
           igtfAmount,
@@ -346,7 +351,9 @@ export class SalesService {
       // 6. Create Accounting Entry
       await (tx.accountingEntry as any).create({
         data: {
-          description: `Venta POS #${sale.id.slice(-4).toUpperCase()}`,
+          description: data.channel === 'ONLINE'
+            ? `Venta Syncro Shop ${data.orderCode ?? ''} #${sale.id.slice(-4).toUpperCase()}`
+            : `Venta POS #${sale.id.slice(-4).toUpperCase()}`,
           amount: total,
           type: 'INCOME',
           category: 'VENTA_POS',
@@ -446,7 +453,7 @@ export class SalesService {
             } 
           } 
         }, 
-        user: true, 
+        user: { select: { id: true, name: true, email: true, role: true, avatar: true } }, 
         branch: true,
         client: true,
         payments: true
@@ -464,7 +471,7 @@ export class SalesService {
       where,
       include: { 
         items: { include: { variant: { include: { product: true } } } }, 
-        user: true, 
+        user: { select: { id: true, name: true, email: true, role: true, avatar: true } }, 
         branch: true,
         client: true,
         returns: { include: { items: true } },
@@ -568,7 +575,9 @@ export class SalesService {
         }
 
         // Fetch settings for proper tax calculation
-        const settings = await tx.setting.findFirst();
+        const settings = await tx.setting.findFirst({
+          where: sale.branch?.businessId ? { businessId: sale.branch.businessId } : undefined,
+        });
         const taxRate = settings?.taxRate ?? 16;
         const taxAmount = netSubtotal * (taxRate / 100);
         const total = netSubtotal + taxAmount; 

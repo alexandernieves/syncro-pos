@@ -5,6 +5,15 @@ export interface LocalProduct {
   name: string;
   totalStock: number;
   image?: string;
+  isPublishedOnSyncroShop?: boolean;
+  isFeaturedOnSyncroShop?: boolean;
+  syncroShopBranchId?: string | null;
+  syncroShopBranchName?: string | null;
+  description?: string;
+  categoryId?: string | null;
+  supplierId?: string | null;
+  isWeighable?: boolean;
+  specifications?: { label: string; value: string }[];
   categoryName?: string;
   category?: { id: string; name: string };
   variants: any[]; // Store variants as array
@@ -15,6 +24,8 @@ export interface LocalClient {
   id: string;
   name: string;
   documentId?: string;
+  phone?: string | null;
+  email?: string | null;
   walletBalance?: number;
   creditLimit?: number;
   currentDebt?: number;

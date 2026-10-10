@@ -185,25 +185,25 @@ const CreditRadial = ({ client }: { client: any }) => {
   return (
     <div className={`p-3 rounded-xl border ${bgLight} flex items-center justify-between gap-3 transition-all duration-300 font-sans shadow-sm`}>
       <div className="flex flex-col gap-1 flex-1 min-w-0">
-        <span className="text-[9px] font-extrabold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-1">
-          <IconCreditCard size={12} className={textColor} stroke={2.5} /> SyncroCredit Activo
+        <span className="text-[9px] font-extrabold text-muted-foreground/80 flex items-center gap-1">
+          <IconCreditCard size={12} className={textColor} stroke={2.5} /> SyncroCredit activo
         </span>
         <div className="flex flex-col">
-          <span className="text-[10px] font-semibold text-muted-foreground/80 leading-none">Cupo Disponible:</span>
+          <span className="text-[10px] font-semibold text-muted-foreground/80 leading-none">Cupo disponible:</span>
           <span className="text-base font-black text-foreground tabular-nums mt-0.5">${available.toFixed(2)}</span>
         </div>
         <div className="flex items-center gap-2.5 mt-1 pt-1.5 border-t border-border/40 text-[9px] font-bold text-muted-foreground/80">
           <div className="flex flex-col">
-            <span className="text-[7px] font-medium uppercase text-muted-foreground/60 leading-none">Límite</span>
+            <span className="text-[7px] font-medium text-muted-foreground/60 leading-none">Límite</span>
             <span className="text-foreground/95 mt-0.5">${limit.toFixed(2)}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[7px] font-medium uppercase text-muted-foreground/60 leading-none">Deuda</span>
+            <span className="text-[7px] font-medium text-muted-foreground/60 leading-none">Deuda</span>
             <span className="text-amber-600/90 mt-0.5">${debt.toFixed(2)}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[7px] font-medium uppercase text-muted-foreground/60 leading-none">Score</span>
-            <span className="text-blue-500 mt-0.5">{score.toFixed(0)} PTS</span>
+            <span className="text-[7px] font-medium text-muted-foreground/60 leading-none">Score</span>
+            <span className="text-blue-500 mt-0.5">{score.toFixed(0)} pts</span>
           </div>
         </div>
       </div>
@@ -235,7 +235,7 @@ const CreditRadial = ({ client }: { client: any }) => {
         {/* Inside circle text */}
         <div className="absolute flex flex-col items-center justify-center text-center w-full px-1">
           <span className="text-[8px] font-extrabold text-foreground tabular-nums leading-none">${available.toFixed(2)}</span>
-          <span className="text-[5px] font-extrabold text-muted-foreground uppercase leading-none mt-0.5">Disponible</span>
+          <span className="text-[5px] font-extrabold text-muted-foreground leading-none mt-0.5">Disponible</span>
         </div>
       </div>
     </div>
@@ -250,11 +250,11 @@ const ThermalTicket = ({ order, settings }: { order: any, settings: any }) => {
   if (!mounted) return null;
 
   return (
-    <div className="hidden print:block font-mono text-[10px] w-[80mm] p-4 text-black bg-white mx-auto uppercase">
+    <div className="hidden print:block font-mono text-[10px] w-[80mm] p-4 text-black bg-white mx-auto">
       <div className="text-center mb-4">
-        <h2 className="text-sm font-black tracking-widest">{settings?.businessName || 'SYNCRO POS'}</h2>
+        <h2 className="text-sm font-black">{settings?.businessName || 'Syncro POS'}</h2>
         <p>{settings?.businessAddress || 'S/N'}</p>
-        <p>{settings?.businessPhone || 'TEL: 000-0000000'}</p>
+        <p>{settings?.businessPhone || 'Tel: 000-0000000'}</p>
         <div className="my-2 border-b border-dashed border-black" />
       </div>
       <div className="flex justify-between mb-1">
@@ -268,16 +268,16 @@ const ThermalTicket = ({ order, settings }: { order: any, settings: any }) => {
       <table className="w-full mb-2">
         <thead>
           <tr className="border-b border-black">
-            <th className="text-left font-normal pb-1">CANT</th>
-            <th className="text-left font-normal pb-1 uppercase">DETALLE</th>
-            <th className="text-right font-normal pb-1">SUB</th>
+            <th className="text-left font-normal pb-1">Cant</th>
+            <th className="text-left font-normal pb-1">Detalle</th>
+            <th className="text-right font-normal pb-1">Sub</th>
           </tr>
         </thead>
         <tbody>
           {order.items.map((it: any, i: number) => (
             <tr key={it.id || i}>
-              <td className="py-1">{it.quantity}X</td>
-              <td className="py-1 uppercase">{it.product.name}</td>
+              <td className="py-1">{it.quantity}x</td>
+              <td className="py-1">{it.product.name}</td>
               <td className="py-1 text-right">${(it.product.price * it.quantity).toFixed(2)}</td>
             </tr>
           ))}
@@ -285,17 +285,17 @@ const ThermalTicket = ({ order, settings }: { order: any, settings: any }) => {
       </table>
       <div className="border-t border-dashed border-black pt-2 space-y-1">
         <div className="flex justify-between font-black text-xs">
-          <span>TOTAL USD:</span>
+          <span>Total USD:</span>
           <span>${order.total.toFixed(2)}</span>
         </div>
         <div className="flex justify-between italic">
-          <span>TASA BCV: Bs {(order?.payments?.[0]?.exchangeRate || settings?.exchangeRate || 1).toFixed(2)}</span>
+          <span>Tasa BCV: Bs {(order?.payments?.[0]?.exchangeRate || settings?.exchangeRate || 1).toFixed(2)}</span>
           <span>BS: {(order.total * (order?.payments?.[0]?.exchangeRate || settings?.exchangeRate || 1)).toLocaleString('es-VE')}</span>
         </div>
       </div>
       <div className="text-center mt-6">
-        <p>¡GRACIAS POR SU COMPRA!</p>
-        <p className="text-[8px] mt-2 italic text-slate-500">Documento no fiscal • Generado por Syncro POS</p>
+        <p>¡Gracias por su compra!</p>
+        <p className="text-[8px] mt-2 italic text-slate-500">Documento no fiscal • generado por Syncro POS</p>
       </div>
     </div>
   );
@@ -374,7 +374,7 @@ function PosNumpad({ onClose, onEnter }: { onClose: () => void, onEnter: (val: s
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       >
-        <span className="text-xs font-bold text-muted-foreground flex items-center gap-2"><IconKeyboard size={14} /> Teclado Numérico</span>
+        <span className="text-xs font-bold text-muted-foreground flex items-center gap-2"><IconKeyboard size={14} /> Teclado numérico</span>
         <button
           onPointerDown={(e) => e.stopPropagation()}
           onClick={onClose}
@@ -390,7 +390,7 @@ function PosNumpad({ onClose, onEnter }: { onClose: () => void, onEnter: (val: s
           <span className="text-2xl font-mono font-bold tracking-tighter truncate block w-full">{display || "0"}</span>
         </div>
         <div className="grid grid-cols-3 gap-2">
-          <Button variant="outline" className="h-14 font-bold text-rose-500 bg-rose-500/10 border-none hover:bg-rose-500/20 text-sm shadow-sm" onClick={handleClear}>CLS</Button>
+          <Button variant="outline" className="h-14 font-bold text-rose-500 bg-rose-500/10 border-none hover:bg-rose-500/20 text-sm shadow-sm" onClick={handleClear}>Cls</Button>
           <Button variant="outline" className="h-14 font-bold bg-muted/50 border-none hover:bg-muted text-lg shadow-sm" onClick={handleBackspace}>←</Button>
           <Button variant="default" className="h-14 font-bold bg-primary text-primary-foreground text-sm shadow-sm" onClick={handleSubmit}>Enter</Button>
 
@@ -1050,7 +1050,7 @@ export default function POSPage() {
       });
 
       if (dueClients.length > 0) {
-        toast.info(`Cobranza Pendiente: ${dueClients.length} clientes deben pagar hoy.`, {
+        toast.info(`Cobranza pendiente: ${dueClients.length} clientes deben pagar hoy.`, {
           description: "Revise el módulo de clientes para más detalles.",
           duration: 10000,
           icon: <IconAlertCircle className="text-amber-500" />
@@ -1592,7 +1592,7 @@ export default function POSPage() {
       });
       if (res.ok) {
         await refreshRates();
-        toast.success(`Tasas BCV (Punto de Venta) actualizadas`);
+        toast.success(`Tasas BCV (punto de venta) actualizadas`);
       } else {
         toast.error("No se pudo sincronizar la tasa");
       }
@@ -1892,7 +1892,7 @@ export default function POSPage() {
           createdAt: Date.now()
         });
 
-        toast.success("Venta guardada localmente (Pendiente de sincronizar)", {
+        toast.success("Venta guardada localmente (pendiente de sincronizar)", {
           description: "La venta se subirá al sistema automáticamente cuando se recupere la conexión.",
           duration: 6000
         });
@@ -1988,7 +1988,7 @@ export default function POSPage() {
 
   const handleCreateClient = async () => {
     if (!newClient.name.trim()) return toast.error("El nombre es obligatorio");
-    if (!newClient.documentId.trim()) return toast.error("La Cédula / RIF es obligatoria");
+    if (!newClient.documentId.trim()) return toast.error("La cédula / RIF es obligatoria");
     setSavingClient(true);
     try {
       const res = await fetch(`${API}/clients`, {
@@ -2257,7 +2257,7 @@ export default function POSPage() {
                 <IconArrowLeft className="size-4" />
               </Button>
             )}
-            <h1 className="font-bold text-lg tracking-tight">SYNCRO POS</h1>
+            <h1 className="font-bold text-lg tracking-tight">Syncro POS</h1>
           </div>
           <BranchSwitcher disabled={!!activeShift} />
         </header>
@@ -2268,7 +2268,7 @@ export default function POSPage() {
               <div className="size-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <IconCalculator className="size-6 text-primary" />
               </div>
-              <h1 className="text-2xl font-semibold tracking-tight leading-none">Terminal de Venta</h1>
+              <h1 className="text-2xl font-semibold tracking-tight leading-none">Terminal de venta</h1>
               <p className="text-sm text-muted-foreground mt-2">
                 Inicie su turno de trabajo estableciendo el fondo de caja inicial.
               </p>
@@ -2279,13 +2279,13 @@ export default function POSPage() {
                 <div className="flex items-center gap-4 p-3 border rounded-md bg-muted/30">
                   <IconUser className="size-5 text-muted-foreground" />
                   <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-medium text-muted-foreground">Cajero</span>
+                    <span className="text-[10px] font-medium text-muted-foreground">Cajero</span>
                     <span className="text-sm font-semibold leading-none">{user?.name || "Administrador"}</span>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="opening-balance">Monto Inicial en Caja</Label>
+                  <Label htmlFor="opening-balance">Monto inicial en caja</Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
                     <Input
@@ -2305,13 +2305,13 @@ export default function POSPage() {
                     onClick={() => setShowFondoBreakdown(!showFondoBreakdown)}
                     className="text-xs text-primary hover:underline flex items-center gap-1 font-medium transition-all"
                   >
-                    {showFondoBreakdown ? "✕ Ocultar desglose de efectivo" : "＋ Desglosar efectivo (Dólares y Bolívares)"}
+                    {showFondoBreakdown ? "✕ Ocultar desglose de efectivo" : "＋ Desglosar efectivo (dólares y bolívares)"}
                   </button>
 
                   {showFondoBreakdown && (
                     <div className="p-3 border rounded-lg bg-muted/20 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                      <div className="text-[10px] text-muted-foreground uppercase font-semibold flex justify-between">
-                        <span>Asistente de Fondo</span>
+                      <div className="text-[10px] text-muted-foreground font-semibold flex justify-between">
+                        <span>Asistente de fondo</span>
                         <span>Tasa BCV: Bs {currentExchangeRate?.toFixed(2)}</span>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
@@ -2372,7 +2372,7 @@ export default function POSPage() {
                   onClick={handleOpenShift}
                   className="w-full h-11"
                 >
-                  Abrir Caja Registradora
+                  Abrir caja registradora
                 </Button>
 
                 <div className="flex flex-col gap-1">
@@ -2383,7 +2383,7 @@ export default function POSPage() {
                       className="w-full h-9 text-muted-foreground gap-2"
                       onClick={() => router.push("/dashboard")}
                     >
-                      <IconArrowLeft className="size-3" /> Regresar al Dashboard
+                      <IconArrowLeft className="size-3" /> Regresar al dashboard
                     </Button>
                   ) : (
                     <Button
@@ -2396,7 +2396,7 @@ export default function POSPage() {
                         router.push("/login");
                       }}
                     >
-                      <IconLogout className="size-4 mr-2" /> Cerrar Sesión
+                      <IconLogout className="size-4 mr-2" /> Cerrar sesión
                     </Button>
                   )}
                 </div>
@@ -2404,8 +2404,8 @@ export default function POSPage() {
             </div>
 
             <div className="pt-4 border-t text-center">
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest leading-none">
-                SYNCRO POS • {new Date().toLocaleDateString()}
+              <p className="text-[10px] font-medium text-muted-foreground leading-none">
+                Syncro POS • {new Date().toLocaleDateString()}
               </p>
             </div>
           </div>
@@ -2445,10 +2445,10 @@ export default function POSPage() {
             <AntButton type="text" size="small" className="!h-7 !w-7 !p-0" onClick={() => router.push("/dashboard")} icon={<IconArrowLeft className="size-4" />} />
           )}
           <div className="flex items-center gap-1.5">
-            <h1 className="font-bold text-sm tracking-tight whitespace-nowrap">SYNCRO POS</h1>
+            <h1 className="font-bold text-sm tracking-tight whitespace-nowrap">Syncro POS</h1>
             <AntTag
               color={isOnline ? "success" : "error"}
-              className="hidden sm:inline-flex !text-[9px] !leading-4 !py-0 !px-1.5 !m-0 font-bold uppercase tracking-wider"
+              className="hidden sm:inline-flex !text-[9px] !leading-4 !py-0 !px-1.5 !m-0 font-bold"
             >
               {isOnline ? 'Online' : 'Offline'}
             </AntTag>
@@ -2462,7 +2462,7 @@ export default function POSPage() {
           </div>
           {settings?.bcvUpdateDate && (
             <div className="hidden xl:flex flex-col items-end mr-1">
-              <p className="text-[9px] text-muted-foreground leading-none">Fecha Valor</p>
+              <p className="text-[9px] text-muted-foreground leading-none">Fecha valor</p>
               <p className="text-[10px] font-semibold text-[#79716b] leading-none mt-0.5">{settings.bcvUpdateDate}</p>
             </div>
           )}
@@ -2504,7 +2504,7 @@ export default function POSPage() {
             }}
             icon={<IconCash size={14} />}
           >
-            Cerrar Turno
+            Cerrar turno
           </AntButton>
         </div>
       </header>
@@ -2539,7 +2539,7 @@ export default function POSPage() {
                   checked={showOnlyInStock}
                   onChange={setShowOnlyInStock}
                 />
-                <Label htmlFor="stock-filter" className="text-[9px] font-bold text-muted-foreground whitespace-nowrap cursor-pointer uppercase select-none">
+                <Label htmlFor="stock-filter" className="text-[9px] font-bold text-muted-foreground whitespace-nowrap cursor-pointer select-none">
                   Stock
                 </Label>
               </div>
@@ -2607,7 +2607,7 @@ export default function POSPage() {
                   setIsWaitlistOpen(true);
                 }}
               >
-                <span className="text-[10px] font-bold hidden md:inline">Lista de Espera</span>
+                <span className="text-[10px] font-bold hidden md:inline">Lista de espera</span>
               </AntButton>
             </AntBadge>
 
@@ -2617,7 +2617,7 @@ export default function POSPage() {
                 icon={<IconPlayerPause size={13} />}
                 onClick={() => setIsParkedModalOpen(true)}
               >
-                <span className="text-[10px] font-bold hidden md:inline">Tickets en Pausa</span>
+                <span className="text-[10px] font-bold hidden md:inline">Tickets en pausa</span>
               </AntButton>
             </AntBadge>
           </div>
@@ -2639,7 +2639,7 @@ export default function POSPage() {
               ) : filteredProducts.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50 pt-20">
                   <IconBox size={60} stroke={1} className="mb-4" />
-                  <p className="text-xl font-black uppercase tracking-widest text-center">Sin resultados</p>
+                  <p className="text-xl font-black text-center">Sin resultados</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-8">
@@ -2669,7 +2669,7 @@ export default function POSPage() {
                       {/* Badge de Agotado superpuesto */}
                       {p.totalStock <= 0 && (
                         <div className="absolute top-2 right-2 z-10">
-                          <AntTag color="error" className="!text-[8px] !leading-4 !py-0 !px-1.5 !m-0 font-bold uppercase">Agotado</AntTag>
+                          <AntTag color="error" className="!text-[8px] !leading-4 !py-0 !px-1.5 !m-0 font-bold">Agotado</AntTag>
                         </div>
                       )}
                       <div className="flex flex-col h-full">
@@ -2677,11 +2677,11 @@ export default function POSPage() {
                         <div className="flex items-end justify-between mt-auto pt-2">
                           <span className="font-bold text-xs">${(p.variants?.[0]?.price || 0).toFixed(2)}</span>
                           <div className="flex flex-col items-end gap-0.5 mt-1 text-right shrink-0">
-                            <p className="text-[9px] font-mono text-muted-foreground uppercase leading-none" title="SKU Interno">
+                            <p className="text-[9px] font-mono text-muted-foreground leading-none" title="SKU interno">
                               {p.variants?.[0]?.sku || 'S/SKU'}
                             </p>
                             {p.variants?.[0]?.barcode && (
-                              <p className="text-[8.5px] font-mono text-muted-foreground/60 flex items-center justify-end gap-1 leading-none" title="Código de Barras">
+                              <p className="text-[8.5px] font-mono text-muted-foreground/60 flex items-center justify-end gap-1 leading-none" title="Código de barras">
                                 <IconBarcode size={10} stroke={1.5} />
                                 {p.variants[0].barcode}
                               </p>
@@ -2699,9 +2699,9 @@ export default function POSPage() {
               <div className="p-4 border-b bg-muted/10 flex justify-between items-center">
                 <div>
                   <h2 className="text-sm font-bold flex items-center gap-2">
-                    <IconReceipt size={16} className="text-primary" /> Historial de Ventas
+                    <IconReceipt size={16} className="text-primary" /> Historial de ventas
                   </h2>
-                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">Control de actividad de facturación</p>
+                  <p className="text-[10px] text-muted-foreground font-medium mt-0.5">Control de actividad de facturación</p>
                 </div>
                 <div className="flex items-center gap-4">
                   <AntInput
@@ -2711,7 +2711,7 @@ export default function POSPage() {
                     value={historySearchTerm}
                     onChange={(e) => setHistorySearchTerm(e.target.value)}
                   />
-                  <AntButton size="small" className="!h-8 !text-[10px] uppercase font-bold tracking-widest" onClick={() => setView('pos')}>
+                  <AntButton size="small" className="!h-8 !text-[10px] font-bold" onClick={() => setView('pos')}>
                     Volver al POS
                   </AntButton>
                 </div>
@@ -2725,20 +2725,20 @@ export default function POSPage() {
                 ) : filteredSalesHistory.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-40 py-20">
                     <IconHistory size={48} stroke={1} className="mb-2" />
-                    <p className="text-xs font-bold uppercase tracking-widest">Sin ventas registradas</p>
+                    <p className="text-xs font-bold">Sin ventas registradas</p>
                   </div>
                 ) : (
                   <div className="min-w-full inline-block align-middle">
                     <table className="w-full text-sm">
                       <thead className="bg-background sticky top-0 border-b z-10">
                         <tr>
-                          <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">ID Venta</th>
-                          <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Fecha / Hora</th>
-                          <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Cliente</th>
-                          <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Cajero</th>
-                          <th className="p-4 text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Artículos</th>
-                          <th className="p-4 text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Total USD</th>
-                          <th className="p-4 text-center font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Estado</th>
+                          <th className="p-4 text-left font-bold text-[10px] text-muted-foreground">ID venta</th>
+                          <th className="p-4 text-left font-bold text-[10px] text-muted-foreground">Fecha / hora</th>
+                          <th className="p-4 text-left font-bold text-[10px] text-muted-foreground">Cliente</th>
+                          <th className="p-4 text-left font-bold text-[10px] text-muted-foreground">Cajero</th>
+                          <th className="p-4 text-right font-bold text-[10px] text-muted-foreground">Artículos</th>
+                          <th className="p-4 text-right font-bold text-[10px] text-muted-foreground">Total USD</th>
+                          <th className="p-4 text-center font-bold text-[10px] text-muted-foreground">Estado</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y bg-background/50">
@@ -2752,7 +2752,7 @@ export default function POSPage() {
                             }}
                           >
                             <td className="p-4">
-                              <code className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded uppercase">
+                              <code className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded">
                                 #{sale.id.slice(-6)}
                               </code>
                             </td>
@@ -2768,7 +2768,7 @@ export default function POSPage() {
                                   <IconUser size={12} className="text-muted-foreground opacity-70" />
                                 </div>
                                 <div className="flex flex-col">
-                                  <span className="text-[11px] font-bold group-hover:text-primary transition-colors">{sale.client?.name || "Consumidor Final"}</span>
+                                  <span className="text-[11px] font-bold group-hover:text-primary transition-colors">{sale.client?.name || "Consumidor final"}</span>
                                   <span className="text-[9px] text-muted-foreground">{sale.client?.documentId || "No identificado"}</span>
                                 </div>
                               </div>
@@ -2779,7 +2779,7 @@ export default function POSPage() {
                             <td className="p-4 text-right">
                               <div className="inline-flex flex-col items-end">
                                 <span className="font-bold text-[10px] px-1.5 py-0.5 rounded-full bg-muted/50 border text-muted-foreground">
-                                  {sale.items?.length || 0} ITEMS
+                                  {sale.items?.length || 0} items
                                 </span>
                               </div>
                             </td>
@@ -2788,7 +2788,7 @@ export default function POSPage() {
                             </td>
                             <td className="p-4 text-center">
                               <div className="flex items-center justify-center gap-3">
-                                <AntTag color="success" className="!text-[9px] font-black tracking-widest !m-0">COMPLETA</AntTag>
+                                <AntTag color="success" className="!text-[9px] font-black !m-0">Completa</AntTag>
                                 <AntButton
                                   type="text"
                                   size="small"
@@ -2797,7 +2797,7 @@ export default function POSPage() {
                                     e.stopPropagation();
                                     openReturnModal(sale);
                                   }}
-                                  title="Procesar Devolución"
+                                  title="Procesar devolución"
                                   icon={<IconArrowBackUp size={18} />}
                                 />
                               </div>
@@ -2819,7 +2819,7 @@ export default function POSPage() {
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="text-xs font-bold flex items-center gap-1.5">
-                  <IconShoppingCart className="text-primary size-3.5" /> Ticket Actual
+                  <IconShoppingCart className="text-primary size-3.5" /> Ticket actual
                 </h2>
                 <p className="text-[9px] text-muted-foreground mt-0.5">
                   {cart.length} productos • {new Date().toLocaleDateString()}
@@ -2850,9 +2850,9 @@ export default function POSPage() {
 
             <div className="space-y-1.5">
               <div className="flex justify-between items-center px-0.5">
-                <Label className="text-[9px] font-black uppercase text-[#79716b] tracking-widest">Identificación Cliente</Label>
+                <Label className="text-[9px] font-black text-[#79716b]">Identificación cliente</Label>
                 <button className="text-primary text-[9px] font-bold hover:underline" onClick={() => setIsQuickClientOpen(true)}>
-                  + NUEVO
+                  + Nuevo
                 </button>
               </div>
               <div className="relative">
@@ -2870,11 +2870,11 @@ export default function POSPage() {
                 value={selectedClientId}
                 onChange={setSelectedClientId}
                 className="w-full"
-                placeholder="Seleccionar Cliente"
+                placeholder="Seleccionar cliente"
                 showSearch
                 optionFilterProp="label"
                 options={[
-                  { value: "consumidor-final", label: "Consumidor Final" },
+                  { value: "consumidor-final", label: "Consumidor final" },
                   ...clients.map(c => ({
                     value: c.id || (c as any)._id,
                     label: `${c.name} (${c.documentId || 'S/D'})`,
@@ -2894,7 +2894,7 @@ export default function POSPage() {
                           icon={<IconWallet size={14} />}
                           message={
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold uppercase tracking-widest">Saldo a Favor</span>
+                              <span className="text-[10px] font-bold">Saldo a favor</span>
                               <span className="text-sm font-black tabular-nums">${(c.walletBalance || 0).toFixed(2)}</span>
                             </div>
                           }
@@ -2912,8 +2912,8 @@ export default function POSPage() {
                             icon={isBlocked ? <IconAlertTriangle size={14} /> : <IconHistory size={14} />}
                             message={
                               <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-bold uppercase tracking-widest">
-                                  {isBlocked ? "Crédito Bloqueado" : "Deuda Activa"}
+                                <span className="text-[10px] font-bold">
+                                  {isBlocked ? "Crédito bloqueado" : "Deuda activa"}
                                 </span>
                                 <span className="text-sm font-black tabular-nums">${(c.currentDebt || 0).toFixed(2)}</span>
                               </div>
@@ -2929,13 +2929,13 @@ export default function POSPage() {
                                   danger={isBlocked}
                                   type={isBlocked ? "primary" : "default"}
                                   size="small"
-                                  className="w-full !text-[10px] font-bold uppercase tracking-wider"
+                                  className="w-full !text-[10px] font-bold"
                                   onClick={() => {
                                     setAbonoAmount(c.currentDebt.toString());
                                     setIsPaymentModalAbonoOpen(true);
                                   }}
                                 >
-                                  Abonar a Deuda
+                                  Abonar a deuda
                                 </AntButton>
                               </div>
                             }
@@ -2960,7 +2960,7 @@ export default function POSPage() {
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {cart.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center py-20 opacity-40">
-                <AntEmpty description={<span className="text-xs font-bold uppercase tracking-widest">Carrito Vacío</span>} />
+                <AntEmpty description={<span className="text-xs font-bold">Carrito vacío</span>} />
               </div>
             ) : (
               cart.map(item => (
@@ -2983,7 +2983,7 @@ export default function POSPage() {
                           <p className="font-bold text-xs">${(item.product.price * item.quantity).toFixed(2)}</p>
                         )}
                       </div>
-                      <p className="text-[9px] font-mono text-muted-foreground uppercase leading-none">
+                      <p className="text-[9px] font-mono text-muted-foreground leading-none">
                         {item.product.sku || 'S/SKU'}
                       </p>
                       {item.product.barcode && (
@@ -3001,7 +3001,7 @@ export default function POSPage() {
                       <AntButton type="text" size="small" className="!h-6 !w-6 !p-0 !min-w-0 rounded-none border-l" onClick={(e) => { e.stopPropagation(); updateQuantity(item.product.id, 1); }} icon={<IconPlus size={10} />} />
                     </div>
                     <div className="flex gap-1 items-center">
-                      <AntButton type="text" size="small" title="Editar Cantidad / Peso" className="!h-6 !w-6 !p-0 !min-w-0 text-blue-500" onClick={(e) => {
+                      <AntButton type="text" size="small" title="Editar cantidad / peso" className="!h-6 !w-6 !p-0 !min-w-0 text-blue-500" onClick={(e) => {
                         e.stopPropagation();
                         setEditingCartItemId(item.product.id);
                         setEditingCartItemName(item.product.name);
@@ -3010,7 +3010,7 @@ export default function POSPage() {
                         setWeightUnit('ud');
                         setIsWeightModalOpen(true);
                       }} icon={<IconScale size={14} />} />
-                      <AntButton type="text" size="small" title="Aplicar Descuento" className="!h-6 !w-6 !p-0 !min-w-0 text-emerald-500" onClick={(e) => {
+                      <AntButton type="text" size="small" title="Aplicar descuento" className="!h-6 !w-6 !p-0 !min-w-0 text-emerald-500" onClick={(e) => {
                         e.stopPropagation();
                         openPinVerification(() => {
                           setTargetDiscountId(item.product.id);
@@ -3034,7 +3034,7 @@ export default function POSPage() {
                         }}
                       >
                         <IconDiscount size={8} />
-                        {item.discount.type === 'pct' ? `${item.discount.value}%` : `$${item.discount.value}`} OFF
+                        {item.discount.type === 'pct' ? `${item.discount.value}%` : `$${item.discount.value}`} off
                         <IconX size={8} className="ml-1" />
                       </AntTag>
                     </div>
@@ -3055,14 +3055,14 @@ export default function POSPage() {
                 });
               }}>
                 <span className="flex items-center gap-1 border-b border-dashed border-muted-foreground/30 hover:border-emerald-500 hover:text-emerald-500 transition-colors">
-                  <IconDiscount size={11} /> Descuento Global
+                  <IconDiscount size={11} /> Descuento global
                 </span>
                 <span className={cn("tabular-nums", totalDiscountAmt > 0 ? "text-emerald-500 font-bold" : "")}>
                   {totalDiscountAmt > 0 ? `-$${totalDiscountAmt.toFixed(2)}` : '$0.00'}
                 </span>
               </div>
               <div className="flex justify-between text-[11px] font-medium text-muted-foreground">
-                <span>Subtotal (Neto)</span>
+                <span>Subtotal (neto)</span>
                 <span className="tabular-nums">${subtotalAfterGlobalDiscount.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-[11px] font-medium text-muted-foreground">
@@ -3072,7 +3072,7 @@ export default function POSPage() {
             </div>
             <div className="flex justify-between items-center pt-1.5 border-t">
               <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] font-bold text-foreground">Total Checkout</span>
+                <span className="text-[11px] font-bold text-foreground">Total checkout</span>
                 <span className="text-[9px] text-muted-foreground font-medium tabular-nums">~ Bs {(updatedTotal * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
               </div>
               <span className="text-xl font-black tracking-tight tabular-nums">${updatedTotal.toFixed(2)}</span>
@@ -3085,7 +3085,7 @@ export default function POSPage() {
               disabled={cart.length === 0 || processing}
               icon={<IconCash className="size-4" />}
             >
-              Procesar Pago
+              Procesar pago
             </AntButton>
           </div>
         </div>
@@ -3099,7 +3099,7 @@ export default function POSPage() {
             <div className="md:col-span-5 bg-muted/20 border-r flex flex-col overflow-hidden">
               <div className="p-5 border-b bg-background/50">
                 <DialogTitle className="text-base font-semibold tracking-tight text-foreground flex items-center gap-2">
-                  <IconList className="size-4 text-primary" /> Resumen de Compra
+                  <IconList className="size-4 text-primary" /> Resumen de compra
                 </DialogTitle>
                 <p className="text-[11px] text-muted-foreground font-medium mt-0.5">{cart.length} productos en el carrito</p>
               </div>
@@ -3131,7 +3131,7 @@ export default function POSPage() {
                   </div>
                 )}
                 <div className="flex justify-between items-center pt-2 border-t">
-                  <span className="text-[13px] font-semibold text-foreground">Total Bruto</span>
+                  <span className="text-[13px] font-semibold text-foreground">Total bruto</span>
                   <span className="text-lg font-bold text-foreground">${updatedTotal.toFixed(2)}</span>
                 </div>
               </div>
@@ -3141,13 +3141,13 @@ export default function POSPage() {
             <div className="md:col-span-7 flex flex-col overflow-hidden bg-background">
               <div className="p-5 border-b flex justify-between items-center h-[69px]">
                 <div>
-                  <DialogTitle className="text-base font-semibold tracking-tight text-foreground">Procesar Pago</DialogTitle>
+                  <DialogTitle className="text-base font-semibold tracking-tight text-foreground">Procesar pago</DialogTitle>
                   <p className="text-[11px] text-muted-foreground font-medium">Complete la información de pago</p>
                 </div>
                 <div className="flex items-center gap-2 px-3 py-1.5 mr-6 rounded-full bg-muted/40 border">
                   <IconUser size={14} className="text-muted-foreground" />
-                  <span className="text-[11px] font-semibold truncate max-w-[150px]" title={selectedClient ? selectedClient.name : "Consumidor Final"}>
-                    {selectedClient ? selectedClient.name : "Consumidor Final"}
+                  <span className="text-[11px] font-semibold truncate max-w-[150px]" title={selectedClient ? selectedClient.name : "Consumidor final"}>
+                    {selectedClient ? selectedClient.name : "Consumidor final"}
                   </span>
                 </div>
               </div>
@@ -3156,12 +3156,12 @@ export default function POSPage() {
 
                 {/* Total Display */}
                 <div className="p-6 rounded-lg bg-primary/5 border border-primary/20 flex flex-col gap-3">
-                  <p className="text-xs font-semibold text-primary/70 tracking-tight">Monto Total a Pagar</p>
+                  <p className="text-xs font-semibold text-primary/70 tracking-tight">Monto total a pagar</p>
                   <div className="flex flex-wrap items-baseline gap-x-8 gap-y-1">
                     <p className="text-4xl font-bold tracking-tight text-primary">${finalTotalWithIgtf.toFixed(2)}</p>
                     <p className="text-3xl font-bold tracking-tight text-primary/50 tabular-nums">Bs {(finalTotalWithIgtf * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</p>
                   </div>
-                  {igtfAmount > 0 && <p className="text-[11px] font-semibold text-emerald-600 bg-emerald-500/10 self-start px-2 py-0.5 rounded">+ IGTF (3%) Incluido</p>}
+                  {igtfAmount > 0 && <p className="text-[11px] font-semibold text-emerald-600 bg-emerald-500/10 self-start px-2 py-0.5 rounded">+ IGTF (3%) incluido</p>}
                 </div>
 
                 {/* Wallet Toggle */}
@@ -3178,7 +3178,7 @@ export default function POSPage() {
                         <IconWallet size={18} stroke={2} />
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[13px] font-semibold text-foreground">Saldo a Favor</span>
+                        <span className="text-[13px] font-semibold text-foreground">Saldo a favor</span>
                         <span className="text-[11px] text-muted-foreground font-medium">Disponible: ${availableWallet.toFixed(2)}</span>
                       </div>
                     </div>
@@ -3188,7 +3188,7 @@ export default function POSPage() {
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b pb-2">
-                    <h4 className="text-xs font-semibold text-muted-foreground tracking-tight">Métodos de Pago</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground tracking-tight">Métodos de pago</h4>
                   </div>
 
                   {/* Payment Entry Form: Dynamic Grid based on method */}
@@ -3202,10 +3202,10 @@ export default function POSPage() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="CASH" disabled={addedPayments.some(p => p.method === "CASH")}>Efectivo</SelectItem>
-                              <SelectItem value="CARD" disabled={addedPayments.some(p => p.method === "CARD")}>Tarjeta (Punto)</SelectItem>
+                              <SelectItem value="CARD" disabled={addedPayments.some(p => p.method === "CARD")}>Tarjeta (punto)</SelectItem>
                               <SelectItem value="TRANSFER" disabled={addedPayments.some(p => p.method === "TRANSFER")}>Transferencia</SelectItem>
-                              {settings?.pagoMovilEnabled && <SelectItem value="PAGO_MOVIL" disabled={addedPayments.some(p => p.method === "PAGO_MOVIL")}>Pago Móvil</SelectItem>}
-                              {settings?.binanceEnabled && <SelectItem value="BINANCE" disabled={addedPayments.some(p => p.method === "BINANCE")}>Binance Pay</SelectItem>}
+                              {settings?.pagoMovilEnabled && <SelectItem value="PAGO_MOVIL" disabled={addedPayments.some(p => p.method === "PAGO_MOVIL")}>Pago móvil</SelectItem>}
+                              {settings?.binanceEnabled && <SelectItem value="BINANCE" disabled={addedPayments.some(p => p.method === "BINANCE")}>Binance pay</SelectItem>}
                               {settings?.zinliEnabled && <SelectItem value="ZINLI" disabled={addedPayments.some(p => p.method === "ZINLI")}>Zinli</SelectItem>}
                               {settings?.paypalEnabled && <SelectItem value="PAYPAL" disabled={addedPayments.some(p => p.method === "PAYPAL")}>PayPal</SelectItem>}
                               <SelectItem value="WALLET" disabled={addedPayments.some(p => p.method === "WALLET")}>Monedero</SelectItem>
@@ -3217,8 +3217,8 @@ export default function POSPage() {
                                 }
                               >
                                 {(selectedClient?.hasAccount && ((selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0) <= 0.01 && (selectedClient?.currentDebt || 0) > 0))
-                                  ? "Crédito / Fiado (Bloqueado)"
-                                  : "Crédito / Fiado"
+                                  ? "Crédito / fiado (bloqueado)"
+                                  : "Crédito / fiado"
                                 }
                               </SelectItem>
                             </SelectContent>
@@ -3227,8 +3227,8 @@ export default function POSPage() {
                           {tempPaymentMethod === "CREDIT" && (selectedClientId === "consumidor-final" || !selectedClient?.hasAccount || creditType === "traditional") && (
                             <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-500">
                               <div className="space-y-2 px-1">
-                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.15em] ml-0.5">
-                                  Fecha Promesa de Pago
+                                <label className="text-[10px] font-black text-muted-foreground ml-0.5">
+                                  Fecha promesa de pago
                                 </label>
                                 <Popover>
                                   <PopoverTrigger asChild disabled={selectedClientId === "consumidor-final"}>
@@ -3268,7 +3268,7 @@ export default function POSPage() {
                                   </p>
                                 ) : (
                                   <p className="text-[10px] text-destructive font-bold italic ml-1 flex items-center gap-1">
-                                    <IconAlertCircle size={10} /> No se puede fiar al Consumidor Final.
+                                    <IconAlertCircle size={10} /> No se puede fiar al consumidor final.
                                   </p>
                                 )}
                               </div>
@@ -3278,7 +3278,7 @@ export default function POSPage() {
                           {tempPaymentMethod === "WALLET" && selectedClientId !== "consumidor-final" && (
                             <div className="mt-1 flex items-center gap-1.5 px-1 animate-in fade-in slide-in-from-top-1 duration-300">
                               <div className="size-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                              <span className="text-[9px] font-bold text-blue-600 tracking-tight uppercase">Saldo: ${availableWallet.toFixed(2)}</span>
+                              <span className="text-[9px] font-bold text-blue-600 tracking-tight">Saldo: ${availableWallet.toFixed(2)}</span>
                             </div>
                           )}
                         </div>
@@ -3321,10 +3321,10 @@ export default function POSPage() {
                           <div className="col-span-6 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
                             <div className="flex items-center gap-2">
                               <IconHistory className="text-amber-600 size-5" />
-                              <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-500 tracking-tight">Deuda Previa Abierta</span>
+                              <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-500 tracking-tight">Deuda previa abierta</span>
                             </div>
                             <div className="flex flex-col text-right">
-                              <span className="text-[10px] font-bold text-amber-600/80 uppercase">Libreta Actual</span>
+                              <span className="text-[10px] font-bold text-amber-600/80">Libreta actual</span>
                               <span className="text-sm font-black text-amber-600 tabular-nums">${(selectedClient.currentDebt || 0).toFixed(2)}</span>
                             </div>
                           </div>
@@ -3365,19 +3365,19 @@ export default function POSPage() {
                         <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
                           <div className="flex items-center gap-2">
                             <IconDevices className="text-blue-500 size-5" />
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 hidden sm:block">Datos Pago Móvil</span>
+                            <span className="text-[11px] font-bold text-blue-600 hidden sm:block">Datos pago móvil</span>
                           </div>
                           <div className="flex gap-4">
                             <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Banco</span>
+                              <span className="text-[9px] font-bold text-muted-foreground">Banco</span>
                               <span className="text-xs font-semibold">{settings?.pagoMovilBank || "-"}</span>
                             </div>
                             <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Cédula/RIF</span>
+                              <span className="text-[9px] font-bold text-muted-foreground">Cédula/RIF</span>
                               <span className="text-xs font-semibold">{settings?.pagoMovilId || "-"}</span>
                             </div>
                             <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Teléfono</span>
+                              <span className="text-[9px] font-bold text-muted-foreground">Teléfono</span>
                               <span className="text-xs font-semibold">{settings?.pagoMovilPhone || "-"}</span>
                             </div>
                           </div>
@@ -3388,15 +3388,15 @@ export default function POSPage() {
                         <div className="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
                           <div className="flex items-center gap-2">
                             <IconHexagon className="text-yellow-600 size-5" />
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-yellow-600 hidden sm:block">Datos Binance Pay</span>
+                            <span className="text-[11px] font-bold text-yellow-600 hidden sm:block">Datos Binance pay</span>
                           </div>
                           <div className="flex gap-4">
                             <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Binance ID</span>
+                              <span className="text-[9px] font-bold text-muted-foreground">Binance ID</span>
                               <span className="text-xs font-semibold">{settings?.binanceId || "-"}</span>
                             </div>
                             <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo</span>
+                              <span className="text-[9px] font-bold text-muted-foreground">Correo</span>
                               <span className="text-xs font-semibold">{settings?.binanceEmail || "-"}</span>
                             </div>
                           </div>
@@ -3407,11 +3407,11 @@ export default function POSPage() {
                         <div className="p-3 bg-purple-500/5 border border-purple-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
                           <div className="flex items-center gap-2">
                             <IconWorld className="text-purple-600 size-5" />
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-purple-600 hidden sm:block">Datos Zinli</span>
+                            <span className="text-[11px] font-bold text-purple-600 hidden sm:block">Datos Zinli</span>
                           </div>
                           <div className="flex gap-4">
                             <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo Zinli</span>
+                              <span className="text-[9px] font-bold text-muted-foreground">Correo Zinli</span>
                               <span className="text-xs font-semibold">{settings?.zinliEmail || "-"}</span>
                             </div>
                           </div>
@@ -3422,11 +3422,11 @@ export default function POSPage() {
                         <div className="p-3 bg-blue-700/5 border border-blue-700/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
                           <div className="flex items-center gap-2">
                             <IconBuilding className="text-blue-800 size-5" />
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-800 hidden sm:block">Datos PayPal</span>
+                            <span className="text-[11px] font-bold text-blue-800 hidden sm:block">Datos PayPal</span>
                           </div>
                           <div className="flex gap-4">
                             <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo PayPal</span>
+                              <span className="text-[9px] font-bold text-muted-foreground">Correo PayPal</span>
                               <span className="text-xs font-semibold">{settings?.paypalEmail || "-"}</span>
                             </div>
                           </div>
@@ -3498,8 +3498,8 @@ export default function POSPage() {
 
                             {isCredit && (
                               <div className="col-span-4 flex items-center justify-end px-2">
-                                <span className="text-[11px] font-bold text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                                  Por Cobrar en Libreta
+                                <span className="text-[11px] font-bold text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full">
+                                  Por cobrar en libreta
                                 </span>
                               </div>
                             )}
@@ -3531,7 +3531,7 @@ export default function POSPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        className="w-full py-6 border-dashed border-primary/30 hover:border-primary text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2 rounded-xl font-bold text-xs tracking-wider uppercase"
+                        className="w-full py-6 border-dashed border-primary/30 hover:border-primary text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2 rounded-xl font-bold text-xs"
                         onClick={() => setShowSplitPaymentForm(true)}
                       >
                         <IconPlus size={16} />
@@ -3544,7 +3544,7 @@ export default function POSPage() {
                   <div className="pt-2">
                     {remainingToPay > 0.001 ? (
                       <div className="p-8 rounded-lg bg-amber-500/5 border border-amber-500/20 flex flex-col items-center gap-2 shadow-sm">
-                        <span className="text-[12px] font-semibold text-amber-600 tracking-tight">Pendiente por Cobrar</span>
+                        <span className="text-[12px] font-semibold text-amber-600 tracking-tight">Pendiente por cobrar</span>
                         <div className="flex flex-col items-center gap-1 text-center">
                           <span className="text-5xl font-bold text-amber-500 tabular-nums tracking-tighter leading-none">${remainingToPay.toFixed(2)}</span>
                           <span className="text-4xl font-bold text-amber-500/70 tabular-nums tracking-tighter leading-none">
@@ -3555,7 +3555,7 @@ export default function POSPage() {
                     ) : changeDue > 0.001 ? (
                       <div className="space-y-4">
                         <div className="p-8 rounded-lg bg-blue-500/5 border border-blue-500/20 flex flex-col items-center gap-2 shadow-sm">
-                          <span className="text-[12px] font-semibold text-blue-600 tracking-tight">Cambio para el Cliente</span>
+                          <span className="text-[12px] font-semibold text-blue-600 tracking-tight">Cambio para el cliente</span>
                           <div className="flex flex-col items-center gap-1 text-center">
                             <span className="text-5xl font-bold text-blue-600 tabular-nums tracking-tighter leading-none">${changeDue.toFixed(2)}</span>
                             <span className="text-4xl font-bold text-blue-600/70 tabular-nums tracking-tighter leading-none">
@@ -3575,7 +3575,7 @@ export default function POSPage() {
                       </div>
                     ) : (
                       <div className="p-10 rounded-lg bg-emerald-500/5 border border-emerald-500/20 flex flex-col items-center gap-4 shadow-sm">
-                        <span className="text-[13px] font-semibold text-emerald-600 tracking-tight">Pago Completado</span>
+                        <span className="text-[13px] font-semibold text-emerald-600 tracking-tight">Pago completado</span>
                         <div className="size-16 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
                           <IconCircleCheckFilled size={32} />
                         </div>
@@ -3586,7 +3586,7 @@ export default function POSPage() {
                   {/* Switch to enable/disable printing receipt */}
                   <div className="flex items-center justify-between p-4 rounded-lg bg-muted/40 border transition-all duration-300">
                     <div className="flex flex-col">
-                      <span className="text-xs font-semibold text-foreground/80">Imprimir Recibo al Finalizar</span>
+                      <span className="text-xs font-semibold text-foreground/80">Imprimir recibo al finalizar</span>
                       <span className="text-[11px] text-muted-foreground font-medium">Abrir el diálogo de impresión automáticamente al registrar la venta</span>
                     </div>
                     <Switch checked={printReceipt} onCheckedChange={setPrintReceipt} />
@@ -3620,7 +3620,7 @@ export default function POSPage() {
 
                       {/* Custom Credit Limit Input */}
                       <div className="flex items-center gap-2 mt-1">
-                        <Label htmlFor="custom-credit-limit" className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 shrink-0">Límite Personalizado:</Label>
+                        <Label htmlFor="custom-credit-limit" className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 shrink-0">Límite personalizado:</Label>
                         <div className="relative flex-1">
                           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">$</span>
                           <Input
@@ -3680,7 +3680,7 @@ export default function POSPage() {
                         {generatingPwaCode ? (
                           <><IconRefresh className="animate-spin size-3" /> Generando...</>
                         ) : (
-                          <><IconDevices size={13} /> Generar Código SyncroCredit</>
+                          <><IconDevices size={13} /> Generar código SyncroCredit</>
                         )}
                       </Button>
 
@@ -3702,7 +3702,7 @@ export default function POSPage() {
                           {checkingActivation ? (
                             <><IconRefresh className="animate-spin size-3" /> Verificando...</>
                           ) : (
-                            <><IconRefresh size={12} /> Verificar Estado</>
+                            <><IconRefresh size={12} /> Verificar estado</>
                           )}
                         </Button>
                       </div>
@@ -3712,7 +3712,7 @@ export default function POSPage() {
                   {/* Selector de Tipo de Fiado: Tradicional vs SyncroCredit */}
                   {(tempPaymentMethod === 'CREDIT' || addedPayments.some((p: any) => p.method === 'CREDIT')) && selectedClientId !== "consumidor-final" && selectedClient?.hasAccount && (
                     <div className="flex flex-col gap-2 p-2 bg-muted/40 border border-border/40 rounded-xl animate-in fade-in duration-200">
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">Modalidad de Fiado</span>
+                      <span className="text-[10px] font-bold text-muted-foreground px-1">Modalidad de fiado</span>
                       <div className="grid grid-cols-2 gap-1.5 p-1 bg-muted rounded-lg border">
                         <button
                           type="button"
@@ -3722,7 +3722,7 @@ export default function POSPage() {
                               : "text-muted-foreground hover:text-foreground"
                             }`}
                         >
-                          Fiado Tradicional (Libreta)
+                          Fiado tradicional (libreta)
                         </button>
                         <button
                           type="button"
@@ -3732,7 +3732,7 @@ export default function POSPage() {
                               : "text-muted-foreground hover:text-foreground"
                             }`}
                         >
-                          <IconDevices size={14} /> SyncroCredit (Digital)
+                          <IconDevices size={14} /> SyncroCredit (digital)
                         </button>
                       </div>
                     </div>
@@ -3743,7 +3743,7 @@ export default function POSPage() {
                     <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl flex items-start gap-2.5 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
                       <IconInfoCircle className="text-amber-600 shrink-0 size-4 mt-0.5" />
                       <div className="flex-1">
-                        <p className="text-xs font-bold text-amber-700 dark:text-amber-500">Fiado Directo a Libreta</p>
+                        <p className="text-xs font-bold text-amber-700 dark:text-amber-500">Fiado directo a libreta</p>
                         <p className="text-[10px] text-muted-foreground font-semibold leading-normal mt-0.5">
                           Este crédito se registrará directamente en la cuenta local del cliente sin requerir código PIN ni cuotas fijas.
                         </p>
@@ -3769,9 +3769,9 @@ export default function POSPage() {
                       {/* Ajustar Límite de Crédito */}
                       <div className="flex items-center justify-between p-2 rounded-lg bg-muted/50 border border-border/60">
                         <div className="flex flex-col">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase leading-none">Límite de Crédito</span>
+                          <span className="text-[10px] font-bold text-muted-foreground leading-none">Límite de crédito</span>
                           <span className="text-xs font-black mt-1">
-                            {selectedClient?.creditLimit === 0 ? "Sin Límite (Libreta Tradicional)" : `$${selectedClient?.creditLimit || 0}`}
+                            {selectedClient?.creditLimit === 0 ? "Sin límite (libreta tradicional)" : `$${selectedClient?.creditLimit || 0}`}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5">
@@ -3863,7 +3863,7 @@ export default function POSPage() {
                           }}
                           className="w-full text-[11px] font-bold h-9 flex items-center justify-center gap-1.5"
                         >
-                          <IconLock size={13} /> Cambiar Contraseña (OTP)
+                          <IconLock size={13} /> Cambiar contraseña (OTP)
                         </Button>
 
                         <div className="grid grid-cols-2 gap-2">
@@ -3904,9 +3904,9 @@ export default function POSPage() {
                               }`}
                           >
                             {selectedClient?.isSuspended ? (
-                              <><IconLock size={13} /> Reactivar Cuenta</>
+                              <><IconLock size={13} /> Reactivar cuenta</>
                             ) : (
-                              <><IconLock size={13} /> Pausar Cuenta</>
+                              <><IconLock size={13} /> Pausar cuenta</>
                             )}
                           </Button>
 
@@ -3952,7 +3952,7 @@ export default function POSPage() {
                             }}
                             className="w-full text-[11px] font-bold h-9 flex items-center justify-center gap-1.5"
                           >
-                            <IconTrash size={13} /> Eliminar Cuenta
+                            <IconTrash size={13} /> Eliminar cuenta
                           </Button>
                         </div>
                       </div>
@@ -3968,7 +3968,7 @@ export default function POSPage() {
                   disabled={processing || (tempPaymentMethod !== 'CREDIT' && remainingToPay > 0.01)}
                   onClick={() => {
                     if (tempPaymentMethod === 'CREDIT' && selectedClientId === 'consumidor-final') {
-                      toast.error("No se puede fiar al Consumidor Final.");
+                      toast.error("No se puede fiar al consumidor final.");
                       return;
                     }
 
@@ -4016,7 +4016,7 @@ export default function POSPage() {
                     <span className="flex items-center gap-2">
                       <IconRefresh className="animate-spin size-4" /> Procesando...
                     </span>
-                  ) : (tempPaymentMethod === 'CREDIT' && addedPayments.length === 0) ? ((selectedClient?.currentDebt || 0) > 0 ? "Agregar a Libreta" : "Confirmar Fiado") : "Finalizar Venta"}
+                  ) : (tempPaymentMethod === 'CREDIT' && addedPayments.length === 0) ? ((selectedClient?.currentDebt || 0) > 0 ? "Agregar a libreta" : "Confirmar fiado") : "Finalizar venta"}
                 </Button>
               </div>
             </div>
@@ -4031,14 +4031,14 @@ export default function POSPage() {
             <div className="size-12 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mb-3">
               <IconReceipt size={24} />
             </div>
-            <AlertDialogTitle className="text-xl font-bold tracking-tight">¿Confirmar Método de Pago?</AlertDialogTitle>
+            <AlertDialogTitle className="text-xl font-bold tracking-tight">¿Confirmar método de pago?</AlertDialogTitle>
           </AlertDialogHeader>
 
           <div className="px-6 py-4 space-y-5 text-center">
             {/* Huge Payment Method */}
             <div className="space-y-1">
               <div className={cn(
-                "font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-tight break-words leading-none",
+                "font-black text-emerald-600 dark:text-emerald-400 tracking-tight break-words leading-none",
                 (() => {
                   const name = paymentConfirmationSummary.split(" + ").map(p => p.split(" (")[0]).join(" + ");
                   if (name.length > 15) return "text-3xl";
@@ -4052,7 +4052,7 @@ export default function POSPage() {
 
             {/* Total Amount in smaller font */}
             <div className="py-2.5 px-4 rounded-xl bg-muted/40 border border-border/40 flex justify-between items-center text-sm font-semibold text-muted-foreground">
-              <span>Monto Total:</span>
+              <span>Monto total:</span>
               <span className="text-lg font-black text-foreground font-mono">
                 ${finalTotalWithIgtf.toFixed(2)} USD
               </span>
@@ -4063,7 +4063,7 @@ export default function POSPage() {
 
           <AlertDialogFooter className="p-6 pt-2 flex sm:flex-row flex-col gap-3">
             <AlertDialogCancel className="w-full sm:flex-1 rounded-xl h-12 font-bold text-sm border-border hover:bg-muted transition-colors mt-0">
-              Revisar Pago
+              Revisar pago
             </AlertDialogCancel>
             <AlertDialogAction
               disabled={processing}
@@ -4082,7 +4082,7 @@ export default function POSPage() {
               }}
               className="w-full sm:flex-1 rounded-xl h-12 px-8 font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/10 border-none transition-colors"
             >
-              Registrar Venta
+              Registrar venta
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -4099,9 +4099,9 @@ export default function POSPage() {
             <div className="size-14 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center mb-3">
               <IconLock size={28} />
             </div>
-            <DialogTitle className="text-xl font-bold tracking-tight">Autorización SyncroCredit Requerida</DialogTitle>
+            <DialogTitle className="text-xl font-bold tracking-tight">Autorización SyncroCredit requerida</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-1 flex flex-col items-center gap-0.5">
-              <span>El cliente <strong>{selectedClient?.name || "Cliente"}</strong> debe autorizar el crédito.</span>
+              <span>El cliente <strong>{selectedClient?.name || "Cliente"}</strong> Debe autorizar el crédito.</span>
             </DialogDescription>
           </DialogHeader>
 
@@ -4109,13 +4109,13 @@ export default function POSPage() {
             {isGeneratingPin ? (
               <div className="flex flex-col items-center justify-center gap-3 py-6">
                 <IconRefresh className="animate-spin text-blue-500 size-8" />
-                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Generando PIN...</span>
+                <span className="text-xs font-bold text-muted-foreground">Generando PIN...</span>
               </div>
             ) : generatedPinCode ? (
               <div className="space-y-6">
                 <div className="flex flex-col items-center justify-center gap-1.5">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Dicta este PIN al cliente:</span>
-                  <div className="text-5xl font-black tracking-widest text-blue-600 font-mono select-all select-none py-3 px-6 bg-blue-500/5 rounded-2xl border border-blue-500/10 shadow-inner">
+                  <span className="text-[10px] font-bold text-muted-foreground">Dicta este PIN al cliente:</span>
+                  <div className="text-5xl font-black text-blue-600 font-mono select-all select-none py-3 px-6 bg-blue-500/5 rounded-2xl border border-blue-500/10 shadow-inner">
                     {generatedPinCode}
                   </div>
                 </div>
@@ -4150,7 +4150,7 @@ export default function POSPage() {
               }}
               className="w-full h-12 rounded-xl text-xs font-black"
             >
-              Cancelar Operación
+              Cancelar operación
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4163,7 +4163,7 @@ export default function POSPage() {
             <div className="size-14 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-3">
               <IconDevices size={28} />
             </div>
-            <DialogTitle className="text-xl font-bold tracking-tight">Acceso SyncroCredit Generado</DialogTitle>
+            <DialogTitle className="text-xl font-bold tracking-tight">Acceso SyncroCredit generado</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-1 flex flex-col items-center gap-0.5">
               <span>Código de activación para <strong>{pwaClientName}</strong></span>
               {pwaClientDocument && (
@@ -4198,7 +4198,7 @@ export default function POSPage() {
               variant="outline"
               className="w-full sm:flex-1 rounded-xl h-11 font-bold text-xs flex items-center justify-center gap-2"
             >
-              Copiar Código
+              Copiar código
             </Button>
             <Button
               onClick={async () => {
@@ -4220,7 +4220,7 @@ export default function POSPage() {
           </div>
           <DialogHeader className="text-center flex flex-col items-center">
             <DialogTitle className="text-2xl font-black tracking-tight text-emerald-600 dark:text-emerald-500">
-              ¡Venta Procesada!
+              ¡Venta procesada!
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground mt-2 font-medium">
               La transacción ha sido registrada y autorizada con éxito en el sistema. El carrito de compras ha sido limpiado para la siguiente venta.
@@ -4240,7 +4240,7 @@ export default function POSPage() {
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-600">
-              <IconHistory size={18} /> Abonar a Deuda
+              <IconHistory size={18} /> Abonar a deuda
             </DialogTitle>
             <DialogDescription>
               Registra un pago para reducir la deuda activa del cliente.
@@ -4248,7 +4248,7 @@ export default function POSPage() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>Monto a Abonar (USD) <span className="text-destructive">*</span></Label>
+              <Label>Monto a abonar (USD) <span className="text-destructive">*</span></Label>
               <Input
                 type="number"
                 placeholder="0.00"
@@ -4258,15 +4258,15 @@ export default function POSPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Método de Pago</Label>
+              <Label>Método de pago</Label>
               <Select value={abonoPaymentMethod} onValueChange={setAbonoPaymentMethod}>
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccione método" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="CASH">Efectivo</SelectItem>
-                  <SelectItem value="CARD">Punto de Venta</SelectItem>
-                  <SelectItem value="PAGO_MOVIL">Pago Móvil</SelectItem>
+                  <SelectItem value="CARD">Punto de venta</SelectItem>
+                  <SelectItem value="PAGO_MOVIL">Pago móvil</SelectItem>
                   <SelectItem value="TRANSFER">Transferencia</SelectItem>
                   <SelectItem value="ZELLE">Zelle</SelectItem>
                   <SelectItem value="BINANCE">Binance</SelectItem>
@@ -4274,7 +4274,7 @@ export default function POSPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Referencia / Notas</Label>
+              <Label>Referencia / notas</Label>
               <Input
                 placeholder="Opcional"
                 value={abonoNotes}
@@ -4286,7 +4286,7 @@ export default function POSPage() {
             <Button variant="ghost" onClick={() => setIsPaymentModalAbonoOpen(false)} disabled={isSubmittingAbono}>Cancelar</Button>
             <Button onClick={handleRegisterAbono} disabled={isSubmittingAbono} className="bg-amber-600 hover:bg-amber-700 text-white">
               {isSubmittingAbono ? <IconRefresh className="animate-spin size-4 mr-2" /> : null}
-              Registrar Abono
+              Registrar abono
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4297,7 +4297,7 @@ export default function POSPage() {
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <IconUserPlus size={18} className="text-primary" /> Nuevo Cliente
+              <IconUserPlus size={18} className="text-primary" /> Nuevo cliente
             </DialogTitle>
             <DialogDescription>
               Completa los datos para registrar el cliente en el sistema.
@@ -4305,9 +4305,9 @@ export default function POSPage() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>Nombre Completo <span className="text-destructive">*</span></Label>
+              <Label>Nombre completo <span className="text-destructive">*</span></Label>
               <Input
-                placeholder="Juan Pérez"
+                placeholder="Juan pérez"
                 value={newClient.name}
                 onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
               />
@@ -4336,7 +4336,7 @@ export default function POSPage() {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setIsQuickClientOpen(false)}>Cancelar</Button>
             <Button onClick={handleCreateClient} disabled={savingClient}>
-              {savingClient ? "Guardando..." : "Registrar Cliente"}
+              {savingClient ? "Guardando..." : "Registrar cliente"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4347,7 +4347,7 @@ export default function POSPage() {
         <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
-              <IconCalculator className="text-primary" size={20} /> Arqueo de Caja Detallado
+              <IconCalculator className="text-primary" size={20} /> Arqueo de caja detallado
             </DialogTitle>
             <DialogDescription>
               Ingrese los montos físicos para realizar el cierre de caja. El sistema calculará los sobrantes o faltantes.
@@ -4359,11 +4359,11 @@ export default function POSPage() {
             {/* Expected Totals Summary */}
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="p-3 rounded-lg bg-muted/30 border space-y-1">
-                <p className="text-muted-foreground text-xs font-medium">Efectivo USD Esperado</p>
+                <p className="text-muted-foreground text-xs font-medium">Efectivo USD esperado</p>
                 <p className="font-semibold text-base">${activeShift?.expectedTotals?.CASH?.toFixed(2) || '0.00'}</p>
               </div>
               <div className="p-3 rounded-lg bg-muted/30 border space-y-1">
-                <p className="text-muted-foreground text-xs font-medium">Punto y Pago Móvil</p>
+                <p className="text-muted-foreground text-xs font-medium">Punto y pago móvil</p>
                 <p className="font-semibold text-base">Bs {((activeShift?.expectedTotals?.CARD || 0) + (activeShift?.expectedTotals?.PAGO_MOVIL || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</p>
               </div>
             </div>
@@ -4392,7 +4392,7 @@ export default function POSPage() {
 
             {/* Bs Cash and Digital */}
             <div className="space-y-3">
-              <h4 className="text-sm font-semibold">Bolívares y Digital</h4>
+              <h4 className="text-sm font-semibold">Bolívares y digital</h4>
               <div className="grid grid-cols-1 gap-3">
                 <div className="flex items-center gap-3">
                   <Label className="w-1/3 text-xs text-muted-foreground">Efectivo Bs</Label>
@@ -4402,14 +4402,14 @@ export default function POSPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Label className="w-1/3 text-xs text-muted-foreground">Lote Punto Venta</Label>
+                  <Label className="w-1/3 text-xs text-muted-foreground">Lote punto venta</Label>
                   <div className="relative flex-1">
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-medium">Bs</span>
                     <Input type="number" className="pl-8 h-9" value={posBatch} onChange={e => setPosBatch(e.target.value)} />
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Label className="w-1/3 text-xs text-muted-foreground">Total Pago Móvil</Label>
+                  <Label className="w-1/3 text-xs text-muted-foreground">Total pago móvil</Label>
                   <div className="relative flex-1">
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-medium">Bs</span>
                     <Input type="number" className="pl-8 h-9" value={pagoMovilBatch} onChange={e => setPagoMovilBatch(e.target.value)} />
@@ -4421,7 +4421,7 @@ export default function POSPage() {
             {/* Validation Panel */}
             <div className="p-4 rounded-xl bg-muted/50 border space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Efectivo Contado (USD eq):</span>
+                <span className="text-sm font-medium">Efectivo contado (USD eq):</span>
                 <span className="text-base font-bold tabular-nums">
                   ${(
                     cashBreakdown.b1 + (cashBreakdown.b5 * 5) + (cashBreakdown.b10 * 10) +
@@ -4431,7 +4431,7 @@ export default function POSPage() {
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs text-muted-foreground">
-                <span>Total Digital Contado (Bs):</span>
+                <span>Total digital contado (Bs):</span>
                 <span className="tabular-nums">Bs {((Number(posBatch) || 0) + (Number(pagoMovilBatch) || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
               </div>
             </div>
@@ -4440,7 +4440,7 @@ export default function POSPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsClosingShift(false)}>Cancelar</Button>
             <Button onClick={handleCloseShift} disabled={isClosingShift && processing} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              {processing ? "Procesando..." : "Confirmar Arqueo y Cerrar Caja"}
+              {processing ? "Procesando..." : "Confirmar arqueo y cerrar caja"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4451,7 +4451,7 @@ export default function POSPage() {
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg text-emerald-500">
-              <IconCheck className="size-5" /> Caja Cerrada Exitosamente
+              <IconCheck className="size-5" /> Caja cerrada exitosamente
             </DialogTitle>
             <DialogDescription>
               Resumen del cuadre de caja de este turno de trabajo.
@@ -4461,11 +4461,11 @@ export default function POSPage() {
           <div className="space-y-4 py-4">
             <div className="p-4 rounded-xl bg-muted/50 border space-y-3">
               <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Efectivo Esperado:</span>
+                <span className="text-muted-foreground">Efectivo esperado:</span>
                 <span className="font-semibold text-foreground">${closeSummary?.expected.toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Efectivo Contado:</span>
+                <span className="text-muted-foreground">Efectivo contado:</span>
                 <span className="font-semibold text-foreground">${closeSummary?.reported.toFixed(2)}</span>
               </div>
 
@@ -4485,14 +4485,14 @@ export default function POSPage() {
                       ? '(Faltante)'
                       : (closeSummary?.difference || 0) > 0.01
                         ? '(Sobrante)'
-                        : '(Cuadrado Perfecto)'}
+                        : '(Cuadrado perfecto)'}
                   </span>
                 </span>
               </div>
             </div>
 
             <p className="text-xs text-muted-foreground text-center">
-              Este reporte ha sido guardado de forma segura y puede ser consultado en el historial de turnos del Dashboard de Contabilidad.
+              Este reporte ha sido guardado de forma segura y puede ser consultado en el historial de turnos del dashboard de contabilidad.
             </p>
           </div>
           <DialogFooter>
@@ -4518,7 +4518,7 @@ export default function POSPage() {
       <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>
         <DialogContent className={cn("overflow-hidden bg-black/95 border-white/10 shadow-2xl p-0 transition-all duration-300", useCamera ? "sm:max-w-[320px]" : "sm:max-w-md")}>
           <DialogHeader className="sr-only">
-            <DialogTitle>Captura de Código de Barras</DialogTitle>
+            <DialogTitle>Captura de código de barras</DialogTitle>
           </DialogHeader>
 
           <Button variant="ghost" size="icon" className="absolute top-3 right-3 size-8 rounded-full bg-black/50 hover:bg-white/10 text-white z-50" onClick={() => setScannerOpen(false)}>
@@ -4550,7 +4550,7 @@ export default function POSPage() {
                     <IconBarcode size={48} stroke={1.2} />
                   </div>
                   <div className="text-center space-y-2 relative z-10">
-                    <p className="font-semibold text-lg tracking-tight">Escáner Listo</p>
+                    <p className="font-semibold text-lg tracking-tight">Escáner listo</p>
                     <p className="text-[11px] text-muted-foreground/50 font-normal tracking-tight">Esperando lector láser...</p>
                   </div>
                 </div>
@@ -4560,7 +4560,7 @@ export default function POSPage() {
                   size="icon"
                   className="mx-auto size-14 hover:bg-primary/5 transition-all group"
                   onClick={() => setUseCamera(true)}
-                  title="Usar Cámara"
+                  title="Usar cámara"
                 >
                   <IconCamera size={32} className="text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all duration-500" />
                 </Button>
@@ -4606,14 +4606,14 @@ export default function POSPage() {
               <IconAlertCircle className="text-amber-500" /> Producto no registrado
             </DialogTitle>
             <DialogDescription className="text-xs">
-              El código <strong>{waitlistData.barcode}</strong> no existe. Ingréselo en la lista de espera para poder facturarlo.
+              El código <strong>{waitlistData.barcode}</strong> No existe. Ingréselo en la lista de espera para poder facturarlo.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>Nombre del Producto <span className="text-destructive">*</span></Label>
+              <Label>Nombre del producto <span className="text-destructive">*</span></Label>
               <Input
-                placeholder="Ej. Refresco Cola 2L"
+                placeholder="Ej. Refresco cola 2l"
                 value={waitlistData.name}
                 onChange={(e) => setWaitlistData({ ...waitlistData, name: e.target.value })}
               />
@@ -4629,7 +4629,7 @@ export default function POSPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Stock Inicial</Label>
+                <Label>Stock inicial</Label>
                 <Input
                   type="number"
                   placeholder="1"
@@ -4642,7 +4642,7 @@ export default function POSPage() {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setWaitlistOpen(false)}>Cancelar</Button>
             <Button onClick={handleWaitlistSubmit} disabled={savingWaitlist} className="bg-amber-500 hover:bg-amber-600">
-              {savingWaitlist ? "Guardando..." : "Agregar a Espera y Carrito"}
+              {savingWaitlist ? "Guardando..." : "Agregar a espera y carrito"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4657,8 +4657,8 @@ export default function POSPage() {
                 <IconArrowBackUp size={24} />
               </div>
               <div className="space-y-1 text-left">
-                <DialogTitle className="text-lg font-black uppercase tracking-tight">Procesar Devolución</DialogTitle>
-                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                <DialogTitle className="text-lg font-black tracking-tight">Procesar devolución</DialogTitle>
+                <DialogDescription className="text-[10px] font-bold text-muted-foreground">
                   {selectedSaleForReturn ? `Venta #${selectedSaleForReturn.id.slice(-8).toUpperCase()}` : "Cargando detalles..."}
                 </DialogDescription>
               </div>
@@ -4668,13 +4668,13 @@ export default function POSPage() {
           {fetchingSaleDetails ? (
             <div className="flex-1 flex flex-col items-center justify-center py-12 gap-4">
               <IconRefresh size={40} className="animate-spin text-muted-foreground opacity-20" />
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground animate-pulse">Obteniendo información...</p>
+              <p className="text-xs font-bold text-muted-foreground animate-pulse">Obteniendo información...</p>
             </div>
           ) : selectedSaleForReturn && (
             <div className="flex-1 flex flex-col overflow-hidden py-4 gap-6">
               <div className="space-y-3">
                 <div className="flex justify-between items-end px-1">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Artículos de la Venta</Label>
+                  <Label className="text-[10px] font-black text-muted-foreground">Artículos de la venta</Label>
                   <span className="text-[9px] font-medium text-muted-foreground italic">Seleccione la cantidad a devolver</span>
                 </div>
 
@@ -4697,15 +4697,15 @@ export default function POSPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-[11px] font-bold truncate leading-tight">{item.variant?.product?.name || "Producto"} {item.variant?.name !== 'Principal' ? `(${item.variant?.name})` : ''}</p>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[9px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded uppercase">Vendido: {item.quantity}</span>
-                            {returnedQty > 0 && <span className="text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded uppercase">Devuelto: {returnedQty}</span>}
+                            <span className="text-[9px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Vendido: {item.quantity}</span>
+                            {returnedQty > 0 && <span className="text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded">Devuelto: {returnedQty}</span>}
                           </div>
                         </div>
 
                         <div className="flex items-center gap-3 shrink-0">
                           <div className="flex flex-col items-end gap-1">
                             <span className="text-[10px] font-bold tabular-nums">${item.price.toFixed(2)}</span>
-                            <span className="text-[8px] text-muted-foreground font-medium uppercase tracking-tighter">Sub: ${(item.price * currentReturnQty).toFixed(2)}</span>
+                            <span className="text-[8px] text-muted-foreground font-medium tracking-tighter">Sub: ${(item.price * currentReturnQty).toFixed(2)}</span>
                           </div>
                           <div className="flex items-center border rounded-lg h-9 bg-background shadow-sm">
                             <Button
@@ -4739,7 +4739,7 @@ export default function POSPage() {
                   }) && (
                       <div className="p-8 text-center text-muted-foreground space-y-2">
                         <IconCircleCheckFilled size={32} className="mx-auto text-emerald-500 opacity-50" />
-                        <p className="text-[10px] font-black uppercase tracking-widest">Todos los artículos han sido devueltos</p>
+                        <p className="text-[10px] font-black">Todos los artículos han sido devueltos</p>
                       </div>
                     )}
                 </div>
@@ -4747,9 +4747,9 @@ export default function POSPage() {
 
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Motivo de la Devolución</Label>
+                  <Label className="text-[10px] font-black text-muted-foreground">Motivo de la devolución</Label>
                   <Input
-                    placeholder="Ej. Producto defectuoso, Error en la compra..."
+                    placeholder="Ej. Producto defectuoso, error en la compra..."
                     className="h-10 text-xs"
                     value={returnReason}
                     onChange={(e) => setReturnReason(e.target.value)}
@@ -4758,7 +4758,7 @@ export default function POSPage() {
 
                 <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex justify-between items-center">
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">Total a Reembolsar</span>
+                    <span className="text-[10px] font-black text-amber-600">Total a reembolsar</span>
                     <span className="text-[9px] text-muted-foreground font-medium italic">Incluye impuestos proporcionales</span>
                   </div>
                   <div className="text-right">
@@ -4775,13 +4775,13 @@ export default function POSPage() {
           )}
 
           <DialogFooter className="pt-2 border-t mt-auto">
-            <Button variant="ghost" onClick={() => setIsReturnModalOpen(false)} className="font-bold text-[10px] uppercase">Cancelar</Button>
+            <Button variant="ghost" onClick={() => setIsReturnModalOpen(false)} className="font-bold text-[10px]">Cancelar</Button>
             <Button
               onClick={handleReturnSubmit}
               disabled={processingReturn || !selectedSaleForReturn || Object.values(returnQuantities).every(q => q === 0)}
-              className="bg-amber-500 hover:bg-amber-600 h-11 font-black text-[10px] uppercase tracking-widest px-8"
+              className="bg-amber-500 hover:bg-amber-600 h-11 font-black text-[10px] px-8"
             >
-              {processingReturn ? "PROCESANDO..." : "CONFIRMAR DEVOLUCIÓN"}
+              {processingReturn ? "Procesando..." : "Confirmar devolución"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4796,8 +4796,8 @@ export default function POSPage() {
                 <IconReceipt size={20} />
               </div>
               <div>
-                <DialogTitle className="text-base font-bold tracking-tight text-white">Detalle de la Orden</DialogTitle>
-                <DialogDescription className="text-zinc-500 text-[10px] uppercase font-mono tracking-wider mt-0.5">
+                <DialogTitle className="text-base font-bold tracking-tight text-white">Detalle de la orden</DialogTitle>
+                <DialogDescription className="text-zinc-500 text-[10px] font-mono mt-0.5">
                   ID: {selectedSale?.id}
                 </DialogDescription>
               </div>
@@ -4807,38 +4807,38 @@ export default function POSPage() {
           {/* Client & Date Info */}
           <div className="grid grid-cols-2 gap-4 py-4 border-b border-[#79716b]/10 text-xs">
             <div className="space-y-1">
-              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Cliente</span>
-              <div className="font-bold text-white uppercase">{selectedSale?.client || "Consumidor Final"}</div>
+              <span className="text-zinc-500 text-[10px] font-bold">Cliente</span>
+              <div className="font-bold text-white">{selectedSale?.client || "Consumidor final"}</div>
               {selectedSale?.clientDocument && (
                 <div className="text-zinc-500 font-mono text-[10px]">{selectedSale.clientDocument}</div>
               )}
               {selectedSale?.seller && (
                 <div className="text-[10px] text-zinc-400 mt-2">
-                  <span className="font-semibold text-zinc-500 uppercase text-[9px] tracking-wider block">Cajero / Vendedor</span>
+                  <span className="font-semibold text-zinc-500 text-[9px] block">Cajero / vendedor</span>
                   <span className="font-bold text-zinc-200">{selectedSale.seller}</span>
                 </div>
               )}
             </div>
             <div className="space-y-1 text-right">
-              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Fecha y Hora</span>
+              <span className="text-zinc-500 text-[10px] font-bold">Fecha y hora</span>
               <div className="font-semibold text-zinc-300">
                 {selectedSale && format(new Date(selectedSale.date), "dd 'de' MMMM 'de' yyyy, hh:mm a", { locale: es })}
               </div>
-              <div className="text-zinc-500 text-[10px] uppercase font-bold">Sucursal: {selectedSale?.branch || "N/A"}</div>
+              <div className="text-zinc-500 text-[10px] font-bold">Sucursal: {selectedSale?.branch || "N/A"}</div>
             </div>
           </div>
 
           {/* Products List */}
           <div className="py-4 space-y-3">
-            <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Productos Comprados</span>
+            <span className="text-zinc-500 text-[10px] font-bold">Productos comprados</span>
             <div className="rounded-xl border border-[#79716b]/10 overflow-hidden max-h-48 overflow-y-auto">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-muted/30 border-b border-[#79716b]/10">
                   <tr>
-                    <th className="h-8 p-2 text-[9px] uppercase font-bold text-zinc-400">Producto</th>
-                    <th className="h-8 p-2 text-center text-[9px] uppercase font-bold text-zinc-400 w-[60px]">Cant.</th>
-                    <th className="h-8 p-2 text-right text-[9px] uppercase font-bold text-zinc-400 w-[85px]">P. Unit</th>
-                    <th className="h-8 p-2 text-right text-[9px] uppercase font-bold text-zinc-400 w-[90px]">Subtotal</th>
+                    <th className="h-8 p-2 text-[9px] font-bold text-zinc-400">Producto</th>
+                    <th className="h-8 p-2 text-center text-[9px] font-bold text-zinc-400 w-[60px]">Cant.</th>
+                    <th className="h-8 p-2 text-right text-[9px] font-bold text-zinc-400 w-[85px]">P. Unit</th>
+                    <th className="h-8 p-2 text-right text-[9px] font-bold text-zinc-400 w-[90px]">Subtotal</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#79716b]/5">
@@ -4879,21 +4879,21 @@ export default function POSPage() {
           {/* Payment & Totals */}
           <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#79716b]/10">
             <div className="space-y-2">
-              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider block">Método de Pago</span>
+              <span className="text-zinc-500 text-[10px] font-bold block">Método de pago</span>
               <div className="space-y-1">
                 {selectedSale?.payments && selectedSale.payments.length > 0 ? (
                   selectedSale.payments.map((p: any, idx: number) => (
                     <div key={idx} className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-muted/20 border border-[#79716b]/5">
                       <span className="text-zinc-400 font-medium">
                         {p.method === "CASH" ? "Efectivo" :
-                          p.method === "CARD" ? "Tarjeta / Punto" :
+                          p.method === "CARD" ? "Tarjeta / punto" :
                             p.method === "TRANSFER" ? "Transferencia" :
                               p.method === "WALLET" ? "Billetera" :
                                 p.method === "CREDIT" ? "Fiado" :
-                                  p.method === "PAGO_MOVIL" ? "Pago Móvil" :
+                                  p.method === "PAGO_MOVIL" ? "Pago móvil" :
                                     p.method === "BINANCE" ? "Binance" :
                                       p.method === "ZINLI" ? "Zinli" :
-                                        p.method === "PAYPAL" ? "Paypal" : p.method}
+                                        p.method === "PAYPAL" ? "PayPal" : p.method}
                       </span>
                       <span className="font-bold text-white font-mono">{formatPrice(p.amount)}</span>
                     </div>
@@ -4929,8 +4929,8 @@ export default function POSPage() {
           {/* Other Purchases Section */}
           {selectedSale?.clientId && (
             <div className="py-4 border-t border-[#79716b]/10 space-y-2.5">
-              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider block">
-                Historial de Compras del Cliente ({clientHistory.length})
+              <span className="text-zinc-500 text-[10px] font-bold block">
+                Historial de compras del cliente ({clientHistory.length})
               </span>
               {loadingHistory ? (
                 <div className="text-[11px] text-zinc-500 animate-pulse">Cargando historial...</div>
@@ -4946,7 +4946,7 @@ export default function POSPage() {
                         key={histSale.id}
                         onClick={() => setSelectedSale(histSale)}
                         className={cn(
-                          "w-full text-left px-3.5 py-2.5 rounded-xl border text-[11px] font-bold transition-all uppercase tracking-tight cursor-pointer flex items-center justify-between",
+                          "w-full text-left px-3.5 py-2.5 rounded-xl border text-[11px] font-bold transition-all tracking-tight cursor-pointer flex items-center justify-between",
                           isCurrent
                             ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
                             : "bg-[#121110]/60 border-[#79716b]/20 hover:border-zinc-500 text-zinc-400 hover:text-white"
@@ -4973,8 +4973,8 @@ export default function POSPage() {
                 <IconAlertCircle size={24} />
               </div>
               <div className="space-y-1 text-left">
-                <DialogTitle className="text-lg font-black uppercase tracking-tight">Lista de Espera</DialogTitle>
-                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                <DialogTitle className="text-lg font-black tracking-tight">Lista de espera</DialogTitle>
+                <DialogDescription className="text-[10px] font-bold text-muted-foreground">
                   Productos escaneados no registrados en el sistema
                 </DialogDescription>
               </div>
@@ -4985,12 +4985,12 @@ export default function POSPage() {
             {loadingWaitlist ? (
               <div className="flex flex-col items-center justify-center py-20 gap-4">
                 <IconRefresh className="animate-spin text-muted-foreground opacity-20" size={40} />
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Cargando lista...</p>
+                <p className="text-[10px] font-black text-muted-foreground">Cargando lista...</p>
               </div>
             ) : waitlist.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-4 grayscale opacity-40">
                 <IconBox size={60} strokeWidth={1} />
-                <p className="text-xs font-bold uppercase tracking-widest">No hay productos en espera</p>
+                <p className="text-xs font-bold">No hay productos en espera</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-3">
@@ -5005,21 +5005,21 @@ export default function POSPage() {
                   >
                     <div className="space-y-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-black uppercase truncate">{item.name}</h4>
-                        <Badge variant="outline" className="text-[9px] px-1.5 h-5 font-bold uppercase tracking-tighter bg-background">
+                        <h4 className="text-sm font-black truncate">{item.name}</h4>
+                        <Badge variant="outline" className="text-[9px] px-1.5 h-5 font-bold tracking-tighter bg-background">
                           {item.barcode}
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-medium uppercase tracking-tight">
+                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-medium tracking-tight">
                         <span className="flex items-center gap-1"><IconBuilding size={10} /> {item.branch?.name || "Todas"}</span>
                         <span>•</span>
-                        <span>Stock Sugerido: {item.stock}</span>
+                        <span>Stock sugerido: {item.stock}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-4 shrink-0">
                       <div className="text-right">
                         <p className="text-lg font-black tabular-nums text-foreground">${item.price.toFixed(2)}</p>
-                        <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest">Precio Sugerido</p>
+                        <p className="text-[8px] font-bold text-muted-foreground">Precio sugerido</p>
                       </div>
                     </div>
                   </div>
@@ -5029,7 +5029,7 @@ export default function POSPage() {
           </div>
 
           <DialogFooter className="pt-2 border-t">
-            <Button variant="ghost" onClick={() => setIsWaitlistOpen(false)} className="font-bold text-[10px] uppercase">Cerrar</Button>
+            <Button variant="ghost" onClick={() => setIsWaitlistOpen(false)} className="font-bold text-[10px]">Cerrar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -5043,7 +5043,7 @@ export default function POSPage() {
                 <IconPlayerPause size={24} />
               </div>
               <div className="space-y-1 text-left">
-                <DialogTitle className="text-xl font-semibold">Ventas en Suspenso</DialogTitle>
+                <DialogTitle className="text-xl font-semibold">Ventas en suspenso</DialogTitle>
                 <DialogDescription className="text-sm text-muted-foreground">
                   Gestión de carritos pausados para facturación posterior
                 </DialogDescription>
@@ -5068,7 +5068,7 @@ export default function POSPage() {
                           <span className="text-xs text-muted-foreground font-medium">{new Date(ticket.parkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                         <h4 className="text-sm font-semibold">
-                          {clients.find(c => (c.id || (c as any)._id) === ticket.selectedClientId)?.name || "Consumidor Final"}
+                          {clients.find(c => (c.id || (c as any)._id) === ticket.selectedClientId)?.name || "Consumidor final"}
                         </h4>
                       </div>
                       <div className="text-right">
@@ -5085,7 +5085,7 @@ export default function POSPage() {
                         className="flex-1 h-10 font-medium text-sm"
                         onClick={() => resumeTicket(ticket)}
                       >
-                        Recuperar Venta
+                        Recuperar venta
                       </Button>
                       <Button
                         variant="outline"
@@ -5108,7 +5108,7 @@ export default function POSPage() {
               onClick={() => setIsParkedModalOpen(false)}
               className="w-full font-medium text-sm"
             >
-              Cerrar Ventana
+              Cerrar ventana
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -5125,14 +5125,14 @@ export default function POSPage() {
                 <IconLock size={18} />
               </div>
               <div>
-                <DialogTitle className="text-base font-semibold leading-snug">Verificación Requerida</DialogTitle>
+                <DialogTitle className="text-base font-semibold leading-snug">Verificación requerida</DialogTitle>
                 <p className="text-xs text-muted-foreground">Ingrese el PIN del propietario para continuar.</p>
               </div>
             </div>
           </div>
           <div className="px-6 py-6 space-y-5">
             <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">PIN de 4 Dígitos</Label>
+              <Label className="text-xs font-semibold text-muted-foreground">PIN de 4 dígitos</Label>
               <Input
                 ref={pinInputRef}
                 type="password"
@@ -5141,7 +5141,7 @@ export default function POSPage() {
                 placeholder="••••"
                 value={pinInput}
                 onChange={e => { setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4)); setPinError(''); }}
-                className={cn("text-center font-mono text-2xl tracking-[0.7em] h-14", pinError ? "border-destructive" : "")}
+                className={cn("text-center font-mono text-2xl h-14", pinError ? "border-destructive" : "")}
                 onKeyDown={e => { if (e.key === 'Enter') handlePinConfirm(); }}
               />
               {pinError && (
@@ -5191,7 +5191,7 @@ export default function POSPage() {
                 <IconDiscount size={18} />
               </div>
               <div>
-                <DialogTitle className="text-base font-semibold leading-snug">Aplicar Descuento</DialogTitle>
+                <DialogTitle className="text-base font-semibold leading-snug">Aplicar descuento</DialogTitle>
                 <p className="text-xs text-muted-foreground">
                   {targetDiscountId === 'GLOBAL' ? 'A toda la compra' : 'Al producto seleccionado'}
                 </p>
@@ -5216,8 +5216,8 @@ export default function POSPage() {
               </button>
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Valor del Descuento
+              <Label className="text-xs font-semibold text-muted-foreground">
+                Valor del descuento
               </Label>
               <div className="relative">
                 {discountType === 'amt' && (
@@ -5242,7 +5242,7 @@ export default function POSPage() {
               className="w-full h-11 font-semibold bg-emerald-500 hover:bg-emerald-600 text-white"
               onClick={handleApplyDiscount}
             >
-              Aplicar Descuento
+              Aplicar descuento
             </Button>
           </div>
         </DialogContent>
@@ -5258,14 +5258,14 @@ export default function POSPage() {
           <div className="px-6 pt-6 pb-5 border-b bg-muted/20" style={{ paddingRight: '3.5rem' }}>
             <div className="space-y-1.5">
               <DialogTitle className="text-base font-semibold leading-snug">
-                {editingCartItemId ? 'Editar Cantidad / Peso' : 'Ingresar Peso'}
+                {editingCartItemId ? 'Editar cantidad / peso' : 'Ingresar peso'}
               </DialogTitle>
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="text-sm text-muted-foreground font-medium truncate max-w-[220px]">
                   {editingCartItemId ? editingCartItemName : weighableProduct?.name}
                 </p>
-                <Badge variant="outline" className="shrink-0 text-[10px] font-bold uppercase tracking-wider border-primary/30 text-primary bg-primary/5 flex items-center gap-1">
-                  {weightUnit === 'kg' ? <><IconScale size={11} /> Por Peso</> : <><IconPackage size={11} /> Por Unidad</>}
+                <Badge variant="outline" className="shrink-0 text-[10px] font-bold border-primary/30 text-primary bg-primary/5 flex items-center gap-1">
+                  {weightUnit === 'kg' ? <><IconScale size={11} /> Por peso</> : <><IconPackage size={11} /> Por unidad</>}
                 </Badge>
               </div>
             </div>
@@ -5275,7 +5275,7 @@ export default function POSPage() {
           <div className="px-6 py-6 space-y-5">
             {/* Unit selector */}
             <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tipo de Medida</Label>
+              <Label className="text-xs font-semibold text-muted-foreground">Tipo de medida</Label>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
@@ -5310,8 +5310,8 @@ export default function POSPage() {
 
             {/* Input */}
             <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {weightUnit === 'kg' ? 'Peso (Kg)' : 'Cantidad (Unidades)'}
+              <Label className="text-xs font-semibold text-muted-foreground">
+                {weightUnit === 'kg' ? 'Peso (kg)' : 'Cantidad (unidades)'}
               </Label>
               <div className="relative">
                 <Input
@@ -5340,7 +5340,7 @@ export default function POSPage() {
             {/* Preview */}
             {weightValue && parseFloat(weightValue) > 0 && (
               <div className="rounded-xl bg-muted/30 border border-border/50 px-4 py-3 space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Vista Previa</p>
+                <p className="text-[10px] font-bold text-muted-foreground">Vista previa</p>
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground">
                     {parseFloat(weightValue || '0').toFixed(weightUnit === 'kg' ? 3 : 0)} {weightUnit === 'kg' ? 'Kg' : 'Ud'} × ${editingCartItemPrice > 0 ? editingCartItemPrice.toFixed(2) : (weighableProduct?.variants?.[0]?.price || 0).toFixed(2)}

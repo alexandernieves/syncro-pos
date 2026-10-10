@@ -111,7 +111,9 @@ export default function AlmacenPage() {
           target: stock.toString(),
           limit: minStock.toString(),
           reviewer: p.category?.name || "General",
-          image: p.image
+          image: p.image,
+          shopPublished: Boolean(p.isPublishedOnSyncroShop),
+          shopFeatured: Boolean(p.isFeaturedOnSyncroShop),
         };
       })
     );
@@ -137,7 +139,7 @@ export default function AlmacenPage() {
       <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-3">
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
-              <CardDescription>Valor del Almacén</CardDescription>
+              <CardDescription>Valor del almacén</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
                 {formatPrice(stats.value)}
               </CardTitle>
@@ -160,7 +162,7 @@ export default function AlmacenPage() {
 
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
-              <CardDescription>Alertas de Stock</CardDescription>
+              <CardDescription>Alertas de stock</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-rose-600">
                 {stats.alerts}
               </CardTitle>
@@ -183,7 +185,7 @@ export default function AlmacenPage() {
 
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
-              <CardDescription>Variantes Activas</CardDescription>
+              <CardDescription>Variantes activas</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
                 {stats.total}
               </CardTitle>
@@ -208,7 +210,7 @@ export default function AlmacenPage() {
       <div className="px-4 lg:px-6 space-y-2">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
               <div>
-                <h2 className="text-xl font-bold tracking-tight text-foreground uppercase">Gestión de Inventario</h2>
+                <h2 className="text-xl font-bold tracking-tight text-foreground">Gestión de inventario</h2>
                 <p className="text-sm text-muted-foreground font-medium">Control avanzado de existencias, variantes técnicas y parámetros de reabastecimiento.</p>
               </div>
               
@@ -220,7 +222,7 @@ export default function AlmacenPage() {
                   className="gap-2 font-bold shadow-sm h-10 border-primary/20 hover:border-primary/50"
                 >
                   {syncing ? <IconLoader className="animate-spin" size={18} /> : <IconDatabase size={18} />}
-                  <span>{syncing ? "Sincronizando..." : "Sincronizar Catálogo Maestro"}</span>
+                  <span>{syncing ? "Sincronizando..." : "Sincronizar catálogo maestro"}</span>
                 </Button>
               )}
           </div>

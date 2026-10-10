@@ -1,6 +1,8 @@
+import { Prisma } from '@prisma/client';
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { WhatsAppService } from '../whatsapp/whatsapp.service';
 
 @Injectable()
 export class ClientsService {
@@ -9,6 +11,7 @@ export class ClientsService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private whatsappService: WhatsAppService,
   ) {}
 
   private sanitizeClient(client: any) {
@@ -34,9 +37,7 @@ export class ClientsService {
   }
 
   async create(data: any) {
-    if (data.creditLimit === undefined || data.creditLimit === null) {
-      data.creditLimit = 100;
-    }
+    // No credit by default: a limit is only given when SyncroCredit is activated
     const client = await this.prisma.client.create({ data });
     return this.sanitizeClient(client);
   }
@@ -58,6 +59,82 @@ export class ClientsService {
       orderBy: { createdAt: 'desc' }
     });
     return clients.map(c => this.sanitizeClient(c));
+  }
+
+  /**
+   * Paginated client directory for the POS picker: search by name, document,
+   * phone or email (every word must match), filters and sorting, with purchase
+   * stats for the page only. Scales to tens of thousands of clients.
+   */
+  async directory(
+    businessId: string | undefined,
+    params: { q?: string; filter?: string; sort?: string; page?: string; pageSize?: string },
+  ) {
+    const page = Math.max(1, Number(params.page) || 1);
+    const pageSize = Math.min(100, Math.max(5, Number(params.pageSize) || 20));
+    let terms = (params.q ?? '').trim().split(/\s+/).filter(Boolean).slice(0, 6);
+    // "0412 555 1234" is one phone number, not three words
+    if (terms.length > 1 && terms.every((t) => /^[\d+()-]+$/.test(t))) terms = [terms.join('')];
+
+    const and: any[] = [];
+    if (terms.length) {
+      // Accent- and case-insensitive: "maria rodriguez" finds "María Rodríguez".
+      // Phones and documents also match by their digits ("0414-555" → "04145551234").
+      const fold = (v: string) => v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const conditions = terms.map((term) => {
+        // Local format 0414… also matches the stored international +58 414…
+        const digits = term.replace(/\D/g, '').replace(/^0(?=\d{3})/, '');
+        const text = Prisma.sql`translate(lower(coalesce(c."name", '') || ' ' || coalesce(c."documentId", '') || ' ' || coalesce(c."email", '')), 'áéíóúüñàèìòù', 'aeiouunaeiou') LIKE ${'%' + fold(term) + '%'}`;
+        return digits.length >= 3
+          ? Prisma.sql`(${text} OR regexp_replace(coalesce(c."phone", '') || ' ' || coalesce(c."documentId", ''), '[^0-9]', '', 'g') LIKE ${'%' + digits + '%'})`
+          : text;
+      });
+      const matches = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT c."id" FROM "Client" c
+        WHERE ${businessId ? Prisma.sql`c."businessId" = ${businessId}` : Prisma.sql`TRUE`}
+          AND ${Prisma.join(conditions, ' AND ')}`;
+      and.push({ id: { in: matches.map((m) => m.id) } });
+    }
+    const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    switch (params.filter) {
+      case 'debt': and.push({ currentDebt: { gt: 0 } }); break;
+      case 'credit': and.push({ creditLimit: { gt: 0 } }); break;
+      case 'wallet': and.push({ walletBalance: { gt: 0 } }); break;
+      case 'account': and.push({ password: { not: null } }); break;
+      case 'recent': and.push({ sales: { some: { createdAt: { gte: since30 } } } }); break;
+      case 'inactive': and.push({ sales: { none: { createdAt: { gte: since30 } } } }); break;
+      case 'whatsapp': and.push({ phone: { not: null } }, { NOT: { phone: '' } }); break;
+    }
+    const where: any = { ...(businessId ? { businessId } : {}), ...(and.length ? { AND: and } : {}) };
+    const orderBy: any =
+      params.sort === 'newest' ? { createdAt: 'desc' }
+      : params.sort === 'debt' ? { currentDebt: 'desc' }
+      : { name: 'asc' };
+
+    const [total, rows] = await Promise.all([
+      this.prisma.client.count({ where }),
+      this.prisma.client.findMany({ where, orderBy, skip: (page - 1) * pageSize, take: pageSize, include: { _count: { select: { sales: true } } } }),
+    ]);
+
+    // Purchase stats only for the clients on this page
+    const ids = rows.map((r) => r.id);
+    const stats = ids.length
+      ? await this.prisma.sale.groupBy({ by: ['clientId'], where: { clientId: { in: ids } }, _max: { createdAt: true }, _sum: { total: true } })
+      : [];
+    const byId = new Map(stats.map((s) => [s.clientId, s]));
+
+    return {
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      items: rows.map(({ _count, ...client }) => ({
+        ...this.sanitizeClient(client),
+        purchasesCount: _count.sales,
+        lastPurchaseAt: byId.get(client.id)?._max.createdAt ?? null,
+        totalSpent: Math.round((byId.get(client.id)?._sum.total ?? 0) * 100) / 100,
+      })),
+    };
   }
 
   async searchByDocument(q: string, businessId?: string) {
@@ -90,7 +167,7 @@ export class ClientsService {
           include: {
             payments: true,
             branch: true,
-            user: true,
+            user: { select: { id: true, name: true, email: true, role: true, avatar: true } },
             items: {
               include: {
                 variant: {
@@ -111,8 +188,20 @@ export class ClientsService {
     return this.sanitizeClient(client);
   }
 
-  async update(id: string, data: any, businessId?: string) {
+  /** The owner can change credit limits; anyone else needs the supervisor PIN. */
+  private async assertSupervisor(businessId: string | undefined, role?: string, pin?: string, knownPin?: string | null) {
+    if (['ownerpos', 'owner', 'admin', 'superadmin'].includes(String(role || '').toLowerCase())) return;
+    const configuredPin = knownPin !== undefined ? knownPin : (await this.prisma.setting.findFirst({ where: { businessId }, select: { discountPin: true } }))?.discountPin;
+    if (!configuredPin) throw new BadRequestException('Configura un PIN de supervisor para cambiar límites de crédito');
+    if (String(pin || '') !== String(configuredPin)) throw new BadRequestException('PIN de supervisor incorrecto');
+  }
+
+  async update(id: string, rawData: any, businessId?: string, role?: string) {
+    const { supervisorPin, ...data } = rawData || {};
     const client = await this.findOne(id, businessId);
+    if (data.creditLimit !== undefined && Number(data.creditLimit) !== Number(client.creditLimit)) {
+      await this.assertSupervisor(businessId, role, supervisorPin);
+    }
     if (data.creditLimit !== undefined && data.creditLimit > 0) {
       if (data.creditLimit < client.currentDebt) {
         throw new BadRequestException(`El límite de crédito ($${data.creditLimit} USD) no puede ser menor a la de deuda actual del cliente ($${client.currentDebt.toFixed(2)} USD)`);
@@ -161,18 +250,10 @@ export class ClientsService {
       let newLimit = client.creditLimit;
 
       if (client.creditLimit > 0) {
-        if (newScore >= 95) {
-          newDownPayment = 20; // Super VIP
-          newLimit = client.creditLimit * 1.10; // 10% increase
-        } else if (newScore >= 85) {
-          newDownPayment = 30;
-          newLimit = client.creditLimit * 1.05; // 5% increase
-        } else if (newScore >= 70) {
-          newDownPayment = 40;
-        } else {
-          newDownPayment = 50; // Return to standard
-          newLimit = Math.min(100, newLimit); // Cap limit at 100 for Level 1
-        }
+        if (newScore >= 95) newDownPayment = 20; // Super VIP
+        else if (newScore >= 85) newDownPayment = 30;
+        else if (newScore >= 70) newDownPayment = 40;
+        else newDownPayment = 50; // Standard
       }
 
       // Calculate remaining base debt (adjusting for surcharge type)
@@ -183,6 +264,17 @@ export class ClientsService {
         }
       }
       const remainingDebt = Math.max(0, client.currentDebt - basePaymentAmount);
+
+      // Limit grows by the owner's step each time a SyncroCredit client clears their debt on time
+      if (client.password && client.creditLimit > 0 && !isLate && client.currentDebt > 0.01 && remainingDebt <= 0.01) {
+        const policy = await tx.setting.findFirst({
+          where: { businessId: client.businessId ?? undefined },
+          select: { syncroCreditMaxLimit: true, syncroCreditLimitStep: true },
+        });
+        const max = policy?.syncroCreditMaxLimit ?? 200;
+        const step = policy?.syncroCreditLimitStep ?? 10;
+        if (client.creditLimit < max) newLimit = Math.min(max, client.creditLimit + step);
+      }
 
       // Points gained (1 point per USD on time)
       const pointsGained = !isLate ? Math.floor(data.amount) : 0;
@@ -874,13 +966,37 @@ export class ClientsService {
     return settings ?? {};
   }
 
-  async generateActivationCode(clientId: string, businessId: string, creditLimit?: number) {
+  /**
+   * Creates the SyncroCredit activation code and sends it to the client's WhatsApp, so the
+   * cashier never sees it. Only when WhatsApp can't be used is the code returned to the POS.
+   */
+  async generateActivationCode(
+    clientId: string,
+    businessId: string,
+    customLimit?: number,
+    purpose: 'activation' | 'reset' = 'activation',
+    supervisorPin?: string,
+    role?: string,
+  ) {
     const activationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const activationCodeExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const client = await this.findOne(clientId, businessId);
-    if (creditLimit !== undefined && creditLimit > 0) {
-      if (creditLimit < client.currentDebt) {
+    const policy = await this.prisma.setting.findFirst({
+      where: { businessId },
+      select: { syncroCreditInitialLimit: true, syncroCreditMaxLimit: true, discountPin: true },
+    });
+
+    // The limit comes from the owner's policy; the cashier can only change it with the supervisor PIN
+    let creditLimit: number | undefined;
+    if (purpose === 'activation') {
+      if (customLimit !== undefined && customLimit !== null && Number(customLimit) > 0) {
+        await this.assertSupervisor(businessId, role, supervisorPin, policy?.discountPin);
+        creditLimit = Number(customLimit);
+      } else if (!(client.creditLimit > 0)) {
+        creditLimit = policy?.syncroCreditInitialLimit ?? 30;
+      }
+      if (creditLimit !== undefined && creditLimit < client.currentDebt) {
         throw new BadRequestException(`El límite de crédito ($${creditLimit} USD) no puede ser menor a la de deuda actual del cliente ($${client.currentDebt.toFixed(2)} USD)`);
       }
     }
@@ -893,7 +1009,39 @@ export class ClientsService {
       },
     });
 
-    return { activationCode };
+    const phone = (client.phone || '').replace(/\D/g, '');
+    if (phone.length < 8) {
+      return { activationCode, sent: false, reason: 'El cliente no tiene WhatsApp registrado' };
+    }
+    const status = await this.whatsappService.getStatus(businessId);
+    if (!status.connected) {
+      return { activationCode, sent: false, reason: 'El WhatsApp del negocio no está conectado' };
+    }
+
+    const settings = await this.prisma.setting.findFirst({ where: { businessId }, select: { businessName: true } });
+    const businessName = settings?.businessName || 'tu tienda';
+    const appBase = (process.env.API_URL || '').replace(/\/api\/?$/, '');
+    const portalUrl = process.env.PORTAL_URL || (appBase ? `${appBase}/portal` : '');
+    const firstName = (client.name || '').trim().split(/\s+/)[0];
+    const intro = purpose === 'reset'
+      ? `Hola ${firstName}, este es tu código para restablecer tu contraseña de *SyncroCredit* en *${businessName}*:`
+      : `Hola ${firstName}, *${businessName}* te dio acceso a *SyncroCredit* con un límite de *$${Number(creditLimit ?? client.creditLimit).toFixed(0)}*.\n\nTu código de activación es:`;
+    const text = [
+      intro,
+      '',
+      `*${activationCode}*`,
+      '',
+      portalUrl ? `${purpose === 'reset' ? 'Ingresa aquí' : 'Actívalo aquí'} con tu cédula: ${portalUrl}` : 'Ingresa al portal de SyncroCredit con tu cédula.',
+      'Vence en 24 horas. No lo compartas con nadie, ni con el personal de la tienda.',
+    ].join('\n');
+    const masked = text.replace(activationCode, '••••••');
+
+    try {
+      await this.whatsappService.sendTextMessage(phone, text, businessId, undefined, undefined, masked);
+      return { sent: true, sentTo: `+${phone}` };
+    } catch (e) {
+      return { activationCode, sent: false, reason: 'No se pudo enviar por WhatsApp' };
+    }
   }
 
   async requestLoan(clientId: string, amount: number, businessId: string) {

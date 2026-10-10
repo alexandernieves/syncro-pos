@@ -41,7 +41,7 @@ export default function NotificacionesPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <IconBell className="text-primary" /> Centro de Notificaciones
+            <IconBell className="text-primary" /> Centro de notificaciones
           </h1>
           <p className="text-muted-foreground">Gestiona todas las alertas y actividades de tus sucursales.</p>
         </div>
@@ -103,18 +103,18 @@ export default function NotificacionesPage() {
                         {n.title}
                       </h3>
                       {!n.isRead && (
-                        <Badge className="bg-primary text-primary-foreground hover:bg-primary text-[10px] h-5">NUEVO</Badge>
+                        <Badge className="bg-primary text-primary-foreground hover:bg-primary text-[10px] h-5">Nuevo</Badge>
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       {n.message}
                     </p>
                     <div className="flex items-center gap-4 mt-2">
-                      <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-wider">
+                      <span className="text-[10px] font-bold text-muted-foreground/60">
                         {format(new Date(n.createdAt), "dd MMM yyyy 'a las' HH:mm", { locale: es })}
                       </span>
                       {n.branch && (
-                        <span className="text-[10px] font-bold text-primary/60 uppercase tracking-wider flex items-center gap-1">
+                        <span className="text-[10px] font-bold text-primary/60 flex items-center gap-1">
                           📍 {n.branch.name || "Sucursal"}
                         </span>
                       )}

@@ -178,7 +178,7 @@ export default function HistorialPage() {
     },
     {
       accessorKey: "action",
-      header: "Actividad / Acción",
+      header: "Actividad / acción",
       cell: ({ row }) => {
           const entity = row.original.entity;
           const config = moduleConfig[entity] || moduleConfig.SYSTEM;
@@ -258,7 +258,7 @@ export default function HistorialPage() {
     },
     {
       accessorKey: "createdAt",
-      header: () => <div className="text-right">Fecha / Hora</div>,
+      header: () => <div className="text-right">Fecha / hora</div>,
       cell: ({ row }) => (
         <div className="flex flex-col text-right text-[11px] font-medium text-muted-foreground leading-tight">
           <span className="text-foreground/80 font-bold">{new Date(row.original.createdAt).toLocaleDateString()}</span>
@@ -280,7 +280,7 @@ export default function HistorialPage() {
                 <DropdownMenuItem className="gap-2 text-xs" onClick={() => { setSelectedLog(row.original); setShowInspect(true); }}>
                     <IconEye size={14} /> Inspeccionar rastro
                 </DropdownMenuItem>
-                <DropdownMenuItem className="gap-2 text-xs" onClick={() => toast.success("Integridad verificada (SHA-256 Valid)")}>
+                <DropdownMenuItem className="gap-2 text-xs" onClick={() => toast.success("Integridad verificada (SHA-256 valid)")}>
                     <IconShieldCheck size={14} /> Validar integridad
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -301,7 +301,7 @@ export default function HistorialPage() {
       <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 md:grid-cols-3">
           <Card className="shadow-sm border-none bg-card">
             <CardHeader>
-              <CardDescription className="text-[10px] font-semibold uppercase tracking-tight text-muted-foreground">Acciones Totales</CardDescription>
+              <CardDescription className="text-[10px] font-semibold tracking-tight text-muted-foreground">Acciones totales</CardDescription>
               <CardTitle className="text-2xl font-bold tabular-nums">
                 {stats?.totalActions || 0}
               </CardTitle>
@@ -313,7 +313,7 @@ export default function HistorialPage() {
               </CardAction>
             </CardHeader>
             <CardFooter className="flex-col items-start gap-1 text-[10px] pb-5">
-              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground uppercase tracking-tight">
+              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground tracking-tight">
                 Actividad operativa intensa <IconTrendingUp className="size-3 text-primary" />
               </div>
             </CardFooter>
@@ -321,7 +321,7 @@ export default function HistorialPage() {
 
           <Card className="shadow-sm border-none bg-card">
             <CardHeader>
-              <CardDescription className="text-[10px] font-semibold uppercase tracking-tight text-muted-foreground">Alertas Críticas</CardDescription>
+              <CardDescription className="text-[10px] font-semibold tracking-tight text-muted-foreground">Alertas críticas</CardDescription>
               <CardTitle className="text-2xl font-bold tabular-nums text-rose-600">
                 {stats?.criticalAlerts || 0}
               </CardTitle>
@@ -333,7 +333,7 @@ export default function HistorialPage() {
               </CardAction>
             </CardHeader>
             <CardFooter className="flex-col items-start gap-1 text-[10px] pb-5">
-              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground uppercase tracking-tight">
+              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground tracking-tight">
                 Incidentes de seguridad <IconShieldCheck className="size-3 text-rose-500" />
               </div>
             </CardFooter>
@@ -341,7 +341,7 @@ export default function HistorialPage() {
 
           <Card className="shadow-sm border-none bg-card">
             <CardHeader>
-              <CardDescription className="text-[10px] font-semibold uppercase tracking-tight text-muted-foreground">Estabilidad Sistema</CardDescription>
+              <CardDescription className="text-[10px] font-semibold tracking-tight text-muted-foreground">Estabilidad sistema</CardDescription>
               <CardTitle className="text-2xl font-bold tabular-nums text-emerald-600">
                 {stats?.systemStability || 99.9}%
               </CardTitle>
@@ -353,7 +353,7 @@ export default function HistorialPage() {
               </CardAction>
             </CardHeader>
             <CardFooter className="flex-col items-start gap-1 text-[10px] pb-5">
-              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground uppercase tracking-tight">
+              <div className="line-clamp-1 flex gap-2 font-bold text-muted-foreground tracking-tight">
                 Plataforma 100% operativa <IconCheck className="size-3 text-emerald-500" />
               </div>
             </CardFooter>
@@ -364,7 +364,7 @@ export default function HistorialPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 px-4 lg:px-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <IconHistory size={24} className="text-primary" /> Auditoría de Sistema
+            <IconHistory size={24} className="text-primary" /> Auditoría de sistema
           </h1>
           <p className="text-sm text-muted-foreground font-medium">Registro cronológico de todas las acciones y eventos ejecutados en la plataforma.</p>
         </div>
@@ -379,9 +379,9 @@ export default function HistorialPage() {
       <Tabs defaultValue="actividad" className="w-full flex flex-col gap-6">
         <div className="px-4 lg:px-6">
           <TabsList>
-            <TabsTrigger value="actividad">Actividad Global</TabsTrigger>
+            <TabsTrigger value="actividad">Actividad global</TabsTrigger>
             <TabsTrigger value="seguridad">Seguridad <Badge variant="destructive" className="ml-2 text-white h-5 px-1 min-w-5">{stats?.criticalAlerts || 0}</Badge></TabsTrigger>
-            <TabsTrigger value="mantenimiento">Logs de Sistema</TabsTrigger>
+            <TabsTrigger value="mantenimiento">Logs de sistema</TabsTrigger>
           </TabsList>
         </div>
 
@@ -435,7 +435,7 @@ export default function HistorialPage() {
                               <IconHistory size={20} />
                           </div>
                           <div>
-                              <DialogTitle className="text-lg font-bold">Inspección de Rastro</DialogTitle>
+                              <DialogTitle className="text-lg font-bold">Inspección de rastro</DialogTitle>
                               <DialogDescription className="text-xs font-medium">Metadatos técnicos y contexto del evento</DialogDescription>
                           </div>
                       </div>
@@ -444,17 +444,17 @@ export default function HistorialPage() {
               <div className="p-6 space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
-                          <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">ID de Evento</label>
+                          <label className="text-[10px] font-bold text-muted-foreground">ID de evento</label>
                           <div className="text-xs font-mono bg-muted/50 p-2 rounded border">{selectedLog?.id}</div>
                       </div>
                       <div className="space-y-1">
-                          <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Fecha de Ejecución</label>
+                          <label className="text-[10px] font-bold text-muted-foreground">Fecha de ejecución</label>
                           <div className="text-xs p-2 rounded bg-muted/20 border">{selectedLog ? new Date(selectedLog.createdAt).toLocaleString() : ''}</div>
                       </div>
                   </div>
                   
                   <div className="space-y-2">
-                      <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Metadatos (JSON Raw)</label>
+                      <label className="text-[10px] font-bold text-muted-foreground">Metadatos (JSON raw)</label>
                       <pre className="text-[11px] p-4 bg-zinc-950 text-emerald-400 rounded-xl overflow-x-auto font-mono border border-zinc-800 leading-relaxed">
                           {JSON.stringify(selectedLog ? JSON.parse(selectedLog.details || '{}') : {}, null, 2)}
                       </pre>
@@ -465,7 +465,7 @@ export default function HistorialPage() {
                           <IconShieldCheck className="text-emerald-500" size={24} />
                       </div>
                       <div>
-                          <h4 className="text-sm font-bold">Firma Digital Válida</h4>
+                          <h4 className="text-sm font-bold">Firma digital válida</h4>
                           <p className="text-[11px] text-muted-foreground font-medium">Este registro no ha sido alterado desde su creación original.</p>
                       </div>
                   </div>
@@ -484,7 +484,7 @@ export default function HistorialPage() {
               <AlertDialogFooter>
                   <AlertDialogCancel className="rounded-xl h-10 font-medium">Cancelar</AlertDialogCancel>
                   <AlertDialogAction onClick={handleDeleteLog} className="bg-rose-600 hover:bg-rose-700 rounded-xl h-10 shadow-lg shadow-rose-600/20 border-none text-white font-bold">
-                      Confirmar Eliminación
+                      Confirmar eliminación
                   </AlertDialogAction>
               </AlertDialogFooter>
           </AlertDialogContent>

@@ -181,13 +181,13 @@ export default function PurchaseOrdersPage() {
         {/* Metrica 1: OC Pendientes */}
         <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
           <CardHeader>
-            <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">Logística</CardDescription>
+            <CardDescription className="text-[10px] font-black text-muted-foreground opacity-60">Logística</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
               {stats.pending}
             </CardTitle>
             <CardAction>
-              <Badge variant="outline" className="gap-1 animate-pulse border-none bg-amber-500/10 text-amber-600 font-bold uppercase text-[9px]">
-                En Proceso
+              <Badge variant="outline" className="gap-1 animate-pulse border-none bg-amber-500/10 text-amber-600 font-bold text-[9px]">
+                En proceso
               </Badge>
             </CardAction>
           </CardHeader>
@@ -199,13 +199,13 @@ export default function PurchaseOrdersPage() {
         {/* Metrica 2: Inversión Mes */}
         <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
           <CardHeader>
-            <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">Capitalización</CardDescription>
+            <CardDescription className="text-[10px] font-black text-muted-foreground opacity-60">Capitalización</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
               {formatPrice(stats.totalMonth)}
             </CardTitle>
             <CardAction>
-              <Badge variant="outline" className="gap-1 border-none bg-emerald-500/10 text-emerald-600 font-bold uppercase text-[9px]">
-                Mes Actual
+              <Badge variant="outline" className="gap-1 border-none bg-emerald-500/10 text-emerald-600 font-bold text-[9px]">
+                Mes actual
               </Badge>
             </CardAction>
           </CardHeader>
@@ -217,12 +217,12 @@ export default function PurchaseOrdersPage() {
         {/* Metrica 3: Recepciones */}
         <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
           <CardHeader>
-            <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">Stock Auditado</CardDescription>
+            <CardDescription className="text-[10px] font-black text-muted-foreground opacity-60">Stock auditado</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
               {orders.filter(o => o.status === 'RECEIVED').length}
             </CardTitle>
             <CardAction>
-              <Badge variant="outline" className="gap-1 border-none bg-blue-500/10 text-blue-600 font-bold uppercase text-[9px]">
+              <Badge variant="outline" className="gap-1 border-none bg-blue-500/10 text-blue-600 font-bold text-[9px]">
                 Recepciones
               </Badge>
             </CardAction>
@@ -235,13 +235,13 @@ export default function PurchaseOrdersPage() {
         {/* Metrica 4: Total */}
         <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
           <CardHeader>
-            <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">Procura</CardDescription>
+            <CardDescription className="text-[10px] font-black text-muted-foreground opacity-60">Procura</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
               {orders.length}
             </CardTitle>
             <CardAction>
-              <Badge variant="outline" className="gap-1 border-none bg-slate-900/10 text-slate-900 dark:text-slate-100 font-bold uppercase text-[9px]">
-                Total OC
+              <Badge variant="outline" className="gap-1 border-none bg-slate-900/10 text-slate-900 dark:text-slate-100 font-bold text-[9px]">
+                Total oc
               </Badge>
             </CardAction>
           </CardHeader>
@@ -253,17 +253,17 @@ export default function PurchaseOrdersPage() {
 
       <div className="flex items-center justify-between px-4 lg:px-6">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight">Órdenes de Compra</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Órdenes de compra</h1>
           <p className="text-sm text-muted-foreground font-medium">Gestión de procura, abastecimiento y recepción de inventario.</p>
         </div>
         
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="h-9 shadow-none bg-card">
-            <IconDownload size={16} className="mr-2" /> Reporte Mensual
+            <IconDownload size={16} className="mr-2" /> Reporte mensual
           </Button>
           <Button size="sm" onClick={() => router.push('/dashboard/inventario/compras/nuevo')} className="gap-2 h-9 shadow-none font-bold text-xs px-5">
             <IconPlus size={16} />
-            Nueva Orden
+            Nueva orden
           </Button>
         </div>
       </div>
@@ -311,16 +311,16 @@ export default function PurchaseOrdersPage() {
         <DialogContent className="max-w-2xl bg-zinc-950 border-[#79716b]/30 text-white shadow-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-              <IconBox size={20} className="text-emerald-500" /> Confirmar Recepción
+              <IconBox size={20} className="text-emerald-500" /> Confirmar recepción
             </DialogTitle>
             <div className="flex items-center gap-4 mt-2 p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/10 mb-4">
                <div>
-                  <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">Orden de Compra</p>
+                  <p className="text-[10px] font-black text-muted-foreground">Orden de compra</p>
                   <p className="text-sm font-bold text-white">{selectedOrderForReception?.number}</p>
                </div>
                <div className="h-6 w-px bg-[#79716b]/30" />
                <div>
-                  <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">Sucursal Destino</p>
+                  <p className="text-[10px] font-black text-muted-foreground">Sucursal destino</p>
                   <p className="text-sm font-bold text-white">{selectedOrderForReception?.branch?.name}</p>
                </div>
             </div>
@@ -331,9 +331,9 @@ export default function PurchaseOrdersPage() {
               <Table>
                 <TableHeader className="bg-muted sticky top-0 z-10">
                   <TableRow className="border-[#79716b]/20">
-                    <TableHead className="text-[10px] font-bold uppercase tracking-wider text-white h-10">Producto</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase tracking-wider text-white h-10 text-center">Cantidad</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase tracking-wider text-white h-10 text-right">Costo</TableHead>
+                    <TableHead className="text-[10px] font-bold text-white h-10">Producto</TableHead>
+                    <TableHead className="text-[10px] font-bold text-white h-10 text-center">Cantidad</TableHead>
+                    <TableHead className="text-[10px] font-bold text-white h-10 text-right">Costo</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -341,7 +341,7 @@ export default function PurchaseOrdersPage() {
                     <TableRow key={item.id} className="border-[#79716b]/10 bg-transparent">
                       <TableCell className="py-2.5">
                         <p className="text-xs font-bold text-white">{item.variant.product.name}</p>
-                        <p className="text-[10px] text-muted-foreground font-medium uppercase">{item.variant.name}</p>
+                        <p className="text-[10px] text-muted-foreground font-medium">{item.variant.name}</p>
                       </TableCell>
                       <TableCell className="text-center font-black text-sm text-foreground">{item.quantity}</TableCell>
                       <TableCell className="text-right tabular-nums text-xs text-muted-foreground">{formatPrice(item.cost)}</TableCell>
@@ -357,11 +357,11 @@ export default function PurchaseOrdersPage() {
           </div>
 
           <DialogFooter className="mt-6">
-            <Button variant="ghost" onClick={() => setSelectedOrderForReception(null)} className="h-10 text-xs font-bold opacity-60 hover:opacity-100 uppercase tracking-widest">
+            <Button variant="ghost" onClick={() => setSelectedOrderForReception(null)} className="h-10 text-xs font-bold opacity-60 hover:opacity-100">
               Cancelar
             </Button>
-            <Button onClick={() => processReceive(selectedOrderForReception.id)} disabled={loading} className="h-10 px-8 bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-xs tracking-widest shadow-[0_0_20px_rgba(16,185,129,0.3)]">
-              {loading ? "Procesando..." : "Proceder con Recepción"}
+            <Button onClick={() => processReceive(selectedOrderForReception.id)} disabled={loading} className="h-10 px-8 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+              {loading ? "Procesando..." : "Proceder con recepción"}
             </Button>
           </DialogFooter>
         </DialogContent>

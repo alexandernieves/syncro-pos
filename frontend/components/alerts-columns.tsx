@@ -26,7 +26,7 @@ export const alertsColumns: ColumnDef<AlertData>[] = [
         </div>
         <div className="flex flex-col">
           <span className="text-sm font-bold">{row.original.header}</span>
-          <span className="text-[10px] text-muted-foreground uppercase">{row.original.category}</span>
+          <span className="text-[10px] text-muted-foreground">{row.original.category}</span>
         </div>
       </div>
     ),
@@ -42,7 +42,7 @@ export const alertsColumns: ColumnDef<AlertData>[] = [
   },
   {
     accessorKey: "target",
-    header: "Stock Actual",
+    header: "Stock actual",
     cell: ({ row }) => (
       <div className="text-center">
         <span className="text-lg font-black">{row.original.target}</span>
@@ -51,7 +51,7 @@ export const alertsColumns: ColumnDef<AlertData>[] = [
   },
   {
     accessorKey: "limit",
-    header: "Stock Mínimo",
+    header: "Stock mínimo",
     cell: ({ row }) => (
       <div className="text-center opacity-60">
         <span className="text-lg font-bold">{row.original.limit}</span>
@@ -60,7 +60,7 @@ export const alertsColumns: ColumnDef<AlertData>[] = [
   },
   {
     id: "actions",
-    header: "Acciones Rápidas",
+    header: "Acciones rápidas",
     cell: ({ row }) => {
       const router = useRouter();
       return (
@@ -72,7 +72,7 @@ export const alertsColumns: ColumnDef<AlertData>[] = [
             onClick={() => router.push("/dashboard/inventario/traslados")}
           >
             <IconArrowsExchange size={14} />
-            TRASLADO
+            Traslado
           </Button>
           <Button 
             size="sm" 
@@ -80,7 +80,7 @@ export const alertsColumns: ColumnDef<AlertData>[] = [
             onClick={() => router.push("/dashboard/inventario/compras")}
           >
             <IconShoppingCart size={14} />
-            COMPRA
+            Compra
           </Button>
         </div>
       );

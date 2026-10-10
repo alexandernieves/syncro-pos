@@ -45,3 +45,8 @@ backend/test-*.txt
 frontend/.next-old-root/
 frontend/.next.old/
 **/.next.old
+
+# Local-only data
+**/.env.bak*
+backend/uploads/
+storefront/

@@ -1,7 +1,9 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppGateway } from './whatsapp.gateway';
 import { AiAgentService } from '../ai-agent/ai-agent.service';
+import { UploadsService } from '../uploads/uploads.service';
+import { publicChat } from './public-chat';
 
 @Injectable()
 export class WhatsAppService {
@@ -14,6 +16,7 @@ export class WhatsAppService {
     private prisma: PrismaService,
     private gateway: WhatsAppGateway,
     private aiAgentService: AiAgentService,
+    private uploadsService: UploadsService,
   ) {}
 
   /**
@@ -112,7 +115,7 @@ export class WhatsAppService {
         await fetch(`${url}/webhook/set/${instance}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', apikey: apiKey },
-          body: JSON.stringify({ webhook: { enabled: true, url: webhookUrl, byEvents: false, events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE'] } }),
+          body: JSON.stringify({ webhook: { enabled: true, url: webhookUrl, byEvents: false, base64: true, events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE', 'PRESENCE_UPDATE'] } }),
         }).catch((e) => this.logger.error(`Webhook config failed: ${e.message}`));
       }
       return res.ok;
@@ -243,7 +246,9 @@ export class WhatsAppService {
             enabled: true,
             url: webhookUrl,
             byEvents: false,
-            events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE'],
+            // Received files come inside the event, so they can be stored right away
+            base64: true,
+            events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE', 'PRESENCE_UPDATE'],
           },
         }),
       });
@@ -644,9 +649,14 @@ export class WhatsAppService {
 
   // ─── END BOT METHODS ────────────────────────────────────────────────────
 
-  async sendTextMessage(phone: string, text: string, businessId: string, agentId?: string) {
+  async sendTextMessage(phone: string, text: string, businessId: string, agentId?: string, quotedMessageId?: string, storedText?: string) {
     const { url, apiKey, instance } = this.getUrlAndKey(businessId);
     const cleanPhone = phone.replace(/\D/g, '');
+
+    // Reply to a message of this conversation
+    const quoted = quotedMessageId
+      ? await this.prisma.whatsAppMessage.findFirst({ where: { id: quotedMessageId, chat: { businessId } } })
+      : null;
 
     try {
       const res = await fetch(`${url}/message/sendText/${instance}`, {
@@ -655,7 +665,16 @@ export class WhatsAppService {
           'Content-Type': 'application/json',
           apikey: apiKey,
         },
-        body: JSON.stringify({ number: cleanPhone, text }),
+        body: JSON.stringify({
+          number: cleanPhone,
+          text,
+          ...(quoted?.whatsappMsgId && {
+            quoted: {
+              key: { id: quoted.whatsappMsgId, remoteJid: `${cleanPhone}@s.whatsapp.net`, fromMe: quoted.senderType !== 'CLIENT' },
+              message: { conversation: quoted.text || '' },
+            },
+          }),
+        }),
       });
 
       if (!res.ok) {
@@ -673,15 +692,17 @@ export class WhatsAppService {
           chatId: chat.id,
           senderType: 'AGENT',
           agentId: agentId || null,
-          text,
+          // A private message (e.g. an activation code) is saved masked
+          text: storedText ?? text,
           type: 'text',
           status: 'SENT',
           whatsappMsgId,
+          ...(quoted && { quotedMessageId: quoted.id, quotedText: quoted.text, quotedSenderType: quoted.senderType }),
         },
       });
 
       this.gateway.emitNewMessage({ ...message, businessId });
-      this.gateway.emitChatUpdated({ ...chat, lastMessage: text, updatedAt: new Date(), businessId });
+      this.gateway.emitChatUpdated({ ...chat, lastMessage: storedText ?? text, updatedAt: new Date(), businessId });
 
       return message;
     } catch (e) {
@@ -698,19 +719,36 @@ export class WhatsAppService {
 
     const event = body.event;
 
-    // Process message status updates (Delivered, Read, Played)
+    // Message status updates (delivered, read, played). Evolution v2 sends { keyId, status };
+    // older versions sent the Baileys shape { key: { id }, update: { status } }
     if (event === 'messages.update' || event === 'MESSAGES_UPDATE') {
-      const updateData = body.data;
-      if (updateData && Array.isArray(updateData)) {
-        for (const upd of updateData) {
-          if (upd.key && upd.update) {
-            await this.processMessageStatusUpdate(upd.key.id, upd.update.status);
-          }
-        }
-      } else if (updateData && updateData.key && updateData.update) {
-        await this.processMessageStatusUpdate(updateData.key.id, updateData.update.status);
+      const updates = Array.isArray(body.data) ? body.data : body.data ? [body.data] : [];
+      for (const upd of updates) {
+        const id = upd.keyId || upd.key?.id;
+        const status = upd.status ?? upd.update?.status;
+        if (id && status !== undefined) await this.processMessageStatusUpdate(id, status);
       }
       return { success: true, updated: true };
+    }
+
+    // Contact online / typing / recording
+    if (event === 'presence.update' || event === 'PRESENCE_UPDATE') {
+      const data = body.data || {};
+      const jid: string = data.id || '';
+      if (!jid.endsWith('@s.whatsapp.net')) return { success: true, ignored: true };
+      const phone = jid.split('@')[0];
+      const info = data.presences?.[jid] || Object.values(data.presences || {})[0] || {};
+      const chat = await this.prisma.whatsAppChat.findFirst({ where: { phone, businessId }, select: { id: true } });
+      if (chat) {
+        this.gateway.emitPresence({
+          businessId,
+          chatId: chat.id,
+          phone,
+          presence: (info as any).lastKnownPresence || 'unavailable',
+          lastSeen: (info as any).lastSeen ? new Date((info as any).lastSeen * 1000).toISOString() : null,
+        });
+      }
+      return { success: true, presence: true };
     }
 
     if (event !== 'messages.upsert' && event !== 'MESSAGES_UPSERT') return { success: true, ignored: true };
@@ -731,6 +769,41 @@ export class WhatsAppService {
 
     const msg = messageData.message;
     if (!msg) return { success: true, ignored: true };
+
+    // A reaction is not a new message: it goes on the message it reacts to
+    if (msg.reactionMessage?.key?.id) {
+      const target = await this.prisma.whatsAppMessage.findFirst({
+        where: { whatsappMsgId: msg.reactionMessage.key.id, chat: { businessId } },
+      });
+      if (target) {
+        const updated = await this.prisma.whatsAppMessage.update({
+          where: { id: target.id },
+          data: fromMe ? { reaction: msg.reactionMessage.text || null } : { contactReaction: msg.reactionMessage.text || null },
+        });
+        this.gateway.emitNewMessage({ ...updated, businessId });
+      }
+      return { success: true, reaction: true };
+    }
+
+    // Our own messages sent from Syncro come back here too: they are already saved
+    if (fromMe && whatsappMsgId && (await this.prisma.whatsAppMessage.findFirst({ where: { whatsappMsgId }, select: { id: true } }))) {
+      return { success: true, duplicate: true };
+    }
+
+    // Reply to an earlier message
+    const contextInfo =
+      msg.extendedTextMessage?.contextInfo || msg.imageMessage?.contextInfo || msg.videoMessage?.contextInfo ||
+      msg.audioMessage?.contextInfo || msg.documentMessage?.contextInfo || null;
+    let quotedData: { quotedMessageId?: string; quotedText?: string; quotedSenderType?: string } = {};
+    if (contextInfo?.stanzaId) {
+      const quotedMsg = await this.prisma.whatsAppMessage.findFirst({ where: { whatsappMsgId: contextInfo.stanzaId, chat: { businessId } } });
+      const qm = contextInfo.quotedMessage || {};
+      quotedData = {
+        quotedMessageId: quotedMsg?.id,
+        quotedText: quotedMsg?.text || qm.conversation || qm.extendedTextMessage?.text || qm.imageMessage?.caption || (qm.imageMessage ? 'Foto' : qm.audioMessage ? 'Audio' : 'Mensaje'),
+        quotedSenderType: quotedMsg?.senderType || (contextInfo.participant && !contextInfo.participant.startsWith(phone) ? 'AGENT' : 'CLIENT'),
+      };
+    }
 
     if (msg.conversation) {
       text = msg.conversation;
@@ -775,11 +848,26 @@ export class WhatsAppService {
         mediaUrl,
         status: 'DELIVERED',
         whatsappMsgId,
+        ...quotedData,
       },
     });
 
     this.gateway.emitNewMessage({ ...message, businessId });
     this.gateway.emitChatUpdated({ ...chat, lastMessage: text, updatedAt: new Date(), businessId });
+
+    // Received files: keep a copy in S3 and tell the open chat when it's ready
+    if (type !== 'text') {
+      const media = msg.imageMessage || msg.audioMessage || msg.videoMessage || msg.documentMessage || {};
+      (async () => {
+        const inline = messageData.message?.base64 || messageData.base64;
+        const file = inline ? { base64: inline, mimetype: media.mimetype } : await this.downloadEvolutionMedia(businessId, messageData);
+        if (!file) return;
+        const mediaUrl = await this.storeMedia(file.base64, file.mimetype || media.mimetype || 'application/octet-stream', businessId, media.fileName);
+        if (!mediaUrl) return;
+        const updated = await this.prisma.whatsAppMessage.update({ where: { id: message.id }, data: { mediaUrl } });
+        this.gateway.emitNewMessage({ ...updated, businessId });
+      })().catch((e) => this.logger.warn(`Could not keep received media: ${e.message}`));
+    }
 
     // AI Bot Integration
     if (!fromMe && type === 'text') {
@@ -1028,7 +1116,7 @@ export class WhatsAppService {
       }).catch(() => {});
     }
 
-    return chat;
+    return publicChat(chat);
   }
 
   async findChatByIdOrPhone(idOrPhone: string, businessId: string) {
@@ -1043,7 +1131,7 @@ export class WhatsAppService {
     if (!chat) {
       chat = await this.findOrCreateChat(idOrPhone, businessId);
     }
-    return chat;
+    return publicChat(chat);
   }
 
   async getChats(businessId: string) {
@@ -1083,7 +1171,7 @@ export class WhatsAppService {
       }
     });
 
-    return chats.map((c: any) => ({
+    return chats.map((c: any) => publicChat({
       ...c,
       lastMessage: c.messages[0]?.text || '',
       lastMessageTime: c.messages[0]?.createdAt || c.updatedAt,
@@ -1113,7 +1201,7 @@ export class WhatsAppService {
     return this.prisma.whatsAppChat.update({
       where: { id: chatId },
       data: { assignedTo: agentId },
-      include: { user: true },
+      include: { user: { select: { id: true, name: true, email: true, role: true, avatar: true } } },
     });
   }
 
@@ -1137,8 +1225,42 @@ export class WhatsAppService {
     }
   }
 
-  async getMessageById(id: string) {
-    return this.prisma.whatsAppMessage.findUnique({ where: { id } });
+  /** Saves a WhatsApp file in S3 (uploads module) and returns its link, or null if it can't. */
+  private async storeMedia(base64OrDataUrl: string, mimetype: string, businessId: string, fileName?: string): Promise<string | null> {
+    try {
+      const match = base64OrDataUrl.match(/^data:([^;,]+)[^,]*,(.*)$/s);
+      const buffer = Buffer.from(match ? match[2] : base64OrDataUrl, 'base64');
+      if (!buffer.length) return null;
+      return await this.uploadsService.uploadBuffer(buffer, match?.[1] || mimetype, `whatsapp/${businessId}`, fileName);
+    } catch (e) {
+      this.logger.warn(`Could not store WhatsApp media: ${e.message}`);
+      return null;
+    }
+  }
+
+  /** Downloads a received file from Evolution (with the full message, so it doesn't need Evolution's own store). */
+  private async downloadEvolutionMedia(businessId: string, messageData: any): Promise<{ base64: string; mimetype?: string } | null> {
+    const { url, apiKey, instance } = this.getUrlAndKey(businessId);
+    try {
+      const res = await fetch(`${url}/chat/getBase64FromMediaMessage/${instance}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: apiKey },
+        body: JSON.stringify({ message: messageData, convertToMp4: false }),
+      });
+      if (!res.ok) {
+        this.logger.warn(`Evolution could not return the media: ${(await res.text()).slice(0, 200)}`);
+        return null;
+      }
+      const data = await res.json();
+      return data?.base64 ? { base64: data.base64, mimetype: data.mimetype } : null;
+    } catch (e) {
+      this.logger.warn(`Evolution media download failed: ${e.message}`);
+      return null;
+    }
+  }
+
+  async getMessageById(id: string, businessId?: string) {
+    return this.prisma.whatsAppMessage.findFirst({ where: { id, ...(businessId && { chat: { businessId } }) } });
   }
 
   async getMessageMedia(whatsappMsgId: string, businessId: string) {
@@ -1155,6 +1277,17 @@ export class WhatsAppService {
 
       if (res.ok) {
         const data = await res.json();
+        // Keep it so the next time it comes from S3
+        if (data?.base64) {
+          const message = await this.prisma.whatsAppMessage.findFirst({ where: { whatsappMsgId, chat: { businessId } } });
+          if (message && !message.mediaUrl) {
+            const mediaUrl = await this.storeMedia(data.base64, data.mimetype || 'application/octet-stream', businessId);
+            if (mediaUrl) {
+              await this.prisma.whatsAppMessage.update({ where: { id: message.id }, data: { mediaUrl } });
+              return { base64: mediaUrl };
+            }
+          }
+        }
         return { base64: data.base64 };
       }
       const errText = await res.text();
@@ -1166,9 +1299,12 @@ export class WhatsAppService {
     }
   }
 
-  async sendMediaMessage(phone: string, mediatype: string, mediaBase64: string, businessId: string, fileName?: string, caption?: string, agentId?: string) {
+  async sendMediaMessage(phone: string, mediatype: string, mediaBase64: string, businessId: string, fileName?: string, caption?: string, agentId?: string, mimetype?: string) {
     const { url, apiKey, instance } = this.getUrlAndKey(businessId);
     const cleanPhone = phone.replace(/\D/g, '');
+    const dataUrl = mediaBase64.match(/^data:([^;,]+)[^,]*,(.*)$/s);
+    const rawBase64 = dataUrl ? dataUrl[2] : mediaBase64;
+    const mime = mimetype || dataUrl?.[1] || (mediatype === 'image' ? 'image/jpeg' : mediatype === 'audio' ? 'audio/ogg' : mediatype === 'video' ? 'video/mp4' : 'application/octet-stream');
 
     try {
       const res = await fetch(`${url}/message/sendMedia/${instance}`, {
@@ -1177,7 +1313,8 @@ export class WhatsAppService {
         body: JSON.stringify({
           number: cleanPhone,
           mediatype,
-          media: mediaBase64,
+          mimetype: mime,
+          media: rawBase64,
           fileName: fileName || undefined,
           caption: caption || undefined,
         }),
@@ -1198,9 +1335,10 @@ export class WhatsAppService {
           chatId: chat.id,
           senderType: 'AGENT',
           agentId: agentId || null,
-          text: caption || `[Archivo: ${mediatype}]`,
+          text: caption || fileName || `[Archivo: ${mediatype}]`,
           type: mediatype,
-          mediaUrl: mediaBase64.startsWith('data:') ? mediaBase64 : null,
+          // A copy in S3 so the chat can always show what was sent
+          mediaUrl: await this.storeMedia(rawBase64, mime, businessId, fileName),
           status: 'SENT',
           whatsappMsgId,
         },
@@ -1219,6 +1357,125 @@ export class WhatsAppService {
       this.logger.error(`Error sending media to ${phone} (business ${businessId}): ${e.message}`);
       throw new BadRequestException(`No se pudo enviar el archivo: ${e.message}`);
     }
+  }
+
+  /**
+   * Sends a sale's invoice (an image rendered by the POS) to the client's WhatsApp
+   * from the business's connected number, and records the result on the sale.
+   */
+  async sendSaleInvoice(
+    saleId: string,
+    businessId: string,
+    data: { image: string; caption?: string; phone?: string; fileName?: string },
+    agentId?: string,
+  ) {
+    const sale = await this.prisma.sale.findFirst({
+      where: { id: saleId, OR: [{ businessId }, { branch: { businessId } }] },
+      include: { client: true },
+    });
+    if (!sale) throw new BadRequestException('Venta no encontrada');
+
+    const phone = (data.phone || sale.client?.phone || '').replace(/\D/g, '');
+    if (phone.length < 8) throw new BadRequestException('El cliente no tiene un WhatsApp registrado');
+
+    const image = (data.image || '').replace(/^data:image\/\w+;base64,/, '');
+    if (!image) throw new BadRequestException('Falta la imagen de la factura');
+
+    const record = (status: 'SENT' | 'FAILED', error: string | null) =>
+      this.prisma.sale.update({
+        where: { id: sale.id },
+        data: { whatsappInvoiceStatus: status, whatsappInvoiceTo: `+${phone}`, whatsappInvoiceSentAt: new Date(), whatsappInvoiceError: error },
+        select: { id: true, whatsappInvoiceStatus: true, whatsappInvoiceTo: true, whatsappInvoiceSentAt: true, whatsappInvoiceError: true },
+      });
+
+    const status = await this.getStatus(businessId);
+    if (!status.connected) {
+      await record('FAILED', 'WhatsApp del negocio no conectado');
+      throw new ConflictException('El WhatsApp del negocio no está conectado. Conéctalo desde el módulo de chat escaneando el código QR.');
+    }
+
+    try {
+      await this.sendMediaMessage(phone, 'image', image, businessId, data.fileName || `factura-${sale.id.slice(-8)}.png`, data.caption?.slice(0, 1000), agentId, 'image/png');
+      return record('SENT', null);
+    } catch (e) {
+      await record('FAILED', (e.message || 'Error al enviar').slice(0, 300));
+      throw e;
+    }
+  }
+
+  /**
+   * Our presence towards a contact: "composing" while the agent types, "paused" when they stop,
+   * "available" when the chat is opened. Sending it also subscribes us to the contact's presence,
+   * which is what makes WhatsApp report when they are online or typing.
+   */
+  async sendPresence(chatIdOrPhone: string, presence: 'composing' | 'paused' | 'available' | 'recording', businessId: string) {
+    // Don't create a chat just for typing: a contact opened from the list uses its phone as id
+    const chat = await this.prisma.whatsAppChat.findFirst({ where: { businessId, OR: [{ id: chatIdOrPhone }, { phone: chatIdOrPhone }] } });
+    const phone = (chat?.phone || chatIdOrPhone).replace(/\D/g, '');
+    if (phone.length < 8) return { ok: false };
+    const { url, apiKey, instance } = this.getUrlAndKey(businessId);
+    // Evolution waits `delay` before answering; don't hold the request for it
+    fetch(`${url}/chat/sendPresence/${instance}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: apiKey },
+      body: JSON.stringify({ number: phone, presence, delay: presence === 'composing' || presence === 'recording' ? 4000 : 500 }),
+    }).catch((e) => this.logger.warn(`Presence not sent: ${e.message}`));
+    return { ok: true };
+  }
+
+  /** Marks the contact's messages as read in WhatsApp (their side shows blue ticks) and in Syncro. */
+  async markChatAsRead(chatIdOrPhone: string, businessId: string) {
+    const chat = await this.prisma.whatsAppChat.findFirst({ where: { businessId, OR: [{ id: chatIdOrPhone }, { phone: chatIdOrPhone }] } });
+    if (!chat?.id) return { read: 0 };
+    const unread = await this.prisma.whatsAppMessage.findMany({
+      where: { chatId: chat.id, senderType: 'CLIENT', status: { not: 'READ' }, whatsappMsgId: { not: null } },
+      select: { id: true, whatsappMsgId: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    if (unread.length) {
+      const { url, apiKey, instance } = this.getUrlAndKey(businessId);
+      const remoteJid = `${chat.phone.replace(/\D/g, '')}@s.whatsapp.net`;
+      await fetch(`${url}/chat/markMessageAsRead/${instance}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: apiKey },
+        body: JSON.stringify({ readMessages: unread.map((m) => ({ remoteJid, fromMe: false, id: m.whatsappMsgId })) }),
+      }).catch((e) => this.logger.warn(`Read receipt not sent: ${e.message}`));
+      await this.prisma.whatsAppMessage.updateMany({ where: { id: { in: unread.map((m) => m.id) } }, data: { status: 'READ' } });
+    }
+    if (chat.isUnread) await this.prisma.whatsAppChat.update({ where: { id: chat.id }, data: { isUnread: false } });
+    return { read: unread.length };
+  }
+
+  /** Reacts to a message with an emoji (an empty emoji removes the reaction). */
+  async reactToMessage(messageId: string, emoji: string, businessId: string) {
+    const message = await this.prisma.whatsAppMessage.findFirst({
+      where: { id: messageId, chat: { businessId } },
+      include: { chat: true },
+    });
+    if (!message) throw new BadRequestException('Mensaje no encontrado');
+    if (!message.whatsappMsgId) throw new BadRequestException('Este mensaje no se puede reaccionar');
+
+    const { url, apiKey, instance } = this.getUrlAndKey(businessId);
+    const res = await fetch(`${url}/message/sendReaction/${instance}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: apiKey },
+      body: JSON.stringify({
+        key: { id: message.whatsappMsgId, remoteJid: `${message.chat.phone.replace(/\D/g, '')}@s.whatsapp.net`, fromMe: message.senderType !== 'CLIENT' },
+        reaction: emoji || '',
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new BadRequestException(`No se pudo enviar la reacción: ${err?.response?.message || err.message || res.status}`);
+    }
+    const { chat, ...updated } = await this.prisma.whatsAppMessage.update({
+      where: { id: message.id },
+      data: { reaction: emoji || null },
+      include: { chat: true },
+    });
+    this.gateway.emitNewMessage({ ...updated, businessId });
+    return updated;
   }
 
   // --- PREMIUM CHAT MANAGEMENT ACTIONS ---
@@ -1243,11 +1500,11 @@ export class WhatsAppService {
       },
     });
 
-    const formattedChat = {
+    const formattedChat = publicChat({
       ...chat,
       lastMessage: chat.messages[0]?.text || '',
       lastMessageTime: chat.messages[0]?.createdAt || chat.updatedAt,
-    };
+    });
 
     this.gateway.emitChatUpdated(formattedChat);
     return formattedChat;
@@ -1318,31 +1575,31 @@ export class WhatsAppService {
   }
 
   async processMessageStatusUpdate(whatsappMsgId: string, statusValue: number | string) {
-    let statusString = 'SENT';
-    if (statusValue === 2 || statusValue === 'DELIVERED') {
-      statusString = 'DELIVERED';
-    } else if (statusValue === 3 || statusValue === 4 || statusValue === 'READ' || statusValue === 'PLAYED') {
-      statusString = 'READ';
-    } else {
-      return;
-    }
+    // Baileys: 2 SERVER_ACK (one tick), 3 DELIVERY_ACK (two grey), 4 READ / 5 PLAYED (two blue)
+    const value = typeof statusValue === 'string' ? statusValue.toUpperCase() : statusValue;
+    const statusString =
+      value === 2 || value === 'SERVER_ACK' || value === 'SENT' ? 'SENT'
+      : value === 3 || value === 'DELIVERY_ACK' || value === 'DELIVERED' ? 'DELIVERED'
+      : value === 4 || value === 5 || value === 'READ' || value === 'PLAYED' ? 'READ'
+      : null;
+    if (!statusString || !whatsappMsgId) return;
 
     const message = await this.prisma.whatsAppMessage.findFirst({ where: { whatsappMsgId } });
+    const rank: Record<string, number> = { SENT: 1, DELIVERED: 2, READ: 3 };
+    // Events can arrive out of order: a read message never goes back to delivered
+    if (!message || (rank[message.status] ?? 0) >= rank[statusString]) return;
 
-    if (message && message.status !== statusString) {
-      const updatedMessage = await this.prisma.whatsAppMessage.update({
-        where: { id: message.id },
-        data: { status: statusString },
-      });
-
-      // Fetch chat to get businessId for room routing
+    const updatedMessage = await this.prisma.whatsAppMessage.update({
+      where: { id: message.id },
+      data: { status: statusString },
+    });
     const chatForEvent = await this.prisma.whatsAppChat.findUnique({ where: { id: updatedMessage.chatId }, select: { businessId: true } });
     this.gateway.emitMessageStatusUpdated({
-        messageId: updatedMessage.id,
-        chatId: updatedMessage.chatId,
-        businessId: chatForEvent?.businessId || undefined,
-        status: statusString,
-      });
-    }
+      messageId: updatedMessage.id,
+      chatId: updatedMessage.chatId,
+      businessId: chatForEvent?.businessId || undefined,
+      status: statusString,
+    });
   }
+
 }

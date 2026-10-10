@@ -93,7 +93,7 @@ export default function AiFeedbackAuditPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-end">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            Auditoría de Feedback de IA <IconSparkles size={24} className="text-primary animate-pulse" />
+            Auditoría de feedback de IA <IconSparkles size={24} className="text-primary animate-pulse" />
           </h1>
           <p className="text-muted-foreground">Monitorea y analiza el desempeño y las opiniones de los usuarios sobre Syncro IA.</p>
         </div>
@@ -148,7 +148,7 @@ export default function AiFeedbackAuditPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
           <CardHeader>
-            <CardDescription>Total Evaluaciones</CardDescription>
+            <CardDescription>Total evaluaciones</CardDescription>
             <CardTitle className="text-2xl font-bold tabular-nums">
               {totalCount}
             </CardTitle>
@@ -163,7 +163,7 @@ export default function AiFeedbackAuditPage() {
 
         <Card className="@container/card bg-gradient-to-t from-emerald-500/5 to-card shadow-xs border-emerald-500/10">
           <CardHeader>
-            <CardDescription>Calificaciones Positivas</CardDescription>
+            <CardDescription>Calificaciones positivas</CardDescription>
             <CardTitle className="text-2xl font-bold tabular-nums text-emerald-500">
               {likesCount}
             </CardTitle>
@@ -180,7 +180,7 @@ export default function AiFeedbackAuditPage() {
 
         <Card className="@container/card bg-gradient-to-t from-rose-500/5 to-card shadow-xs border-rose-500/10">
           <CardHeader>
-            <CardDescription>Calificaciones Negativas</CardDescription>
+            <CardDescription>Calificaciones negativas</CardDescription>
             <CardTitle className="text-2xl font-bold tabular-nums text-rose-500">
               {dislikesCount}
             </CardTitle>
@@ -197,7 +197,7 @@ export default function AiFeedbackAuditPage() {
 
         <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
           <CardHeader>
-            <CardDescription>Tasa de Aprobación</CardDescription>
+            <CardDescription>Tasa de aprobación</CardDescription>
             <CardTitle className={cn(
               "text-2xl font-bold tabular-nums",
               approvalRate >= 80 ? "text-emerald-500" : approvalRate >= 50 ? "text-amber-500" : "text-rose-500"
@@ -217,7 +217,7 @@ export default function AiFeedbackAuditPage() {
       {/* Main Table */}
       <Card className="border-none shadow-none bg-transparent">
         <CardHeader className="px-0 py-2">
-          <CardTitle>Comentarios y Respuestas de IA</CardTitle>
+          <CardTitle>Comentarios y respuestas de IA</CardTitle>
           <CardDescription>Audita el historial de mensajes de la IA y el feedback recibido.</CardDescription>
         </CardHeader>
 
@@ -236,7 +236,7 @@ export default function AiFeedbackAuditPage() {
           <div className="rounded-xl border border-border/40 bg-card overflow-hidden">
             <Table>
               <TableHeader className="bg-muted/50">
-                <TableRow className="hover:bg-transparent border-border/10 font-semibold uppercase tracking-tight text-[10px] text-muted-foreground">
+                <TableRow className="hover:bg-transparent border-border/10 font-semibold tracking-tight text-[10px] text-muted-foreground">
                   <TableHead className="px-4 h-10 w-[20%]">Negocio</TableHead>
                   <TableHead className="px-4 h-10 w-[35%]">Prompt original del usuario</TableHead>
                   <TableHead className="px-4 h-10 w-[35%]">Respuesta de Syncro IA</TableHead>
@@ -248,9 +248,9 @@ export default function AiFeedbackAuditPage() {
                   <TableRow key={fb.id} className="hover:bg-muted/30 border-border/5 transition-colors border-b">
                     <TableCell className="px-4 py-3.5 align-top">
                       <div className="flex flex-col gap-1">
-                        <span className="font-bold text-xs text-foreground uppercase tracking-tight flex items-center gap-1.5">
+                        <span className="font-bold text-xs text-foreground tracking-tight flex items-center gap-1.5">
                           <IconBuildingStore size={12} className="text-primary/70 shrink-0" />
-                          {fb.business?.name || "Negocio General"}
+                          {fb.business?.name || "Negocio general"}
                         </span>
                         <span className="text-[10px] text-muted-foreground/75 flex items-center gap-1">
                           <IconCalendar size={10} className="shrink-0" />
@@ -272,7 +272,7 @@ export default function AiFeedbackAuditPage() {
                         </div>
                         {fb.comment && (
                           <div className="text-[11px] text-rose-500 font-medium bg-rose-500/5 border border-rose-500/10 rounded-lg p-2.5 flex flex-col gap-1">
-                            <span className="text-[9px] uppercase font-black tracking-wider opacity-60">Comentario del usuario:</span>
+                            <span className="text-[9px] font-black opacity-60">Comentario del usuario:</span>
                             <span className="italic">"{fb.comment}"</span>
                           </div>
                         )}
@@ -282,11 +282,11 @@ export default function AiFeedbackAuditPage() {
                     <TableCell className="px-4 py-3.5 align-top text-center">
                       <div className="flex justify-center">
                         {fb.rating === "LIKE" ? (
-                          <Badge variant="outline" className="bg-emerald-500/10 border-emerald-500/20 text-emerald-500 font-extrabold uppercase text-[9px] gap-1 px-2.5 py-1">
+                          <Badge variant="outline" className="bg-emerald-500/10 border-emerald-500/20 text-emerald-500 font-extrabold text-[9px] gap-1 px-2.5 py-1">
                             <IconThumbUp size={10} /> Útil
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="bg-rose-500/10 border-rose-500/20 text-rose-500 font-extrabold uppercase text-[9px] gap-1 px-2.5 py-1">
+                          <Badge variant="outline" className="bg-rose-500/10 border-rose-500/20 text-rose-500 font-extrabold text-[9px] gap-1 px-2.5 py-1">
                             <IconThumbDown size={10} /> Corregir
                           </Badge>
                         )}

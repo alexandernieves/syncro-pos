@@ -140,18 +140,18 @@ export default function GastosPage() {
     <div className="flex flex-col gap-6 py-4 md:gap-8 md:py-6 font-sans px-4 lg:px-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Gastos de Caja Chica</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Gastos de caja chica</h1>
           <p className="text-muted-foreground">Registra salidas de efectivo de la sucursal actual.</p>
         </div>
         <Button onClick={() => setIsCreateOpen(true)} className="rounded-xl shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90">
-          <IconPlus className="mr-2 h-4 w-4" /> Registrar Gasto
+          <IconPlus className="mr-2 h-4 w-4" /> Registrar gasto
         </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="md:col-span-1 border-none bg-gradient-to-br from-primary/10 to-primary/5 shadow-sm rounded-2xl">
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-primary uppercase tracking-wider">Total Gastos del Mes</CardTitle>
+            <CardTitle className="text-sm font-medium text-primary">Total gastos del mes</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-primary">
@@ -163,7 +163,7 @@ export default function GastosPage() {
 
         <Card className="md:col-span-2 border-none bg-white dark:bg-zinc-900 shadow-sm rounded-2xl">
           <CardHeader>
-            <CardTitle>Historial de Salidas</CardTitle>
+            <CardTitle>Historial de salidas</CardTitle>
             <CardDescription>Lista de gastos registrados recientemente.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -211,7 +211,7 @@ export default function GastosPage() {
         <DialogContent className="rounded-3xl p-6">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-              <IconCash className="text-primary" /> Registrar Nueva Salida
+              <IconCash className="text-primary" /> Registrar nueva salida
             </DialogTitle>
             <DialogDescription>
               Asegúrate de tener el comprobante físico de este gasto.
@@ -243,9 +243,9 @@ export default function GastosPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Descripción / Motivo</Label>
+              <Label>Descripción / motivo</Label>
               <Input 
-                placeholder="Ej. Pago de flete Maracaibo" 
+                placeholder="Ej. Pago de flete maracaibo" 
                 className="rounded-xl h-12"
                 value={formData.description}
                 onChange={(e) => setFormData({...formData, description: e.target.value})}
@@ -260,7 +260,7 @@ export default function GastosPage() {
               disabled={isSubmitting}
               className="rounded-xl h-12 px-8 bg-primary shadow-lg shadow-primary/30"
             >
-              {isSubmitting ? "Registrando..." : "Guardar Gasto"}
+              {isSubmitting ? "Registrando..." : "Guardar gasto"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -271,7 +271,7 @@ export default function GastosPage() {
         <DialogContent className="rounded-3xl p-6 sm:max-w-md bg-background border border-border shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2 text-destructive">
-              <IconTrash size={22} /> Confirmar Eliminación
+              <IconTrash size={22} /> Confirmar eliminación
             </DialogTitle>
             <DialogDescription className="text-muted-foreground pt-1.5">
               ¿Estás seguro de que deseas eliminar este registro de gasto? Esta acción es irreversible y afectará el balance de caja chica.

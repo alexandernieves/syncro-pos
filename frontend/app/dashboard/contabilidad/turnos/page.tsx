@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { API_URL } from "@/lib/constants";
 import { 
-  Card, CardContent, CardHeader, CardTitle, CardDescription 
+  Card, CardContent, CardHeader, CardTitle, CardDescription, CardAction, CardFooter
 } from "@/components/ui/card";
 import { 
   Badge 
@@ -80,7 +80,7 @@ export default function TurnosPage() {
     <div className="flex flex-col gap-6 py-4 md:gap-8 md:py-6 font-sans px-4 lg:px-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Cierres de Caja y Turnos</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Cierres de caja y turnos</h1>
           <p className="text-muted-foreground">Historial de auditorías y cuadres de caja de la sucursal actual.</p>
         </div>
         <Button 
@@ -94,51 +94,66 @@ export default function TurnosPage() {
         </Button>
       </div>
 
-      {/* Metrics Row - High Contrast Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border border-emerald-500/30 bg-card shadow-xs rounded-2xl flex items-center p-4 gap-4">
-          <div className="bg-emerald-500/15 p-3 rounded-xl text-emerald-600 dark:text-emerald-400">
-            <IconCheck className="size-6" />
-          </div>
-          <div>
-            <p className="text-[10px] uppercase font-bold tracking-wider text-emerald-600 dark:text-emerald-400">Cuadres Perfectos</p>
-            <h3 className="text-2xl font-black text-foreground">{totalAudits.perfect}</h3>
-          </div>
+      {/* Metrics Row - Compact Dashboard Standard Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+        <Card className="@container/card bg-gradient-to-t from-emerald-500/5 to-card shadow-xs py-3">
+          <CardHeader className="py-1 px-4">
+            <CardDescription className="text-xs">Cuadres perfectos</CardDescription>
+            <CardTitle className="text-xl font-bold tabular-nums text-emerald-600">
+              {totalAudits.perfect}
+            </CardTitle>
+            <CardAction className="top-2.5 right-3">
+              <IconCheck size={18} className="text-emerald-500/40" />
+            </CardAction>
+          </CardHeader>
+          <CardFooter className="py-1 px-4 text-xs font-medium text-emerald-600">
+            Sin diferencias ($0.00)
+          </CardFooter>
         </Card>
 
-        <Card className="border border-rose-500/30 bg-card shadow-xs rounded-2xl flex items-center p-4 gap-4">
-          <div className="bg-rose-500/15 p-3 rounded-xl text-rose-600 dark:text-rose-400">
-            <IconX className="size-6" />
-          </div>
-          <div>
-            <p className="text-[10px] uppercase font-bold tracking-wider text-rose-600 dark:text-rose-400">Turnos con Faltantes</p>
-            <h3 className="text-2xl font-black text-foreground">{totalAudits.missing}</h3>
-          </div>
+        <Card className="@container/card bg-gradient-to-t from-rose-500/5 to-card shadow-xs py-3">
+          <CardHeader className="py-1 px-4">
+            <CardDescription className="text-xs">Turnos con faltantes</CardDescription>
+            <CardTitle className="text-xl font-bold tabular-nums text-rose-600">
+              {totalAudits.missing}
+            </CardTitle>
+            <CardAction className="top-2.5 right-3">
+              <IconX size={18} className="text-rose-500/40" />
+            </CardAction>
+          </CardHeader>
+          <CardFooter className="py-1 px-4 text-xs font-medium text-rose-600">
+            Diferencia negativa
+          </CardFooter>
         </Card>
 
-        <Card className="border border-blue-500/30 bg-card shadow-xs rounded-2xl flex items-center p-4 gap-4">
-          <div className="bg-blue-500/15 p-3 rounded-xl text-blue-600 dark:text-blue-400">
-            <IconAlertCircle className="size-6" />
-          </div>
-          <div>
-            <p className="text-[10px] uppercase font-bold tracking-wider text-blue-600 dark:text-blue-400">Turnos con Sobrantes</p>
-            <h3 className="text-2xl font-black text-foreground">{totalAudits.surplus}</h3>
-          </div>
+        <Card className="@container/card bg-gradient-to-t from-amber-500/5 to-card shadow-xs py-3">
+          <CardHeader className="py-1 px-4">
+            <CardDescription className="text-xs">Turnos con sobrantes</CardDescription>
+            <CardTitle className="text-xl font-bold tabular-nums text-amber-600">
+              {totalAudits.surplus}
+            </CardTitle>
+            <CardAction className="top-2.5 right-3">
+              <IconAlertCircle size={18} className="text-amber-500/40" />
+            </CardAction>
+          </CardHeader>
+          <CardFooter className="py-1 px-4 text-xs font-medium text-amber-600">
+            Diferencia positiva
+          </CardFooter>
         </Card>
       </div>
 
-      {/* Main shifts list - Clean & High Contrast */}
+      {/* Main shifts list - Exact Dashboard Card Table */}
       <Card className="border border-border/80 bg-card shadow-xs rounded-2xl overflow-hidden">
         <CardHeader className="border-b border-border/60 bg-muted/20">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-base font-bold">Historial de Auditorías de Caja</CardTitle>
+              <CardTitle className="text-base font-bold">Historial de auditorías de caja</CardTitle>
               <CardDescription className="text-xs">
                 Saldos de apertura, montos declarados por el cajero y diferencias calculadas por el sistema.
               </CardDescription>
             </div>
             <Badge variant="outline" className="text-xs text-primary border-primary/30">
-              <IconShieldCheck className="size-3.5 mr-1" /> Control Anti-Robo Activo
+              <IconShieldCheck className="size-3.5 mr-1" /> Control anti-robo activo
             </Badge>
           </div>
         </CardHeader>
@@ -146,8 +161,8 @@ export default function TurnosPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b text-xs font-bold text-muted-foreground uppercase bg-muted/40">
-                  <th className="py-3.5 px-4">Fecha y Hora</th>
+                <tr className="border-b border-[#E8E4DC] text-xs font-bold text-[#6B665B] bg-[#F5F1E8]">
+                  <th className="py-3.5 px-4">Fecha y hora</th>
                   <th className="py-3.5 px-4">Cajero</th>
                   <th className="py-3.5 px-4 text-right">Apertura</th>
                   <th className="py-3.5 px-4 text-right">Esperado</th>
@@ -157,16 +172,16 @@ export default function TurnosPage() {
                   <th className="py-3.5 px-4 text-center">Auditoría</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/60 text-sm">
+              <tbody className="divide-y divide-[#E8E4DC]/60 text-sm bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-12 text-muted-foreground opacity-60">
+                    <td colSpan={8} className="text-center py-12 text-[#6B665B] opacity-60 font-medium">
                       Cargando registros contables...
                     </td>
                   </tr>
                 ) : shifts.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-12 text-muted-foreground">
+                    <td colSpan={8} className="text-center py-12 text-[#6B665B] font-medium">
                       No hay registros de turnos de caja en esta sucursal.
                     </td>
                   </tr>
@@ -177,66 +192,66 @@ export default function TurnosPage() {
                     const isBlind = s.declaredDetails?.isBlindClose;
                     
                     return (
-                      <tr key={s.id} className="hover:bg-muted/30 transition-colors">
+                      <tr key={s.id} className="hover:bg-[#FAF7F2]/80 transition-colors">
                         <td className="py-3.5 px-4">
                           <div className="flex flex-col">
-                            <span className="font-medium text-foreground flex items-center gap-1.5">
-                              <IconCalendar size={14} className="text-muted-foreground" />
+                            <span className="font-semibold text-[#16140F] flex items-center gap-1.5">
+                              <IconCalendar size={14} className="text-[#6B665B]" />
                               {format(new Date(s.openedAt), "dd/MM/yyyy HH:mm")}
                             </span>
                             <div className="flex items-center gap-1.5 ml-5 mt-0.5">
-                              <span className="text-[10px] text-muted-foreground">
+                              <span className="text-xs text-[#6B665B] font-medium">
                                 Cierre: {s.closedAt ? format(new Date(s.closedAt), "HH:mm") : "-"}
                               </span>
                               {isBlind && (
-                                <span className="text-[9px] px-1 py-0.2 rounded font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                                  Arqueo Ciego
+                                <span className="text-[10px] px-1.5 py-0.2 rounded-md font-bold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
+                                  Arqueo ciego
                                 </span>
                               )}
                             </div>
                           </div>
                         </td>
                         <td className="py-3.5 px-4">
-                          <span className="font-semibold text-foreground flex items-center gap-1.5">
-                            <IconUser size={14} className="text-muted-foreground" />
+                          <span className="font-bold text-[#16140F] flex items-center gap-1.5">
+                            <IconUser size={14} className="text-[#6B665B]" />
                             {s.user?.name || "Cajero"}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 text-right font-semibold tabular-nums text-muted-foreground">
+                        <td className="py-3.5 px-4 text-right font-semibold tabular-nums text-[#6B665B]">
                           ${s.openingBalance?.toFixed(2)}
                         </td>
-                        <td className="py-3.5 px-4 text-right font-bold tabular-nums text-foreground">
+                        <td className="py-3.5 px-4 text-right font-bold tabular-nums text-[#16140F]">
                           ${isClosed ? s.expectedBalance?.toFixed(2) : "-"}
                         </td>
-                        <td className="py-3.5 px-4 text-right font-black tabular-nums text-foreground">
+                        <td className="py-3.5 px-4 text-right font-extrabold tabular-nums text-[#16140F]">
                           ${isClosed ? s.closingBalance?.toFixed(2) : "-"}
                         </td>
                         <td className="py-3.5 px-4 text-center">
                           {!isClosed ? (
-                            <Badge variant="outline" className="border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/10 font-semibold text-xs rounded-lg">
+                            <Badge variant="outline" className="border-blue-500/30 text-blue-700 bg-blue-500/10 font-bold text-xs rounded-xl px-2.5 py-0.5">
                               Activo
                             </Badge>
                           ) : Math.abs(diff) < 0.01 ? (
-                            <Badge variant="outline" className="border-border text-muted-foreground font-semibold text-xs rounded-lg">
+                            <Badge variant="outline" className="border-[#DAD5CC] text-[#6B665B] bg-[#FAF7F2] font-bold text-xs rounded-xl px-2.5 py-0.5">
                               $0.00 (Cuadrado)
                             </Badge>
                           ) : diff < 0 ? (
-                            <Badge variant="outline" className="border-rose-500/30 text-rose-600 dark:text-rose-400 bg-rose-500/10 font-black text-xs rounded-lg">
-                              -${Math.abs(diff).toFixed(2)} (Faltante)
+                            <Badge variant="outline" className="border-rose-500/30 text-rose-700 bg-rose-500/10 font-extrabold text-xs rounded-xl px-2.5 py-0.5">
+                              -${Math.abs(diff).toFixed(2)} (faltante)
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 font-black text-xs rounded-lg">
-                              +${diff.toFixed(2)} (Sobrante)
+                            <Badge variant="outline" className="border-emerald-500/30 text-emerald-700 bg-emerald-500/10 font-extrabold text-xs rounded-xl px-2.5 py-0.5">
+                              +${diff.toFixed(2)} (sobrante)
                             </Badge>
                           )}
                         </td>
                         <td className="py-3.5 px-4 text-center">
                           {s.status === 'OPEN' ? (
-                            <Badge className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-[10px] uppercase">
+                            <Badge className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[10px] px-2.5 py-0.5">
                               Abierto
                             </Badge>
                           ) : (
-                            <Badge variant="secondary" className="font-bold rounded-lg text-[10px] uppercase">
+                            <Badge variant="secondary" className="font-bold rounded-xl text-[10px] bg-[#F5F1E8] text-[#6B665B] border border-[#DAD5CC] px-2.5 py-0.5">
                               Cerrado
                             </Badge>
                           )}
@@ -247,12 +262,12 @@ export default function TurnosPage() {
                               size="sm"
                               variant="outline"
                               onClick={() => setAuditModalShift(s)}
-                              className="h-7 text-xs font-semibold px-2.5 rounded-lg border-border hover:border-primary/50 hover:text-primary"
+                              className="h-8 text-xs font-bold px-3 rounded-xl border-[#DAD5CC] bg-[#FAF7F2] hover:bg-[#F5F1E8] text-[#16140F] transition-all shadow-xs"
                             >
-                              <IconEye className="size-3.5 mr-1" /> Ver Arqueo
+                              <IconEye className="size-3.5 mr-1 text-primary" /> Ver arqueo
                             </Button>
                           ) : (
-                            <span className="text-xs text-muted-foreground">-</span>
+                            <span className="text-xs text-[#6B665B] font-medium">-</span>
                           )}
                         </td>
                       </tr>
@@ -272,11 +287,11 @@ export default function TurnosPage() {
             <div className="flex items-center justify-between">
               <DialogTitle className="text-lg font-bold flex items-center gap-2">
                 <IconShieldCheck className="size-5 text-primary" />
-                Auditoría de Turno de Caja
+                Auditoría de turno de caja
               </DialogTitle>
               {auditModalShift?.declaredDetails?.isBlindClose && (
                 <Badge variant="outline" className="text-[10px] text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/5">
-                  Arqueo Ciego
+                  Arqueo ciego
                 </Badge>
               )}
             </div>
@@ -290,22 +305,22 @@ export default function TurnosPage() {
               {/* Resumen Financiero */}
               <div className="p-4 rounded-xl bg-muted/40 border border-border/80 space-y-2.5">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground">Monto de Apertura:</span>
+                  <span className="text-muted-foreground">Monto de apertura:</span>
                   <span className="font-semibold text-foreground tabular-nums">${auditModalShift.openingBalance?.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground">Total Esperado por Sistema:</span>
+                  <span className="text-muted-foreground">Total esperado por sistema:</span>
                   <span className="font-semibold text-foreground tabular-nums">${auditModalShift.expectedBalance?.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground">Total Contado (Declarado):</span>
+                  <span className="text-muted-foreground">Total contado (declarado):</span>
                   <span className="font-extrabold text-foreground tabular-nums">${auditModalShift.closingBalance?.toFixed(2)}</span>
                 </div>
 
                 <Separator />
 
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-foreground">Resultado de Caja:</span>
+                  <span className="text-xs font-bold text-foreground">Resultado de caja:</span>
                   <span className={`text-base font-black tabular-nums ${(auditModalShift.difference || 0) < -0.01
                       ? 'text-rose-500'
                       : (auditModalShift.difference || 0) > 0.01
@@ -318,7 +333,7 @@ export default function TurnosPage() {
                         ? '(Faltante)'
                         : (auditModalShift.difference || 0) > 0.01
                           ? '(Sobrante)'
-                          : '(Cuadrado Perfecto)'}
+                          : '(Cuadrado perfecto)'}
                     </span>
                   </span>
                 </div>
@@ -327,8 +342,8 @@ export default function TurnosPage() {
               {/* Desglose de Billetes Físicos (si existe) */}
               {auditModalShift.cashBreakdown && (
                 <div className="p-4 rounded-xl bg-card border border-border/80 space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <IconCash className="size-4 text-primary" /> Desglose de Billetes Declarados (USD)
+                  <h4 className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
+                    <IconCash className="size-4 text-primary" /> Desglose de billetes declarados (USD)
                   </h4>
                   <div className="grid grid-cols-3 gap-2 pt-1">
                     {[
@@ -349,7 +364,7 @@ export default function TurnosPage() {
 
                   {auditModalShift.declaredDetails?.cashBs > 0 && (
                     <div className="flex justify-between items-center text-xs pt-2 border-t border-border/50">
-                      <span className="text-muted-foreground">Efectivo en Bolívares (Bs):</span>
+                      <span className="text-muted-foreground">Efectivo en bolívares (Bs):</span>
                       <span className="font-bold text-foreground tabular-nums">
                         Bs {Number(auditModalShift.declaredDetails.cashBs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
                       </span>
@@ -366,7 +381,7 @@ export default function TurnosPage() {
               onClick={() => setAuditModalShift(null)}
               className="w-full sm:w-auto"
             >
-              Cerrar Auditoría
+              Cerrar auditoría
             </Button>
           </DialogFooter>
         </DialogContent>

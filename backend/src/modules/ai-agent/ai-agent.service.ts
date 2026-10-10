@@ -836,7 +836,7 @@ export class AiAgentService {
         where: { branch: { businessId }, status: 'CLOSED' },
         orderBy: { closedAt: 'desc' },
         take: 10,
-        include: { branch: true, user: true }
+        include: { branch: true, user: { select: { id: true, name: true, email: true, role: true, avatar: true } } }
       }),
       // Today's sales summary
       this.prisma.sale.findMany({
@@ -857,7 +857,7 @@ export class AiAgentService {
         take: 50,
         include: {
           payments: true,
-          user: true,
+          user: { select: { id: true, name: true, email: true, role: true, avatar: true } },
           client: true,
           items: {
             include: {
@@ -1714,7 +1714,7 @@ ${otherInfo}`;
         },
         include: {
           branch: true,
-          user: true
+          user: { select: { id: true, name: true, email: true, role: true, avatar: true } }
         }
       });
 

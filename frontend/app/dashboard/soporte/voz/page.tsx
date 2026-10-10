@@ -481,7 +481,7 @@ export default function VoiceAiPage() {
       </Button>
 
       <div className="absolute top-8 left-0 right-0 flex justify-center pointer-events-none">
-        <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground/60 flex justify-center">
+        <h2 className="text-sm font-medium text-muted-foreground/60 flex justify-center">
           {status === "listening" ? (
             <ShimmeringText text="Escuchando..." className="text-muted-foreground/60" />
           ) : status === "thinking" ? (
@@ -527,7 +527,7 @@ export default function VoiceAiPage() {
           )}
         >
           <IconVideo size={16} />
-          <span>Modo Ads: {adsMode ? "ON" : "OFF"}</span>
+          <span>Modo ads: {adsMode ? "On" : "Off"}</span>
         </Button>
 
         {/* Web Search Button (only visible if adsMode is true) */}
@@ -547,7 +547,7 @@ export default function VoiceAiPage() {
             )}
           >
             <IconWorld size={16} />
-            <span>Navegación: {webSearchEnabled ? "ON" : "OFF"}</span>
+            <span>Navegación: {webSearchEnabled ? "On" : "Off"}</span>
           </Button>
         )}
       </div>

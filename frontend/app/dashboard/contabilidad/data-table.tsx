@@ -103,7 +103,7 @@ export function DataTable<TData, TValue>({
                 <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" className="h-8">
                         <IconLayoutColumns size={16} />
-                        <span className="hidden lg:inline">Personalizar Columnas</span>
+                        <span className="hidden lg:inline">Personalizar columnas</span>
                         <IconChevronDown size={14} />
                     </Button>
                 </DropdownMenuTrigger>

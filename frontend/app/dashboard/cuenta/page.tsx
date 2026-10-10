@@ -223,10 +223,10 @@ export default function AccountPage() {
       {/* Header Compacto */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
         <div className="space-y-0.5">
-          <h1 className="text-2xl font-bold tracking-tight">Mi Perfil</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Mi perfil</h1>
           <p className="text-muted-foreground text-sm">Configuración de usuario maestro.</p>
         </div>
-        <Badge variant="outline" className="px-3 py-1 font-bold text-amber-500 border-amber-500/20 bg-amber-500/5 uppercase tracking-widest text-[9px] rounded-full">
+        <Badge variant="outline" className="px-3 py-1 font-bold text-amber-500 border-amber-500/20 bg-amber-500/5 text-[9px] rounded-full">
             <IconCrown size={12} className="mr-1.5" /> Enterprise
         </Badge>
       </div>
@@ -248,7 +248,7 @@ export default function AccountPage() {
                                     }}
                                 />
                                 <AvatarFallback className="bg-primary/5 text-2xl font-black text-primary/30">
-                                    {formData.name?.split(' ').map(word => word.charAt(0)).join('').substring(0,2).toUpperCase() || 'AD'}
+                                    {formData.name?.split(' ').map(word => word.charAt(0)).join('').substring(0,2).toUpperCase() || 'Ad'}
                                 </AvatarFallback>
                             </Avatar>
                             <input 
@@ -270,16 +270,16 @@ export default function AccountPage() {
                         </div>
                     </div>
                     <CardTitle className="text-xl font-bold">{formData.name || "Administrador"}</CardTitle>
-                    <CardDescription className="font-mono text-[9px] uppercase tracking-widest text-primary mt-0.5">{user?.role || "OWNER"}</CardDescription>
+                    <CardDescription className="font-mono text-[9px] text-primary mt-0.5">{user?.role || "Owner"}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 p-4 pt-2">
                     <FieldGroup className="gap-2">
                         <Field orientation="horizontal" className="justify-between border-b border-muted pb-1">
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase">Registro</span>
+                            <span className="text-[10px] font-bold text-muted-foreground">Registro</span>
                             <span className="text-[10px] font-semibold">{memberSince}</span>
                         </Field>
                         <Field orientation="horizontal" className="justify-between">
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase">Verificación</span>
+                            <span className="text-[10px] font-bold text-muted-foreground">Verificación</span>
                             <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/10 text-[9px] px-1.5 h-4" variant="outline">OK</Badge>
                         </Field>
                     </FieldGroup>
@@ -296,7 +296,7 @@ export default function AccountPage() {
         <div className="lg:col-span-8">
             <Card className="border shadow-none">
                 <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-lg">Información del Perfil</CardTitle>
+                    <CardTitle className="text-lg">Información del perfil</CardTitle>
                     <CardDescription className="text-xs">Campos de identidad y localización oficial.</CardDescription>
                 </CardHeader>
                 <CardContent className="p-4 pt-2">
@@ -306,11 +306,11 @@ export default function AccountPage() {
                                 <FieldLegend className="text-[10px] mb-1">Identidad</FieldLegend>
                                 <FieldGroup className="grid md:grid-cols-2 gap-4">
                                     <Field className="gap-1">
-                                        <FieldLabel htmlFor="name" className="text-xs">Nombre Completo</FieldLabel>
+                                        <FieldLabel htmlFor="name" className="text-xs">Nombre completo</FieldLabel>
                                         <Input
                                             id="name"
                                             className="h-9 text-sm"
-                                            placeholder="Evil Rabbit"
+                                            placeholder="Evil rabbit"
                                             value={formData.name}
                                             onChange={(e) => setFormData({...formData, name: e.target.value})}
                                             required
@@ -346,7 +346,7 @@ export default function AccountPage() {
                                         </Select>
                                     </Field>
                                     <Field className="gap-1">
-                                        <FieldLabel htmlFor="city" className="text-xs">Estado / Región</FieldLabel>
+                                        <FieldLabel htmlFor="city" className="text-xs">Estado / región</FieldLabel>
                                         <Select value={formData.city} onValueChange={(val) => setFormData({...formData, city: val})}>
                                             <SelectTrigger id="city" className="h-9 text-sm">
                                                 <SelectValue placeholder="Seleccione estado" />
@@ -364,7 +364,7 @@ export default function AccountPage() {
                             <FieldSeparator />
 
                             <FieldSet className="gap-3">
-                                <FieldLegend className="text-[10px] mb-1">Seguridad de Acceso</FieldLegend>
+                                <FieldLegend className="text-[10px] mb-1">Seguridad de acceso</FieldLegend>
                                 <FieldGroup className="gap-4">
                                     <Field orientation="horizontal" className="justify-between bg-muted/20 p-3 rounded-md">
                                         <div className="grid gap-0.5">
@@ -385,7 +385,7 @@ export default function AccountPage() {
                                     {showPasswordFields && (
                                         <div className="grid md:grid-cols-2 gap-4 animate-in slide-in-from-top-2 duration-200">
                                             <Field className="gap-1">
-                                                <FieldLabel className="text-xs">Nueva Contraseña</FieldLabel>
+                                                <FieldLabel className="text-xs">Nueva contraseña</FieldLabel>
                                                 <Input 
                                                     type="password" 
                                                     className="h-9 text-sm"
@@ -395,7 +395,7 @@ export default function AccountPage() {
                                                 />
                                             </Field>
                                             <Field className="gap-1">
-                                                <FieldLabel className="text-xs">Repetir Contraseña</FieldLabel>
+                                                <FieldLabel className="text-xs">Repetir contraseña</FieldLabel>
                                                 <Input 
                                                     type="password" 
                                                     className="h-9 text-sm"

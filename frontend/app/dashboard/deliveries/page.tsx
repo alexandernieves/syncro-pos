@@ -284,7 +284,7 @@ export default function DeliveriesPage() {
             <IconTruck size={22} />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">Pedidos a Domicilio (Delivery)</h1>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">Pedidos a domicilio (delivery)</h1>
             <p className="text-xs font-medium text-muted-foreground">Gestiona las solicitudes de despacho y confirma ubicaciones mediante mapas.</p>
           </div>
         </div>
@@ -315,7 +315,7 @@ export default function DeliveriesPage() {
                 <button
                   key={st}
                   onClick={() => setStatusFilter(st)}
-                  className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0 transition-all border ${
+                  className={`px-3 py-1 rounded-full text-[10px] font-bold   shrink-0 transition-all border ${
                     statusFilter === st
                       ? "bg-primary text-primary-foreground border-primary shadow-sm"
                       : "bg-muted/40 text-muted-foreground border-transparent hover:bg-muted"
@@ -357,7 +357,7 @@ export default function DeliveriesPage() {
                       <p className="text-sm font-bold text-foreground truncate">{order.clientName || "Cliente PWA"}</p>
                       <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{order.phone || "—"}</p>
                     </div>
-                    <Badge variant="outline" className={`text-[10px] font-bold uppercase px-2 py-0.5 ${getStatusColor(order.status)}`}>
+                    <Badge variant="outline" className={`text-[10px] font-bold  px-2 py-0.5 ${getStatusColor(order.status)}`}>
                       {getStatusLabel(order.status)}
                     </Badge>
                   </div>
@@ -392,7 +392,7 @@ export default function DeliveriesPage() {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-5 rounded-2xl border shadow-xs">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-bold text-foreground">{selectedOrder.clientName || "Pedido de Delivery"}</h2>
+                    <h2 className="text-lg font-bold text-foreground">{selectedOrder.clientName || "Pedido de delivery"}</h2>
                     <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 ${getStatusColor(selectedOrder.status)}`}>
                       {getStatusLabel(selectedOrder.status)}
                     </Badge>
@@ -422,7 +422,7 @@ export default function DeliveriesPage() {
                         onClick={() => handleUpdateStatus(selectedOrder.id, "APPROVED")}
                         disabled={isProcessing}
                       >
-                        <IconCheck size={15} /> Aprobar Envío
+                        <IconCheck size={15} /> Aprobar envío
                       </Button>
                     </>
                   )}
@@ -439,7 +439,7 @@ export default function DeliveriesPage() {
                         }}
                         disabled={isProcessing}
                       >
-                        <IconX size={15} /> Cancelar Pedido
+                        <IconX size={15} /> Cancelar pedido
                       </Button>
                       <Button
                         size="sm"
@@ -447,7 +447,7 @@ export default function DeliveriesPage() {
                         onClick={() => handleUpdateStatus(selectedOrder.id, "SHIPPED")}
                         disabled={isProcessing}
                       >
-                        <IconCheck size={15} /> Marcar Salida de Tienda
+                        <IconCheck size={15} /> Marcar salida de tienda
                       </Button>
                     </>
                   )}
@@ -464,7 +464,7 @@ export default function DeliveriesPage() {
                         }}
                         disabled={isProcessing}
                       >
-                        <IconX size={15} /> Cancelar Pedido
+                        <IconX size={15} /> Cancelar pedido
                       </Button>
                       <Button
                         size="sm"
@@ -472,7 +472,7 @@ export default function DeliveriesPage() {
                         onClick={() => handleUpdateStatus(selectedOrder.id, "ON_THE_WAY")}
                         disabled={isProcessing}
                       >
-                        <IconCheck size={15} /> Marcar En Camino
+                        <IconCheck size={15} /> Marcar en camino
                       </Button>
                     </>
                   )}
@@ -489,7 +489,7 @@ export default function DeliveriesPage() {
                         }}
                         disabled={isProcessing}
                       >
-                        <IconX size={15} /> Cancelar Pedido
+                        <IconX size={15} /> Cancelar pedido
                       </Button>
                       <Button
                         size="sm"
@@ -497,23 +497,23 @@ export default function DeliveriesPage() {
                         onClick={() => handleUpdateStatus(selectedOrder.id, "DELIVERED")}
                         disabled={isProcessing}
                       >
-                        <IconCheck size={15} /> Marcar como Entregado
+                        <IconCheck size={15} /> Marcar como entregado
                       </Button>
                     </>
                   )}
                   {selectedOrder.status === "DELIVERED" && (
                     <span className="text-emerald-600 text-xs font-bold flex items-center gap-1 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100">
-                      <IconCircleCheck size={14} /> Entregado con Éxito
+                      <IconCircleCheck size={14} /> Entregado con éxito
                     </span>
                   )}
                   {selectedOrder.status === "REJECTED" && (
                     <span className="text-rose-600 text-xs font-bold flex items-center gap-1 bg-rose-50 px-3 py-1.5 rounded-full border border-rose-100">
-                      <IconCircleX size={14} /> Solicitud Rechazada
+                      <IconCircleX size={14} /> Solicitud rechazada
                     </span>
                   )}
                   {selectedOrder.status === "CANCELLED" && (
                     <span className="text-zinc-500 text-xs font-bold flex items-center gap-1 bg-zinc-50 px-3 py-1.5 rounded-full border border-zinc-200">
-                      <IconCircleX size={14} /> Cancelado por el Cliente
+                      <IconCircleX size={14} /> Cancelado por el cliente
                     </span>
                   )}
 
@@ -537,7 +537,7 @@ export default function DeliveriesPage() {
                 <Card className="border shadow-xs">
                   <CardHeader className="py-4 border-b">
                     <CardTitle className="text-sm font-bold flex items-center gap-2">
-                      <IconClipboardList size={16} className="text-primary" /> Detalle del Pedido
+                      <IconClipboardList size={16} className="text-primary" /> Detalle del pedido
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-0">
@@ -558,7 +558,7 @@ export default function DeliveriesPage() {
                     </div>
 
                     <div className="bg-muted/40 p-4 border-t flex items-center justify-between">
-                      <span className="text-xs font-bold text-muted-foreground uppercase">Total del Pedido</span>
+                      <span className="text-xs font-bold text-muted-foreground">Total del pedido</span>
                       <span className="text-base font-black text-emerald-600 tabular-nums">
                         ${selectedOrder.total.toFixed(2)}
                       </span>
@@ -570,17 +570,17 @@ export default function DeliveriesPage() {
                 <Card className="border shadow-xs flex flex-col">
                   <CardHeader className="py-4 border-b">
                     <CardTitle className="text-sm font-bold flex items-center gap-2">
-                      <IconUser size={16} className="text-primary" /> Información de Envío
+                      <IconUser size={16} className="text-primary" /> Información de envío
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 flex-1 flex flex-col gap-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cliente</span>
-                        <p className="text-xs font-semibold text-foreground">{selectedOrder.clientName || "PWA User"}</p>
+                        <span className="text-[10px] font-bold text-muted-foreground">Cliente</span>
+                        <p className="text-xs font-semibold text-foreground">{selectedOrder.clientName || "PWA user"}</p>
                       </div>
                       <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Teléfono</span>
+                        <span className="text-[10px] font-bold text-muted-foreground">Teléfono</span>
                         <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                           <IconPhone size={13} className="text-muted-foreground" />
                           <a href={`tel:${selectedOrder.phone}`} className="hover:underline text-primary">
@@ -591,7 +591,7 @@ export default function DeliveriesPage() {
                     </div>
 
                     <div className="space-y-1">
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Dirección de Entrega</span>
+                      <span className="text-[10px] font-bold text-muted-foreground">Dirección de entrega</span>
                       <p className="text-xs font-medium text-foreground bg-muted/30 p-2.5 rounded-lg border">
                         {selectedOrder.address || "No especificada por texto"}
                       </p>
@@ -599,11 +599,11 @@ export default function DeliveriesPage() {
 
                     <div className="grid grid-cols-2 gap-4 bg-muted/20 p-3 rounded-lg border border-dashed text-xs">
                       <div>
-                        <span className="text-[9px] font-bold text-muted-foreground uppercase">Latitud</span>
+                        <span className="text-[9px] font-bold text-muted-foreground">Latitud</span>
                         <p className="font-mono font-semibold text-foreground/80 mt-0.5">{selectedOrder.lat.toFixed(6)}</p>
                       </div>
                       <div>
-                        <span className="text-[9px] font-bold text-muted-foreground uppercase">Longitud</span>
+                        <span className="text-[9px] font-bold text-muted-foreground">Longitud</span>
                         <p className="font-mono font-semibold text-foreground/80 mt-0.5">{selectedOrder.lng.toFixed(6)}</p>
                       </div>
                     </div>
@@ -614,7 +614,7 @@ export default function DeliveriesPage() {
                       className="w-full border-primary/20 text-primary bg-primary/5 hover:bg-primary hover:text-primary-foreground gap-2 font-bold text-xs mt-1"
                       onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${selectedOrder.lat},${selectedOrder.lng}`, "_blank")}
                     >
-                      <IconMapPin size={15} /> Ver en Google Maps
+                      <IconMapPin size={15} /> Ver en Google maps
                     </Button>
                   </CardContent>
                 </Card>
@@ -624,14 +624,14 @@ export default function DeliveriesPage() {
               <Card className="border shadow-xs overflow-hidden flex flex-col">
                 <CardHeader className="py-4 border-b">
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
-                    <IconMapPin size={16} className="text-primary" /> Ubicación del Delivery (Mapa)
+                    <IconMapPin size={16} className="text-primary" /> Ubicación del delivery (mapa)
                   </CardTitle>
                 </CardHeader>
                 <div className="relative h-[300px] w-full bg-muted flex items-center justify-center">
                   {!mapboxLoaded && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-card">
                       <span className="size-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-xs text-muted-foreground">Cargando Mapbox...</span>
+                      <span className="text-xs text-muted-foreground">Cargando mapbox...</span>
                     </div>
                   )}
                   <div ref={mapContainerRef} className="w-full h-full" />
@@ -644,7 +644,7 @@ export default function DeliveriesPage() {
                 <IconTruck size={40} className="text-muted-foreground" />
               </div>
               <div className="space-y-1.5">
-                <p className="text-base font-bold text-foreground">Detalle del Delivery</p>
+                <p className="text-base font-bold text-foreground">Detalle del delivery</p>
                 <p className="text-xs text-muted-foreground max-w-sm">
                   Selecciona una solicitud de la barra lateral izquierda para evaluar la ubicación de entrega, revisar los artículos y gestionar el despacho.
                 </p>

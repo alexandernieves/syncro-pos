@@ -67,15 +67,15 @@ export function BranchSwitcher({ disabled }: { disabled?: boolean }) {
   if (!mounted || branches.length === 0) return null;
 
   return (
-    <div className={`flex items-center gap-2 pr-2 ${disabled ? 'opacity-60 grayscale' : ''}`}>
-      <IconMapPin size={16} className="text-muted-foreground" />
+    <div className={`flex items-center gap-1.5 px-2.5 h-9 rounded-lg border border-[#DAD5CC] bg-[#FAF7F2] hover:bg-[#F5F1E8] transition-all shadow-xs ${disabled ? 'opacity-60 grayscale' : ''}`}>
+      <IconMapPin size={15} className="text-[#6B665B] shrink-0" />
       <Select value={selectedBranch} onValueChange={handleBranchChange} disabled={disabled}>
-        <SelectTrigger className="w-[180px] h-8 text-xs font-semibold border-none bg-muted/50 hover:bg-muted transition-colors shadow-none">
-          <SelectValue placeholder="Seleccionar Sucursal" />
+        <SelectTrigger className="h-full w-[160px] text-xs font-bold border-none bg-transparent hover:bg-transparent focus:ring-0 shadow-none px-0 text-[#16140F]">
+          <SelectValue placeholder="Seleccionar sucursal" />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="bg-white border border-[#DAD5CC] rounded-lg shadow-xl">
           {branches.map((b, index) => (
-            <SelectItem key={b.id || `branch-${index}-${b.name}`} value={b.id || `branch-${index}`} className="text-xs">
+            <SelectItem key={b.id || `branch-${index}-${b.name}`} value={b.id || `branch-${index}`} className="text-xs font-semibold cursor-pointer">
               {b.name}
             </SelectItem>
           ))}

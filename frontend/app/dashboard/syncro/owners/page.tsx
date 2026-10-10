@@ -93,7 +93,7 @@ export default function OwnersManagementPage() {
     <div className="p-6 flex flex-col gap-6">
       <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Gestión de Negocios (Owners)</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Gestión de negocios (owners)</h1>
           <p className="text-muted-foreground">Monitorea y gestiona todos los clientes de la plataforma Syncro POS.</p>
         </div>
         <div className="relative w-72">
@@ -110,7 +110,7 @@ export default function OwnersManagementPage() {
       <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
         <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
           <CardHeader>
-            <CardDescription>Total Negocios</CardDescription>
+            <CardDescription>Total negocios</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
               {businesses.length}
             </CardTitle>
@@ -126,25 +126,25 @@ export default function OwnersManagementPage() {
 
         <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
           <CardHeader>
-            <CardDescription>Suscripciones Activas</CardDescription>
+            <CardDescription>Suscripciones activas</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-emerald-600">
               {businesses.filter(b => b.status === "ACTIVE").length}
             </CardTitle>
             <CardAction>
               <Badge variant="outline" className="gap-1 border-emerald-500/20 text-emerald-500">
-                <IconCheck className="size-3" /> ACTIVO
+                <IconCheck className="size-3" /> Activo
               </Badge>
             </CardAction>
           </CardHeader>
           <CardFooter className="flex-col items-start gap-1.5 text-sm">
-            <div className="line-clamp-1 flex gap-2 font-medium">Generando Ingresos</div>
+            <div className="line-clamp-1 flex gap-2 font-medium">Generando ingresos</div>
             <div className="text-muted-foreground italic text-xs">Clientes vigentes</div>
           </CardFooter>
         </Card>
 
         <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
           <CardHeader>
-            <CardDescription>En Período de Prueba</CardDescription>
+            <CardDescription>En período de prueba</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-blue-600">
               {businesses.filter(b => b.status === "TRIAL").length}
             </CardTitle>
@@ -153,7 +153,7 @@ export default function OwnersManagementPage() {
             </CardAction>
           </CardHeader>
           <CardFooter className="flex-col items-start gap-1.5 text-sm">
-            <div className="line-clamp-1 flex gap-2 font-medium">Potenciales Clientes</div>
+            <div className="line-clamp-1 flex gap-2 font-medium">Potenciales clientes</div>
             <div className="text-muted-foreground italic text-xs">Probando el sistema</div>
           </CardFooter>
         </Card>
@@ -169,7 +169,7 @@ export default function OwnersManagementPage() {
             </CardAction>
           </CardHeader>
           <CardFooter className="flex-col items-start gap-1.5 text-sm">
-            <div className="line-clamp-1 flex gap-2 font-medium">Acceso Restringido</div>
+            <div className="line-clamp-1 flex gap-2 font-medium">Acceso restringido</div>
             <div className="text-muted-foreground italic text-xs">Cuentas inactivas</div>
           </CardFooter>
         </Card>
@@ -177,13 +177,13 @@ export default function OwnersManagementPage() {
 
       <Card className="border-none shadow-none bg-transparent">
         <CardHeader className="px-0">
-          <CardTitle>Listado de Clientes</CardTitle>
+          <CardTitle>Listado de clientes</CardTitle>
           <CardDescription>Detalle de cada negocio y su uso del sistema.</CardDescription>
         </CardHeader>
         <div className="rounded-xl border border-border/40 bg-card overflow-hidden">
           <Table>
             <TableHeader className="bg-muted/50">
-              <TableRow className="hover:bg-transparent border-border/10 font-semibold uppercase tracking-tight text-[10px] text-muted-foreground">
+              <TableRow className="hover:bg-transparent border-border/10 font-semibold tracking-tight text-[10px] text-muted-foreground">
                 <TableHead className="px-4 h-10">Negocio</TableHead>
                 <TableHead className="px-4 h-10">Estado</TableHead>
                 <TableHead className="px-4 h-10">Plan</TableHead>
@@ -197,8 +197,8 @@ export default function OwnersManagementPage() {
               {filtered.map((b) => (
                 <TableRow key={b.id} className="hover:bg-muted/30 border-border/5 transition-colors group">
                   <TableCell className="px-4 py-3">
-                    <div className="font-bold text-xs text-white uppercase tracking-tight">{b.name}</div>
-                    <div className="text-[10px] font-mono text-primary/70">{b.id.substring(0, 8)} • {b.ruc || "SIN RUC"}</div>
+                    <div className="font-bold text-xs text-white tracking-tight">{b.name}</div>
+                    <div className="text-[10px] font-mono text-primary/70">{b.id.substring(0, 8)} • {b.ruc || "Sin RUC"}</div>
                   </TableCell>
                   <TableCell className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
@@ -209,7 +209,7 @@ export default function OwnersManagementPage() {
                         "bg-red-500 shadow-red-500/40"
                       )} />
                       <span className={cn(
-                        "text-[10px] font-semibold uppercase tracking-tight",
+                        "text-[10px] font-semibold tracking-tight",
                         b.status === "ACTIVE" ? "text-emerald-500" : 
                         b.status === "TRIAL" ? "text-blue-500" : 
                         "text-red-500"
@@ -219,7 +219,7 @@ export default function OwnersManagementPage() {
                     </div>
                   </TableCell>
                   <TableCell className="px-4 py-3">
-                    <Badge variant="outline" className="text-[9px] font-black uppercase border-primary/20 text-primary">
+                    <Badge variant="outline" className="text-[9px] font-black border-primary/20 text-primary">
                       {b.subscription}
                     </Badge>
                   </TableCell>
@@ -240,17 +240,17 @@ export default function OwnersManagementPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-56 border-border/40 shadow-2xl rounded-xl">
-                        <DropdownMenuLabel className="text-[10px] uppercase text-muted-foreground tracking-widest">Control SaaS</DropdownMenuLabel>
+                        <DropdownMenuLabel className="text-[10px] text-muted-foreground">Control SaaS</DropdownMenuLabel>
                         <DropdownMenuSeparator className="bg-border/10" />
                         <DropdownMenuItem onClick={() => handleStatusChange(b.id, "ACTIVE")} className="text-xs font-semibold gap-2 py-2.5">
-                          <IconCheck className="size-4 text-emerald-500" /> Activar Negocio
+                          <IconCheck className="size-4 text-emerald-500" /> Activar negocio
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleStatusChange(b.id, "SUSPENDED")} className="text-xs font-semibold gap-2 py-2.5 text-red-500">
-                          <IconX className="size-4" /> Suspender Acceso
+                          <IconX className="size-4" /> Suspender acceso
                         </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-border/10" />
                         <DropdownMenuItem className="text-xs font-semibold gap-2 py-2.5">
-                          Ver Detalles de Cliente
+                          Ver detalles de cliente
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

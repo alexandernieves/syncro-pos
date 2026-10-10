@@ -16,7 +16,7 @@ export default function FacturacionPage() {
       <div className="flex items-center justify-between space-y-2">
         <div>
           <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-            Suscripción y Facturación
+            Suscripción y facturación
           </h2>
           <p className="text-muted-foreground mt-1">
             Gestiona tu plan SaaS, cuotas de uso y métodos de pago.
@@ -32,7 +32,7 @@ export default function FacturacionPage() {
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <CardTitle className="text-2xl flex items-center gap-2">
-                  Plan Actual <Badge className="bg-primary/20 text-primary hover:bg-primary/30 border-primary/30 font-bold uppercase tracking-wider">Gratis (Ilimitado)</Badge>
+                  Plan actual <Badge className="bg-primary/20 text-primary hover:bg-primary/30 border-primary/30 font-bold">Gratis (ilimitado)</Badge>
                 </CardTitle>
                 <CardDescription>
                   Estás disfrutando de la fase beta con acceso total.
@@ -91,7 +91,7 @@ export default function FacturacionPage() {
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
-              <IconCreditCard size={18} /> Método de Pago
+              <IconCreditCard size={18} /> Método de pago
             </CardTitle>
             <CardDescription>
               Aún no necesitas registrar una tarjeta.
@@ -104,7 +104,7 @@ export default function FacturacionPage() {
             <p className="text-sm font-medium text-muted-foreground">Sin tarjeta registrada</p>
             <p className="text-xs text-muted-foreground/70 mt-1 mb-4">Añade una tarjeta para estar listo cuando termine el periodo gratuito.</p>
             <Button variant="outline" size="sm" className="w-full" disabled>
-              Añadir Tarjeta (Próximamente)
+              Añadir tarjeta (próximamente)
             </Button>
           </CardContent>
         </Card>
@@ -112,7 +112,7 @@ export default function FacturacionPage() {
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-xl font-bold">Planes Disponibles</h3>
+          <h3 className="text-xl font-bold">Planes disponibles</h3>
           <div className="flex items-center p-1 bg-muted rounded-lg">
             <button 
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${billingCycle === "mensual" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
@@ -124,7 +124,7 @@ export default function FacturacionPage() {
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${billingCycle === "anual" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => setBillingCycle("anual")}
             >
-              Anual <span className="text-[10px] uppercase tracking-wider text-green-500 font-bold ml-1">-20%</span>
+              Anual <span className="text-[10px] text-green-500 font-bold ml-1">-20%</span>
             </button>
           </div>
         </div>
@@ -132,11 +132,11 @@ export default function FacturacionPage() {
         <div className="grid gap-6 md:grid-cols-2">
           {/* Free Plan */}
           <Card className="relative border-primary bg-primary/5 shadow-md shadow-primary/10 transition-all duration-300 hover:shadow-lg hover:shadow-primary/20">
-            <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-lg uppercase tracking-wider">
-              Tu Plan Actual
+            <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-lg">
+              Tu plan actual
             </div>
             <CardHeader>
-              <CardTitle className="text-2xl">Plan Base</CardTitle>
+              <CardTitle className="text-2xl">Plan base</CardTitle>
               <CardDescription>Ideal para comenzar tu negocio.</CardDescription>
               <div className="mt-4 flex items-baseline text-5xl font-extrabold">
                 $0 <span className="ml-1 text-xl font-medium text-muted-foreground">/mes</span>
@@ -163,7 +163,7 @@ export default function FacturacionPage() {
             </CardContent>
             <CardFooter>
               <Button className="w-full bg-primary/20 text-primary hover:bg-primary/30 font-bold" variant="secondary" disabled>
-                Plan Activo
+                Plan activo
               </Button>
             </CardFooter>
           </Card>
@@ -172,7 +172,7 @@ export default function FacturacionPage() {
           <Card className="relative border-muted opacity-80 transition-all duration-300 hover:opacity-100">
             <CardHeader>
               <CardTitle className="text-2xl flex items-center gap-2 text-muted-foreground">
-                <IconCrown size={24} className="text-yellow-500" /> Plan Premium
+                <IconCrown size={24} className="text-yellow-500" /> Plan premium
               </CardTitle>
               <CardDescription>Funciones avanzadas para negocios en crecimiento.</CardDescription>
               <div className="mt-4 flex items-baseline text-5xl font-extrabold opacity-50">
@@ -208,7 +208,7 @@ export default function FacturacionPage() {
       </div>
 
       <div className="pt-6">
-        <h3 className="text-xl font-bold mb-4">Historial de Pagos</h3>
+        <h3 className="text-xl font-bold mb-4">Historial de pagos</h3>
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mb-4 text-muted-foreground">

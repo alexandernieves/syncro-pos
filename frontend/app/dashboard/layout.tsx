@@ -3,7 +3,6 @@
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { MikeWidget } from "@/components/mike-widget";
 
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -115,7 +114,9 @@ export default function DashboardLayout({
       }
     >
       <AppSidebar variant="inset" />
-      <SidebarInset className="rounded-xl overflow-hidden border shadow-sm bg-background/50">
+      {/* La vista es la superficie que sobresale: blanca y elevada sobre el
+          armazon gris del sidebar, con la esquina superior izquierda marcada. */}
+      <SidebarInset className="overflow-clip rounded-2xl border border-border/70 bg-background shadow-[0_18px_40px_-24px_rgba(26,24,21,0.28)]">
         <SiteHeader />
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
@@ -123,7 +124,6 @@ export default function DashboardLayout({
           </div>
         </div>
       </SidebarInset>
-      <MikeWidget />
     </SidebarProvider>
   );
 }

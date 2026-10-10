@@ -21,7 +21,17 @@ import {
   IconChevronDown,
   IconCirclePlusFilled,
   IconMessageCircle,
+  IconBarbell,
+  IconArrowLeft,
+  IconLayoutDashboard,
+  IconId,
+  IconCalendarRepeat,
+  IconDoorEnter,
+  IconBellRinging,
+  IconCalendarEvent,
 } from "@tabler/icons-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import {
   DropdownMenu,
@@ -45,8 +55,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
-import { ModuleCustomizerDialog, PRESET_DEFINITIONS } from "@/components/module-customizer-dialog";
-import { IconAdjustmentsHorizontal, IconSparkles } from "@tabler/icons-react";
+import { IconSparkles } from "@tabler/icons-react";
 
 const data = {
   user: {
@@ -64,7 +73,7 @@ const data = {
       moduleId: "dashboard",
     },
     {
-      title: "Punto de Venta",
+      title: "Punto de venta",
       url: "/pos",
       icon: IconShoppingCart,
       moduleId: "pos",
@@ -75,7 +84,7 @@ const data = {
       icon: IconPackage,
       moduleId: "products",
       items: [
-        { title: "Todos los Productos", url: "/dashboard/productos/todos" },
+        { title: "Todos los productos", url: "/dashboard/productos/todos" },
         { title: "Categorías", url: "/dashboard/productos/categorias" },
       ],
     },
@@ -86,9 +95,9 @@ const data = {
       moduleId: "inventory",
       items: [
         { title: "Almacén", url: "/dashboard/inventario/almacen" },
-        { title: "Compras (OC)", url: "/dashboard/inventario/compras" },
+        { title: "Compras (oc)", url: "/dashboard/inventario/compras" },
         { title: "Traslados", url: "/dashboard/inventario/traslados" },
-        { title: "Alertas de Stock", url: "/dashboard/inventario/alertas" },
+        { title: "Alertas de stock", url: "/dashboard/inventario/alertas" },
         { title: "Conteo", url: "/dashboard/inventario/conteo" },
         { title: "Movimientos", url: "/dashboard/inventario/movimientos" },
       ],
@@ -112,7 +121,7 @@ const data = {
       moduleId: "clients",
       items: [
         { title: "Directorio", url: "/dashboard/clientes" },
-        { title: "Cuentas por Cobrar (Fiado)", url: "/dashboard/clientes/creditos", moduleId: "credit" },
+        { title: "Cuentas por cobrar (fiado)", url: "/dashboard/clientes/creditos", moduleId: "credit" },
         { title: "Chat de WhatsApp", url: "/dashboard/chat", moduleId: "whatsapp" },
       ],
     },
@@ -123,8 +132,8 @@ const data = {
       moduleId: "accounting",
       items: [
         { title: "Resumen", url: "/dashboard/contabilidad" },
-        { title: "Gastos (Caja Chica)", url: "/dashboard/contabilidad/gastos" },
-        { title: "Cierres de Caja (Turnos)", url: "/dashboard/contabilidad/turnos" },
+        { title: "Gastos (caja chica)", url: "/dashboard/contabilidad/gastos" },
+        { title: "Cierres de caja (turnos)", url: "/dashboard/contabilidad/turnos" },
       ],
     },
     {
@@ -134,11 +143,33 @@ const data = {
       moduleId: "historial",
     },
     {
+      title: "Syncro Shop",
+      url: "/dashboard/syncro-shop",
+      icon: IconBuildingStore,
+      moduleId: "syncroshop",
+    },
+    {
       title: "Delivery",
       url: "/dashboard/deliveries",
       icon: IconTruck,
       moduleId: "deliveries",
     },
+    {
+      title: "Gimnasio",
+      url: "/dashboard/gimnasio",
+      icon: IconBarbell,
+      moduleId: "gym",
+    },
+  ],
+  // Gym workspace: replaces the whole menu while inside /dashboard/gimnasio
+  navGym: [
+    { title: "Resumen", url: "/dashboard/gimnasio", icon: IconLayoutDashboard },
+    { title: "Recepción", url: "/dashboard/gimnasio/recepcion", icon: IconDoorEnter },
+    { title: "Socios", url: "/dashboard/gimnasio/socios", icon: IconId },
+    { title: "Clases", url: "/dashboard/gimnasio/clases", icon: IconCalendarEvent },
+    { title: "Planes y membresías", url: "/dashboard/gimnasio/planes", icon: IconCalendarRepeat },
+    { title: "Recordatorios", url: "/dashboard/gimnasio/recordatorios", icon: IconBellRinging },
+    { title: "Punto de venta", url: "/pos", icon: IconShoppingCart },
   ],
   navSecondary: [
     {
@@ -164,16 +195,16 @@ const data = {
   ],
   navSyncro: [
     {
-      title: "Syncro Central",
+      title: "Syncro central",
       url: "/dashboard/syncro",
       icon: IconHexagon,
       items: [
-        { title: "Gestión de Negocios", url: "/dashboard/syncro/owners" },
+        { title: "Gestión de negocios", url: "/dashboard/syncro/owners" },
         { title: "Mensajería", url: "/dashboard/syncro/chat" },
         { title: "Feedback de IA", url: "/dashboard/syncro/feedback" },
         { title: "Suscripciones", url: "/dashboard/syncro/subscriptions" },
-        { title: "Métricas Globales", url: "/dashboard/syncro/stats" },
-        { title: "Auditoría Global", url: "/dashboard/syncro/audit" },
+        { title: "Métricas globales", url: "/dashboard/syncro/stats" },
+        { title: "Auditoría global", url: "/dashboard/syncro/audit" },
       ],
     },
   ],
@@ -181,11 +212,13 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [user, setUser] = React.useState(data.user);
-  const [businessName, setBusinessName] = React.useState("SYNCRO POS");
+  const [businessName, setBusinessName] = React.useState("SYNCRO CRM");
   const [businessType, setBusinessType] = React.useState<string>("GENERAL");
   const [enabledModules, setEnabledModules] = React.useState<string[]>([]);
-  const [customizerOpen, setCustomizerOpen] = React.useState(false);
+  const [isSyncroVendor, setIsSyncroVendor] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
+  const pathname = usePathname() || "";
+  const gymMode = pathname.startsWith("/dashboard/gimnasio");
 
   React.useEffect(() => {
     setMounted(true);
@@ -203,6 +236,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       const storedBusinessType = localStorage.getItem("businessType");
       if (storedBusinessType) {
         setBusinessType(storedBusinessType);
+      }
+
+      const storedVendor = localStorage.getItem("isSyncroVendor");
+      if (storedVendor !== null) {
+        setIsSyncroVendor(storedVendor === "true");
       }
 
       const storedModules = localStorage.getItem("enabledModules");
@@ -224,12 +262,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           if (res.ok) {
             const config = await res.json();
             if (config) {
+              if (config.isSyncroVendor !== undefined) {
+                setIsSyncroVendor(Boolean(config.isSyncroVendor));
+                localStorage.setItem("isSyncroVendor", String(config.isSyncroVendor));
+              }
+
               if (config.businessName) {
                 setBusinessName(config.businessName);
                 localStorage.setItem("businessName", config.businessName);
               } else {
-                setBusinessName("SYNCRO POS");
-                localStorage.setItem("businessName", "SYNCRO POS");
+                setBusinessName("SYNCRO CRM");
+                localStorage.setItem("businessName", "SYNCRO CRM");
               }
 
               if (config.businessType) {
@@ -250,7 +293,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       };
       fetchConfig();
 
-      const handleUpdate = () => fetchConfig();
+      const handleUpdate = () => {
+        const storedVendor = localStorage.getItem("isSyncroVendor");
+        if (storedVendor !== null) {
+          setIsSyncroVendor(storedVendor === "true");
+        }
+        fetchConfig();
+      };
       window.addEventListener("settingsUpdated", handleUpdate);
       return () => window.removeEventListener("settingsUpdated", handleUpdate);
     }
@@ -262,26 +311,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     const isAdmin = user.role === "ownerpos" || user.role === "admin";
 
-    // Filtrar primero por módulos activos (si está configurado)
-    let moduleFiltered = data.navMain;
-    if (enabledModules && enabledModules.length > 0) {
-      moduleFiltered = data.navMain
-        .filter((item) => {
-          if (!item.moduleId || item.moduleId === "dashboard") return true;
+    // Filter items based on isSyncroVendor toggle and enabledModules
+    let moduleFiltered = data.navMain
+      .filter((item) => {
+        if (item.moduleId === "syncroshop") {
+          return isSyncroVendor;
+        }
+        if (!item.moduleId || item.moduleId === "dashboard") return true;
+        if (enabledModules && enabledModules.length > 0) {
           return enabledModules.includes(item.moduleId);
-        })
-        .map((item) => {
-          // Filtrar también sub-ítems específicos si tienen moduleId
-          if (item.items && item.items.length > 0) {
-            const filteredSubItems = item.items.filter((sub: any) => {
-              if (!sub.moduleId) return true;
-              return enabledModules.includes(sub.moduleId);
-            });
-            return { ...item, items: filteredSubItems };
-          }
-          return item;
-        });
-    }
+        }
+        return true;
+      })
+      .map((item) => {
+        if (enabledModules && enabledModules.length > 0 && item.items && item.items.length > 0) {
+          const filteredSubItems = item.items.filter((sub: any) => {
+            if (!sub.moduleId) return true;
+            return enabledModules.includes(sub.moduleId);
+          });
+          return { ...item, items: filteredSubItems };
+        }
+        return item;
+      });
 
     if (isAdmin) return moduleFiltered;
     if (!user.permissions || user.permissions.length === 0) return [];
@@ -299,11 +350,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       if (p.includes("clientes") && urlStr.includes("/clientes")) return true;
       if (p.includes("contabilidad") && urlStr.includes("/contabilidad")) return true;
       if (p.includes("historial") && urlStr.includes("/historial")) return true;
+      if (item.moduleId === "syncroshop") return isSyncroVendor;
       if (urlStr.includes("/deliveries")) return true;
+      if (p.includes("gimnasio") && urlStr.includes("/gimnasio")) return true;
 
       return false;
     });
-  }, [user, enabledModules]);
+  }, [user, isSyncroVendor, enabledModules]);
 
   const filteredNavSecondary = React.useMemo(() => {
     const isSyncro = user.role === "syncropos";
@@ -333,55 +386,61 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <>
       <Sidebar collapsible="icon" {...props}>
-        <SidebarHeader>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="lg"
-                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+        {gymMode ? (
+          <SidebarHeader className="gap-0 p-0">
+            <div className="px-3 pb-1 pt-3">
+              <Link
+                href="/dashboard"
+                title="Volver a Syncro"
+                aria-label="Volver a Syncro"
+                className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
               >
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden shrink-0">
-                  <img src="/syncro.png" alt="Logo" className="size-full object-cover rounded-md" />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="truncate font-semibold text-base">{businessName}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="truncate text-xs text-muted-foreground">
-                      {user.role === "syncropos" ? "Centro de Soporte" : "Panel de Control"}
-                    </span>
-                    {businessType && businessType !== "GENERAL" && (
-                      <span className="text-[9px] px-1.5 py-0.2 rounded-full font-medium bg-primary/15 text-primary border border-primary/20 shrink-0">
-                        {businessType === "BODEGA" ? "Bodega" : businessType === "MODA" ? "Moda" : businessType}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarHeader>
-        <SidebarContent>
-          <NavMain items={filteredNavMain} />
-
-          {(user.role === "ownerpos" || user.role === "admin") && (
-            <div className="px-3 py-2 mt-2">
-              <button
-                type="button"
-                onClick={() => setCustomizerOpen(true)}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border border-border/70 hover:border-primary/50 bg-card hover:bg-muted/40 transition-colors group text-foreground cursor-pointer shadow-2xs"
-              >
-                <span className="flex items-center gap-2">
-                  <IconAdjustmentsHorizontal className="w-4 h-4 text-primary group-hover:rotate-12 transition-transform" />
-                  <span>Personalizar Menú</span>
-                </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground group-hover:text-primary group-hover:bg-primary/10">
-                  Adaptar
-                </span>
-              </button>
+                <IconArrowLeft size={20} />
+              </Link>
             </div>
-          )}
+          </SidebarHeader>
+        ) : (
+        <SidebarHeader>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  size="lg"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                >
+                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden shrink-0">
+                    <img src="/syncro.png" alt="Logo" className="size-full object-cover rounded-md" />
+                  </div>
+                  <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate font-semibold text-base">{businessName}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="truncate text-xs text-muted-foreground">
+                        {user.role === "syncropos" ? "Centro de soporte" : "Panel de control"}
+                      </span>
+                      {businessType && businessType !== "GENERAL" && (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded-full font-medium bg-primary/15 text-primary border border-primary/20 shrink-0">
+                          {businessType === "BODEGA" ? "Bodega" : businessType === "MODA" ? "Moda" : businessType}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarHeader>
+        )}
+        <SidebarContent className="overflow-x-hidden">
+          {/* The menu slides when switching between Syncro and the gym workspace */}
+          <div key={gymMode ? "gym" : "main"} className={gymMode ? "animate-in slide-in-from-right-full fade-in duration-300" : "animate-in slide-in-from-left-full fade-in duration-300"}>
+            {gymMode ? (
+              <>
+                <NavMain items={data.navGym} />
+              </>
+            ) : (
+              <NavMain items={filteredNavMain} />
+            )}
+          </div>
 
           <NavSecondary items={filteredNavSecondary} className="mt-auto" />
         </SidebarContent>
@@ -389,13 +448,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <NavUser user={user} />
         </SidebarFooter>
       </Sidebar>
-
-      <ModuleCustomizerDialog
-        open={customizerOpen}
-        onOpenChange={setCustomizerOpen}
-        currentType={businessType}
-        currentModules={enabledModules}
-      />
     </>
   );
 }

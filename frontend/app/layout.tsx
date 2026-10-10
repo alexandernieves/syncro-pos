@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Quicksand, Caveat } from "next/font/google";
+import { Quicksand, Caveat, Inter } from "next/font/google";
 
 import "./globals.css";
 
@@ -16,6 +16,15 @@ const quicksand = Quicksand({
   display: "swap",
 });
 
+// Inter lleva la interfaz: neutra, pensada para pantalla, con acentos y
+// signos de apertura (¿ ¡ ñ) bien dibujados y cifras de ancho fijo para que
+// las columnas de importes no bailen.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
 const caveat = Caveat({
   subsets: ["latin"],
   variable: "--font-caveat",
@@ -23,7 +32,7 @@ const caveat = Caveat({
 });
 
 export const metadata: Metadata = {
-  title: "SYNCRO POS",
+  title: "Syncro CRM",
   description: "Sistema de gestión y auditoría comercial premium.",
   manifest: "/manifest.json",
   icons: {
@@ -53,7 +62,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" translate="no" className={cn("notranslate bg-[#09090b]", quicksand.variable, caveat.variable)} suppressHydrationWarning>
+    <html lang="es" translate="no" className={cn("notranslate", inter.variable, quicksand.variable, caveat.variable)} suppressHydrationWarning>
       <body
         suppressHydrationWarning
         className={cn(
@@ -101,12 +110,14 @@ export default function RootLayout({
             `
           }}
         />
+        {/* Una sola paleta para toda la app: forcedTheme fija el tema y deja
+            sin efecto cualquier conmutador de claro/oscuro que quede suelto. */}
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          defaultTheme="light"
+          forcedTheme="light"
+          enableSystem={false}
           disableTransitionOnChange
-          enableColorScheme
         >
           <NotificationsProvider>
             <CurrencyProvider>

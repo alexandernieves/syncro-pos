@@ -1,5 +1,6 @@
 "use client"
 
+import { SyncroShopBadges } from "@/components/syncro-shop/syncro-shop-badges"
 import * as React from "react"
 import { API_URL } from "@/lib/constants"
 import { z } from "zod"
@@ -45,6 +46,8 @@ export const inventorySchema = z.object({
   limit: z.string(),         // Mínimo
   reviewer: z.string(),      // Proveedor / Categoría
   productId: z.string().optional(),
+  shopPublished: z.boolean().optional(),
+  shopFeatured: z.boolean().optional(),
 })
 
 export const inventoryColumns: ColumnDef<z.infer<typeof inventorySchema>>[] = [
@@ -98,7 +101,7 @@ export const inventoryColumns: ColumnDef<z.infer<typeof inventorySchema>>[] = [
   },
   {
     accessorKey: "header",
-    header: "Producto / Especificación",
+    header: "Producto / especificación",
     cell: ({ row }) => {
       return (
         <div className="flex items-center gap-3 cursor-pointer group/item">
@@ -107,7 +110,8 @@ export const inventoryColumns: ColumnDef<z.infer<typeof inventorySchema>>[] = [
           </div>
           <div className="flex flex-col text-left">
             <span className="text-sm font-bold text-foreground group-hover/item:text-primary transition-colors line-clamp-1">{row.original.header}</span>
-            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">{row.original.type}</span>
+            <span className="text-[10px] text-muted-foreground font-medium tracking-tight">{row.original.type}</span>
+            <SyncroShopBadges published={row.original.shopPublished} featured={row.original.shopFeatured} className="mt-1" />
           </div>
         </div>
       )
@@ -116,7 +120,7 @@ export const inventoryColumns: ColumnDef<z.infer<typeof inventorySchema>>[] = [
   },
   {
     accessorKey: "type",
-    header: "SKU / Código",
+    header: "SKU / código",
     cell: ({ row }) => (
       <div className="w-32">
         <code className="text-[10px] font-light border border-muted-foreground/30 px-1.5 py-0.5 rounded text-muted-foreground bg-transparent">
@@ -127,7 +131,7 @@ export const inventoryColumns: ColumnDef<z.infer<typeof inventorySchema>>[] = [
   },
   {
     accessorKey: "status",
-    header: "Estado Stock",
+    header: "Estado stock",
     cell: ({ row }) => {
       const isOk = row.original.status === "En Stock";
       const isLow = row.original.status === "Stock Bajo";
@@ -170,7 +174,7 @@ export const inventoryColumns: ColumnDef<z.infer<typeof inventorySchema>>[] = [
   },
   {
     accessorKey: "reviewer",
-    header: "Proveedor / Categoría",
+    header: "Proveedor / categoría",
     cell: ({ row }) => {
       const isAssigned = row.original.reviewer !== "Asignar"
 
@@ -192,8 +196,8 @@ export const inventoryColumns: ColumnDef<z.infer<typeof inventorySchema>>[] = [
               <SelectValue placeholder="Asignar" />
             </SelectTrigger>
             <SelectContent align="end">
-              <SelectItem value="Proveedor A">Proveedor A</SelectItem>
-              <SelectItem value="Proveedor B">Proveedor B</SelectItem>
+              <SelectItem value="Proveedor A">Proveedor a</SelectItem>
+              <SelectItem value="Proveedor B">Proveedor b</SelectItem>
             </SelectContent>
           </Select>
         </>
@@ -227,7 +231,7 @@ function ActionsCell({ row }: { row: any }) {
           className="text-xs"
           onClick={() => router.push(`/dashboard/inventario/movimientos?variantId=${variantId}`)}
         >
-          Kardex de Movimientos
+          Kardex de movimientos
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

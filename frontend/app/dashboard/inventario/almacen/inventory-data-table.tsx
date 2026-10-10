@@ -174,7 +174,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
   },
   {
     accessorKey: "header",
-    header: "Producto / Especificación",
+    header: "Producto / especificación",
     cell: ({ row }) => {
       return <TableCellViewer item={row.original} />
     },
@@ -182,7 +182,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
   },
   {
     accessorKey: "type",
-    header: "SKU / Código",
+    header: "SKU / código",
     cell: ({ row }) => (
       <div className="w-32">
         <code className="text-[10px] font-bold bg-muted/50 px-1.5 py-0.5 rounded text-muted-foreground">
@@ -193,7 +193,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
   },
   {
     accessorKey: "status",
-    header: "Estado Stock",
+    header: "Estado stock",
     cell: ({ row }) => {
         const isOk = row.original.status === "En Stock";
         const isLow = row.original.status === "Stock Bajo";
@@ -264,7 +264,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
   },
   {
     accessorKey: "reviewer",
-    header: "Proveedor / Categoría",
+    header: "Proveedor / categoría",
     cell: ({ row }) => {
       const isAssigned = row.original.reviewer !== "Asignar"
 
@@ -286,8 +286,8 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
               <SelectValue placeholder="Asignar" />
             </SelectTrigger>
             <SelectContent align="end">
-              <SelectItem value="Proveedor A">Proveedor A</SelectItem>
-              <SelectItem value="Proveedor B">Proveedor B</SelectItem>
+              <SelectItem value="Proveedor A">Proveedor a</SelectItem>
+              <SelectItem value="Proveedor B">Proveedor b</SelectItem>
             </SelectContent>
           </Select>
         </>
@@ -309,7 +309,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48 border-none shadow-2xl rounded-xl">
-          <DropdownMenuItem className="text-xs">Kardex de Movimientos</DropdownMenuItem>
+          <DropdownMenuItem className="text-xs">Kardex de movimientos</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     ),
@@ -481,7 +481,7 @@ export function InventoryDataTable({
           </DropdownMenu>
           <Button variant="default" size="sm" className="h-9 gap-2 shadow-md rounded-lg font-bold">
             <IconPlus size={16} />
-            <span className="hidden lg:inline text-xs">Añadir Sección</span>
+            <span className="hidden lg:inline text-xs">Añadir sección</span>
           </Button>
         </div>
       </div>
@@ -503,7 +503,7 @@ export function InventoryDataTable({
                   <TableRow key={headerGroup.id} className="hover:bg-transparent border-b">
                     {headerGroup.headers.map((header) => {
                       return (
-                        <TableHead key={header.id} colSpan={header.colSpan} className="text-muted-foreground font-black text-[10px] uppercase tracking-widest h-10">
+                        <TableHead key={header.id} colSpan={header.colSpan} className="text-muted-foreground font-black text-[10px] h-10">
                           {header.isPlaceholder
                             ? null
                             : flexRender(
@@ -542,13 +542,13 @@ export function InventoryDataTable({
         </div>
         
         <div className="flex items-center justify-between px-2 py-4">
-          <div className="hidden flex-1 text-[11px] font-bold uppercase tracking-tight text-muted-foreground/60 lg:flex">
+          <div className="hidden flex-1 text-[11px] font-bold tracking-tight text-muted-foreground/60 lg:flex">
             {table.getFilteredSelectedRowModel().rows.length} de{" "}
             {table.getFilteredRowModel().rows.length} registros seleccionados
           </div>
           <div className="flex w-full items-center gap-8 lg:w-fit">
             <div className="hidden items-center gap-2 lg:flex">
-              <Label htmlFor="rows-per-page" className="text-[10px] font-black uppercase tracking-widest opacity-60">
+              <Label htmlFor="rows-per-page" className="text-[10px] font-black opacity-60">
                 Registros
               </Label>
               <Select
@@ -571,7 +571,7 @@ export function InventoryDataTable({
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex w-fit items-center justify-center text-xs font-bold uppercase tracking-tighter opacity-80">
+            <div className="flex w-fit items-center justify-center text-xs font-bold tracking-tighter opacity-80">
               Página {table.getState().pagination.pageIndex + 1} de{" "}
               {table.getPageCount() || 1}
             </div>
@@ -624,12 +624,12 @@ export function InventoryDataTable({
         className="flex flex-col px-0"
       >
         <div className="aspect-video w-full flex-1 rounded-2xl border border-dashed border-muted/40 bg-muted/10 flex items-center justify-center text-muted-foreground italic text-sm">
-            Sección de Historial de Movimientos
+            Sección de historial de movimientos
         </div>
       </TabsContent>
       <TabsContent value="key-personnel" className="flex flex-col px-0">
         <div className="aspect-video w-full flex-1 rounded-2xl border border-dashed border-muted/40 bg-muted/10 flex items-center justify-center text-muted-foreground italic text-sm">
-            Sección de Alertas Críticas
+            Sección de alertas críticas
         </div>
       </TabsContent>
       <TabsContent
@@ -637,7 +637,7 @@ export function InventoryDataTable({
         className="flex flex-col px-0"
       >
         <div className="aspect-video w-full flex-1 rounded-2xl border border-dashed border-muted/40 bg-muted/10 flex items-center justify-center text-muted-foreground italic text-sm">
-            Repositorio de Documentos Adjuntos
+            Repositorio de documentos adjuntos
         </div>
       </TabsContent>
     </Tabs>
@@ -676,7 +676,7 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
             </div>
             <div className="flex flex-col text-left">
                 <span className="text-sm font-bold text-foreground group-hover/item:text-primary transition-colors line-clamp-1">{item.header}</span>
-                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">{item.type}</span>
+                <span className="text-[10px] text-muted-foreground font-medium tracking-tight">{item.type}</span>
             </div>
         </div>
       </DrawerTrigger>
@@ -751,16 +751,16 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
           )}
           <form className="flex flex-col gap-5">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="header" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">Nombre del Producto</Label>
+              <Label htmlFor="header" className="text-[10px] font-black text-muted-foreground/70">Nombre del producto</Label>
               <Input id="header" defaultValue={item.header} className="h-10 rounded-xl bg-muted/20 border-none font-bold" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="type" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">SKU / Código</Label>
+                <Label htmlFor="type" className="text-[10px] font-black text-muted-foreground/70">SKU / código</Label>
                 <Input id="type" defaultValue={item.type} className="h-10 rounded-xl bg-muted/20 border-none font-mono text-xs font-bold" />
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="status" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">Estado</Label>
+                <Label htmlFor="status" className="text-[10px] font-black text-muted-foreground/70">Estado</Label>
                 <Select defaultValue={item.status}>
                   <SelectTrigger id="status" className="w-full h-10 rounded-xl bg-muted/20 border-none font-bold">
                     <SelectValue placeholder="Seleccionar" />
@@ -768,38 +768,38 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
                   <SelectContent className="rounded-xl border-none shadow-2xl">
                     <SelectItem value="En Stock" className="text-xs">En Stock</SelectItem>
                     <SelectItem value="Stock Bajo" className="text-xs">Stock Bajo</SelectItem>
-                    <SelectItem value="Sin Stock" className="text-xs">Sin Stock</SelectItem>
+                    <SelectItem value="Sin Stock" className="text-xs">Sin stock</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="target" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">Existencia Actual</Label>
+                <Label htmlFor="target" className="text-[10px] font-black text-muted-foreground/70">Existencia actual</Label>
                 <Input id="target" defaultValue={item.target} className="h-10 rounded-xl bg-muted/20 border-none font-black text-primary text-lg" />
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="limit" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">Mínimo Requerido</Label>
+                <Label htmlFor="limit" className="text-[10px] font-black text-muted-foreground/70">Mínimo requerido</Label>
                 <Input id="limit" defaultValue={item.limit} className="h-10 rounded-xl bg-muted/20 border-none font-bold" />
               </div>
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="reviewer" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">Proveedor Principal</Label>
+              <Label htmlFor="reviewer" className="text-[10px] font-black text-muted-foreground/70">Proveedor principal</Label>
               <Select defaultValue={item.reviewer}>
                 <SelectTrigger id="reviewer" className="w-full h-10 rounded-xl bg-muted/20 border-none font-bold">
                   <SelectValue placeholder="Seleccionar proveedor" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border-none shadow-2xl">
-                  <SelectItem value="Proveedor A" className="text-xs">Proveedor A</SelectItem>
-                  <SelectItem value="Proveedor B" className="text-xs">Proveedor B</SelectItem>
-                  <SelectItem value="Proveedor C" className="text-xs">Proveedor C</SelectItem>
+                  <SelectItem value="Proveedor A" className="text-xs">Proveedor a</SelectItem>
+                  <SelectItem value="Proveedor B" className="text-xs">Proveedor b</SelectItem>
+                  <SelectItem value="Proveedor C" className="text-xs">Proveedor c</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </form>
         </div>
         <DrawerFooter className="flex-row gap-2 border-t pt-4 bg-muted/5">
-          <Button className="flex-1 rounded-xl h-11 font-bold shadow-lg">Guardar Cambios</Button>
+          <Button className="flex-1 rounded-xl h-11 font-bold shadow-lg">Guardar cambios</Button>
           <DrawerClose asChild>
             <Button variant="outline" className="flex-1 rounded-xl h-11 font-bold">Cancelar</Button>
           </DrawerClose>

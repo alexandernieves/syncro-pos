@@ -312,7 +312,7 @@ export default function ClientsPage() {
   };
   const handleSaveClient = async () => {
     if (!formData.name.trim()) return toast.error("El nombre es obligatorio");
-    if (!formData.documentId.trim()) return toast.error("La Cédula / RIF es obligatoria");
+    if (!formData.documentId.trim()) return toast.error("La cédula / RIF es obligatoria");
     setIsSaving(true);
     try {
       const token = localStorage.getItem("token");
@@ -373,7 +373,7 @@ export default function ClientsPage() {
     },
     {
         accessorKey: "name",
-        header: "Cliente / Identificación",
+        header: "Cliente / identificación",
         cell: ({ row }) => (
             <div className="flex items-center gap-3">
                 <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold text-[10px] border border-primary/20">
@@ -388,7 +388,7 @@ export default function ClientsPage() {
     },
     {
         accessorKey: "contact",
-        header: "Contacto y Correo",
+        header: "Contacto y correo",
         cell: ({ row }) => (
             <div className="flex flex-col gap-0.5">
                 <div className="flex items-center gap-2 text-xs font-medium">
@@ -427,7 +427,7 @@ export default function ClientsPage() {
                         )}>
                             {score.toFixed(0)} PTS
                         </Badge>
-                        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+                        <span className="text-[10px] font-medium text-muted-foreground">
                             {score >= 85 ? "Excelente" : score >= 70 ? "Bueno" : score >= 50 ? "Regular" : "Riesgo"}
                         </span>
                     </div>
@@ -447,7 +447,7 @@ export default function ClientsPage() {
     */
     {
         accessorKey: "sales",
-        header: () => <div className="w-full text-right">Última Operación</div>,
+        header: () => <div className="w-full text-right">Última operación</div>,
         cell: ({ row }) => {
             const lastSale = row.original.sales?.[row.original.sales.length - 1];
             return (
@@ -455,7 +455,7 @@ export default function ClientsPage() {
                     <span className="text-[11px] font-semibold">
                         {lastSale ? new Date(lastSale.createdAt).toLocaleDateString() : 'Sin actividad'}
                     </span>
-                    <span className="text-[10px] text-muted-foreground uppercase font-black tracking-tighter opacity-30">Auditoría</span>
+                    <span className="text-[10px] text-muted-foreground font-black tracking-tighter opacity-30">Auditoría</span>
                 </div>
             )
         }
@@ -496,12 +496,12 @@ export default function ClientsPage() {
                       setSelectedClient(row.original);
                       setIsQRModalOpen(true);
                   }}>
-                      Generar QR de Acceso
+                      Generar QR de acceso
                   </DropdownMenuItem>
                   <DropdownMenuItem className="text-xs" onClick={() => {
                       handleOpenActivationModal(row.original);
                   }}>
-                      Generar Código PWA
+                      Generar código PWA
                   </DropdownMenuItem>
                   <DropdownMenuItem className="text-xs" onClick={() => {
                       setSelectedClient(row.original);
@@ -530,7 +530,7 @@ export default function ClientsPage() {
       <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-3">
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
-              <CardDescription>Total Clientes</CardDescription>
+              <CardDescription>Total clientes</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
                 {clients.length}
               </CardTitle>
@@ -553,7 +553,7 @@ export default function ClientsPage() {
 
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
-              <CardDescription>Clientes Activos</CardDescription>
+              <CardDescription>Clientes activos</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
                 {clients.filter(c => c.isActive).length}
               </CardTitle>
@@ -576,7 +576,7 @@ export default function ClientsPage() {
 
           <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader>
-              <CardDescription>Ticket Promedio</CardDescription>
+              <CardDescription>Ticket promedio</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-amber-600">
                 {formatCurrency(ticketPromedio)}
               </CardTitle>
@@ -604,9 +604,9 @@ export default function ClientsPage() {
       <Tabs defaultValue="perfiles" className="w-full flex flex-col gap-6">
         <div className="flex items-center justify-between px-4 lg:px-6">
           <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1">
-            <TabsTrigger value="perfiles">Cartera de Clientes</TabsTrigger>
+            <TabsTrigger value="perfiles">Cartera de clientes</TabsTrigger>
             <TabsTrigger value="abonos" className="relative" onClick={loadSubmissions}>
-              Abonos por Validar
+              Abonos por validar
               {submissions.filter(s => s.status === 'PENDING').length > 0 && (
                 <span className="ml-2 inline-flex items-center justify-center size-4 rounded-full bg-amber-500 text-white text-[9px] font-black">
                   {submissions.filter(s => s.status === 'PENDING').length}
@@ -625,7 +625,7 @@ export default function ClientsPage() {
                 setIsEditModalOpen(true);
             }}>
                 <IconPlus size={16} />
-                <span className="hidden lg:inline">Agregar Cliente</span>
+                <span className="hidden lg:inline">Agregar cliente</span>
                 <span className="lg:hidden">Nuevo</span>
             </Button>
           </div>
@@ -658,18 +658,18 @@ export default function ClientsPage() {
               </div>
               <div className="text-center space-y-1">
                 <p className="font-bold text-sm">Sin abonos pendientes</p>
-                <p className="text-xs text-muted-foreground">Aquí aparecerán los comprobantes de Pago Móvil enviados por tus clientes</p>
+                <p className="text-xs text-muted-foreground">Aquí aparecerán los comprobantes de pago móvil enviados por tus clientes</p>
               </div>
             </div>
           ) : (
             <div className="rounded-2xl border overflow-hidden bg-card shadow-xs">
               {/* Table Header */}
               <div className="grid grid-cols-[1fr_1fr_120px_130px_110px] gap-4 px-5 py-3 bg-muted/40 border-b">
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Cliente</span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Referencia / Fecha</span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-right">Monto</span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center">Estado</span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-right">Acción</span>
+                <span className="text-[10px] font-black text-muted-foreground">Cliente</span>
+                <span className="text-[10px] font-black text-muted-foreground">Referencia / fecha</span>
+                <span className="text-[10px] font-black text-muted-foreground text-right">Monto</span>
+                <span className="text-[10px] font-black text-muted-foreground text-center">Estado</span>
+                <span className="text-[10px] font-black text-muted-foreground text-right">Acción</span>
               </div>
               <div className="divide-y divide-border/50">
                 {submissions.map((sub) => (
@@ -695,7 +695,7 @@ export default function ClientsPage() {
                     </div>
                     {/* Status Badge */}
                     <div className="flex justify-center">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide border ${
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black   border ${
                         sub.status === 'PENDING' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
                         sub.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
                         'bg-rose-500/10 text-rose-600 border-rose-500/20'
@@ -719,7 +719,7 @@ export default function ClientsPage() {
                         }}
                       >
                         <IconEye size={13} />
-                        Ver Comprobante
+                        Ver comprobante
                       </Button>
                     </div>
                   </div>
@@ -750,20 +750,20 @@ export default function ClientsPage() {
             {/* Current Status Card */}
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded-xl bg-muted/50 border space-y-1">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Deuda Actual</span>
+                <span className="text-[10px] font-bold text-muted-foreground">Deuda actual</span>
                 <div className="text-xl font-bold text-rose-600 tabular-nums">${selectedClient?.currentDebt.toFixed(2)}</div>
               </div>
               <div className="p-3 rounded-xl bg-muted/50 border space-y-1">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Cupo Disponible</span>
+                <span className="text-[10px] font-bold text-muted-foreground">Cupo disponible</span>
                 <div className="text-xl font-bold text-emerald-600 tabular-nums">
-                    {selectedClient?.creditLimit === 0 ? "Sin Límite" : `$${((selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0)).toFixed(2)}`}
+                    {selectedClient?.creditLimit === 0 ? "Sin límite" : `$${((selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0)).toFixed(2)}`}
                 </div>
               </div>
             </div>
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">Nuevo Límite de Crédito ($)</label>
+                <label className="text-[11px] font-bold text-muted-foreground tracking-tight">Nuevo Límite de Crédito ($)</label>
                 <div className="relative">
                   <IconCreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                   <Input 
@@ -777,7 +777,7 @@ export default function ClientsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">Pago Inicial (%)</label>
+                  <label className="text-[11px] font-bold text-muted-foreground tracking-tight">Pago inicial (%)</label>
                   <Input 
                     type="number" 
                     value={downPayment} 
@@ -786,7 +786,7 @@ export default function ClientsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">Ciclo Pago (Días)</label>
+                  <label className="text-[11px] font-bold text-muted-foreground tracking-tight">Ciclo pago (días)</label>
                   <Input 
                     type="number" 
                     value={cycle} 
@@ -798,7 +798,7 @@ export default function ClientsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">Cuotas Máximas</label>
+                  <label className="text-[11px] font-bold text-muted-foreground tracking-tight">Cuotas máximas</label>
                   <Input 
                     type="number" 
                     placeholder="Por defecto"
@@ -808,7 +808,7 @@ export default function ClientsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">Frecuencia Cuotas (Días)</label>
+                  <label className="text-[11px] font-bold text-muted-foreground tracking-tight">Frecuencia cuotas (días)</label>
                   <Input 
                     type="number" 
                     placeholder="Por defecto"
@@ -820,7 +820,7 @@ export default function ClientsPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">Registrar Abono / Pago ($)</label>
+                <label className="text-[11px] font-bold text-muted-foreground tracking-tight">Registrar Abono / Pago ($)</label>
                 <div className="relative">
                   <IconCash className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                   <Input 
@@ -843,7 +843,7 @@ export default function ClientsPage() {
                 disabled={isSaving}
                 className="rounded-xl h-11 px-8 font-bold text-xs bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/20"
             >
-                {isSaving ? "Guardando..." : "Actualizar Crédito"}
+                {isSaving ? "Guardando..." : "Actualizar crédito"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -856,8 +856,8 @@ export default function ClientsPage() {
               <div className="size-16 bg-white rounded-2xl flex items-center justify-center shadow-xl shadow-black/10">
                   <IconQrcode size={32} className="text-emerald-500" />
               </div>
-              <DialogTitle className="text-xl font-black tracking-tighter mt-2">SYNCRO CREDIT</DialogTitle>
-              <DialogDescription className="text-xs font-bold text-emerald-950/60 uppercase tracking-widest">Portal Personal de Cliente</DialogDescription>
+              <DialogTitle className="text-xl font-black tracking-tighter mt-2">Syncro Credit</DialogTitle>
+              <DialogDescription className="text-xs font-bold text-emerald-950/60">Portal personal de cliente</DialogDescription>
           </DialogHeader>
 
           <div className="p-8 flex flex-col items-center gap-6">
@@ -881,7 +881,7 @@ export default function ClientsPage() {
 
               <div className="text-center space-y-1">
                   <h4 className="text-sm font-bold tracking-tight">{selectedClient?.name}</h4>
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">{selectedClient?.documentId}</p>
+                  <p className="text-[10px] text-zinc-500 font-bold">{selectedClient?.documentId}</p>
               </div>
 
               <div className="w-full grid grid-cols-2 gap-3">
@@ -923,22 +923,22 @@ export default function ClientsPage() {
               </div>
               
               <div className="space-y-1">
-                  <DialogTitle className="text-lg font-bold tracking-tight">Activar Cuenta PWA</DialogTitle>
+                  <DialogTitle className="text-lg font-bold tracking-tight">Activar cuenta PWA</DialogTitle>
                   <DialogDescription className="text-xs text-muted-foreground max-w-[280px] mx-auto">
                       Define el crédito disponible y genera el código de activación para el cliente.
                   </DialogDescription>
               </div>
 
               <div className="border-t border-border/50 w-full pt-3 pb-1 space-y-1">
-                  <p className="text-[10px] text-muted-foreground uppercase font-black tracking-wider">Cliente</p>
+                  <p className="text-[10px] text-muted-foreground font-black">Cliente</p>
                   <h4 className="text-sm font-extrabold text-foreground">{selectedClient?.name}</h4>
                   <p className="text-[10px] font-mono text-muted-foreground bg-muted/50 px-2 py-0.5 rounded border border-border/40 inline-block mt-0.5">{selectedClient?.documentId}</p>
               </div>
 
               {/* Credit Limit Input */}
               <div className="w-full space-y-2">
-                  <label className="text-[11px] font-black text-muted-foreground uppercase tracking-wider text-left w-full block">
-                      Crédito a Habilitar (USD)
+                  <label className="text-[11px] font-black text-muted-foreground text-left w-full block">
+                      Crédito a habilitar (USD)
                   </label>
                   <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-black text-muted-foreground">$</span>
@@ -961,8 +961,8 @@ export default function ClientsPage() {
               {activationCode ? (
                   <>
                       <div className="py-4 px-6 bg-muted/30 rounded-xl border border-border/80 w-full text-center shadow-inner">
-                          <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Código de Activación</p>
-                          <span className="text-3xl font-black font-mono tracking-[0.3em] pl-[0.3em] text-amber-600 dark:text-amber-400">
+                          <p className="text-[9px] text-muted-foreground font-bold mb-1">Código de activación</p>
+                          <span className="text-3xl font-black font-mono pl-[0.3em] text-amber-600 dark:text-amber-400">
                               {activationCode}
                           </span>
                       </div>
@@ -974,7 +974,7 @@ export default function ClientsPage() {
                                 toast.success("Código copiado al portapapeles");
                             }}
                           >
-                              <IconCopy size={16} /> Copiar Código
+                              <IconCopy size={16} /> Copiar código
                           </Button>
                       </div>
                       <p className="text-[10px] text-muted-foreground leading-normal px-2">
@@ -987,7 +987,7 @@ export default function ClientsPage() {
                     onClick={handleGenerateActivationCode}
                     disabled={isGeneratingCode}
                   >
-                      <IconDeviceMobile size={16} /> {isGeneratingCode ? "Generando..." : "Generar Código"}
+                      <IconDeviceMobile size={16} /> {isGeneratingCode ? "Generando..." : "Generar código"}
                   </Button>
               )}
           </div>
@@ -999,26 +999,26 @@ export default function ClientsPage() {
         <DialogContent className="max-w-md border-none shadow-2xl rounded-[1.8rem] p-0 overflow-hidden bg-background">
           <DialogHeader className="p-6 pb-0">
             <DialogTitle className="text-xl font-bold tracking-tight">
-                {selectedClient ? "Editar Cliente" : "Nuevo Cliente"}
+                {selectedClient ? "Editar cliente" : "Nuevo cliente"}
             </DialogTitle>
-            <DialogDescription className="text-xs uppercase font-bold tracking-widest text-muted-foreground opacity-70">
+            <DialogDescription className="text-xs font-bold text-muted-foreground opacity-70">
                 Información básica y contacto
             </DialogDescription>
           </DialogHeader>
 
           <div className="p-6 space-y-4">
             <div className="space-y-2">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">Nombre Completo</label>
+                <label className="text-[11px] font-bold text-muted-foreground tracking-tight">Nombre completo</label>
                 <Input 
                     value={formData.name} 
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    placeholder="Ej. Juan Pérez"
+                    placeholder="Ej. Juan pérez"
                     className="h-11 rounded-xl bg-muted/30 border-none font-medium text-sm"
                 />
             </div>
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">Cédula / RIF</label>
+                    <label className="text-[11px] font-bold text-muted-foreground tracking-tight">Cédula / RIF</label>
                     <Input 
                         value={formData.documentId} 
                         onChange={(e) => setFormData({...formData, documentId: e.target.value})}
@@ -1027,7 +1027,7 @@ export default function ClientsPage() {
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">Teléfono</label>
+                    <label className="text-[11px] font-bold text-muted-foreground tracking-tight">Teléfono</label>
                     <Input 
                         value={formData.phone} 
                         onChange={(e) => setFormData({...formData, phone: e.target.value})}
@@ -1037,7 +1037,7 @@ export default function ClientsPage() {
                 </div>
             </div>
             <div className="space-y-2">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">Correo Electrónico</label>
+                <label className="text-[11px] font-bold text-muted-foreground tracking-tight">Correo electrónico</label>
                 <Input 
                     type="email"
                     value={formData.email} 
@@ -1047,11 +1047,11 @@ export default function ClientsPage() {
                 />
             </div>
             <div className="space-y-2">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">Dirección</label>
+                <label className="text-[11px] font-bold text-muted-foreground tracking-tight">Dirección</label>
                 <Input 
                     value={formData.address} 
                     onChange={(e) => setFormData({...formData, address: e.target.value})}
-                    placeholder="Ciudad, Calle, Edificio..."
+                    placeholder="Ciudad, calle, edificio..."
                     className="h-11 rounded-xl bg-muted/30 border-none font-medium text-sm"
                 />
             </div>
@@ -1062,7 +1062,7 @@ export default function ClientsPage() {
                 Cancelar
             </Button>
             <Button onClick={handleSaveClient} disabled={isSaving} className="rounded-xl h-11 px-8 font-bold text-xs bg-primary shadow-lg shadow-primary/20">
-                {isSaving ? "Guardando..." : "Guardar Cambios"}
+                {isSaving ? "Guardando..." : "Guardar cambios"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1078,8 +1078,8 @@ export default function ClientsPage() {
               </div>
               <div>
                 <DialogTitle className="text-xl font-bold">{selectedClient?.name}</DialogTitle>
-                <DialogDescription className="text-xs uppercase tracking-widest font-semibold">
-                  {selectedClient?.documentId} • Límite: {selectedClient?.creditLimit === 0 ? "Libreta Tradicional / Sin Límite" : `$${selectedClient?.creditLimit.toFixed(2)}`}
+                <DialogDescription className="text-xs font-semibold">
+                  {selectedClient?.documentId} • límite: {selectedClient?.creditLimit === 0 ? "Libreta tradicional / sin límite" : `$${selectedClient?.creditLimit.toFixed(2)}`}
                 </DialogDescription>
               </div>
             </div>
@@ -1088,41 +1088,41 @@ export default function ClientsPage() {
           <div className="space-y-6 py-4">
             <div className="grid grid-cols-3 gap-4">
               <div className="rounded-lg border bg-card p-4 space-y-1">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">Deuda Actual</p>
+                <p className="text-[10px] font-bold text-muted-foreground">Deuda actual</p>
                 <p className="text-xl font-bold text-rose-500">${selectedClient?.currentDebt.toFixed(2)}</p>
               </div>
               <div className="rounded-lg border bg-card p-4 space-y-1">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">Syncro Score</p>
-                <p className="text-xl font-bold text-emerald-500">{selectedClient?.creditScore.toFixed(0)} PTS</p>
+                <p className="text-[10px] font-bold text-muted-foreground">Syncro Score</p>
+                <p className="text-xl font-bold text-emerald-500">{selectedClient?.creditScore.toFixed(0)} pts</p>
               </div>
               <div className="rounded-lg border bg-card p-4 space-y-1">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">Pagos</p>
+                <p className="text-[10px] font-bold text-muted-foreground">Pagos</p>
                 <p className="text-xl font-bold">{selectedClient?.totalPaymentsCount}</p>
               </div>
             </div>
 
             <div className="space-y-3">
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Últimas Transacciones</h4>
+              <h4 className="text-[10px] font-bold text-muted-foreground">Últimas transacciones</h4>
               <div className="rounded-lg border divide-y overflow-hidden">
                 {selectedClient?.sales?.slice().reverse().map((sale: any) => (
                   <div key={sale.id} className="p-3 flex items-center justify-between hover:bg-muted/50 transition-colors">
                     <div className="flex items-center gap-3">
                       <IconReceipt size={16} className="text-muted-foreground" />
                       <div>
-                        <p className="text-xs font-bold">Compra en Tienda</p>
+                        <p className="text-xs font-bold">Compra en tienda</p>
                         <p className="text-[10px] text-muted-foreground">{new Date(sale.createdAt).toLocaleDateString()}</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="text-xs font-bold">${sale.total.toFixed(2)}</p>
-                      <Badge variant="outline" className="text-[8px] font-bold uppercase">{sale.status}</Badge>
+                      <Badge variant="outline" className="text-[8px] font-bold">{sale.status}</Badge>
                     </div>
                   </div>
                 ))}
                 {(!selectedClient?.sales || selectedClient.sales.length === 0) && (
                   <div className="p-10 text-center space-y-2 opacity-30">
                     <IconHistory size={32} className="mx-auto" />
-                    <p className="text-[10px] font-bold uppercase tracking-widest">Sin actividad</p>
+                    <p className="text-[10px] font-bold">Sin actividad</p>
                   </div>
                 )}
               </div>
@@ -1131,7 +1131,7 @@ export default function ClientsPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsProfileModalOpen(false)} className="w-full">
-              Cerrar Perfil
+              Cerrar perfil
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1146,7 +1146,7 @@ export default function ClientsPage() {
               <IconBuildingBank size={20} />
             </div>
             <div>
-              <DialogTitle className="text-base font-bold tracking-tight">Comprobante de Pago Móvil</DialogTitle>
+              <DialogTitle className="text-base font-bold tracking-tight">Comprobante de pago móvil</DialogTitle>
               <DialogDescription className="text-[11px] font-medium text-amber-600/80">Revisión y validación de abono</DialogDescription>
             </div>
           </div>
@@ -1157,30 +1157,30 @@ export default function ClientsPage() {
               <>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="p-3 rounded-xl bg-muted/40 border space-y-1">
-                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest block">Cliente</span>
+                    <span className="text-[9px] font-black text-muted-foreground block">Cliente</span>
                     <p className="text-sm font-bold truncate">{selectedSubmission.client.name}</p>
                     <p className="text-[10px] font-mono text-muted-foreground">{selectedSubmission.client.documentId}</p>
                   </div>
                   <div className="p-3 rounded-xl bg-muted/40 border space-y-1">
-                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest block">Monto del Abono</span>
+                    <span className="text-[9px] font-black text-muted-foreground block">Monto del abono</span>
                     <p className="text-2xl font-black tabular-nums text-emerald-600">${selectedSubmission.amount.toFixed(2)}</p>
                   </div>
                 </div>
 
                 <div className="p-3 rounded-xl bg-muted/40 border flex items-center justify-between">
                   <div>
-                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest block">N° de Referencia</span>
+                    <span className="text-[9px] font-black text-muted-foreground block">N° de referencia</span>
                     <span className="text-sm font-bold font-mono">{selectedSubmission.referenceNumber || 'No indicado'}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest block">Enviado</span>
+                    <span className="text-[9px] font-black text-muted-foreground block">Enviado</span>
                     <span className="text-xs font-medium">{new Date(selectedSubmission.createdAt).toLocaleString('es-VE', { dateStyle: 'medium', timeStyle: 'short' })}</span>
                   </div>
                 </div>
 
                 {/* Receipt Image */}
                 <div className="space-y-2">
-                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Captura del Comprobante</span>
+                  <span className="text-[10px] font-black text-muted-foreground">Captura del comprobante</span>
                   {selectedSubmission.receiptUrl ? (
                     <div className="rounded-2xl overflow-hidden border-2 border-dashed border-muted-foreground/20 bg-muted/30 relative">
                       <img
@@ -1223,7 +1223,7 @@ export default function ClientsPage() {
                       disabled={isProcessing}
                     >
                       <IconCheck size={16} />
-                      {isProcessing ? 'Aplicando...' : 'Aprobar Abono'}
+                      {isProcessing ? 'Aplicando...' : 'Aprobar abono'}
                     </Button>
                   </div>
                 )}

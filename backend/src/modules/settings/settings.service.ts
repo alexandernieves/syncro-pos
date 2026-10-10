@@ -81,12 +81,17 @@ export class SettingsService {
       'defaultPrinter', 'paperWidth', 'copiesPerSale',
       'paymentMethods', 'discountPin', 'pinPermissions',
       'syncroCreditMaxInstallments', 'syncroCreditFrequencyDays',
+      'syncroCreditInitialLimit', 'syncroCreditMaxLimit', 'syncroCreditLimitStep',
       'salesGoal', 'showSalesGoal', 'showNetMargin',
       'exchangeRate', 'exchangeRateEur', 'bcvUpdateDate',
       'exchangeRateDashboard', 'exchangeRateDashboardEur', 'bcvUpdateDateDashboard',
       'whatsappBotEnabled', 'whatsappAuthorizedPhones',
       'businessType', 'enabledModules', 'sidebarOrder',
-      'blindShiftClose'
+      'blindShiftClose',
+      'isSyncroVendor', 'syncroVendorStoreName', 'syncroVendorCategory',
+      'syncroVendorPhone', 'syncroVendorBio', 'syncroAutoSync',
+      'syncroShopSectionTitle', 'syncroShopLocation',
+      'invoiceDesign', 'gymSettings'
     ];
 
     const filteredData: any = {};

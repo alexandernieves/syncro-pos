@@ -27,7 +27,7 @@ export function ChartRadialCategories({ sales }: { sales: any[] }) {
   return (
     <Card className="border-none bg-gradient-to-t from-primary/5 to-card shadow-sm">
       <CardHeader>
-        <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground">Distribución de Ingresos</CardTitle>
+        <CardTitle className="text-sm font-black text-muted-foreground">Distribución de ingresos</CardTitle>
         <CardDescription className="text-xs">Ventas por categoría de productos</CardDescription>
       </CardHeader>
       <CardContent className="h-[300px]">
@@ -47,7 +47,7 @@ export function ChartRadialCategories({ sales }: { sales: any[] }) {
             <Tooltip 
                contentStyle={{ backgroundColor: '#09090b', border: '1px solid #79716b30', borderRadius: '8px', fontSize: '11px' }}
             />
-            <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase' }} />
+            <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
           </PieChart>
         </ResponsiveContainer>
       </CardContent>

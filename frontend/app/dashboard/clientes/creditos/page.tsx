@@ -40,18 +40,18 @@ function CreditRadialCard({ client }: { client: any }) {
         </div>
         <div className="flex-1 space-y-2">
           <div>
-            <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Crédito Disponible</p>
+            <p className="text-[9px] font-black text-zinc-400">Crédito disponible</p>
             <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">
-              Sin Límite
+              Sin límite
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <p className="text-[8px] font-bold text-zinc-400 uppercase">Límite</p>
-              <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-md uppercase tracking-tight">Tradicional</span>
+              <p className="text-[8px] font-bold text-zinc-400">Límite</p>
+              <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-md tracking-tight">Tradicional</span>
             </div>
             <div>
-              <p className="text-[8px] font-bold text-zinc-400 uppercase">Usado</p>
+              <p className="text-[8px] font-bold text-zinc-400">Usado</p>
               <p className="text-xs font-bold text-rose-600 dark:text-rose-400">${debt.toFixed(2)}</p>
             </div>
           </div>
@@ -88,18 +88,18 @@ function CreditRadialCard({ client }: { client: any }) {
       </ChartContainer>
       <div className="flex-1 space-y-2">
         <div>
-          <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Crédito Disponible</p>
+          <p className="text-[9px] font-black text-zinc-400">Crédito disponible</p>
           <p className={`text-xl font-black tabular-nums ${available > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
             ${available.toFixed(2)}
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <p className="text-[8px] font-bold text-zinc-400 uppercase">Límite</p>
+            <p className="text-[8px] font-bold text-zinc-400">Límite</p>
             <p className="text-xs font-bold text-zinc-600 dark:text-zinc-300">${limit.toFixed(2)}</p>
           </div>
           <div>
-            <p className="text-[8px] font-bold text-zinc-400 uppercase">Usado</p>
+            <p className="text-[8px] font-bold text-zinc-400">Usado</p>
             <p className="text-xs font-bold text-rose-600 dark:text-rose-400">${debt.toFixed(2)}</p>
           </div>
         </div>
@@ -470,7 +470,7 @@ export default function CreditosPage() {
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Cuentas por Cobrar (Fiado)</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Cuentas por cobrar (fiado)</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Clientes con deudas pendientes o saldo utilizado.</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -482,7 +482,7 @@ export default function CreditosPage() {
             }}
             className="rounded-xl h-11 text-xs font-bold gap-1.5"
           >
-            {isSelectionMode ? "Cancelar Selección" : "Selección Masiva"}
+            {isSelectionMode ? "Cancelar selección" : "Selección masiva"}
           </Button>
           <div className="relative w-full md:w-80">
             <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
@@ -497,7 +497,7 @@ export default function CreditosPage() {
       </div>
 
       {loading ? (
-        <div className="text-center py-24 text-zinc-400 animate-pulse text-sm uppercase tracking-wider font-semibold">Cargando libreta digital...</div>
+        <div className="text-center py-24 text-zinc-400 animate-pulse text-sm font-semibold">Cargando libreta digital...</div>
       ) : filteredClients.length === 0 ? (
         <Card className="border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/20 rounded-2xl shadow-none">
           <CardContent className="flex flex-col items-center justify-center py-24 text-center text-zinc-400">
@@ -541,17 +541,17 @@ export default function CreditosPage() {
                             className="size-4.5 rounded border-zinc-300 dark:border-zinc-800 accent-amber-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                           />
                         )}
-                        <div className="size-10 rounded-xl bg-gradient-to-tr from-zinc-100 to-zinc-200/50 dark:from-zinc-800 dark:to-zinc-700/50 border border-zinc-200 dark:border-zinc-700/30 flex items-center justify-center font-bold uppercase shadow-inner text-zinc-700 dark:text-zinc-200">
+                        <div className="size-10 rounded-xl bg-gradient-to-tr from-zinc-100 to-zinc-200/50 dark:from-zinc-800 dark:to-zinc-700/50 border border-zinc-200 dark:border-zinc-700/30 flex items-center justify-center font-bold shadow-inner text-zinc-700 dark:text-zinc-200">
                           {c.name.charAt(0)}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <CardTitle className="text-base font-bold text-zinc-800 dark:text-zinc-100 truncate max-w-[120px]">{c.name}</CardTitle>
                             {c.isSuspended && (
-                              <Badge className="bg-rose-500 text-white border-none hover:bg-rose-500 text-[9px] h-4 px-1.5 font-bold uppercase">Mora</Badge>
+                              <Badge className="bg-rose-500 text-white border-none hover:bg-rose-500 text-[9px] h-4 px-1.5 font-bold">Mora</Badge>
                             )}
                             {c.surchargeType && c.surchargeValue > 0 && (
-                              <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200/30 dark:border-amber-500/20 text-[9px] h-4 px-1.5 font-bold uppercase shrink-0" title="Recargo activo">
+                              <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200/30 dark:border-amber-500/20 text-[9px] h-4 px-1.5 font-bold shrink-0" title="Recargo activo">
                                 +{c.surchargeValue}{c.surchargeType === "PERCENT" ? "%" : " USD"}
                               </Badge>
                             )}
@@ -575,7 +575,7 @@ export default function CreditosPage() {
                         <button
                           onClick={() => handleOpenLimitModal(c)}
                           className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-all flex items-center justify-center"
-                          title="Gestionar Límite"
+                          title="Gestionar límite"
                         >
                           <IconSettings size={15} />
                         </button>
@@ -591,15 +591,15 @@ export default function CreditosPage() {
                     {/* Date info */}
                     <div className="grid grid-cols-2 gap-2">
                       <div className="flex flex-col gap-0.5 p-2 rounded-xl bg-zinc-50 dark:bg-zinc-900/20 border border-zinc-100 dark:border-zinc-900/60">
-                        <span className="text-[8px] uppercase font-bold text-zinc-400 flex items-center gap-1">
-                          <IconHistory size={10} /> Último Pago
+                        <span className="text-[8px] font-bold text-zinc-400 flex items-center gap-1">
+                          <IconHistory size={10} /> Último pago
                         </span>
                         <span className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300">
                           {c.lastPaymentDate ? format(new Date(c.lastPaymentDate), "dd MMM yyyy", { locale: es }) : "Nunca"}
                         </span>
                       </div>
                       <div className="flex flex-col gap-0.5 p-2 rounded-xl bg-zinc-50 dark:bg-zinc-900/20 border border-zinc-100 dark:border-zinc-900/60">
-                        <span className="text-[8px] uppercase font-bold text-zinc-400 flex items-center gap-1">
+                        <span className="text-[8px] font-bold text-zinc-400 flex items-center gap-1">
                           <IconAlertCircle size={10} /> Vencimiento
                         </span>
                         <span
@@ -683,7 +683,7 @@ export default function CreditosPage() {
               <div className="min-w-0">
                 <h2 className="font-bold text-base text-zinc-800 dark:text-zinc-100 flex items-center gap-1.5 truncate">
                   {selectedTx ? (
-                    <><IconReceipt size={16} className="text-primary shrink-0" /> Detalle de Transacción</>
+                    <><IconReceipt size={16} className="text-primary shrink-0" /> Detalle de transacción</>
                   ) : (
                     <><IconHistory size={16} className="text-primary shrink-0" /> Historial — {historyClient?.name}</>
                   )}
@@ -703,15 +703,15 @@ export default function CreditosPage() {
                 <div className={`rounded-xl p-4 border ${selectedTx.type === "DEBT" ? "bg-rose-500/5 border-rose-200 dark:border-rose-500/20" : "bg-emerald-500/5 border-emerald-200 dark:border-emerald-500/20"}`}>
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className={`text-[9px] font-black uppercase tracking-widest ${selectedTx.type === "DEBT" ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                        {selectedTx.type === "DEBT" ? "Compra a Crédito" : "Abono a Deuda"}
+                      <p className={`text-[9px] font-black   ${selectedTx.type === "DEBT" ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                        {selectedTx.type === "DEBT" ? "Compra a crédito" : "Abono a deuda"}
                       </p>
                       <p className={`text-2xl font-black tabular-nums mt-1 ${selectedTx.type === "DEBT" ? "text-rose-600 dark:text-rose-500" : "text-emerald-600 dark:text-emerald-400"}`}>
                         {selectedTx.type === "DEBT" ? "+" : "-"}${Math.abs(selectedTx.amount).toFixed(2)}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[9px] text-zinc-400 font-bold uppercase">Fecha y Hora</p>
+                      <p className="text-[9px] text-zinc-400 font-bold">Fecha y hora</p>
                       <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300 mt-0.5">
                         {(() => { try { return format(new Date(selectedTx.createdAt), "dd MMM yyyy", { locale: es }); } catch { return "—"; } })()}
                       </p>
@@ -738,7 +738,7 @@ export default function CreditosPage() {
                         {/* Cashier + Branch */}
                         <div className="grid grid-cols-2 gap-3">
                           <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-900">
-                            <p className="text-[8px] font-black uppercase text-zinc-400 tracking-wider flex items-center gap-1 mb-1">
+                            <p className="text-[8px] font-black text-zinc-400 flex items-center gap-1 mb-1">
                               <IconUser size={9} /> Cajero
                             </p>
                             <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 truncate">
@@ -746,7 +746,7 @@ export default function CreditosPage() {
                             </p>
                           </div>
                           <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-900">
-                            <p className="text-[8px] font-black uppercase text-zinc-400 tracking-wider flex items-center gap-1 mb-1">
+                            <p className="text-[8px] font-black text-zinc-400 flex items-center gap-1 mb-1">
                               <IconInfoCircle size={9} /> Sucursal
                             </p>
                             <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 truncate">
@@ -765,7 +765,7 @@ export default function CreditosPage() {
                         <div className="rounded-xl border border-zinc-100 dark:border-zinc-900 overflow-hidden">
                           <div className="bg-zinc-50 dark:bg-zinc-900/60 px-3 py-2 flex items-center gap-1.5">
                             <IconShoppingCart size={12} className="text-zinc-400" />
-                            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Productos Comprados</span>
+                            <span className="text-[9px] font-black text-zinc-500">Productos comprados</span>
                           </div>
                           <div className="divide-y divide-zinc-100 dark:divide-zinc-900">
                             {txSaleDetail.items?.length > 0 ? txSaleDetail.items.map((item: any, idx: number) => (
@@ -907,7 +907,7 @@ export default function CreditosPage() {
                 {loadingHistory ? (
                   <div className="flex flex-col items-center justify-center gap-3 py-12">
                     <div className="size-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                    <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest animate-pulse">Cargando...</p>
+                    <p className="text-xs font-semibold text-zinc-500 animate-pulse">Cargando...</p>
                   </div>
                 ) : filteredHistory.length === 0 ? (
                   <div className="flex flex-col items-center justify-center text-center py-12 text-zinc-400">
@@ -983,7 +983,7 @@ export default function CreditosPage() {
         <DialogContent className="rounded-2xl p-6 max-w-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2 text-emerald-500">
-              <IconCreditCard size={20} /> Recibir Abono
+              <IconCreditCard size={20} /> Recibir abono
             </DialogTitle>
             <DialogDescription className="text-xs mt-1">
               Registra un pago para <strong>{selectedClient?.name}</strong> — Deuda actual: <strong className="text-rose-500">${selectedClient?.currentDebt?.toFixed(2)}</strong>
@@ -992,7 +992,7 @@ export default function CreditosPage() {
 
           <div className="grid gap-4 py-3">
             <div className="space-y-1">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Moneda de Pago</Label>
+              <Label className="text-[10px] font-bold text-zinc-400">Moneda de pago</Label>
               <select
                 value={paymentCurrency}
                 onChange={(e: any) => { setPaymentCurrency(e.target.value); setPaidAmountRaw(""); setCustomRate(""); }}
@@ -1000,12 +1000,12 @@ export default function CreditosPage() {
               >
                 <option value="USD">Dólares (USD)</option>
                 <option value="VES">Bolívares (VES)</option>
-                <option value="COP">Pesos Colombianos (COP)</option>
+                <option value="COP">Pesos colombianos (cop)</option>
               </select>
             </div>
             {paymentCurrency !== "USD" && (
               <div className="space-y-1">
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Tasa de Cambio</Label>
+                <Label className="text-[10px] font-bold text-zinc-400">Tasa de cambio</Label>
                 <Input
                   type="number"
                   className="rounded-xl h-10 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-sm"
@@ -1016,7 +1016,7 @@ export default function CreditosPage() {
               </div>
             )}
             <div className="space-y-1">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Monto Recibido ({paymentCurrency})</Label>
+              <Label className="text-[10px] font-bold text-zinc-400">Monto recibido ({paymentCurrency})</Label>
               <Input
                 type="number"
                 className="rounded-xl h-11 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-lg font-bold text-center"
@@ -1027,14 +1027,14 @@ export default function CreditosPage() {
             </div>
             {paymentCurrency !== "USD" && (
               <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/10 flex justify-between items-center">
-                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1">
+                <span className="text-[10px] font-black text-emerald-500 flex items-center gap-1">
                   <IconInfoCircle size={12} /> Equivalente USD
                 </span>
                 <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">${paymentAmount || "0.00"}</span>
               </div>
             )}
             <div className="space-y-1">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Concepto / Notas</Label>
+              <Label className="text-[10px] font-bold text-zinc-400">Concepto / notas</Label>
               <Input
                 placeholder="Ej. Pago móvil, efectivo..."
                 className="rounded-xl h-10 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-sm"
@@ -1051,7 +1051,7 @@ export default function CreditosPage() {
               disabled={isSubmitting}
               className="flex-1 rounded-xl h-11 bg-emerald-600 hover:bg-emerald-500 text-white font-bold border-none"
             >
-              {isSubmitting ? "Procesando..." : "Confirmar Abono"}
+              {isSubmitting ? "Procesando..." : "Confirmar abono"}
             </Button>
           </div>
         </DialogContent>
@@ -1062,7 +1062,7 @@ export default function CreditosPage() {
         <DialogContent className="rounded-2xl p-6 max-w-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-200 overflow-y-auto max-h-[95vh]">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2 text-zinc-800 dark:text-zinc-100">
-              <IconSettings size={20} className="text-zinc-500" /> Gestionar Límite de Crédito
+              <IconSettings size={20} className="text-zinc-500" /> Gestionar límite de crédito
             </DialogTitle>
             <DialogDescription className="text-xs mt-1">
               Configura el límite para <strong>{selectedClientForLimit?.name}</strong>. Deuda actual: <strong className="text-rose-500">${selectedClientForLimit?.currentDebt?.toFixed(2)}</strong>
@@ -1079,13 +1079,13 @@ export default function CreditosPage() {
                 className="size-4 rounded border-zinc-300 dark:border-zinc-800 accent-emerald-500 cursor-pointer"
               />
               <Label htmlFor="isTraditional" className="text-xs font-bold text-zinc-700 dark:text-zinc-300 cursor-pointer flex-1">
-                Sin límite de crédito (Libreta Tradicional)
+                Sin límite de crédito (libreta tradicional)
               </Label>
             </div>
 
             {!isTraditional && (
               <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Límite Autorizado ($ USD)</Label>
+                <Label className="text-[10px] font-bold text-zinc-400">Límite Autorizado ($ USD)</Label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-zinc-400">$</span>
                   <Input
@@ -1106,13 +1106,13 @@ export default function CreditosPage() {
                 disabled={isUpdatingLimit}
                 className="flex-1 rounded-xl h-11 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold border-none text-xs"
               >
-                {isUpdatingLimit ? "Guardando..." : "Guardar Límite"}
+                {isUpdatingLimit ? "Guardando..." : "Guardar límite"}
               </Button>
             </div>
 
             {/* SECCIÓN CARGO / RECARGO */}
             <div className="space-y-3 pt-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">Aplicar Cargo / Recargo</h4>
+              <h4 className="text-xs font-bold text-zinc-400">Aplicar cargo / recargo</h4>
               
               <div className="flex gap-2 bg-zinc-50 dark:bg-zinc-900/60 p-1 border border-zinc-200 dark:border-zinc-800/80 rounded-xl">
                 <button
@@ -1140,8 +1140,8 @@ export default function CreditosPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                  {surchargeType === "PERCENT" ? "Porcentaje de la Deuda (%)" : "Monto a Cargar ($ USD)"}
+                <Label className="text-[10px] font-bold text-zinc-400">
+                  {surchargeType === "PERCENT" ? "Porcentaje de la deuda (%)" : "Monto a Cargar ($ USD)"}
                 </Label>
                 <div className="relative">
                   {surchargeType === "FIXED" && (
@@ -1164,8 +1164,8 @@ export default function CreditosPage() {
 
               {surchargeType === "PERCENT" && (
                 <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-900 flex justify-between items-center text-xs">
-                  <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
-                    Monto Calculado:
+                  <span className="text-[10px] font-black text-zinc-400">
+                    Monto calculado:
                   </span>
                   <span className="font-bold text-zinc-700 dark:text-zinc-300">
                     ${calculatedSurchargeAmount.toFixed(2)}
@@ -1174,7 +1174,7 @@ export default function CreditosPage() {
               )}
 
               <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Concepto / Notas</Label>
+                <Label className="text-[10px] font-bold text-zinc-400">Concepto / notas</Label>
                 <Input
                   placeholder="Ej. Recargo por crédito"
                   className="rounded-xl h-10 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-sm"
@@ -1189,7 +1189,7 @@ export default function CreditosPage() {
                 disabled={isApplyingSurcharge || !surchargeValue || parseFloat(surchargeValue) <= 0}
                 className="w-full rounded-xl h-11 bg-rose-600 hover:bg-rose-500 text-white font-bold border-none mt-2 text-xs"
               >
-                {isApplyingSurcharge ? "Aplicando..." : "Aplicar y Cobrar"}
+                {isApplyingSurcharge ? "Aplicando..." : "Aplicar y cobrar"}
               </Button>
             </div>
           </div>
@@ -1201,10 +1201,10 @@ export default function CreditosPage() {
         <DialogContent className="rounded-2xl p-6 max-w-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-200">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2 text-zinc-800 dark:text-zinc-100">
-              <IconSettings size={20} className="text-zinc-500" /> Aplicar Recargo Masivo
+              <IconSettings size={20} className="text-zinc-500" /> Aplicar recargo masivo
             </DialogTitle>
             <DialogDescription className="text-xs mt-1">
-              Aplicando recargo a <strong>{selectedClients.length}</strong> cliente(s) seleccionado(s).
+              Aplicando recargo a <strong>{selectedClients.length}</strong> Cliente(s) seleccionado(s).
             </DialogDescription>
           </DialogHeader>
 
@@ -1235,8 +1235,8 @@ export default function CreditosPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                {massSurchargeType === "PERCENT" ? "Porcentaje del Recargo (%)" : "Monto a Cargar ($ USD)"}
+              <Label className="text-[10px] font-bold text-zinc-400">
+                {massSurchargeType === "PERCENT" ? "Porcentaje del recargo (%)" : "Monto a Cargar ($ USD)"}
               </Label>
               <div className="relative">
                 {massSurchargeType === "FIXED" && (
@@ -1265,7 +1265,7 @@ export default function CreditosPage() {
               disabled={isApplyingMassSurcharge || !massSurchargeValue || parseFloat(massSurchargeValue) <= 0}
               className="flex-1 rounded-xl h-11 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold border-none text-xs"
             >
-              {isApplyingMassSurcharge ? "Aplicando..." : "Confirmar Recargo"}
+              {isApplyingMassSurcharge ? "Aplicando..." : "Confirmar recargo"}
             </Button>
           </div>
         </DialogContent>
@@ -1283,7 +1283,7 @@ export default function CreditosPage() {
               onClick={handleOpenMassSurcharge}
               className="h-9 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold border-none text-xs"
             >
-              Aplicar Recargo Masivo
+              Aplicar recargo masivo
             </Button>
             <Button
               size="sm"
@@ -1291,7 +1291,7 @@ export default function CreditosPage() {
               onClick={() => setSelectedClients([])}
               className="h-9 px-4 rounded-xl border-zinc-700 bg-transparent text-white hover:bg-zinc-800 text-xs"
             >
-              Desmarcar Todos
+              Desmarcar todos
             </Button>
           </div>
         </div>

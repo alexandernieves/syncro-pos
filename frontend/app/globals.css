@@ -60,71 +60,52 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.147 0.004 49.25);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.147 0.004 49.25);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.147 0.004 49.25);
-  --primary: oklch(0.216 0.006 56.043);
-  --primary-foreground: oklch(0.985 0.001 106.423);
-  --secondary: oklch(0.97 0.001 106.424);
-  --secondary-foreground: oklch(0.216 0.006 56.043);
-  --muted: oklch(0.97 0.001 106.424);
-  --muted-foreground: oklch(0.553 0.013 58.071);
-  --accent: oklch(0.97 0.001 106.424);
-  --accent-foreground: oklch(0.216 0.006 56.043);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.923 0.003 48.717);
-  --input: oklch(0.923 0.003 48.717);
-  --ring: oklch(0.709 0.01 56.259);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0.001 106.423);
-  --sidebar-foreground: oklch(0.147 0.004 49.25);
-  --sidebar-primary: oklch(0.216 0.006 56.043);
-  --sidebar-primary-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-accent: oklch(0.97 0.001 106.424);
-  --sidebar-accent-foreground: oklch(0.216 0.006 56.043);
-  --sidebar-border: oklch(0.923 0.003 48.717);
-  --sidebar-ring: oklch(0.709 0.01 56.259);
+
+  /* Syncro — una sola paleta, sin modo claro ni oscuro.
+     El armazon (sidebar + margenes) es gris calido y se hunde;
+     la vista es blanca y sobresale sobre el. */
+  --shell: #E9E6E0;
+
+  /* Nada de blanco puro: la vista es hueso y las tarjetas un hueso mas
+     claro, de modo que se levantan sobre el fondo sin llegar al blanco. */
+  --background: #F7F5F0;
+  --foreground: #1A1815;
+  --card: #FCFBF8;
+  --card-foreground: #1A1815;
+  --popover: #FCFBF8;
+  --popover-foreground: #1A1815;
+  --primary: #F26B3A;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F4F2ED;
+  --secondary-foreground: #1A1815;
+  --muted: #F4F2ED;
+  --muted-foreground: #5F5B52;
+  --accent: #F1EEE8;
+  --accent-foreground: #1A1815;
+  --destructive: #D64535;
+  --border: #E5E1D9;
+  --input: #E5E1D9;
+  --ring: #F26B3A;
+
+  --chart-1: #F26B3A;
+  --chart-2: #3B9AE8;
+  --chart-3: #2FB36D;
+  --chart-4: #E8A72B;
+  --chart-5: #7C5CF0;
+
+  --sidebar: var(--shell);
+  --sidebar-foreground: #1A1815;
+  --sidebar-primary: #F26B3A;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #DCD7CE;
+  --sidebar-accent-foreground: #1A1815;
+  --sidebar-border: #DAD5CC;
+  --sidebar-ring: #F26B3A;
 }
 
+/* El modo oscuro se retiro: .dark hereda la paleta unica de :root. */
 .dark {
-  --background: oklch(0.147 0.004 49.25);
-  --foreground: oklch(0.985 0.001 106.423);
-  --card: oklch(0.216 0.006 56.043);
-  --card-foreground: oklch(0.985 0.001 106.423);
-  --popover: oklch(0.216 0.006 56.043);
-  --popover-foreground: oklch(0.985 0.001 106.423);
-  --primary: oklch(0.923 0.003 48.717);
-  --primary-foreground: oklch(0.216 0.006 56.043);
-  --secondary: oklch(0.268 0.007 34.298);
-  --secondary-foreground: oklch(0.985 0.001 106.423);
-  --muted: oklch(0.268 0.007 34.298);
-  --muted-foreground: oklch(0.709 0.01 56.259);
-  --accent: oklch(0.268 0.007 34.298);
-  --accent-foreground: oklch(0.985 0.001 106.423);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.553 0.013 58.071);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.216 0.006 56.043);
-  --sidebar-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-accent: oklch(0.268 0.007 34.298);
-  --sidebar-accent-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.553 0.013 58.071);
+  color-scheme: light;
 }
 
 @layer base {
@@ -209,13 +190,8 @@ body {
 
 .theme-default,
 .theme-default-scaled {
-  --primary: var(--color-neutral-600);
-  --primary-foreground: var(--color-neutral-50);
-
-  @variant dark {
-    --primary: var(--color-neutral-500);
-    --primary-foreground: var(--color-neutral-50);
-  }
+  --primary: #F26B3A;
+  --primary-foreground: #FFFFFF;
 }
 
 .theme-blue,
@@ -286,7 +262,7 @@ body {
 }
 
 html {
-  background-color: #09090b !important;
+  background-color: var(--shell) !important;
 }
 
 /* PWA Standalone root locking to prevent virtual keyboard scrolling */
@@ -297,7 +273,7 @@ html {
   height: 100% !important;
   overflow: hidden !important;
   overscroll-behavior: none !important;
-  background-color: #09090b !important;
+  background-color: var(--shell) !important;
 }
 
 .font-sans-ui {
@@ -306,4 +282,135 @@ html {
 
 .font-handwritten {
   font-family: var(--font-caveat), cursive !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Tipografia del panel
+   Acotado a [data-slot="sidebar-wrapper"] a proposito: la landing usa
+   mayusculas y espaciado ancho a conciencia en sus etiquetas, y no debe
+   verse afectada. Son reglas sin capa, asi que ganan a las utilidades de
+   Tailwind sin necesidad de !important.
+   ───────────────────────────────────────────────────────────────────────── */
+
+[data-slot="sidebar-wrapper"] {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  /* Cifras de ancho fijo: las columnas de importes dejan de descuadrarse. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Un subtitulo en VERSALITAS ESPACIADAS se lee peor en español, donde las
+   palabras son mas largas y los acentos desaparecen en mayuscula. Se dejan
+   en su capitalizacion normal. */
+[data-slot="sidebar-wrapper"] .uppercase {
+  text-transform: none;
+}
+
+/* El espaciado ancho acompañaba a esas mayusculas; sin ellas, sobra. */
+[data-slot="sidebar-wrapper"] .tracking-widest,
+[data-slot="sidebar-wrapper"] .tracking-wider,
+[data-slot="sidebar-wrapper"] .tracking-wide,
+[data-slot="sidebar-wrapper"] [class*="tracking-[0.1"],
+[data-slot="sidebar-wrapper"] [class*="tracking-[0.2"],
+[data-slot="sidebar-wrapper"] [class*="tracking-[0.3"],
+[data-slot="sidebar-wrapper"] [class*="tracking-[0.4"] {
+  letter-spacing: 0.005em;
+}
+
+/* Excepcion: el campo de codigo de un solo uso si quiere las cifras
+   separadas, ahi el espaciado ayuda a leerlas de una en una. */
+[data-slot="sidebar-wrapper"] .font-mono[class*="tracking-[0.5em]"] {
+  letter-spacing: 0.5em;
+}
+
+/* Titulares grandes: un poco de tracking negativo los asienta. */
+[data-slot="sidebar-wrapper"] .tracking-tight { letter-spacing: -0.014em; }
+[data-slot="sidebar-wrapper"] .tracking-tighter { letter-spacing: -0.022em; }
+
+/* Habia cuatro pesos compitiendo (bold, semibold, black, extrabold). Se
+   reducen a dos: semibold para jerarquia y bold para lo verdaderamente
+   principal. El negro tipografico no encaja con una paleta sobria. */
+[data-slot="sidebar-wrapper"] .font-black,
+[data-slot="sidebar-wrapper"] .font-extrabold {
+  font-weight: 700;
+}
+[data-slot="sidebar-wrapper"] .font-bold {
+  font-weight: 650;
+}
+
+/* Texto corrido algo mas holgado: en español las lineas salen mas largas. */
+[data-slot="sidebar-wrapper"] p {
+  line-height: 1.6;
+}
+
+/* Que los acentos no se corten en titulares apretados. */
+[data-slot="sidebar-wrapper"] h1,
+[data-slot="sidebar-wrapper"] h2,
+[data-slot="sidebar-wrapper"] h3 {
+  line-height: 1.22;
+  text-wrap: pretty;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Restos del modo oscuro dentro del panel
+   La app se escribio para fondo negro y quedaron colores fijos (bg-zinc-900,
+   text-white, text-zinc-400) que sobre fondo claro se ven como manchas
+   oscuras o texto invisible. Se reconducen a la paleta unica. Sin capa, asi
+   que ganan a las utilidades de Tailwind sin !important.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Superficies que eran negras -> el gris del armazon. */
+[data-slot="sidebar-wrapper"] .bg-black,
+[data-slot="sidebar-wrapper"] .bg-zinc-900,
+[data-slot="sidebar-wrapper"] .bg-zinc-950,
+[data-slot="sidebar-wrapper"] .bg-neutral-900,
+[data-slot="sidebar-wrapper"] .bg-slate-900,
+[data-slot="sidebar-wrapper"] [class*="bg-[#121110]"],
+[data-slot="sidebar-wrapper"] [class*="bg-[#050505]"],
+[data-slot="sidebar-wrapper"] [class*="bg-[#0a0a0a]"] {
+  background-color: var(--shell);
+}
+
+/* Texto blanco -> tinta oscura, salvo cuando va sobre un fondo de color
+   (botones y etiquetas naranjas, verdes, rojas...), donde debe seguir blanco. */
+[data-slot="sidebar-wrapper"] [class*="text-white"]:not([class*="bg-primary"]):not([class*="bg-orange"]):not([class*="bg-emerald"]):not([class*="bg-green"]):not([class*="bg-red"]):not([class*="bg-blue"]):not([class*="bg-amber"]):not([class*="bg-indigo"]):not([class*="bg-violet"]):not([class*="bg-rose"]) {
+  color: var(--foreground);
+}
+
+/* Grises pensados para fondo negro: sobre claro no se leen. */
+[data-slot="sidebar-wrapper"] .text-zinc-400,
+[data-slot="sidebar-wrapper"] .text-zinc-500,
+[data-slot="sidebar-wrapper"] .text-gray-400,
+[data-slot="sidebar-wrapper"] .text-gray-500,
+[data-slot="sidebar-wrapper"] .text-neutral-400,
+[data-slot="sidebar-wrapper"] .text-neutral-500,
+[data-slot="sidebar-wrapper"] .text-slate-400 {
+  color: var(--muted-foreground);
+}
+
+/* Bordes claros pensados para fondo negro. */
+[data-slot="sidebar-wrapper"] .border-white\/5,
+[data-slot="sidebar-wrapper"] .border-white\/10 {
+  border-color: var(--border);
+}
+
+/* Los botones no llevan resplandor: la sombra de color se leia como un halo. */
+[data-slot="sidebar-wrapper"] button,
+[data-slot="sidebar-wrapper"] [data-slot="button"],
+[data-slot="sidebar-wrapper"] a[data-slot="button"] {
+  box-shadow: none;
+}
+
+/* Puntitos decorativos que pulsan junto a los subtitulos, y su halo. */
+[data-slot="sidebar-wrapper"] .animate-pulse.rounded-full[class*="size-1"],
+[data-slot="sidebar-wrapper"] .animate-pulse.rounded-full[class*="h-1"],
+[data-slot="sidebar-wrapper"] .animate-pulse.rounded-full[class*="w-2"] {
+  display: none;
+}
+
+/* Blancos puros escritos a mano -> hueso, para que no queden parches
+   brillantes sobre el resto de superficies. */
+[data-slot="sidebar-wrapper"] .bg-white {
+  background-color: var(--card);
 }

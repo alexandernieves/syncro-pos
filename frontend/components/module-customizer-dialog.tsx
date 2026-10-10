@@ -29,6 +29,7 @@ import {
   IconHistory,
   IconBrandWhatsapp,
   IconAdjustmentsHorizontal,
+  IconBarbell,
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -122,6 +123,13 @@ export const ALL_MODULES: ModuleDefinition[] = [
     icon: IconTruck,
     category: "operacion",
   },
+  {
+    id: "gym",
+    name: "Gimnasio",
+    description: "Socios, membresías y control de acceso con lector de rostro.",
+    icon: IconBarbell,
+    category: "operacion",
+  },
 ];
 
 export const PRESET_DEFINITIONS: Record<
@@ -134,7 +142,7 @@ export const PRESET_DEFINITIONS: Record<
   }
 > = {
   BODEGA: {
-    title: "Bodega / Minimarket",
+    title: "Bodega / minimarket",
     subtitle: "Alta rotación y caja rápida.",
     icon: IconBuildingStore,
     modules: [
@@ -149,7 +157,7 @@ export const PRESET_DEFINITIONS: Record<
     ],
   },
   MODA: {
-    title: "Tienda de Ropa / Boutique",
+    title: "Tienda de ropa / boutique",
     subtitle: "Catálogo visual, tallas y crédito.",
     icon: IconShirt,
     modules: [
@@ -164,7 +172,7 @@ export const PRESET_DEFINITIONS: Record<
     ],
   },
   GENERAL: {
-    title: "Retail Completo",
+    title: "Retail completo",
     subtitle: "Todos los módulos activos.",
     icon: IconLayoutGrid,
     modules: ALL_MODULES.map((m) => m.id),

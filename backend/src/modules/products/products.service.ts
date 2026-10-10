@@ -335,6 +335,7 @@ export class ProductsService {
       where,
       include: {
         category: true,
+        syncroShopBranch: { select: { id: true, name: true } },
         variants: {
           include: {
             inventory: branchId ? {
@@ -452,10 +453,34 @@ export class ProductsService {
   }
 
   async update(id: string, data: any, userId?: string, businessId?: string) {
-    await this.findOne(id, businessId);
+    const existing = await this.findOne(id, businessId);
     let { variants, ...productData } = data;
     delete productData.businessId;
     delete productData.id;
+    delete productData.images;
+
+    // Syncro Shop fields go through the publication rules (origin branch, max featured).
+    const { isPublishedOnSyncroShop, isFeaturedOnSyncroShop, syncroShopBranchId, branchId } = productData;
+    delete productData.isPublishedOnSyncroShop;
+    delete productData.isFeaturedOnSyncroShop;
+    delete productData.syncroShopBranchId;
+    delete productData.branchId;
+    if (isPublishedOnSyncroShop !== undefined || isFeaturedOnSyncroShop !== undefined || syncroShopBranchId) {
+      Object.assign(productData, await this.resolveSyncroShopChanges(
+        existing,
+        {
+          published: isPublishedOnSyncroShop === undefined ? undefined : isPublishedOnSyncroShop === true || isPublishedOnSyncroShop === 'true',
+          featured: isFeaturedOnSyncroShop === undefined ? undefined : isFeaturedOnSyncroShop === true || isFeaturedOnSyncroShop === 'true',
+          branchId: syncroShopBranchId || branchId,
+        },
+        businessId || existing.businessId,
+      ));
+    }
+
+    const specifications = this.normalizeSpecifications(productData.specifications);
+    if (specifications !== undefined) productData.specifications = specifications;
+    const landingBlocks = this.normalizeLandingBlocks(productData.landingBlocks);
+    if (landingBlocks !== undefined) productData.landingBlocks = landingBlocks;
 
     if (productData.categoryId === '') productData.categoryId = null;
     if (productData.supplierId === '') productData.supplierId = null;
@@ -495,6 +520,7 @@ export class ProductsService {
             bulkPrice: isNaN(bulkPrice as number) ? null : bulkPrice,
             stock,
             minStock,
+            ...(v.showOnSyncroShop !== undefined ? { showOnSyncroShop: Boolean(v.showOnSyncroShop) } : {}),
           };
 
           if (v.id) {
@@ -655,5 +681,185 @@ export class ProductsService {
 
   async removeFromWaitlist(id: string) {
     return (this.prisma.productWaitlist as any).delete({ where: { id } });
+  }
+
+  // ── Syncro Shop ────────────────────────────────────────────────────────────
+
+  /**
+   * Publishes, unpublishes or features a product in Syncro Shop.
+   *
+   * - Publishing stores the branch the user had selected: online orders are
+   *   sold from that branch's stock (PLAN-SYNCRO-SHOP.md, R14).
+   * - Only published products can be featured, and a business can feature at
+   *   most MAX_FEATURED products (R10).
+   */
+  async setSyncroShopStatus(
+    id: string,
+    input: { published?: boolean; featured?: boolean; branchId?: string | null },
+    businessId?: string,
+  ) {
+    if (!businessId) throw new BadRequestException('Falta el negocio del usuario');
+    const product = await this.prisma.product.findFirst({ where: { id, businessId } });
+    if (!product) throw new NotFoundException('Producto no encontrado');
+
+    const data = await this.resolveSyncroShopChanges(product, input, businessId);
+    const updated = await this.prisma.product.update({ where: { id }, data });
+    await this.invalidateProductsCache(businessId, id);
+    return updated;
+  }
+
+  /** Publishes or unpublishes several products at once from one branch. */
+  async bulkSetSyncroShopPublished(
+    productIds: string[],
+    published: boolean,
+    branchId: string | null | undefined,
+    businessId?: string,
+  ) {
+    if (!businessId) throw new BadRequestException('Falta el negocio del usuario');
+    if (!Array.isArray(productIds) || productIds.length === 0) {
+      throw new BadRequestException('Selecciona al menos un producto');
+    }
+
+    if (!published) {
+      const result = await this.prisma.product.updateMany({
+        where: { id: { in: productIds }, businessId },
+        data: { isPublishedOnSyncroShop: false, isFeaturedOnSyncroShop: false, syncroShopBranchId: null },
+      });
+      await this.invalidateProductsCache(businessId);
+      return { updated: result.count };
+    }
+
+    const branch = await this.resolvePublicationBranch(branchId, businessId);
+    // Products already published keep their original branch.
+    const result = await this.prisma.product.updateMany({
+      where: { id: { in: productIds }, businessId, isPublishedOnSyncroShop: false },
+      data: { isPublishedOnSyncroShop: true, syncroShopBranchId: branch.id },
+    });
+    await this.invalidateProductsCache(businessId);
+    return { updated: result.count, branch: { id: branch.id, name: branch.name } };
+  }
+
+  async getFeaturedCount(businessId?: string) {
+    const count = await this.prisma.product.count({
+      where: { businessId, isFeaturedOnSyncroShop: true, isPublishedOnSyncroShop: true },
+    });
+    return { count, max: ProductsService.MAX_FEATURED };
+  }
+
+  /** Replaces the product gallery (max MAX_IMAGES). The first image is the cover. */
+  async setImages(id: string, urls: string[], businessId?: string) {
+    if (!businessId) throw new BadRequestException('Falta el negocio del usuario');
+    const product = await this.prisma.product.findFirst({ where: { id, businessId } });
+    if (!product) throw new NotFoundException('Producto no encontrado');
+
+    const clean = (Array.isArray(urls) ? urls : [])
+      .map((u) => (typeof u === 'string' ? u.trim() : ''))
+      .filter(Boolean);
+    if (clean.length > ProductsService.MAX_IMAGES) {
+      throw new BadRequestException(`Un producto puede tener máximo ${ProductsService.MAX_IMAGES} imágenes`);
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.productImage.deleteMany({ where: { productId: id } }),
+      this.prisma.productImage.createMany({
+        data: clean.map((url, position) => ({ productId: id, url, position })),
+      }),
+      this.prisma.product.update({ where: { id }, data: { image: clean[0] ?? null } }),
+    ]);
+    await this.invalidateProductsCache(businessId, id);
+    return this.getImages(id, businessId);
+  }
+
+  async getImages(id: string, businessId?: string) {
+    const product = await this.prisma.product.findFirst({
+      where: { id, businessId },
+      select: { image: true, images: { orderBy: { position: 'asc' } } },
+    });
+    if (!product) throw new NotFoundException('Producto no encontrado');
+    // Products created before the gallery existed only have the cover image.
+    if (product.images.length === 0 && product.image) {
+      return [{ id: null, url: product.image, position: 0 }];
+    }
+    return product.images;
+  }
+
+  static readonly MAX_FEATURED = 5;
+  static readonly MAX_IMAGES = 5;
+
+  private async resolvePublicationBranch(branchId: string | null | undefined, businessId: string) {
+    const branch = branchId
+      ? await this.prisma.branch.findFirst({ where: { id: branchId, businessId } })
+      : await this.prisma.branch.findFirst({ where: { businessId }, orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }] });
+    if (!branch) throw new BadRequestException('No se encontró la sucursal desde la que se publica el producto');
+    return branch;
+  }
+
+  private async resolveSyncroShopChanges(
+    product: { id: string; isPublishedOnSyncroShop: boolean; isFeaturedOnSyncroShop: boolean; syncroShopBranchId: string | null },
+    input: { published?: boolean; featured?: boolean; branchId?: string | null },
+    businessId: string,
+  ) {
+    const data: { isPublishedOnSyncroShop?: boolean; isFeaturedOnSyncroShop?: boolean; syncroShopBranchId?: string | null } = {};
+    const published = input.published ?? product.isPublishedOnSyncroShop;
+
+    if (!published) {
+      return { isPublishedOnSyncroShop: false, isFeaturedOnSyncroShop: false, syncroShopBranchId: null };
+    }
+
+    if (!product.isPublishedOnSyncroShop || !product.syncroShopBranchId) {
+      data.isPublishedOnSyncroShop = true;
+      data.syncroShopBranchId = (await this.resolvePublicationBranch(input.branchId, businessId)).id;
+    } else if (input.branchId && input.branchId !== product.syncroShopBranchId) {
+      // Explicit change of origin branch (the UI asks for confirmation first).
+      data.syncroShopBranchId = (await this.resolvePublicationBranch(input.branchId, businessId)).id;
+    }
+
+    if (input.featured !== undefined && input.featured !== product.isFeaturedOnSyncroShop) {
+      if (input.featured) {
+        const featuredCount = await this.prisma.product.count({
+          where: { businessId, isFeaturedOnSyncroShop: true, isPublishedOnSyncroShop: true, id: { not: product.id } },
+        });
+        if (featuredCount >= ProductsService.MAX_FEATURED) {
+          throw new BadRequestException(
+            `Ya tienes ${ProductsService.MAX_FEATURED} productos destacados. Quita uno para destacar este.`,
+          );
+        }
+      }
+      data.isFeaturedOnSyncroShop = input.featured;
+    }
+    return data;
+  }
+
+  /** JSON fields may arrive as strings from multipart forms. */
+  private parseJsonField(value: unknown, label: string) {
+    if (typeof value !== 'string') return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      throw new BadRequestException(`${label} no tiene un formato válido`);
+    }
+  }
+
+  /** Landing page blocks (R9). The storefront ignores malformed blocks; here we only bound size. */
+  private normalizeLandingBlocks(value: unknown) {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+    const raw = this.parseJsonField(value, 'El contenido de la página de venta');
+    if (!Array.isArray(raw)) throw new BadRequestException('El contenido de la página de venta debe ser una lista de bloques');
+    if (raw.length > 30) throw new BadRequestException('Máximo 30 bloques en la página de venta');
+    if (JSON.stringify(raw).length > 200_000) throw new BadRequestException('El contenido de la página de venta es demasiado grande');
+    return raw;
+  }
+
+  private normalizeSpecifications(value: unknown) {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+    const raw = this.parseJsonField(value, 'Las especificaciones');
+    if (!Array.isArray(raw)) throw new BadRequestException('Las especificaciones deben ser una lista');
+    const specs = raw
+      .map((s: any) => ({ label: String(s?.label ?? '').trim(), value: String(s?.value ?? '').trim() }))
+      .filter((s) => s.label && s.value);
+    if (specs.length > 30) throw new BadRequestException('Máximo 30 especificaciones por producto');
+    return specs;
   }
 }

@@ -1,5 +1,6 @@
 import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
@@ -28,16 +29,19 @@ import { HistoryModule } from './modules/history/history.module';
 import { TransfersModule } from './modules/transfers/transfers.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { StorefrontModule } from './modules/storefront/storefront.module';
 import { SyncroAdminModule } from './modules/syncro-admin/syncro-admin.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { AiAgentModule } from './modules/ai-agent/ai-agent.module';
 import { AppCacheModule } from './modules/cache/app-cache.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
+import { GymModule } from './modules/gym/gym.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     // ── Rate Limiting (global, 60 req / 60 s; login overrides to 5 / 900 s) ──
     ThrottlerModule.forRoot([
       {
@@ -70,11 +74,13 @@ import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
     TransfersModule,
     ExpensesModule,
     NotificationsModule,
+    StorefrontModule,
     SyncroAdminModule,
     ChatModule,
     UploadModule,
     AiAgentModule,
     WhatsAppModule,
+    GymModule,
   ],
   controllers: [AppController],
   providers: [

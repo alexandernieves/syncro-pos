@@ -10,8 +10,8 @@ export default function HelpPage() {
           <IconHelp size={24} />
         </div>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Centro de Ayuda</h1>
-          <p className="text-muted-foreground">Estamos aquí para ayudarte a sacar el máximo provecho de SYNCRO POS.</p>
+          <h1 className="text-2xl font-bold tracking-tight">Centro de ayuda</h1>
+          <p className="text-muted-foreground">Estamos aquí para ayudarte a sacar el máximo provecho de Syncro POS.</p>
         </div>
       </div>
 
@@ -35,7 +35,7 @@ export default function HelpPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 group-hover:text-primary transition-colors">
               <IconMessageCircle size={20} />
-              Soporte en Vivo
+              Soporte en vivo
             </CardTitle>
             <CardDescription>
               Habla directamente con nuestro equipo técnico.
@@ -53,10 +53,10 @@ export default function HelpPage() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
-            Nuestro equipo de soporte está disponible de Lunes a Viernes, de 8:00 AM a 6:00 PM.
+            Nuestro equipo de soporte está disponible de lunes a viernes, de 8:00 AM a 6:00 PM.
           </p>
           <button className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity">
-            Contactar Soporte
+            Contactar soporte
           </button>
         </CardContent>
       </Card>

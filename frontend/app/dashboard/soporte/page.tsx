@@ -46,7 +46,8 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { io, Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
+import { connectSocket } from "@/lib/socket";
 import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -174,7 +175,7 @@ const renderMarkdown = (content: string) => {
                 <thead className="bg-primary/10 dark:bg-primary/20 font-extrabold text-foreground">
                   <tr>
                     {headers.map((col, idx) => (
-                      <th key={idx} className="px-3 py-2 text-left font-extrabold border-r border-primary/10 last:border-r-0 uppercase tracking-wider text-[10px]">
+                      <th key={idx} className="px-3 py-2 text-left font-extrabold border-r border-primary/10 last:border-r-0 text-[10px]">
                         {parseInline(col)}
                       </th>
                     ))}
@@ -487,27 +488,27 @@ export default function SupportChatPage() {
     const lastRoute = localStorage.getItem("syncro_last_visited_dashboard_route") || "";
     if (lastRoute.includes("/productos") || lastRoute.includes("/inventario")) {
       setQuickActions([
-        { label: "📦 Bajo Stock", text: "¿Qué productos tienen bajo stock?" },
-        { label: "💰 Valor del Inventario", text: "¿Cuál es el valor total de mi inventario actual?" },
-        { label: "🔥 Productos Más Vendidos", text: "¿Qué producto se vende más rápido y cuál es el top de ventas?" },
+        { label: "📦 Bajo stock", text: "¿Qué productos tienen bajo stock?" },
+        { label: "💰 Valor del inventario", text: "¿Cuál es el valor total de mi inventario actual?" },
+        { label: "🔥 Productos más vendidos", text: "¿Qué producto se vende más rápido y cuál es el top de ventas?" },
       ]);
     } else if (lastRoute.includes("/proveedores") || lastRoute.includes("/compras")) {
       setQuickActions([
-        { label: "📝 Sugerir Orden de Compra", text: "Generar propuesta de orden de compra inteligente" },
-        { label: "🚚 Facturas Pendientes", text: "¿Qué proveedores tienen facturas pendientes de pago?" },
-        { label: "📊 Compras del Mes", text: "Ver resumen de compras de este mes" },
+        { label: "📝 Sugerir orden de compra", text: "Generar propuesta de orden de compra inteligente" },
+        { label: "🚚 Facturas pendientes", text: "¿Qué proveedores tienen facturas pendientes de pago?" },
+        { label: "📊 Compras del mes", text: "Ver resumen de compras de este mes" },
       ]);
     } else if (lastRoute.includes("/ventas") || lastRoute.includes("/facturas")) {
       setQuickActions([
-        { label: "🎟️ Ticket Promedio", text: "¿Cuál es el ticket de venta promedio hoy?" },
-        { label: "💳 Ventas por Transferencia", text: "¿Cuántas ventas se hicieron por transferencia y en efectivo hoy?" },
-        { label: "⏱️ Últimas Ventas", text: "Ver las últimas transacciones de venta registradas" },
+        { label: "🎟️ Ticket promedio", text: "¿Cuál es el ticket de venta promedio hoy?" },
+        { label: "💳 Ventas por transferencia", text: "¿Cuántas ventas se hicieron por transferencia y en efectivo hoy?" },
+        { label: "⏱️ Últimas ventas", text: "Ver las últimas transacciones de venta registradas" },
       ]);
     } else if (lastRoute.includes("/caja") || lastRoute.includes("/turnos") || lastRoute.includes("/contabilidad")) {
       setQuickActions([
-        { label: "🔑 Cuadre Paso a Paso", text: "¿Cómo hago el cuadre de caja paso a paso?" },
-        { label: "⏳ Ver Turno Activo", text: "Ver estado del turno activo de hoy" },
-        { label: "💸 Registrar Egreso", text: "Quiero registrar un egreso para el negocio" },
+        { label: "🔑 Cuadre paso a paso", text: "¿Cómo hago el cuadre de caja paso a paso?" },
+        { label: "⏳ Ver turno activo", text: "Ver estado del turno activo de hoy" },
+        { label: "💸 Registrar egreso", text: "Quiero registrar un egreso para el negocio" },
       ]);
     }
   }, []);
@@ -771,7 +772,7 @@ export default function SupportChatPage() {
         setTimeout(scrollToBottom, 200);
       }
     } catch {
-      toast.error("Error al cargar historial del Asistente IA");
+      toast.error("Error al cargar historial del asistente IA");
     }
   };
 
@@ -791,7 +792,7 @@ export default function SupportChatPage() {
       setScreenStream(stream);
       setAutopilotEnabled(true);
 
-      toast.success("Pantalla vinculada con éxito. Asegúrate de mostrar tu pestaña de Meta Ads Manager");
+      toast.success("Pantalla vinculada con éxito. Asegúrate de mostrar tu pestaña de meta ads manager");
 
       stream.getVideoTracks()[0].onended = () => {
         stopScreenSharing();
@@ -1093,10 +1094,10 @@ export default function SupportChatPage() {
           }
         }
       } else {
-        toast.error("El Asistente IA no pudo responder.");
+        toast.error("El asistente IA no pudo responder.");
       }
     } catch {
-      toast.error("Error de conexión con el Asistente IA");
+      toast.error("Error de conexión con el asistente IA");
     } finally {
       setIsAiLoading(false);
       setTimeout(scrollToBottom, 100);
@@ -1163,7 +1164,7 @@ export default function SupportChatPage() {
   const startAiVoice = async () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      toast.error("La entrada por voz no es compatible con este navegador. Por favor usa Google Chrome o Safari.");
+      toast.error("La entrada por voz no es compatible con este navegador. Por favor usa Google Chrome o safari.");
       return;
     }
 
@@ -1541,7 +1542,7 @@ export default function SupportChatPage() {
         fetchSessions();
       }
     } catch {
-      toast.error("Error al modificar estado de pin");
+      toast.error("Error al modificar estado de PIN");
     }
   };
 
@@ -1638,11 +1639,9 @@ export default function SupportChatPage() {
     const token = isPwa ? sessionStorage.getItem("token") : localStorage.getItem("token");
     if (!storedUser.id || !token) return;
 
-    const socketUrl = API;
     if (socketRef.current) socketRef.current.disconnect();
 
-    socketRef.current = io(socketUrl, {
-      transports: ["websocket", "polling"],
+    socketRef.current = connectSocket({
       auth: { token },
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -1907,7 +1906,7 @@ export default function SupportChatPage() {
                   <IconHeadset size={20} className="text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm">Syncro Soporte</p>
+                  <p className="font-semibold text-sm">Syncro soporte</p>
                   <p className="text-[11px] text-muted-foreground">Canal de ayuda</p>
                 </div>
               </div>
@@ -1979,7 +1978,7 @@ export default function SupportChatPage() {
                 <div className="relative">
                   <Avatar className="size-10">
                     <AvatarImage src="/syncro.png" />
-                    <AvatarFallback className="bg-primary text-primary-foreground font-bold text-xs">SP</AvatarFallback>
+                    <AvatarFallback className="bg-primary text-primary-foreground font-bold text-xs">Sp</AvatarFallback>
                   </Avatar>
                   <span className={cn(
                     "absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-background transition-colors duration-300",
@@ -1987,7 +1986,7 @@ export default function SupportChatPage() {
                   )} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={cn("font-bold text-xs truncate", chatType === "human" ? "text-foreground" : "text-muted-foreground")}>Soporte Humano</p>
+                  <p className={cn("font-bold text-xs truncate", chatType === "human" ? "text-foreground" : "text-muted-foreground")}>Soporte humano</p>
                   <p className="text-[10px] text-muted-foreground truncate">
                     {messages.at(-1)?.text ?? "Inicia una conversación..."}
                   </p>
@@ -2003,8 +2002,8 @@ export default function SupportChatPage() {
             {/* Info block */}
             <div className="p-4 border-t">
               <div className="rounded-xl bg-muted/40 p-3 space-y-1">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Horario de atención</p>
-                <p className="text-xs text-foreground font-medium">Lun – Vie · 8am – 6pm</p>
+                <p className="text-[11px] font-semibold text-muted-foreground">Horario de atención</p>
+                <p className="text-xs text-foreground font-medium">Lun – vie · 8AM – 6PM</p>
                 <p className="text-[10px] text-muted-foreground">Respuesta típica en minutos</p>
                 <PWAInstallButton />
               </div>
@@ -2035,7 +2034,7 @@ export default function SupportChatPage() {
                   <>
                     <Avatar className="size-9">
                       <AvatarImage src="/syncro.png" />
-                      <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">SP</AvatarFallback>
+                      <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">Sp</AvatarFallback>
                     </Avatar>
                     <div>
                       <p className="font-semibold text-sm">
@@ -2089,7 +2088,7 @@ export default function SupportChatPage() {
                       </p>
                       <div className="flex items-center gap-1.5 h-4">
                         <span className="size-1.5 rounded-full bg-emerald-500" />
-                        <span className="text-[10px] text-muted-foreground font-medium">Asistente Virtual Activo</span>
+                        <span className="text-[10px] text-muted-foreground font-medium">Asistente virtual activo</span>
                       </div>
                     </div>
                   </>
@@ -2110,7 +2109,7 @@ export default function SupportChatPage() {
                       <DialogContent className="max-w-md w-[90vw] bg-background/95 backdrop-blur-md border-border">
                         <DialogHeader>
                           <DialogTitle className="flex items-center justify-between">
-                            Historial de Conversaciones
+                            Historial de conversaciones
                             <Button
                               variant="default"
                               size="sm"
@@ -2121,7 +2120,7 @@ export default function SupportChatPage() {
                                 setIsHistoryModalOpen(false);
                               }}
                             >
-                              <IconPlus size={14} /> Nuevo Chat
+                              <IconPlus size={14} /> Nuevo chat
                             </Button>
                           </DialogTitle>
                         </DialogHeader>
@@ -2137,7 +2136,7 @@ export default function SupportChatPage() {
                                 : "border-transparent text-muted-foreground hover:text-foreground"
                             )}
                           >
-                            Chats Activos
+                            Chats activos
                           </button>
                           <button
                             onClick={() => setHistoryTab("archived")}
@@ -2148,7 +2147,7 @@ export default function SupportChatPage() {
                                 : "border-transparent text-muted-foreground hover:text-foreground"
                             )}
                           >
-                            Chats Archivados
+                            Chats archivados
                           </button>
                         </div>
 
@@ -2263,7 +2262,7 @@ export default function SupportChatPage() {
                         <DropdownMenuItem asChild>
                           <Link href={`/dashboard/soporte/voz?sessionId=${sessionId}&adsMode=${adsMode}&webSearch=${webSearchEnabled}`} className="flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-lg cursor-pointer text-muted-foreground hover:text-foreground">
                             <IconMicrophone size={16} className="text-primary" />
-                            <span>Modo Voz (Tiempo real)</span>
+                            <span>Modo voz (tiempo real)</span>
                           </Link>
                         </DropdownMenuItem>
 
@@ -2272,7 +2271,7 @@ export default function SupportChatPage() {
                           className="flex items-center gap-2.5 px-3 py-2 text-sm font-semibold rounded-lg cursor-pointer text-muted-foreground hover:text-foreground"
                         >
                           <IconHistory size={16} className="text-primary" />
-                          <span>Historial de Chats</span>
+                          <span>Historial de chats</span>
                         </DropdownMenuItem>
 
                         <DropdownMenuItem 
@@ -2281,7 +2280,7 @@ export default function SupportChatPage() {
                         >
                           <div className="flex items-center gap-2.5">
                             <IconVideo size={16} className="text-primary" />
-                            <span>Modo Ads</span>
+                            <span>Modo ads</span>
                           </div>
                           <Switch
                             checked={adsMode}
@@ -2305,10 +2304,10 @@ export default function SupportChatPage() {
                         >
                           <div className="flex items-center gap-2.5">
                             {aiVoiceResponseEnabled ? <IconVolume size={16} className="text-primary" /> : <IconVolumeOff size={16} className="text-primary" />}
-                            <span>Respuesta por Voz</span>
+                            <span>Respuesta por voz</span>
                           </div>
-                          <Badge variant="outline" className={cn("border-none text-[9px] font-black uppercase px-2 py-0.5 rounded-md", aiVoiceResponseEnabled ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground")}>
-                            {aiVoiceResponseEnabled ? "ON" : "OFF"}
+                          <Badge variant="outline" className={cn("border-none text-[9px] font-black px-2 py-0.5 rounded-md", aiVoiceResponseEnabled ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground")}>
+                            {aiVoiceResponseEnabled ? "On" : "Off"}
                           </Badge>
                         </DropdownMenuItem>
 
@@ -2347,7 +2346,7 @@ export default function SupportChatPage() {
                   <Button 
                     size="sm" 
                     onClick={handleRequestNotificationPermission} 
-                    className="h-8 text-[11px] font-black uppercase tracking-wider px-3 bg-primary text-primary-foreground hover:bg-primary/95 shrink-0 rounded-lg active:scale-95 transition-all"
+                    className="h-8 text-[11px] font-black px-3 bg-primary text-primary-foreground hover:bg-primary/95 shrink-0 rounded-lg active:scale-95 transition-all"
                   >
                     Activar
                   </Button>
@@ -2431,7 +2430,7 @@ export default function SupportChatPage() {
                                 : "bg-card border-border text-foreground rounded-tl-none"
                           )}>
                             {chatType === "ai" && !isMe && (
-                              <div className="flex items-center gap-1.5 mb-1 text-[10px] font-bold text-primary uppercase tracking-wider">
+                              <div className="flex items-center gap-1.5 mb-1 text-[10px] font-bold text-primary">
                                 <img src="/iconosyncro.png" alt="Syncro" className="shrink-0 object-contain" style={{ width: 11, height: 11 }} />
                                 <span>Syncro IA</span>
                               </div>
@@ -2514,7 +2513,7 @@ export default function SupportChatPage() {
                                   <div className="size-6 rounded-lg bg-primary/10 flex items-center justify-center">
                                     <img src="/iconosyncro.png" alt="Syncro" className="shrink-0 object-contain" style={{ width: 13, height: 13 }} />
                                   </div>
-                                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Acción sugerida</span>
+                                  <span className="text-[10px] font-bold text-primary">Acción sugerida</span>
                                 </div>
                                 <div className="space-y-1.5 text-xs text-muted-foreground leading-normal">
                                   <p className="font-extrabold text-foreground tracking-tight">{msg.action.label}</p>
@@ -2524,11 +2523,11 @@ export default function SupportChatPage() {
                                     <span className="font-bold text-foreground">
                                       {msg.action.type === 'register_expense' ? 'Egreso (-)' : 
                                        msg.action.type === 'register_income' ? 'Ingreso (+)' : 
-                                       msg.action.type === 'close_shift' ? 'Cierre de Turno' : 
-                                       msg.action.type === 'create_category' ? 'Crear Categoría' :
-                                       msg.action.type === 'create_supplier' ? 'Crear Proveedor' :
-                                       msg.action.type === 'edit_product' ? 'Editar Producto' : 
-                                       msg.action.type === 'reconcile_inventory' ? 'Auditoría de Inventario' : 'Orden de Compra'}
+                                       msg.action.type === 'close_shift' ? 'Cierre de turno' : 
+                                       msg.action.type === 'create_category' ? 'Crear categoría' :
+                                       msg.action.type === 'create_supplier' ? 'Crear proveedor' :
+                                       msg.action.type === 'edit_product' ? 'Editar producto' : 
+                                       msg.action.type === 'reconcile_inventory' ? 'Auditoría de inventario' : 'Orden de compra'}
                                     </span>
                                   </p>
                                   {msg.action.data?.amount && (
@@ -2540,13 +2539,13 @@ export default function SupportChatPage() {
                                   {msg.action.data?.category && (
                                     <p className="flex justify-between">
                                       <span>Categoría:</span>
-                                      <span className="font-semibold text-foreground uppercase text-[10px]">{msg.action.data.category.replace('_', ' ')}</span>
+                                      <span className="font-semibold text-foreground text-[10px]">{msg.action.data.category.replace('_', ' ')}</span>
                                     </p>
                                   )}
                                   {msg.action.type === 'create_purchase_order' && msg.action.data?.items && (
                                     <p className="flex justify-between">
                                       <span>Artículos:</span>
-                                      <span className="font-semibold text-foreground uppercase text-[10px]">{msg.action.data.items.length} items</span>
+                                      <span className="font-semibold text-foreground text-[10px]">{msg.action.data.items.length} items</span>
                                     </p>
                                   )}
                                   {msg.action.type === 'create_category' && (
@@ -2616,7 +2615,7 @@ export default function SupportChatPage() {
                                       )}
                                       {msg.action.data.imageSearchQuery && (
                                         <p className="flex justify-between">
-                                          <span>Buscar Imagen:</span>
+                                          <span>Buscar imagen:</span>
                                           <span className="font-semibold text-primary italic truncate max-w-[120px]">{msg.action.data.imageSearchQuery}</span>
                                         </p>
                                       )}
@@ -2625,13 +2624,13 @@ export default function SupportChatPage() {
                                   {msg.action.type === 'close_shift' && (
                                     <>
                                       <p className="flex justify-between">
-                                        <span>Efectivo Reportado:</span>
+                                        <span>Efectivo reportado:</span>
                                         <span className="font-bold text-foreground">${msg.action.data.reportedCash?.toFixed(2)}</span>
                                       </p>
                                       {msg.actionConfirmed && (
                                         <>
                                           <p className="flex justify-between">
-                                            <span>Efectivo Esperado:</span>
+                                            <span>Efectivo esperado:</span>
                                             <span className="font-bold text-foreground">${msg.action.data.expectedCash?.toFixed(2)}</span>
                                           </p>
                                           <p className="flex justify-between">
@@ -2646,7 +2645,7 @@ export default function SupportChatPage() {
                                   )}
                                   {msg.action.type === 'reconcile_inventory' && msg.action.data?.items && (
                                     <div className="space-y-1.5 mt-1 border-t border-dashed border-border/40 pt-2 max-h-[150px] overflow-y-auto pr-1">
-                                      <p className="text-[10px] font-bold text-foreground mb-1 uppercase tracking-wider">Productos Contados:</p>
+                                      <p className="text-[10px] font-bold text-foreground mb-1">Productos contados:</p>
                                       {msg.action.data.items.map((item: any, idx: number) => (
                                         <div key={idx} className="flex justify-between items-center text-[11px] py-1 border-b border-muted/20 last:border-0">
                                           <span className="text-muted-foreground truncate max-w-[150px]" title={item.name}>{item.name}</span>
@@ -2779,7 +2778,7 @@ export default function SupportChatPage() {
                             <div className="flex items-center gap-1.5 mt-2 ml-1 w-full max-w-[260px] animate-in fade-in slide-in-from-top-1 duration-200">
                               <input
                                 type="text"
-                                placeholder="¿Cómo podemos mejorar? (Opcional)..."
+                                placeholder="¿Cómo podemos mejorar? (opcional)..."
                                 className="flex-1 bg-muted/70 dark:bg-muted/30 border border-border rounded-lg px-2.5 py-1 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/20"
                                 value={feedbackComment}
                                 onChange={(e) => setFeedbackComment(e.target.value)}
@@ -2820,7 +2819,7 @@ export default function SupportChatPage() {
                         animate={{ opacity: 1, scale: 1 }}
                         className="self-start flex flex-col max-w-[80%]"
                       >
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-primary uppercase tracking-wider h-5 px-1 py-1">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-primary h-5 px-1 py-1">
                           <img src="/iconosyncro.png" alt="Syncro" className="shrink-0 object-contain" style={{ width: 11, height: 11 }} />
                           <div className="inline-flex items-center relative overflow-hidden">
                             <AnimatePresence mode="wait">
@@ -2862,13 +2861,13 @@ export default function SupportChatPage() {
                           <PopoverContent side="top" align="start" className="w-[320px] p-0 border-none shadow-2xl rounded-2xl bg-popover/95 backdrop-blur-md overflow-hidden">
                             <div className="flex flex-col h-[350px]">
                               <div className="px-4 py-3 border-b bg-muted/30">
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Emojis</p>
+                                <p className="text-xs font-semibold text-muted-foreground">Emojis</p>
                               </div>
                               <ScrollArea className="flex-1">
                                 <div className="p-3 space-y-4">
                                   {EMOJI_CATEGORIES.map((cat) => (
                                     <div key={cat.label} className="space-y-2">
-                                      <p className="text-[10px] font-bold text-muted-foreground px-1 uppercase">{cat.label}</p>
+                                      <p className="text-[10px] font-bold text-muted-foreground px-1">{cat.label}</p>
                                       <div className="grid grid-cols-8 gap-1">
                                         {cat.emojis.map((emoji) => (
                                           <button
@@ -2957,7 +2956,7 @@ export default function SupportChatPage() {
                         <div className="flex-1 flex items-center min-w-0 gap-3">
                           <div className="flex items-center gap-1.5 shrink-0 px-1 border-r pr-2 border-muted">
                             <span className="size-2 rounded-full bg-rose-500 animate-pulse" />
-                            <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Escuchando</span>
+                            <span className="text-[10px] font-bold text-rose-500">Escuchando</span>
                           </div>
 
                           {/* REAL-TIME PREVIEW TEXT */}
@@ -3066,7 +3065,7 @@ export default function SupportChatPage() {
               </div>
               {chatType === "ai" && (
                 <p className="text-[10px] text-muted-foreground/60 text-center w-full mt-0.5 tracking-tight font-medium">
-                  es una IA y puede cometer errores porfavor califique
+                  Es una IA y puede cometer errores porfavor califique
                 </p>
               )}
             </div>
@@ -3078,8 +3077,8 @@ export default function SupportChatPage() {
               <Card className="overflow-hidden border-border bg-card">
                 <CardHeader className="p-4 flex flex-row items-center justify-between space-y-0">
                   <div>
-                    <CardTitle className="text-sm font-bold">Pantalla Compartida</CardTitle>
-                    <CardDescription className="text-[11px]">Meta Ads Manager Stream</CardDescription>
+                    <CardTitle className="text-sm font-bold">Pantalla compartida</CardTitle>
+                    <CardDescription className="text-[11px]">Meta ads manager stream</CardDescription>
                   </div>
                   {!screenStream ? (
                     <Button size="sm" onClick={startScreenSharing} className="bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] h-7 gap-1 px-2.5">
@@ -3105,7 +3104,7 @@ export default function SupportChatPage() {
                     <div className="flex flex-col items-center gap-2 p-6">
                       <IconVideo className="text-muted-foreground animate-pulse" size={28} />
                       <p className="text-xs text-muted-foreground max-w-[200px] leading-relaxed">
-                        Pantalla desconectada. Vincula la pestaña del Ads Manager para que la IA la analice.
+                        Pantalla desconectada. Vincula la pestaña del ads manager para que la IA la analice.
                       </p>
                     </div>
                   )}

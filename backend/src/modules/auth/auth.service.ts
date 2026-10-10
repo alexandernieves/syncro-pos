@@ -290,10 +290,20 @@ export class AuthService {
       },
     });
 
-    // 5. Create the user linked to the business
+    /*
+     * 5. Create the user linked to the business.
+     *
+     * Whoever registers here just created the business, so they are its owner
+     * and get the run of it. Without this they fell through to the schema
+     * default of 'pos', which drops them on the till screen with an empty
+     * sidebar — locked out of the inventory, reports and settings of a shop
+     * that is their own.
+     */
     return await this.usersService.create({
       ...userFields,
-      businessId: business.id,
+      businessId:  business.id,
+      role:        'ownerpos',
+      permissions: ['all'],
     });
   }
 

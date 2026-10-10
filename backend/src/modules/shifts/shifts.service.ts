@@ -50,7 +50,9 @@ export class ShiftsService {
       return total + saleCash;
     }, 0);
     
-    const expectedBalance = shift.openingBalance + totalCashPayments;
+    // Gym memberships charged in cash during this shift
+    const gymCash = await this.prisma.gymPayment.aggregate({ where: { shiftId: id, method: 'CASH' }, _sum: { amount: true } });
+    const expectedBalance = shift.openingBalance + totalCashPayments + (gymCash._sum.amount ?? 0);
     const difference = Number(closingBalance) - expectedBalance;
 
     return this.prisma.shift.update({
@@ -103,18 +105,30 @@ export class ShiftsService {
       }
     });
 
+    // Gym memberships charged during this shift count like sales
+    const gymPayments = await this.prisma.gymPayment.findMany({ where: { shiftId: shift.id }, select: { method: true, amount: true } });
+    let gymTotal = 0;
+    gymPayments.forEach((p) => {
+      gymTotal += p.amount;
+      if (expectedTotals[p.method as keyof typeof expectedTotals] !== undefined) {
+        expectedTotals[p.method as keyof typeof expectedTotals] += p.amount;
+      }
+    });
+
     // Return the shift without the huge sales array to save bandwidth, but with the calculated totals
     const { sales, ...shiftData } = shift;
     
     return {
       ...shiftData,
-      expectedTotals
+      expectedTotals,
+      gymTotal,
+      gymPaymentsCount: gymPayments.length,
     };
   }
 
   async findAll() {
     return this.prisma.shift.findMany({
-      include: { user: true, branch: true },
+      include: { user: { select: { id: true, name: true, email: true, role: true, avatar: true } }, branch: true },
       orderBy: { openedAt: 'desc' }
     });
   }

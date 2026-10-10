@@ -129,7 +129,7 @@ export default function PredictivePurchasesPage() {
       <div className="flex flex-col gap-2">
         <button 
           onClick={() => router.push('/dashboard/inventario/compras')} 
-          className="flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors max-w-max uppercase tracking-wider"
+          className="flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors max-w-max"
         >
           <IconArrowLeft size={14} /> Volver a compras
         </button>
@@ -138,7 +138,7 @@ export default function PredictivePurchasesPage() {
             <IconSparkles size={20} className="text-white animate-pulse" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent">Predicción de Compras Inteligente</h1>
+            <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent">Predicción de compras inteligente</h1>
             <p className="text-sm text-muted-foreground font-medium">Algoritmo predictivo contable que analiza la velocidad de ventas de los últimos 30 días y sugiere órdenes de reabastecimiento.</p>
           </div>
         </div>
@@ -157,13 +157,13 @@ export default function PredictivePurchasesPage() {
             <IconPackage size={24} />
           </div>
           <div>
-            <CardTitle className="text-lg font-bold text-white">¡Inventario Perfectamente Abastecido!</CardTitle>
+            <CardTitle className="text-lg font-bold text-white">¡Inventario perfectamente abastecido!</CardTitle>
             <CardDescription className="text-sm max-w-md mx-auto mt-1">
               La IA no detecta ningún producto con stock crítico o velocidad de venta insatisfecha para los próximos 14 días. ¡Excelente gestión de inventario!
             </CardDescription>
           </div>
-          <Button onClick={() => router.push('/dashboard/inventario/compras')} className="mt-2 text-xs font-bold uppercase tracking-wider">
-            Regresar a Compras
+          <Button onClick={() => router.push('/dashboard/inventario/compras')} className="mt-2 text-xs font-bold">
+            Regresar a compras
           </Button>
         </Card>
       ) : (
@@ -174,7 +174,7 @@ export default function PredictivePurchasesPage() {
             
             <Card className="bg-gradient-to-t from-violet-600/5 to-card border-violet-500/10 shadow-lg backdrop-blur-xs">
               <CardHeader className="pb-2">
-                <CardDescription className="text-[10px] font-black uppercase tracking-widest text-violet-400 opacity-80">Presupuesto Estimado</CardDescription>
+                <CardDescription className="text-[10px] font-black text-violet-400 opacity-80">Presupuesto estimado</CardDescription>
                 <CardTitle className="text-2xl font-black text-white tabular-nums mt-1">
                   {formatPrice(kpis.totalInvestment)}
                 </CardTitle>
@@ -186,7 +186,7 @@ export default function PredictivePurchasesPage() {
 
             <Card className="bg-gradient-to-t from-indigo-600/5 to-card border-indigo-500/10 shadow-lg backdrop-blur-xs">
               <CardHeader className="pb-2">
-                <CardDescription className="text-[10px] font-black uppercase tracking-widest text-indigo-400 opacity-80">Volumen Sugerido</CardDescription>
+                <CardDescription className="text-[10px] font-black text-indigo-400 opacity-80">Volumen sugerido</CardDescription>
                 <CardTitle className="text-2xl font-black text-white tabular-nums mt-1">
                   {kpis.totalItems} unidades
                 </CardTitle>
@@ -198,7 +198,7 @@ export default function PredictivePurchasesPage() {
 
             <Card className="bg-gradient-to-t from-amber-600/5 to-card border-amber-500/10 shadow-lg backdrop-blur-xs">
               <CardHeader className="pb-2">
-                <CardDescription className="text-[10px] font-black uppercase tracking-widest text-amber-400 opacity-80">Proveedores Involucrados</CardDescription>
+                <CardDescription className="text-[10px] font-black text-amber-400 opacity-80">Proveedores involucrados</CardDescription>
                 <CardTitle className="text-2xl font-black text-white tabular-nums mt-1">
                   {kpis.suppliersCount} proveedores
                 </CardTitle>
@@ -235,15 +235,15 @@ export default function PredictivePurchasesPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-extrabold text-white tracking-tight">{group.supplierName}</h3>
-                        <p className="text-[10px] text-muted-foreground font-bold tracking-widest uppercase">
-                          {group.items.length} {group.items.length === 1 ? 'Producto Sugerido' : 'Productos Sugeridos'}
+                        <p className="text-[10px] text-muted-foreground font-bold">
+                          {group.items.length} {group.items.length === 1 ? 'Producto sugerido' : 'Productos sugeridos'}
                         </p>
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
                       <div className="text-right">
-                        <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest block leading-none">Costo Total Sugerido</span>
+                        <span className="text-[10px] text-muted-foreground font-black block leading-none">Costo total sugerido</span>
                         <span className="text-sm font-black text-white tabular-nums mt-0.5 block">{formatPrice(group.totalCost)}</span>
                       </div>
                       
@@ -251,7 +251,7 @@ export default function PredictivePurchasesPage() {
                         <Button 
                           onClick={() => handleCreateDraftPO(group.supplierId, group.supplierName, group.items)}
                           disabled={creatingPo === group.supplierId}
-                          className="h-9 px-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-black uppercase text-[10px] tracking-wider shadow-md shrink-0 gap-1.5"
+                          className="h-9 px-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-black text-[10px] shadow-md shrink-0 gap-1.5"
                         >
                           {creatingPo === group.supplierId ? (
                             <>
@@ -259,13 +259,13 @@ export default function PredictivePurchasesPage() {
                             </>
                           ) : (
                             <>
-                              <IconSparkles size={12} /> Sugerir Borrador OC
+                              <IconSparkles size={12} /> Sugerir borrador oc
                             </>
                           )}
                         </Button>
                       ) : (
-                        <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground bg-muted/40 px-3 py-1.5 rounded-lg border border-transparent">
-                          Asignar Proveedor en POS
+                        <span className="text-[10px] font-black text-muted-foreground bg-muted/40 px-3 py-1.5 rounded-lg border border-transparent">
+                          Asignar proveedor en POS
                         </span>
                       )}
                     </div>
@@ -276,14 +276,14 @@ export default function PredictivePurchasesPage() {
                     <Table>
                       <TableHeader className="bg-zinc-950/20 border-b border-[#79716b]/10">
                         <TableRow className="border-[#79716b]/10 hover:bg-transparent">
-                          <TableHead className="text-[10px] font-black uppercase tracking-wider text-white h-10">Producto</TableHead>
-                          <TableHead className="text-[10px] font-black uppercase tracking-wider text-white h-10 text-center">SKU</TableHead>
-                          <TableHead className="text-[10px] font-black uppercase tracking-wider text-white h-10 text-center">Stock Actual</TableHead>
-                          <TableHead className="text-[10px] font-black uppercase tracking-wider text-white h-10 text-center">Ritmo Ventas (Día)</TableHead>
-                          <TableHead className="text-[10px] font-black uppercase tracking-wider text-white h-10 text-center">Cobertura (Días)</TableHead>
-                          <TableHead className="text-[10px] font-black uppercase tracking-wider text-white h-10 text-center bg-violet-600/5">Cantidad IA</TableHead>
-                          <TableHead className="text-[10px] font-black uppercase tracking-wider text-white h-10 text-right">Costo Unit.</TableHead>
-                          <TableHead className="text-[10px] font-black uppercase tracking-wider text-white h-10 text-right">Inversión Est.</TableHead>
+                          <TableHead className="text-[10px] font-black text-white h-10">Producto</TableHead>
+                          <TableHead className="text-[10px] font-black text-white h-10 text-center">SKU</TableHead>
+                          <TableHead className="text-[10px] font-black text-white h-10 text-center">Stock actual</TableHead>
+                          <TableHead className="text-[10px] font-black text-white h-10 text-center">Ritmo ventas (día)</TableHead>
+                          <TableHead className="text-[10px] font-black text-white h-10 text-center">Cobertura (días)</TableHead>
+                          <TableHead className="text-[10px] font-black text-white h-10 text-center bg-violet-600/5">Cantidad IA</TableHead>
+                          <TableHead className="text-[10px] font-black text-white h-10 text-right">Costo unit.</TableHead>
+                          <TableHead className="text-[10px] font-black text-white h-10 text-right">Inversión est.</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -293,7 +293,7 @@ export default function PredictivePurchasesPage() {
                             {/* Product & Variant */}
                             <TableCell className="py-3">
                               <p className="text-xs font-bold text-white leading-tight">{item.productName}</p>
-                              <p className="text-[10px] text-muted-foreground font-semibold uppercase mt-0.5">{item.variantName}</p>
+                              <p className="text-[10px] text-muted-foreground font-semibold mt-0.5">{item.variantName}</p>
                             </TableCell>
 
                             {/* SKU */}
@@ -321,7 +321,7 @@ export default function PredictivePurchasesPage() {
                             {/* Remaining Days of stock */}
                             <TableCell className="text-center">
                               {item.daysOfStockRemaining === 'N/A' ? (
-                                <span className="text-[10px] font-black text-muted-foreground uppercase">Estable</span>
+                                <span className="text-[10px] font-black text-muted-foreground">Estable</span>
                               ) : (
                                 <span className={`text-xs font-extrabold px-1.5 py-0.5 rounded-md ${item.daysOfStockRemaining <= 3 ? 'bg-red-500/10 text-red-500 border border-red-500/20' : item.daysOfStockRemaining <= 7 ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'text-white'}`}>
                                   {item.daysOfStockRemaining} días

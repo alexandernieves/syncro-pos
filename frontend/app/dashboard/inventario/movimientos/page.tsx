@@ -37,10 +37,10 @@ type Movement = {
 };
 
 const typeConfig: Record<string, { label: string; icon: any; color: string; bg: string }> = {
-  IN:         { label: "ENTRADA",  icon: IconArrowUp,    color: "text-emerald-600",  bg: "bg-emerald-500/10" },
-  OUT:        { label: "SALIDA",   icon: IconArrowDown,  color: "text-rose-600",    bg: "bg-rose-500/10" },
-  ADJUSTMENT: { label: "AJUSTE",   icon: IconAdjustments,color: "text-amber-600", bg: "bg-amber-500/10" },
-  TRANSFER:   { label: "TRASLADO", icon: IconArrowLeftRight,        color: "text-blue-600",   bg: "bg-blue-500/10" },
+  IN:         { label: "Entrada",  icon: IconArrowUp,    color: "text-emerald-600",  bg: "bg-emerald-500/10" },
+  OUT:        { label: "Salida",   icon: IconArrowDown,  color: "text-rose-600",    bg: "bg-rose-500/10" },
+  ADJUSTMENT: { label: "Ajuste",   icon: IconAdjustments,color: "text-amber-600", bg: "bg-amber-500/10" },
+  TRANSFER:   { label: "Traslado", icon: IconArrowLeftRight,        color: "text-blue-600",   bg: "bg-blue-500/10" },
 };
 
 export default function MovimientosPage() {
@@ -120,17 +120,17 @@ export default function MovimientosPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 px-4 lg:px-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <IconArrowLeftRight size={24} className="text-primary" /> Kardex de Movimientos
+            <IconArrowLeftRight size={24} className="text-primary" /> Kardex de movimientos
           </h1>
           <p className="text-sm text-muted-foreground font-medium">Control pormenorizado del flujo físico de mercancías entre sucursales y clientes.</p>
         </div>
         <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="gap-2 h-9 shadow-sm">
-                <IconFilter size={16} /> Filtros Rápidos
+                <IconFilter size={16} /> Filtros rápidos
             </Button>
             <Button size="sm" className="gap-2 h-9 shadow-md font-medium">
                 <IconCalendar size={16} />
-                <span>Rango Histórico</span>
+                <span>Rango histórico</span>
             </Button>
         </div>
       </div>

@@ -181,7 +181,7 @@ export const baseColumns: ColumnDef<any>[] = [
   },
   {
     accessorKey: "type",
-    header: "Tipo de Sección",
+    header: "Tipo de sección",
     cell: ({ row }) => (
       <div className="w-32">
         <Badge variant="outline" className="text-muted-foreground px-1.5">
@@ -278,9 +278,9 @@ export const baseColumns: ColumnDef<any>[] = [
               <SelectValue placeholder="Assign reviewer" />
             </SelectTrigger>
             <SelectContent align="end">
-              <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
+              <SelectItem value="Eddie Lake">Eddie lake</SelectItem>
               <SelectItem value="Jamik Tashpulatov">
-                Jamik Tashpulatov
+                Jamik tashpulatov
               </SelectItem>
             </SelectContent>
           </Select>
@@ -299,7 +299,7 @@ export const baseColumns: ColumnDef<any>[] = [
             size="icon"
           >
             <IconDotsVertical />
-            <span className="sr-only">Open menu</span>
+            <span className="sr-only">Abrir menú</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-32">
@@ -467,7 +467,7 @@ export function UniversalTable<TData extends { id: string | number }>({
                 <TableRow key={headerGroup.id} className="hover:bg-transparent border-none">
                   {headerGroup.headers.map((header) => {
                     return (
-                      <TableHead key={header.id} colSpan={header.colSpan} className="text-white font-normal text-[11px] uppercase tracking-wider py-4">
+                      <TableHead key={header.id} colSpan={header.colSpan} className="text-muted-foreground font-medium text-[11px] py-4">
                         {header.isPlaceholder
                           ? null
                           : flexRender(
@@ -605,27 +605,27 @@ export function UniversalTable<TData extends { id: string | number }>({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="outline">{tabs.outline || "Outline"}</SelectItem>
-              <SelectItem value="past-performance">{tabs.pastPerformance || "Past Performance"}</SelectItem>
-              <SelectItem value="key-personnel">{tabs.keyPersonnel || "Key Personnel"}</SelectItem>
-              <SelectItem value="focus-documents">{tabs.focusDocuments || "Focus Documents"}</SelectItem>
+              <SelectItem value="past-performance">{tabs.pastPerformance || "Rendimiento anterior"}</SelectItem>
+              <SelectItem value="key-personnel">{tabs.keyPersonnel || "Key personnel"}</SelectItem>
+              <SelectItem value="focus-documents">{tabs.focusDocuments || "Focus documents"}</SelectItem>
             </SelectContent>
           </Select>
           <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex">
             <TabsTrigger value="outline">{tabs.outline || "Outline"}</TabsTrigger>
             <TabsTrigger value="past-performance">
-              {tabs.pastPerformance || "Past Performance"}
+              {tabs.pastPerformance || "Rendimiento anterior"}
             </TabsTrigger>
             <TabsTrigger value="key-personnel">
-              {tabs.keyPersonnel || "Key Personnel"}
+              {tabs.keyPersonnel || "Key personnel"}
             </TabsTrigger>
-            <TabsTrigger value="focus-documents">{tabs.focusDocuments || "Focus Documents"}</TabsTrigger>
+            <TabsTrigger value="focus-documents">{tabs.focusDocuments || "Focus documents"}</TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
                   <IconLayoutColumns />
-                  <span className="hidden lg:inline">Personalizar Columnas</span>
+                  <span className="hidden lg:inline">Personalizar columnas</span>
                   <span className="lg:hidden">Columnas</span>
                   <IconChevronDown />
                 </Button>
@@ -657,7 +657,7 @@ export function UniversalTable<TData extends { id: string | number }>({
             {!hideAddButton && (
               <Button variant="outline" size="sm">
                 <IconPlus />
-                <span className="hidden lg:inline">Agregar Sección</span>
+                <span className="hidden lg:inline">Agregar sección</span>
               </Button>
             )}
           </div>
@@ -779,8 +779,8 @@ function TableCellViewer({ item }: { item: any }) {
                 </div>
                 <div className="text-muted-foreground">
                   Showing total visitors for the last 6 months. This is just
-                  some random text to test the layout. It spans multiple lines
-                  and should wrap around.
+                  Some random text to test the layout. It spans multiple lines
+                  And should wrap around.
                 </div>
               </div>
               <Separator />
@@ -803,15 +803,15 @@ function TableCellViewer({ item }: { item: any }) {
                       Tabla de contenidos
                     </SelectItem>
                     <SelectItem value="Executive Summary">
-                      Resumen Ejecutivo
+                      Resumen ejecutivo
                     </SelectItem>
                     <SelectItem value="Technical Approach">
-                      Enfoque Técnico
+                      Enfoque técnico
                     </SelectItem>
                     <SelectItem value="Design">Diseño</SelectItem>
                     <SelectItem value="Capabilities">Capacidades</SelectItem>
                     <SelectItem value="Focus Documents">
-                      Documentos de Enfoque
+                      Documentos de enfoque
                     </SelectItem>
                     <SelectItem value="Narrative">Narrativo</SelectItem>
                     <SelectItem value="Cover Page">Portada</SelectItem>
@@ -849,11 +849,11 @@ function TableCellViewer({ item }: { item: any }) {
                   <SelectValue placeholder="Seleccionar revisor" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
+                  <SelectItem value="Eddie Lake">Eddie lake</SelectItem>
                   <SelectItem value="Jamik Tashpulatov">
-                    Jamik Tashpulatov
+                    Jamik tashpulatov
                   </SelectItem>
-                  <SelectItem value="Emily Whalen">Emily Whalen</SelectItem>
+                  <SelectItem value="Emily Whalen">Emily whalen</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -1,4 +1,5 @@
 "use client";
+import { StoreProfileEditor } from "@/components/syncro-shop/store-profile-editor";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { API_URL } from "@/lib/constants"
 import { clearAuthSession } from "@/lib/auth-helpers";
@@ -48,6 +49,7 @@ import {
   IconMapPin,
   IconWorld,
   IconReceipt,
+  IconFileInvoice,
   IconCreditCard,
   IconDevices,
   IconHistory,
@@ -75,6 +77,7 @@ import {
 import { ALL_MODULES, PRESET_DEFINITIONS } from "@/components/module-customizer-dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { InvoiceDesigner } from "@/components/invoice/invoice-designer";
 
 const renderMarkdown = (content: string) => {
   if (!content) return null;
@@ -156,16 +159,17 @@ const ICONS_MAP: Record<string, React.ElementType> = {
 };
 
 const SECTIONS = [
-  { id: "modulos", label: "Giro y Módulos", icon: IconAdjustmentsHorizontal },
+  { id: "syncroshop", label: "Tienda Syncro Shop", icon: IconBuildingStore },
   { id: "negocio", label: "Negocio", icon: IconBuilding },
   { id: "facturacion", label: "Facturación e IVA", icon: IconReceipt },
-  { id: "pagos", label: "Métodos de Pago", icon: IconCreditCard },
-  { id: "pos", label: "Punto de Venta", icon: IconCash },
-  { id: "usuarios", label: "Usuarios y Roles", icon: IconShieldLock },
+  { id: "factura", label: "Diseño de factura", icon: IconFileInvoice },
+  { id: "pagos", label: "Métodos de pago", icon: IconCreditCard },
+  { id: "pos", label: "Punto de venta", icon: IconCash },
+  { id: "usuarios", label: "Usuarios y roles", icon: IconShieldLock },
   { id: "sucursales", label: "Sucursales", icon: IconMapPin },
-  { id: "sesiones", label: "Sesión y Seguridad", icon: IconFingerprint },
-  { id: "whatsapp", label: "WhatsApp Bot", icon: IconBrandWhatsapp },
-  { id: "ads_copilot", label: "Entrenamiento Ads IA", icon: IconHexagon },
+  { id: "sesiones", label: "Sesión y seguridad", icon: IconFingerprint },
+  { id: "whatsapp", label: "WhatsApp bot", icon: IconBrandWhatsapp },
+  { id: "ads_copilot", label: "Entrenamiento ads IA", icon: IconHexagon },
 ];
 
 const VENEZUELA_STATES = [
@@ -177,11 +181,21 @@ const VENEZUELA_STATES = [
 
 export default function ConfiguracionPage() {
   const [mounted, setMounted] = useState(false);
-  const [activeSection, setActiveSection] = React.useState("modulos");
+  const [activeSection, setActiveSection] = React.useState("syncroshop");
   const [loading, setLoading] = useState(true);
   const [businessType, setBusinessType] = useState("GENERAL");
   const [enabledModules, setEnabledModules] = useState<string[]>([]);
   const [savingModules, setSavingModules] = useState(false);
+
+  // --- Syncro Shop Vendor States ---
+  const [isSyncroVendor, setIsSyncroVendor] = useState(false);
+  const [syncroVendorStoreName, setSyncroVendorStoreName] = useState("");
+  const [syncroVendorCategory, setSyncroVendorCategory] = useState("Bodega");
+  const [syncroVendorPhone, setSyncroVendorPhone] = useState("");
+  const [syncroVendorBio, setSyncroVendorBio] = useState("");
+  const [syncroAutoSync, setSyncroAutoSync] = useState(true);
+  const [syncroShopSectionTitle, setSyncroShopSectionTitle] = useState("");
+  const [syncroShopLocation, setSyncroShopLocation] = useState("");
 
   React.useEffect(() => { setMounted(true); }, []);
 
@@ -240,6 +254,7 @@ export default function ConfiguracionPage() {
 
   const [syncroCreditMaxInstallments, setSyncroCreditMaxInstallments] = useState(3);
   const [syncroCreditFrequencyDays, setSyncroCreditFrequencyDays] = useState(15);
+  const [syncroCreditLimits, setSyncroCreditLimits] = useState({ initial: 30, max: 200, step: 10 });
 
   const [dashboardConfig, setDashboardConfig] = useState({
     salesGoal: "10000",
@@ -485,7 +500,7 @@ export default function ConfiguracionPage() {
       const audioTracks = stream.getAudioTracks();
       if (audioTracks.length === 0) {
         stream.getTracks().forEach((t: any) => t.stop());
-        toast.error("¡Error!: No seleccionaste la casilla 'Compartir audio de la pestaña/sistema'. Vuelve a intentarlo.");
+        toast.error("¡Error!: no seleccionaste la casilla 'compartir audio de la pestaña/sistema'. Vuelve a intentarlo.");
         return;
       }
 
@@ -646,7 +661,7 @@ export default function ConfiguracionPage() {
       return;
     }
 
-    const toastId = toast.loading("Analizando e interpretando la lección con Inteligencia Artificial...");
+    const toastId = toast.loading("Analizando e interpretando la lección con inteligencia artificial...");
 
     try {
       const token = localStorage.getItem("token");
@@ -763,8 +778,8 @@ export default function ConfiguracionPage() {
 
   const AVAILABLE_PRIVILEGES = [
     { id: "dashboard", label: "Dashboard" },
-    { id: "pos", label: "Punto de Venta" },
-    { id: "productos", label: "Gestión de Productos" },
+    { id: "pos", label: "Punto de venta" },
+    { id: "productos", label: "Gestión de productos" },
     { id: "inventario", label: "Inventario" },
     { id: "proveedores", label: "Proveedores" },
     { id: "reportes", label: "Reportes" },
@@ -772,6 +787,7 @@ export default function ConfiguracionPage() {
     { id: "contabilidad", label: "Contabilidad" },
     { id: "historial", label: "Historial" },
     { id: "configuracion", label: "Configuración" },
+    { id: "gimnasio", label: "Gimnasio" },
   ];
 
   const fetchUsers = async () => {
@@ -852,6 +868,7 @@ export default function ConfiguracionPage() {
             }
             setSyncroCreditMaxInstallments(data.syncroCreditMaxInstallments ?? 3);
             setSyncroCreditFrequencyDays(data.syncroCreditFrequencyDays ?? 15);
+            setSyncroCreditLimits({ initial: data.syncroCreditInitialLimit ?? 30, max: data.syncroCreditMaxLimit ?? 200, step: data.syncroCreditLimitStep ?? 10 });
             setWhatsappBotEnabled(data.whatsappBotEnabled || false);
             setWhatsappAuthorizedPhones(data.whatsappAuthorizedPhones || []);
             setDashboardConfig({
@@ -859,6 +876,21 @@ export default function ConfiguracionPage() {
               showSalesGoal: data.showSalesGoal !== undefined ? data.showSalesGoal : true,
               showNetMargin: data.showNetMargin !== undefined ? data.showNetMargin : true,
             });
+            if (data.isSyncroVendor !== undefined) {
+              setIsSyncroVendor(Boolean(data.isSyncroVendor));
+              localStorage.setItem("isSyncroVendor", String(data.isSyncroVendor));
+            } else {
+              const localV = localStorage.getItem("isSyncroVendor");
+              setIsSyncroVendor(localV === "true");
+            }
+            if (data.syncroVendorStoreName) setSyncroVendorStoreName(data.syncroVendorStoreName);
+            if (data.syncroVendorCategory) setSyncroVendorCategory(data.syncroVendorCategory);
+            if (data.syncroVendorPhone) setSyncroVendorPhone(data.syncroVendorPhone);
+            if (data.syncroVendorBio) setSyncroVendorBio(data.syncroVendorBio);
+            if (data.syncroAutoSync !== undefined) setSyncroAutoSync(Boolean(data.syncroAutoSync));
+            if (data.syncroShopSectionTitle) setSyncroShopSectionTitle(data.syncroShopSectionTitle);
+            if (data.syncroShopLocation) setSyncroShopLocation(data.syncroShopLocation);
+
             setBusinessType(data.businessType || "GENERAL");
             if (Array.isArray(data.enabledModules) && data.enabledModules.length > 0) {
               setEnabledModules(data.enabledModules);
@@ -892,6 +924,24 @@ export default function ConfiguracionPage() {
     };
     fetchData();
   }, []);
+
+  const handleSaveSyncroShopSettings = async (vendorActive: boolean) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ isSyncroVendor: vendorActive }),
+      });
+      if (!res.ok) throw new Error();
+      localStorage.setItem("isSyncroVendor", String(vendorActive));
+      window.dispatchEvent(new Event("settingsUpdated"));
+      toast.success(vendorActive ? "Tu tienda en Syncro Shop está activa." : "Tu tienda en Syncro Shop quedó desactivada.");
+    } catch (e) {
+      setIsSyncroVendor(!vendorActive);
+      toast.error("No se pudo cambiar el estado de tu tienda. Intenta de nuevo.");
+    }
+  };
 
   useEffect(() => {
     console.log("ConfiguracionPage Section:", activeSection);
@@ -1026,6 +1076,9 @@ export default function ConfiguracionPage() {
           pinPermissions: pinPermissions, 
           syncroCreditMaxInstallments: Number(syncroCreditMaxInstallments) || 3,
           syncroCreditFrequencyDays: Number(syncroCreditFrequencyDays) || 15,
+          syncroCreditInitialLimit: Math.max(1, Number(syncroCreditLimits.initial) || 30),
+          syncroCreditMaxLimit: Math.max(Number(syncroCreditLimits.initial) || 30, Number(syncroCreditLimits.max) || 200),
+          syncroCreditLimitStep: Math.max(0, Number(syncroCreditLimits.step) || 0),
           salesGoal: Number(dashboardConfig.salesGoal) || 10000,
           showSalesGoal: !!dashboardConfig.showSalesGoal,
           showNetMargin: !!dashboardConfig.showNetMargin,
@@ -1062,7 +1115,7 @@ export default function ConfiguracionPage() {
     if (preset) {
       setEnabledModules(preset.modules);
       toast.info(`Preset "${preset.title}" seleccionado`, {
-        description: "Haz clic en 'Guardar Cambios' para aplicar esta plantilla a tu sistema.",
+        description: "Haz clic en 'guardar cambios' para aplicar esta plantilla a tu sistema.",
       });
     }
   };
@@ -1152,7 +1205,7 @@ export default function ConfiguracionPage() {
     <div className="flex flex-col lg:flex-row min-h-full">
       {/* LEFT NAV */}
       <aside className="w-full lg:w-64 shrink-0 border-r bg-muted/20 p-4 flex flex-col gap-1">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-2">Secciones</p>
+        <p className="text-xs font-semibold text-muted-foreground mb-3 px-2">Secciones</p>
         {SECTIONS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -1171,178 +1224,74 @@ export default function ConfiguracionPage() {
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 p-6 overflow-y-auto">
+      <main className="min-w-0 flex-1 p-6">
 
-        {/* ─── GIRO Y MÓDULOS ─── */}
-        {activeSection === "modulos" && (
-          <div className="max-w-4xl flex flex-col gap-6">
+        {/* ─── TIENDA SYNCRO SHOP ─── */}
+        {activeSection === "syncroshop" && (
+          <div className="max-w-3xl flex flex-col gap-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-xl font-bold flex items-center gap-2">
-                  <IconAdjustmentsHorizontal className="w-6 h-6 text-primary" />
-                  Giro del Negocio y Módulos de Trabajo
+                  <IconBuildingStore className="w-6 h-6 text-primary" />
+                  Configuración de tienda online (Syncro Shop)
                 </h2>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  Adapta Syncro POS al rubro exacto de tu negocio. Enciende solo lo que tu equipo necesita.
+                  Activa tu tienda y configura cómo te ven y te compran en Syncro Shop. Los productos se publican desde productos → todos los productos.
                 </p>
               </div>
-              <Button
-                onClick={() => handleSaveModules()}
-                disabled={savingModules}
-                className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
-              >
-                {savingModules ? "Guardando..." : "Guardar Cambios"}
-              </Button>
+
             </div>
 
-            {/* Presets Rápidos */}
-            <Card className="border-border/80 shadow-xs">
-              <CardHeader className="pb-3">
+            {/* Tarjeta Principal: ¿Desea ser vendedor? */}
+            <Card className={cn("border transition-all shadow-sm", isSyncroVendor ? "border-primary/50 bg-card" : "border-border bg-muted/20")}>
+              <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-semibold">1. Elige tu Preset de Rubro</CardTitle>
-                  <Badge variant="outline" className="text-xs text-primary border-primary/30">
-                    <IconSparkles className="w-3.5 h-3.5 mr-1" /> Configura todo en 1 clic
-                  </Badge>
-                </div>
-                <CardDescription className="text-xs">
-                  Al hacer clic en un rubro, los módulos recomendados se seleccionarán de forma automática.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {Object.entries(PRESET_DEFINITIONS).map(([key, def]) => {
-                    const Icon = def.icon;
-                    const isSelected = businessType === key;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => handleApplyPreset(key)}
-                        className={cn(
-                          "flex flex-col text-left p-4 rounded-xl border transition-all cursor-pointer group hover:border-primary/50",
-                          isSelected
-                            ? "border-primary bg-primary/5 shadow-xs ring-2 ring-primary/20"
-                            : "border-border/70 bg-card hover:bg-muted/30"
-                        )}
-                      >
-                        <div className="flex items-center justify-between w-full mb-2">
-                          <div
-                            className={cn(
-                              "p-2.5 rounded-lg",
-                              isSelected
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted text-foreground group-hover:bg-primary/10 group-hover:text-primary"
-                            )}
-                          >
-                            <Icon className="w-5 h-5" />
-                          </div>
-                          {isSelected && (
-                            <Badge className="bg-primary text-primary-foreground text-[10px] px-2 py-0.5 h-5 flex items-center gap-1">
-                              <IconCheck className="w-3 h-3" /> Activo
-                            </Badge>
-                          )}
-                        </div>
-                        <h4 className="font-semibold text-sm text-foreground">{def.title}</h4>
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                          {def.subtitle}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Módulos Individuales */}
-            <Card className="border-border/80 shadow-xs">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-semibold">
-                    2. Módulos y Herramientas Activas ({enabledModules.length} de {ALL_MODULES.length})
-                  </CardTitle>
-                  <span className="text-xs text-muted-foreground">
-                    Los módulos desactivados no aparecerán en tu menú lateral
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <div className={cn("p-3 rounded-xl", isSyncroVendor ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                      <IconBuildingStore className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base font-semibold">¿Desea ser vendedor en Syncro Shop?</CardTitle>
+                      <CardDescription className="text-xs mt-0.5">
+                        Activa tu tienda online pública en <span className="font-semibold text-primary">https://syncro.shop</span> y habilita el módulo en el menú lateral.
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={isSyncroVendor}
+                    onCheckedChange={(checked) => {
+                      setIsSyncroVendor(checked);
+                      handleSaveSyncroShopSettings(checked);
+                    }}
+                    className="data-[state=checked]:bg-primary"
+                  />
                 </div>
               </CardHeader>
-              <CardContent className="pt-0">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {ALL_MODULES.map((mod) => {
-                    const Icon = mod.icon;
-                    const isChecked = enabledModules.includes(mod.id);
-
-                    return (
-                      <div
-                        key={mod.id}
-                        onClick={() => handleToggleModule(mod.id)}
-                        className={cn(
-                          "flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none",
-                          isChecked
-                            ? "border-primary/40 bg-card shadow-2xs"
-                            : "border-border/50 bg-muted/20 opacity-60 hover:opacity-100"
-                        )}
-                      >
-                        <div className="flex items-center gap-3 pr-2 min-w-0">
-                          <div
-                            className={cn(
-                              "p-2 rounded-lg shrink-0",
-                              isChecked
-                                ? "bg-primary/10 text-primary"
-                                : "bg-muted text-muted-foreground"
-                            )}
-                          >
-                            <Icon className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-xs font-semibold text-foreground truncate">
-                                {mod.name}
-                              </p>
-                              {mod.isCore && (
-                                <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
-                                  Esencial
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-muted-foreground line-clamp-1">
-                              {mod.description}
-                            </p>
-                          </div>
-                        </div>
-
-                        <Switch
-                          checked={isChecked}
-                          disabled={mod.isCore}
-                          onCheckedChange={() => handleToggleModule(mod.id)}
-                          className="shrink-0 data-[state=checked]:bg-primary"
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-6 flex justify-end">
-                  <Button
-                    onClick={() => handleSaveModules()}
-                    disabled={savingModules}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90"
-                  >
-                    {savingModules ? "Guardando..." : "Guardar y Aplicar Módulos"}
-                  </Button>
-                </div>
-              </CardContent>
+              
+              {!isSyncroVendor && (
+                <CardContent className="pt-0 pb-6">
+                  <div className="p-4 rounded-xl border border-dashed border-muted-foreground/30 bg-background/50 flex flex-col gap-2">
+                    <p className="text-sm text-muted-foreground">
+                      💡 <strong className="text-foreground font-semibold">¿Por qué activar Syncro Shop?</strong> Al convertirte en vendedor, tus productos e inventario estarán disponibles para miles de clientes en vivo. Además, desbloquearás la gestión de pedidos en línea directamente desde tu POS.
+                    </p>
+                  </div>
+                </CardContent>
+              )}
             </Card>
+
+            {/* Perfil público de la tienda (fase 1) */}
+            {isSyncroVendor && <StoreProfileEditor />}
           </div>
         )}
 
         {/* ─── NEGOCIO ─── */}
         {activeSection === "negocio" && (
           <div className="max-w-2xl flex flex-col gap-6">
-            <div><h2 className="text-xl font-bold">Información del Negocio</h2><p className="text-sm text-muted-foreground">Datos generales que aparecerán en tus comprobantes y reportes.</p></div>
+            <div><h2 className="text-xl font-bold">Información del negocio</h2><p className="text-sm text-muted-foreground">Datos generales que aparecerán en tus comprobantes y reportes.</p></div>
             <Card>
               <CardContent className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <Label>Isotipo del Negocio</Label>
+                  <Label>Isotipo del negocio</Label>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" className="w-full justify-between font-normal">
@@ -1376,11 +1325,11 @@ export default function ConfiguracionPage() {
                   </DropdownMenu>
                 </div>
                 {[
-                  { field: "businessName", label: "Nombre del Negocio", icon: IconBuilding, placeholder: "Syncro POS" },
+                  { field: "businessName", label: "Nombre del negocio", icon: IconBuilding, placeholder: "Syncro POS" },
                   { field: "ruc", label: "RUC / NIT / RFC", icon: IconReceipt, placeholder: "00000000000" },
                   { field: "phone", label: "Teléfono", icon: IconPhone, placeholder: "+1 (555) 000-0000" },
-                  { field: "email", label: "Correo Electrónico", icon: IconMail, placeholder: "contacto@negocio.com" },
-                  { field: "website", label: "Sitio Web", icon: IconWorld, placeholder: "www.minegocio.com" },
+                  { field: "email", label: "Correo electrónico", icon: IconMail, placeholder: "contacto@negocio.com" },
+                  { field: "website", label: "Sitio web", icon: IconWorld, placeholder: "www.minegocio.com" },
                   { field: "currency", label: "Moneda", icon: IconCash, placeholder: "USD" },
                 ].map(({ field, label, icon: Icon, placeholder }) => (
                   <div key={field} className="flex flex-col gap-1.5">
@@ -1415,12 +1364,12 @@ export default function ConfiguracionPage() {
                   <Label>Dirección</Label>
                   <div className="relative">
                     <IconMapPin size={15} className="absolute left-3 top-3 text-muted-foreground" />
-                    <Input className="pl-9" placeholder="Calle, Ciudad, País" value={negocio.address || ""} onChange={e => setNegocio(prev => ({ ...prev, address: e.target.value }))} />
+                    <Input className="pl-9" placeholder="Calle, ciudad, país" value={negocio.address || ""} onChange={e => setNegocio(prev => ({ ...prev, address: e.target.value }))} />
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Button className="self-start gap-2" onClick={() => handleSave("Negocio")}><IconDeviceFloppy size={16}/>Guardar Cambios</Button>
+            <Button className="self-start gap-2" onClick={() => handleSave("Negocio")}><IconDeviceFloppy size={16}/>Guardar cambios</Button>
           </div>
         )}
 
@@ -1433,7 +1382,7 @@ export default function ConfiguracionPage() {
             <Card>
               <CardContent className="p-6 flex flex-col gap-5">
                 <div className="flex justify-between items-center">
-                  <div><p className="font-medium">IVA / Impuesto sobre ventas</p><p className="text-sm text-muted-foreground">Aplicado automáticamente a cada venta</p></div>
+                  <div><p className="font-medium">IVA / impuesto sobre ventas</p><p className="text-sm text-muted-foreground">Aplicado automáticamente a cada venta</p></div>
                   <Badge className={iva.enabled ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"} onClick={() => setIva(p => ({ ...p, enabled: !p.enabled }))} style={{ cursor: "pointer" }}>
                     {iva.enabled ? "Activo" : "Desactivado"}
                   </Badge>
@@ -1441,23 +1390,23 @@ export default function ConfiguracionPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex flex-col gap-1.5">
                     <Label>Porcentaje de IVA (%)</Label>
-                    <p className="text-xs text-muted-foreground mb-1">Aplica al monto base de la venta (Ej: 16). Ajustar a 0 si no aplica.</p>
+                    <p className="text-xs text-muted-foreground mb-1">Aplica al monto base de la venta (ej: 16). Ajustar a 0 si no aplica.</p>
                     <Input type="number" value={iva.rate} onChange={e => setIva(p => ({ ...p, rate: e.target.value }))} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label>Porcentaje de IGTF (%)</Label>
-                    <p className="text-xs text-muted-foreground mb-1">Aplica al pago en Efectivo Moneda Extranjera. Ajustar a 0 si no aplica.</p>
+                    <p className="text-xs text-muted-foreground mb-1">Aplica al pago en efectivo moneda extranjera. Ajustar a 0 si no aplica.</p>
                     <Input type="number" value={iva.igtfRate} onChange={e => setIva(p => ({ ...p, igtfRate: e.target.value }))} />
                   </div>
                 </div>
                 <Separator />
-                <div className="flex flex-col gap-1.5">
-                  <Label>Mensaje al pie del comprobante</Label>
-                  <Input value={receiptFooter} onChange={e => setReceiptFooter(e.target.value)} placeholder="Gracias por su compra..." />
+                <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-4 py-3">
+                  <p className="text-sm text-muted-foreground">El logo, los datos y el mensaje del comprobante se editan en el diseño de factura.</p>
+                  <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={() => setActiveSection("factura")}><IconFileInvoice size={15} />Abrir</Button>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>Prefijo de número de venta</Label>
-                  <Input placeholder="VTA-" defaultValue="VTA-" className="max-w-xs" />
+                  <Input placeholder="Vta-" defaultValue="VTA-" className="max-w-xs" />
                   <p className="text-xs text-muted-foreground">Ej: VTA-0001, VTA-0002...</p>
                 </div>
               </CardContent>
@@ -1466,10 +1415,13 @@ export default function ConfiguracionPage() {
           </div>
         )}
 
+        {/* ─── DISEÑO DE FACTURA ─── */}
+        {activeSection === "factura" && <InvoiceDesigner />}
+
         {/* ─── PAGOS ─── */}
         {activeSection === "pagos" && (
           <div className="max-w-2xl flex flex-col gap-6">
-            <div><h2 className="text-xl font-bold">Métodos de Pago</h2><p className="text-sm text-muted-foreground">Activa o desactiva los métodos disponibles en el punto de venta.</p></div>
+            <div><h2 className="text-xl font-bold">Métodos de pago</h2><p className="text-sm text-muted-foreground">Activa o desactiva los métodos disponibles en el punto de venta.</p></div>
             <Card>
               <CardContent className="p-6 flex flex-col gap-1">
                 {paymentMethods.map(p => (
@@ -1498,7 +1450,7 @@ export default function ConfiguracionPage() {
                       <IconDevices size={20} />
                     </div>
                     <div>
-                      <p className="font-bold">Pago Móvil</p>
+                      <p className="font-bold">Pago móvil</p>
                       <p className="text-xs text-muted-foreground">Datos que verá el cliente para transferir</p>
                     </div>
                   </div>
@@ -1512,7 +1464,7 @@ export default function ConfiguracionPage() {
 
                 <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-4 transition-all duration-300", !pagoMovil.enabled && "opacity-40 pointer-events-none")}>
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Banco</Label>
+                    <Label className="text-[10px] font-bold text-muted-foreground">Banco</Label>
                     <Input 
                       placeholder="Ej. Banesco" 
                       value={pagoMovil.bank} 
@@ -1520,7 +1472,7 @@ export default function ConfiguracionPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Cédula / RIF</Label>
+                    <Label className="text-[10px] font-bold text-muted-foreground">Cédula / RIF</Label>
                     <Input 
                       placeholder="V-12345678" 
                       value={pagoMovil.id} 
@@ -1528,7 +1480,7 @@ export default function ConfiguracionPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Teléfono</Label>
+                    <Label className="text-[10px] font-bold text-muted-foreground">Teléfono</Label>
                     <Input 
                       placeholder="0412 1234567" 
                       value={pagoMovil.phone} 
@@ -1548,7 +1500,7 @@ export default function ConfiguracionPage() {
                       <IconHexagon size={20} />
                     </div>
                     <div>
-                      <p className="font-bold">Binance Pay</p>
+                      <p className="font-bold">Binance pay</p>
                       <p className="text-xs text-muted-foreground">Recibe criptomonedas directamente</p>
                     </div>
                   </div>
@@ -1562,7 +1514,7 @@ export default function ConfiguracionPage() {
 
                 <div className={cn("grid grid-cols-1 md:grid-cols-2 gap-4 transition-all duration-300", !binance.enabled && "opacity-40 pointer-events-none")}>
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Binance ID</Label>
+                    <Label className="text-[10px] font-bold text-muted-foreground">Binance ID</Label>
                     <Input 
                       placeholder="Ej. 123456789" 
                       value={binance.binanceId} 
@@ -1570,7 +1522,7 @@ export default function ConfiguracionPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Correo de la Cuenta</Label>
+                    <Label className="text-[10px] font-bold text-muted-foreground">Correo de la cuenta</Label>
                     <Input 
                       placeholder="ali@binance.com" 
                       value={binance.email} 
@@ -1604,7 +1556,7 @@ export default function ConfiguracionPage() {
 
                 <div className={cn("grid grid-cols-1 gap-4 transition-all duration-300", !zinli.enabled && "opacity-40 pointer-events-none")}>
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Correo Zinli</Label>
+                    <Label className="text-[10px] font-bold text-muted-foreground">Correo Zinli</Label>
                     <Input 
                       placeholder="tienda@zinli.com" 
                       value={zinli.email} 
@@ -1638,7 +1590,7 @@ export default function ConfiguracionPage() {
 
                 <div className={cn("grid grid-cols-1 gap-4 transition-all duration-300", !paypal.enabled && "opacity-40 pointer-events-none")}>
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Correo PayPal</Label>
+                    <Label className="text-[10px] font-bold text-muted-foreground">Correo PayPal</Label>
                     <Input 
                       placeholder="pagos@negocio.com" 
                       value={paypal.email} 
@@ -1649,21 +1601,21 @@ export default function ConfiguracionPage() {
               </CardContent>
             </Card>
 
-            <Button className="self-start gap-2" onClick={() => handleSave("Pagos")}><IconDeviceFloppy size={16}/>Guardar Configuración de Pagos</Button>
+            <Button className="self-start gap-2" onClick={() => handleSave("Pagos")}><IconDeviceFloppy size={16}/>Guardar configuración de pagos</Button>
           </div>
         )}
 
         {/* ─── POS ─── */}
         {activeSection === "pos" && (
           <div className="max-w-2xl flex flex-col gap-6">
-            <div><h2 className="text-xl font-bold">Punto de Venta</h2><p className="text-sm text-muted-foreground">Ajusta el comportamiento del terminal de ventas.</p></div>
+            <div><h2 className="text-xl font-bold">Punto de venta</h2><p className="text-sm text-muted-foreground">Ajusta el comportamiento del terminal de ventas.</p></div>
             <Card>
               <CardContent className="p-6 flex flex-col gap-1 divide-y">
                 {[
                   { field: "requireClient", label: "Requerir cliente en cada venta", desc: "Obligatorio seleccionar un cliente antes de cobrar" },
                   { field: "printOnSale", label: "Imprimir comprobante automáticamente", desc: "Envía a impresión al completar la venta" },
                   { field: "allowNegativeStock", label: "Permitir venta con stock negativo", desc: "Vende aunque no quede inventario registrado" },
-                  { field: "blindShiftClose", label: "🛡️ Arqueo Ciego Obligatorio para Cajeros", desc: "Oculta el saldo esperado y las diferencias a los cajeros al cerrar caja para evitar manipulaciones. La auditoría solo la ve gerencia." },
+                  { field: "blindShiftClose", label: "🛡️ Arqueo ciego obligatorio para cajeros", desc: "Oculta el saldo esperado y las diferencias a los cajeros al cerrar caja para evitar manipulaciones. La auditoría solo la ve gerencia." },
                 ].map(({ field, label, desc }) => (
                   <div key={field} className="flex justify-between items-center py-4">
                     <div><p className="font-medium text-sm">{label}</p><p className="text-xs text-muted-foreground">{desc}</p></div>
@@ -1683,12 +1635,12 @@ export default function ConfiguracionPage() {
                 <Separator className="my-2" />
                 
                 <div>
-                  <h3 className="text-sm font-bold text-primary mb-2">Configuración del Dashboard</h3>
+                  <h3 className="text-sm font-bold text-primary mb-2">Configuración del dashboard</h3>
                 </div>
 
                 <div className="flex justify-between items-center py-4">
                   <div>
-                    <p className="font-medium text-sm">Mostrar Meta de Ventas</p>
+                    <p className="font-medium text-sm">Mostrar meta de ventas</p>
                     <p className="text-xs text-muted-foreground">Activa el módulo de seguimiento de metas en el inicio</p>
                   </div>
                   <Switch 
@@ -1699,7 +1651,7 @@ export default function ConfiguracionPage() {
 
                 <div className="flex justify-between items-center py-4">
                   <div>
-                    <p className="font-medium text-sm">Mostrar Margen y Ganancia Real (Neto)</p>
+                    <p className="font-medium text-sm">Mostrar margen y ganancia real (neto)</p>
                     <p className="text-xs text-muted-foreground">Activa el módulo de cálculo de ganancias netas descontando mercancía y egresos</p>
                   </div>
                   <Switch 
@@ -1711,7 +1663,7 @@ export default function ConfiguracionPage() {
                 <div className="flex justify-between items-center py-4">
                   <div>
                     <p className="font-medium text-sm">Meta de Ventas Mensual ($)</p>
-                    <p className="text-xs text-muted-foreground">Monto objetivo para el indicador del Dashboard</p>
+                    <p className="text-xs text-muted-foreground">Monto objetivo para el indicador del dashboard</p>
                   </div>
                   <Input 
                     type="number" 
@@ -1728,16 +1680,56 @@ export default function ConfiguracionPage() {
               <CardHeader>
                 <CardTitle className="text-base font-bold flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                   <IconDevices size={18} />
-                  Configuración de SyncroCredit (Crédito Digital PWA)
+                  Configuración de SyncroCredit (crédito digital PWA)
                 </CardTitle>
                 <CardDescription>
                   Establece los límites y frecuencia predeterminada de cuotas para el cobro digital de créditos.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 divide-y divide-border/60">
+                <div className="flex justify-between items-center py-3">
+                  <div>
+                    <p className="font-medium text-sm">Límite inicial ($)</p>
+                    <p className="text-xs text-muted-foreground">Con cuánto crédito empieza un cliente nuevo al activar SyncroCredit</p>
+                  </div>
+                  <Input
+                    type="number"
+                    value={syncroCreditLimits.initial}
+                    onChange={e => setSyncroCreditLimits(p => ({ ...p, initial: Number(e.target.value) }))}
+                    className="w-24 text-center font-mono font-bold"
+                    min={0}
+                  />
+                </div>
+                <div className="flex justify-between items-center py-3">
+                  <div>
+                    <p className="font-medium text-sm">Aumento por pago a tiempo ($)</p>
+                    <p className="text-xs text-muted-foreground">Cuánto sube el límite cada vez que el cliente salda su deuda a tiempo</p>
+                  </div>
+                  <Input
+                    type="number"
+                    value={syncroCreditLimits.step}
+                    onChange={e => setSyncroCreditLimits(p => ({ ...p, step: Number(e.target.value) }))}
+                    className="w-24 text-center font-mono font-bold"
+                    min={0}
+                  />
+                </div>
+                <div className="flex justify-between items-center py-3">
+                  <div>
+                    <p className="font-medium text-sm">Límite máximo ($)</p>
+                    <p className="text-xs text-muted-foreground">Hasta dónde puede subir el límite automáticamente</p>
+                  </div>
+                  <Input
+                    type="number"
+                    value={syncroCreditLimits.max}
+                    onChange={e => setSyncroCreditLimits(p => ({ ...p, max: Number(e.target.value) }))}
+                    className="w-24 text-center font-mono font-bold"
+                    min={0}
+                  />
+                </div>
+                <p className="pt-3 text-xs text-muted-foreground">En la caja, la cajera solo activa SyncroCredit con el límite inicial. Para dar otro límite hace falta el PIN de supervisor.</p>
                 <div className="flex justify-between items-center py-2">
                   <div>
-                    <p className="font-medium text-sm">Frecuencia de Cuotas (Días)</p>
+                    <p className="font-medium text-sm">Frecuencia de cuotas (días)</p>
                     <p className="text-xs text-muted-foreground">Cada cuántos días el cliente debe realizar un abono (ej: 15 días)</p>
                   </div>
                   <Input 
@@ -1751,7 +1743,7 @@ export default function ConfiguracionPage() {
 
                 <div className="flex justify-between items-center py-3">
                   <div>
-                    <p className="font-medium text-sm">Máximo de Cuotas Habilitadas</p>
+                    <p className="font-medium text-sm">Máximo de cuotas habilitadas</p>
                     <p className="text-xs text-muted-foreground">Número máximo de cuotas que el cliente puede elegir al pagar en la PWA (ej: 3 cuotas)</p>
                   </div>
                   <Input 
@@ -1773,11 +1765,11 @@ export default function ConfiguracionPage() {
         {activeSection === "usuarios" && (
           <div className="max-w-2xl flex flex-col gap-6">
             <div className="flex justify-between items-start">
-              <div><h2 className="text-xl font-bold">Usuarios y Roles</h2><p className="text-sm text-muted-foreground">Gestiona quién tiene acceso al sistema.</p></div>
+              <div><h2 className="text-xl font-bold">Usuarios y roles</h2><p className="text-sm text-muted-foreground">Gestiona quién tiene acceso al sistema.</p></div>
               <Button className="gap-2" onClick={() => {
                 setNewUser({ name: "", email: "", password: "", role: "Cajero", privileges: ["pos"], branchIds: [] });
                 setCreateUserOpen(true);
-              }}><IconPlus size={16}/>Nuevo Usuario</Button>
+              }}><IconPlus size={16}/>Nuevo usuario</Button>
             </div>
             {usuarios.length === 0 ? (
               <div className="text-center py-6 text-muted-foreground text-sm">No hay usuarios o el servicio no está disponible</div>
@@ -1826,7 +1818,7 @@ export default function ConfiguracionPage() {
             <Dialog open={createUserOpen} onOpenChange={setCreateUserOpen}>
               <DialogContent className="sm:max-w-md md:max-w-2xl h-[90vh] md:h-auto overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Crear Nuevo Usuario</DialogTitle>
+                  <DialogTitle>Crear nuevo usuario</DialogTitle>
                   <DialogDescription>
                     Asigna un perfil y personaliza a qué áreas de la aplicación tendrá acceso mediante los switches.
                   </DialogDescription>
@@ -1834,11 +1826,11 @@ export default function ConfiguracionPage() {
                 <div className="flex flex-col gap-4 py-2">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label>Nombre Completo</Label>
-                      <Input placeholder="Ej. Carlos Pérez" value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} />
+                      <Label>Nombre completo</Label>
+                      <Input placeholder="Ej. Carlos pérez" value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} />
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Correo Electrónico</Label>
+                      <Label>Correo electrónico</Label>
                       <Input type="email" placeholder="carlos@mipos.com" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} />
                     </div>
                     <div className="space-y-1.5">
@@ -1846,15 +1838,15 @@ export default function ConfiguracionPage() {
                       <Input type="password" placeholder="••••••••" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} />
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Nombre del Rol Personalizado</Label>
-                      <Input placeholder="Ej. Gerente, Vendedor..." value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })} />
+                      <Label>Nombre del rol personalizado</Label>
+                      <Input placeholder="Ej. Gerente, vendedor..." value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })} />
                     </div>
                   </div>
 
                   <Separator className="my-2" />
                   
                   <div>
-                    <Label className="text-base font-semibold">Permisos de Acceso</Label>
+                    <Label className="text-base font-semibold">Permisos de acceso</Label>
                     <p className="text-xs text-muted-foreground mb-4">Activa los módulos que este usuario podrá visualizar y administrar.</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                       {AVAILABLE_PRIVILEGES.map(priv => (
@@ -1880,7 +1872,7 @@ export default function ConfiguracionPage() {
                   <Separator className="my-2" />
                   
                   <div>
-                    <Label className="text-base font-semibold">Sucursales de Acceso</Label>
+                    <Label className="text-base font-semibold">Sucursales de acceso</Label>
                     <p className="text-xs text-muted-foreground mb-4">Selecciona las sucursales donde este usuario podrá operar.</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                       {sucursales.map(branch => (
@@ -1930,7 +1922,7 @@ export default function ConfiguracionPage() {
                     } catch(e) {
                       toast.error("Error de conexión");
                     }
-                  }}>Crear Usuario</Button>
+                  }}>Crear usuario</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -1938,7 +1930,7 @@ export default function ConfiguracionPage() {
             <Dialog open={editUserOpen} onOpenChange={setEditUserOpen}>
               <DialogContent className="sm:max-w-md md:max-w-2xl h-[90vh] md:h-auto overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Editar Usuario</DialogTitle>
+                  <DialogTitle>Editar usuario</DialogTitle>
                   <DialogDescription>
                     Modifica el perfil del usuario o cambia sus permisos de acceso.
                   </DialogDescription>
@@ -1946,15 +1938,15 @@ export default function ConfiguracionPage() {
                 <div className="flex flex-col gap-4 py-2">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                      <div className="space-y-1.5">
-                       <Label>Nombre Completo</Label>
+                       <Label>Nombre completo</Label>
                        <Input value={editUser.name} onChange={e => setEditUser({ ...editUser, name: e.target.value })} />
                      </div>
                      <div className="space-y-1.5">
-                       <Label>Correo Electrónico</Label>
+                       <Label>Correo electrónico</Label>
                        <Input type="email" value={editUser.email} onChange={e => setEditUser({ ...editUser, email: e.target.value })} />
                      </div>
                      <div className="space-y-1.5 md:col-span-2">
-                       <Label>Nombre del Rol Personalizado</Label>
+                       <Label>Nombre del rol personalizado</Label>
                        <Input value={editUser.role} onChange={e => setEditUser({ ...editUser, role: e.target.value })} />
                      </div>
                   </div>
@@ -1962,7 +1954,7 @@ export default function ConfiguracionPage() {
                   <Separator className="my-2" />
                   
                   <div>
-                    <Label className="text-base font-semibold">Permisos de Acceso</Label>
+                    <Label className="text-base font-semibold">Permisos de acceso</Label>
                     <p className="text-xs text-muted-foreground mb-4">Activa los módulos que este usuario podrá visualizar y administrar.</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                       {AVAILABLE_PRIVILEGES.map(priv => (
@@ -1988,7 +1980,7 @@ export default function ConfiguracionPage() {
                   <Separator className="my-2" />
                   
                   <div>
-                    <Label className="text-base font-semibold">Sucursales de Acceso</Label>
+                    <Label className="text-base font-semibold">Sucursales de acceso</Label>
                     <p className="text-xs text-muted-foreground mb-4">Selecciona las sucursales donde este usuario podrá operar.</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                       {sucursales.map(branch => (
@@ -2038,7 +2030,7 @@ export default function ConfiguracionPage() {
                     } catch(e) {
                       toast.error("Error de conexión");
                     }
-                  }}>Guardar Cambios</Button>
+                  }}>Guardar cambios</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -2050,7 +2042,7 @@ export default function ConfiguracionPage() {
         {activeSection === "sesiones" && (
           <div className="max-w-2xl flex flex-col gap-6">
             <div>
-              <h2 className="text-xl font-bold">Sesión del Ordenador</h2>
+              <h2 className="text-xl font-bold">Sesión del ordenador</h2>
               <p className="text-sm text-muted-foreground">Información sobre tu conexión actual y seguridad de la cuenta.</p>
             </div>
             
@@ -2061,7 +2053,7 @@ export default function ConfiguracionPage() {
                     <IconDevices size={20} />
                   </div>
                   <div>
-                    <CardTitle className="text-sm">Sesión Actual</CardTitle>
+                    <CardTitle className="text-sm">Sesión actual</CardTitle>
                     <CardDescription className="text-xs">Este es el dispositivo que estás usando ahora mismo.</CardDescription>
                   </div>
                   <Badge className="ml-auto bg-green-500/20 text-green-600 border-green-500/30">Activa</Badge>
@@ -2076,7 +2068,7 @@ export default function ConfiguracionPage() {
                         <p className="text-xs text-muted-foreground">Dirección IP</p>
                         <p className="text-sm font-medium">
                           {sessionInfo?.ip === "::1" || sessionInfo?.ip === "127.0.0.1" 
-                            ? "Red Local (localhost)" 
+                            ? "Red local (localhost)" 
                             : (sessionInfo?.ip || "Detectando...")}
                         </p>
                       </div>
@@ -2113,7 +2105,7 @@ export default function ConfiguracionPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">Seguridad de la Sesión</CardTitle>
+                <CardTitle className="text-sm">Seguridad de la sesión</CardTitle>
                 <CardDescription className="text-xs italic">
                   Tu sesión se cerrará automáticamente después de 15 minutos de inactividad para proteger tus datos.
                 </CardDescription>
@@ -2124,7 +2116,7 @@ export default function ConfiguracionPage() {
                     <IconShieldLock size={18} className="text-muted-foreground" />
                     <div>
                       <p className="text-sm font-medium">Estado de la cuenta</p>
-                      <p className="text-xs text-muted-foreground">Tu cuenta está protegida con cifrado SSL.</p>
+                      <p className="text-xs text-muted-foreground">Tu cuenta está protegida con cifrado ssl.</p>
                     </div>
                   </div>
                   <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200">Protegido</Badge>
@@ -2151,7 +2143,7 @@ export default function ConfiguracionPage() {
                     <IconLock size={18} />
                   </div>
                   <div>
-                    <CardTitle className="text-sm">PIN de Autorización</CardTitle>
+                    <CardTitle className="text-sm">PIN de autorización</CardTitle>
                     <CardDescription className="text-xs">PIN de 4 dígitos para autorizar acciones sensibles en el POS (descuentos, etc.)</CardDescription>
                   </div>
                   {discountPin && <Badge className="ml-auto bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border text-[10px]">Configurado</Badge>}
@@ -2160,7 +2152,7 @@ export default function ConfiguracionPage() {
               <CardContent className="p-6 flex flex-col gap-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nuevo PIN (4 dígitos)</Label>
+                    <Label className="text-xs font-semibold text-muted-foreground">Nuevo PIN (4 dígitos)</Label>
                     <div className="relative">
                       <Input
                         type={showPin ? 'text' : 'password'}
@@ -2168,7 +2160,7 @@ export default function ConfiguracionPage() {
                         placeholder="••••"
                         value={discountPin}
                         onChange={e => setDiscountPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        className="pr-10 text-center font-mono text-lg tracking-[0.5em]"
+                        className="pr-10 text-center font-mono text-lg"
                       />
                       <button
                         type="button"
@@ -2180,7 +2172,7 @@ export default function ConfiguracionPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Confirmar PIN</Label>
+                    <Label className="text-xs font-semibold text-muted-foreground">Confirmar PIN</Label>
                     <div className="relative">
                       <Input
                         type={showPin ? 'text' : 'password'}
@@ -2189,7 +2181,7 @@ export default function ConfiguracionPage() {
                         value={discountPinConfirm}
                         onChange={e => setDiscountPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 4))}
                         className={cn(
-                          "pr-10 text-center font-mono text-lg tracking-[0.5em]",
+                          "pr-10 text-center font-mono text-lg",
                           discountPinConfirm && discountPin !== discountPinConfirm ? "border-destructive" : ""
                         )}
                       />
@@ -2200,7 +2192,7 @@ export default function ConfiguracionPage() {
                       )}
                     </div>
                     {discountPinConfirm && discountPin !== discountPinConfirm && (
-                      <p className="text-[11px] text-destructive">Los PINs no coinciden</p>
+                      <p className="text-[11px] text-destructive">Los pins no coinciden</p>
                     )}
                   </div>
                 </div>
@@ -2232,7 +2224,7 @@ export default function ConfiguracionPage() {
                   </Button>
                   <Button variant="outline" className="flex-1 border-amber-500/20 text-amber-500 hover:bg-amber-500/10" onClick={() => setIsPinPermissionsModalOpen(true)}>
                     <IconLock size={16} className="mr-2" />
-                    Configurar Permisos
+                    Configurar permisos
                   </Button>
                 </div>
               </CardContent>
@@ -2242,7 +2234,7 @@ export default function ConfiguracionPage() {
             <Card className="border-destructive/30">
               <CardHeader>
                 <CardTitle className="text-sm text-destructive flex items-center gap-2">
-                  <IconAlertTriangle size={18} /> Zona de Peligro
+                  <IconAlertTriangle size={18} /> Zona de peligro
                 </CardTitle>
                 <CardDescription className="text-xs">
                   Acciones destructivas e irreversibles para la gestión de datos.
@@ -2259,7 +2251,7 @@ export default function ConfiguracionPage() {
                   }}
                 >
                   <IconTrash size={16} />
-                  Eliminar Data de Sucursal
+                  Eliminar data de sucursal
                 </Button>
               </CardContent>
             </Card>
@@ -2269,16 +2261,16 @@ export default function ConfiguracionPage() {
               <DialogContent className="sm:max-w-md border-destructive">
                 <DialogHeader>
                   <DialogTitle className="text-destructive flex items-center gap-2">
-                    <IconAlertTriangle size={20} /> ¡Advertencia de Eliminación!
+                    <IconAlertTriangle size={20} /> ¡Advertencia de eliminación!
                   </DialogTitle>
                   <DialogDescription className="font-medium text-foreground">
-                    Estás a punto de borrar TODOS los datos de una sucursal (Ventas, Gastos, Turnos, Inventario). Esta acción es <strong className="text-destructive">IRREVERSIBLE</strong>.
+                    Estás a punto de borrar todos los datos de una sucursal (ventas, gastos, turnos, inventario). Esta acción es <strong className="text-destructive">irreversible</strong>.
                   </DialogDescription>
                 </DialogHeader>
                 
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label className="font-bold">Selecciona la Sucursal a limpiar</Label>
+                    <Label className="font-bold">Selecciona la sucursal a limpiar</Label>
                     <Select value={wipeBranchId} onValueChange={setWipeBranchId}>
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccionar sucursal..." />
@@ -2294,7 +2286,7 @@ export default function ConfiguracionPage() {
                   <div className="space-y-2">
                     <Label>Para confirmar, escribe la palabra <strong className="select-none">Eliminar</strong></Label>
                     <Input 
-                      placeholder="Escribe Eliminar..." 
+                      placeholder="Escribe eliminar..." 
                       value={wipeConfirmText} 
                       onChange={e => setWipeConfirmText(e.target.value)} 
                     />
@@ -2312,7 +2304,7 @@ export default function ConfiguracionPage() {
                       setTimeout(() => setIsWipeAuthOpen(true), 150); // Small delay to avoid modal overlap issues
                     }}
                   >
-                    Proceder a Autenticación
+                    Proceder a autenticación
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -2323,7 +2315,7 @@ export default function ConfiguracionPage() {
               <DialogContent className="sm:max-w-md border-destructive">
                 <DialogHeader>
                   <DialogTitle className="text-destructive flex items-center gap-2">
-                    <IconShieldLock size={20} /> Autenticación Requerida
+                    <IconShieldLock size={20} /> Autenticación requerida
                   </DialogTitle>
                   <DialogDescription>
                     Por seguridad, ingresa tu contraseña para confirmar el borrado de la sucursal seleccionada.
@@ -2379,7 +2371,7 @@ export default function ConfiguracionPage() {
                       }
                     }}
                   >
-                    {isWiping ? "Borrando..." : "Confirmar Eliminación"}
+                    {isWiping ? "Borrando..." : "Confirmar eliminación"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -2392,16 +2384,16 @@ export default function ConfiguracionPage() {
           <div className="max-w-4xl flex flex-col gap-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold">Sucursales y Bodegas</h2>
+                <h2 className="text-xl font-bold">Sucursales y bodegas</h2>
                 <p className="text-sm text-muted-foreground">Gestione las diferentes ubicaciones físicas de su inventario.</p>
               </div>
               <Button className="gap-2" onClick={() => setCreateBranchOpen(true)}>
-                <IconPlus size={16} /> Nueva Sucursal
+                <IconPlus size={16} /> Nueva sucursal
               </Button>
             </div>
 
             <div className="space-y-4">
-              <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest px-1">Sedes Activas</h3>
+              <h3 className="text-sm font-bold text-muted-foreground px-1">Sedes activas</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {sucursales.map(b => (
                   <Card key={b.id} className="group hover:border-primary/40 transition-colors bg-background/50">
@@ -2462,13 +2454,13 @@ export default function ConfiguracionPage() {
             <Dialog open={createBranchOpen} onOpenChange={setCreateBranchOpen}>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Nueva Sucursal</DialogTitle>
+                  <DialogTitle>Nueva sucursal</DialogTitle>
                   <DialogDescription>Añade un nuevo punto de venta o almacén al sistema.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="branch-name">Nombre de Sucursal</Label>
-                    <Input id="branch-name" placeholder="Ej: Sucursal Norte" value={newBranch.name} onChange={e => setNewBranch({...newBranch, name: e.target.value})} />
+                    <Label htmlFor="branch-name">Nombre de sucursal</Label>
+                    <Input id="branch-name" placeholder="Ej: sucursal norte" value={newBranch.name} onChange={e => setNewBranch({...newBranch, name: e.target.value})} />
                   </div>
                   <div className="space-y-2">
                     <Label>Estado</Label>
@@ -2482,8 +2474,8 @@ export default function ConfiguracionPage() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="branch-loc">Ubicación / Dirección Exacta</Label>
-                    <Input id="branch-loc" placeholder="Ej: Calle 5 con Av. Las Delicias" value={newBranch.location} onChange={e => setNewBranch({...newBranch, location: e.target.value})} />
+                    <Label htmlFor="branch-loc">Ubicación / dirección exacta</Label>
+                    <Input id="branch-loc" placeholder="Ej: calle 5 con av. Las delicias" value={newBranch.location} onChange={e => setNewBranch({...newBranch, location: e.target.value})} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="branch-phone">Teléfono</Label>
@@ -2523,7 +2515,7 @@ export default function ConfiguracionPage() {
                         toast.error(err.message || "Error al crear sucursal");
                       }
                     } catch { toast.error("Error de conexión"); }
-                  }}><IconPlus size={16} /> Crear Sucursal</Button>
+                  }}><IconPlus size={16} /> Crear sucursal</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -2532,13 +2524,13 @@ export default function ConfiguracionPage() {
             <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Editar Sucursal</DialogTitle>
+                  <DialogTitle>Editar sucursal</DialogTitle>
                   <DialogDescription>Modifica los datos de esta sede o bodega.</DialogDescription>
                 </DialogHeader>
                 {editingBranch && (
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                      <Label>Nombre de Sucursal</Label>
+                      <Label>Nombre de sucursal</Label>
                       <Input value={editingBranch.name || ""} onChange={e => setEditingBranch({...editingBranch, name: e.target.value})} />
                     </div>
                     <div className="space-y-2">
@@ -2553,7 +2545,7 @@ export default function ConfiguracionPage() {
                        </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Ubicación / Dirección Exacta</Label>
+                      <Label>Ubicación / dirección exacta</Label>
                       <Input value={editingBranch.location || ""} onChange={e => setEditingBranch({...editingBranch, location: e.target.value})} />
                     </div>
                     <div className="space-y-2">
@@ -2592,7 +2584,7 @@ export default function ConfiguracionPage() {
                       console.error("Branches: Update error", err);
                       toast.error("Error de conexión"); 
                     }
-                  }}>Guardar Cambios</Button>
+                  }}>Guardar cambios</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -2601,7 +2593,7 @@ export default function ConfiguracionPage() {
             <Dialog open={mainBranchDialogOpen} onOpenChange={setMainBranchDialogOpen}>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Establecer como Sucursal Principal</DialogTitle>
+                  <DialogTitle>Establecer como sucursal principal</DialogTitle>
                   <DialogDescription>
                     Esta acción cambiará la sucursal por defecto. Por seguridad, por favor confirma tu contraseña.
                   </DialogDescription>
@@ -2651,7 +2643,7 @@ export default function ConfiguracionPage() {
                       console.error("Set main branch error:", err);
                       toast.error("Error de conexión"); 
                     }
-                  }}>Confirmar y Aplicar</Button>
+                  }}>Confirmar y aplicar</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -2740,7 +2732,7 @@ export default function ConfiguracionPage() {
                     </div>
                     <div className="text-center flex flex-col gap-1">
                       <p className="font-semibold text-sm">Escanea este código QR</p>
-                      <p className="text-xs text-muted-foreground">Abre WhatsApp → ⋮ Menú → Dispositivos vinculados → Vincular dispositivo</p>
+                      <p className="text-xs text-muted-foreground">Abre WhatsApp → ⋮ menú → dispositivos vinculados → vincular dispositivo</p>
                       <p className="text-xs text-muted-foreground">El QR expira en 60 segundos.</p>
                     </div>
                     <Button variant="outline" size="sm" onClick={fetchWaQr} disabled={waQrLoading}>
@@ -2762,7 +2754,7 @@ export default function ConfiguracionPage() {
                       <IconBrandWhatsapp size={24} />
                     </div>
                     <div>
-                      <p className="font-bold">Activar Bot de IA</p>
+                      <p className="font-bold">Activar bot de IA</p>
                       <p className="text-xs text-muted-foreground">La IA responderá de forma automática a los números autorizados</p>
                     </div>
                   </div>
@@ -2776,7 +2768,7 @@ export default function ConfiguracionPage() {
 
                 <div className="flex flex-col gap-4">
                   <div>
-                    <Label className="text-sm font-bold">Números de Teléfono Autorizados</Label>
+                    <Label className="text-sm font-bold">Números de teléfono autorizados</Label>
                     <p className="text-xs text-muted-foreground mb-2">
                       Solo estos números pueden activar la IA escribiendo <strong>syncroai</strong>. Usa formato con código de área (ej: 584121234567).
                     </p>
@@ -2851,7 +2843,7 @@ export default function ConfiguracionPage() {
             </Card>
 
             <Button className="self-start gap-2" onClick={() => handleSave("WhatsApp")}>
-              <IconDeviceFloppy size={16}/> Guardar Configuración de WhatsApp
+              <IconDeviceFloppy size={16}/> Guardar configuración de WhatsApp
             </Button>
           </div>
         )}
@@ -2860,7 +2852,7 @@ export default function ConfiguracionPage() {
         {activeSection === "ads_copilot" && (
           <div className="max-w-2xl flex flex-col gap-6">
             <div>
-              <h2 className="text-xl font-bold">Biblioteca de Entrenamiento de Ads</h2>
+              <h2 className="text-xl font-bold">Biblioteca de entrenamiento de ads</h2>
               <p className="text-sm text-muted-foreground">
                 Entrena a tu copiloto de IA compartiendo tus videos del curso. La IA escuchará el audio y guardará el conocimiento en su base de datos.
               </p>
@@ -2914,7 +2906,7 @@ export default function ConfiguracionPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <IconHexagon size={20} className="text-primary animate-pulse" />
-                  {recording ? "Grabando y Transcribiendo en Vivo..." : "Agregar Nueva Lección o Conocimiento"}
+                  {recording ? "Grabando y transcribiendo en vivo..." : "Agregar nueva lección o conocimiento"}
                 </CardTitle>
                 <CardDescription>
                   {adsTrainingMode === "record" 
@@ -2940,7 +2932,7 @@ export default function ConfiguracionPage() {
                         setLiveTranscription("");
                       }}
                     >
-                      Grabar Video / Pestaña
+                      Grabar video / pestaña
                     </button>
                     <button
                       type="button"
@@ -2956,7 +2948,7 @@ export default function ConfiguracionPage() {
                         setLiveTranscription("");
                       }}
                     >
-                      Cargar Texto Manual
+                      Cargar texto manual
                     </button>
                   </div>
                 )}
@@ -2965,9 +2957,9 @@ export default function ConfiguracionPage() {
                   <>
                     {!recording && (
                       <div className="flex flex-col gap-1.5">
-                        <Label>Título de la Clase / Video</Label>
+                        <Label>Título de la clase / video</Label>
                         <Input 
-                          placeholder="Ej. Lección 1: Cómo estructurar públicos similares" 
+                          placeholder="Ej. Lección 1: cómo estructurar públicos similares" 
                           value={lessonTitle}
                           onChange={e => setLessonTitle(e.target.value)}
                         />
@@ -2996,7 +2988,7 @@ export default function ConfiguracionPage() {
                     {(liveTranscription.trim() || recording) && (
                       <div className="flex flex-col gap-1.5 mt-2">
                         <div className="flex justify-between items-center">
-                          <Label className="text-xs uppercase font-bold text-muted-foreground">Texto Transcrito (Vista Previa)</Label>
+                          <Label className="text-xs font-bold text-muted-foreground">Texto transcrito (vista previa)</Label>
                           {transcriptionStats.total > 0 && (
                             <div className="flex items-center gap-2 text-xs font-semibold">
                               <span>Procesados: {transcriptionStats.success}/{transcriptionStats.total}</span>
@@ -3031,18 +3023,18 @@ export default function ConfiguracionPage() {
                             </Button>
                           )}
                           <Button className="gap-2" onClick={startRecording}>
-                            <IconHexagon size={16} /> Compartir Pestaña y Grabar
+                            <IconHexagon size={16} /> Compartir pestaña y grabar
                           </Button>
                         </>
                       ) : (
                         <Button className="gap-2 bg-red-600 hover:bg-red-700 text-white" onClick={stopRecording}>
-                          <IconTrash size={16} /> Detener Grabación
+                          <IconTrash size={16} /> Detener grabación
                         </Button>
                       )}
 
                       {!recording && liveTranscription.trim() && (
                         <Button className="gap-2 bg-primary hover:bg-primary" onClick={saveLesson}>
-                          <IconDeviceFloppy size={16} /> Guardar Lección en la IA
+                          <IconDeviceFloppy size={16} /> Guardar lección en la IA
                         </Button>
                       )}
                     </div>
@@ -3050,16 +3042,16 @@ export default function ConfiguracionPage() {
                 ) : (
                   <>
                     <div className="flex flex-col gap-1.5">
-                      <Label>Título de la Clase / Documento</Label>
+                      <Label>Título de la clase / documento</Label>
                       <Input 
-                        placeholder="Ej. Lección 1: Cómo estructurar públicos similares" 
+                        placeholder="Ej. Lección 1: cómo estructurar públicos similares" 
                         value={lessonTitle}
                         onChange={e => setLessonTitle(e.target.value)}
                       />
                     </div>
 
                     <div className="flex flex-col gap-1.5">
-                      <Label>Contenido / Transcripción Escrita</Label>
+                      <Label>Contenido / transcripción escrita</Label>
                       <textarea
                         placeholder="Pega aquí el texto completo del video, curso o documento que quieres que la IA aprenda..."
                         value={liveTranscription}
@@ -3083,7 +3075,7 @@ export default function ConfiguracionPage() {
                         onClick={saveLesson} 
                         disabled={!lessonTitle.trim() || !liveTranscription.trim()}
                       >
-                        <IconDeviceFloppy size={16} /> Guardar Lección en la IA
+                        <IconDeviceFloppy size={16} /> Guardar lección en la IA
                       </Button>
                     </div>
                   </>
@@ -3094,8 +3086,8 @@ export default function ConfiguracionPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div className="space-y-1">
-                  <CardTitle className="text-base font-bold">Lecciones Registradas en el Cerebro de la IA</CardTitle>
-                  <CardDescription>Documentos de transcripción que la IA lee para guiarte en Meta Ads.</CardDescription>
+                  <CardTitle className="text-base font-bold">Lecciones registradas en el cerebro de la IA</CardTitle>
+                  <CardDescription>Documentos de transcripción que la IA lee para guiarte en meta ads.</CardDescription>
                 </div>
                 {adsDocs.length > 0 && (
                   <Button
@@ -3105,7 +3097,7 @@ export default function ConfiguracionPage() {
                     onClick={downloadAllAsTxt}
                   >
                     <IconDownload size={15} />
-                    Respaldar Todo (TXT)
+                    Respaldar todo (txt)
                   </Button>
                 )}
               </CardHeader>
@@ -3156,7 +3148,7 @@ export default function ConfiguracionPage() {
                                 className="gap-2 cursor-pointer"
                               >
                                 <IconDownload size={15} />
-                                <span>Descargar TXT</span>
+                                <span>Descargar txt</span>
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 onClick={() => {
@@ -3199,7 +3191,7 @@ export default function ConfiguracionPage() {
               <IconAlertTriangle size={20} /> ¿Estás completamente seguro?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción eliminará permanentemente la sucursal <strong>{branchToDelete?.name}</strong> de la base de datos.
+              Esta acción eliminará permanentemente la sucursal <strong>{branchToDelete?.name}</strong> De la base de datos.
               Esta acción no se puede deshacer y podría afectar los registros asociados.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -3236,7 +3228,7 @@ export default function ConfiguracionPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-500">
-              <IconLock size={20} /> Permisos de Autorización (PIN)
+              <IconLock size={20} /> Permisos de autorización (PIN)
             </DialogTitle>
             <DialogDescription>
               Selecciona qué acciones dentro del sistema solicitarán el ingreso del PIN de autorización de 4 dígitos.
@@ -3244,12 +3236,12 @@ export default function ConfiguracionPage() {
           </DialogHeader>
           <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
             {[
-              { key: 'applyDiscount', label: 'Aplicar Descuentos (Porcentaje o Monto)', desc: 'Solicitará el PIN antes de abrir el modal de descuentos en el punto de venta.' },
-              { key: 'deleteCartItem', label: 'Eliminar Producto del Carrito', desc: 'Evita que los cajeros borren productos que ya habían sido marcados o registrados.' },
-              { key: 'cancelSale', label: 'Cancelar Venta (Limpiar Carrito)', desc: 'Evita la anulación completa de un carrito de compras que estaba en proceso.' },
-              { key: 'processReturn', label: 'Procesar Devoluciones de Venta', desc: 'Evita que se realicen retornos de mercancía y entregas de dinero sin supervisión.' },
-              { key: 'closeShift', label: 'Cerrar Caja (Turno)', desc: 'Protege el proceso de cuadre de caja al final del día.' },
-              { key: 'inventoryAdjustments', label: 'Ajustes de Inventario y Conteo Físico', desc: 'Aplica a finalizaciones de auditorías y ajustes manuales en el módulo de inventario.' }
+              { key: 'applyDiscount', label: 'Aplicar descuentos (porcentaje o monto)', desc: 'Solicitará el PIN antes de abrir el modal de descuentos en el punto de venta.' },
+              { key: 'deleteCartItem', label: 'Eliminar producto del carrito', desc: 'Evita que los cajeros borren productos que ya habían sido marcados o registrados.' },
+              { key: 'cancelSale', label: 'Cancelar venta (limpiar carrito)', desc: 'Evita la anulación completa de un carrito de compras que estaba en proceso.' },
+              { key: 'processReturn', label: 'Procesar devoluciones de venta', desc: 'Evita que se realicen retornos de mercancía y entregas de dinero sin supervisión.' },
+              { key: 'closeShift', label: 'Cerrar caja (turno)', desc: 'Protege el proceso de cuadre de caja al final del día.' },
+              { key: 'inventoryAdjustments', label: 'Ajustes de inventario y conteo físico', desc: 'Aplica a finalizaciones de auditorías y ajustes manuales en el módulo de inventario.' }
             ].map(perm => (
               <div key={perm.key} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
                 <div className="space-y-0.5 pr-4">
@@ -3284,7 +3276,7 @@ export default function ConfiguracionPage() {
                 }
               }}
             >
-              Guardar Permisos
+              Guardar permisos
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3295,7 +3287,7 @@ export default function ConfiguracionPage() {
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <IconHexagon size={20} className="text-primary" /> Editar Lección / Documento
+              <IconHexagon size={20} className="text-primary" /> Editar lección / documento
             </DialogTitle>
             <DialogDescription>
               Modifica el título y contenido del conocimiento de tu IA. Los emojis serán limpiados automáticamente al guardar.
@@ -3303,7 +3295,7 @@ export default function ConfiguracionPage() {
           </DialogHeader>
           <div className="flex flex-col gap-4 py-4">
             <div className="flex flex-col gap-1.5">
-              <Label>Título de la Clase / Documento</Label>
+              <Label>Título de la clase / documento</Label>
               <Input 
                 value={editDocTitle}
                 onChange={e => setEditDocTitle(e.target.value)}
@@ -3311,7 +3303,7 @@ export default function ConfiguracionPage() {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Contenido / Transcripción</Label>
+              <Label>Contenido / transcripción</Label>
               <textarea
                 value={editDocContent}
                 onChange={e => setEditDocContent(e.target.value)}
@@ -3329,7 +3321,7 @@ export default function ConfiguracionPage() {
               Cancelar
             </Button>
             <Button onClick={updateAdsDoc}>
-              Guardar Cambios
+              Guardar cambios
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3340,7 +3332,7 @@ export default function ConfiguracionPage() {
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-6 gap-4 overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <IconEye size={20} className="text-primary" /> Visualizar Lección
+              <IconEye size={20} className="text-primary" /> Visualizar lección
             </DialogTitle>
             <DialogDescription>
               Consulta el contenido estructurado de esta lección del cerebro de la IA.
@@ -3366,7 +3358,7 @@ export default function ConfiguracionPage() {
                 }}
               >
                 <IconCopy size={15} />
-                <span>Copiar Contenido</span>
+                <span>Copiar contenido</span>
               </Button>
             )}
             <Button variant="outline" className="h-9" onClick={() => {

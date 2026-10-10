@@ -1,8 +1,22 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { API_URL } from "@/lib/constants"
+import { ClientPicker, type DirectoryClient } from "@/components/pos/client-picker";
+import { ClientDataPrompt, clientIsMissingData } from "@/components/pos/client-data-prompt";
+import { CreditLimitOverride } from "@/components/pos/credit-limit-override";
+import { ReceiptPrinter, type ReceiptData } from "@/components/pos/receipt-printer";
+import { normalizeInvoiceDesign } from "@/lib/invoice/design";
+import { resolveInvoiceBusiness } from "@/lib/invoice/render";
+import { WhatsAppInvoiceError, openInvoiceInWhatsApp, saleToInvoiceData, sendInvoiceWhatsApp } from "@/lib/invoice/whatsapp";
+import { SyncroShopBadges } from "@/components/syncro-shop/syncro-shop-badges";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { API_URL } from "@/lib/constants";
 import { useRouter } from "next/navigation";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription
 } from "@/components/ui/card";
@@ -16,13 +30,14 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   IconShoppingCart, IconTrash, IconWallet, IconSearch, IconCash, IconCreditCard,
-  IconPlus, IconMinus, IconUser, IconChevronRight, IconUserPlus, IconX, IconBox,
+  IconPlus, IconMinus, IconUser, IconChevronRight, IconChevronDown, IconUserPlus, IconX, IconBox,
   IconArrowLeft, IconLogout, IconDeviceDesktop, IconDevices, IconCalculator, IconRefresh, IconReceiptTax,
   IconEye, IconPencil, IconScan, IconCamera, IconBarcode, IconAlertCircle, IconCircleCheckFilled, IconCheck, IconAlertTriangle,
   IconHexagon, IconWorld, IconBuilding, IconHistory, IconReceipt, IconFilter, IconArrowBackUp,
   IconPlayerPause, IconReceiptOff, IconList, IconFingerprint, IconCalendar as IconCalendarTabler, IconKeyboard,
-  IconPackage, IconScale, IconLock, IconDiscount, IconInfoCircle, IconShieldCheck, IconShieldLock
+  IconPackage, IconScale, IconLock, IconDiscount, IconInfoCircle, IconShieldCheck, IconShieldLock, IconBuildingStore, IconBrandWhatsapp
 } from "@tabler/icons-react";
+import { formatWhatsAppNumber } from "@/lib/phone-countries";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
@@ -62,6 +77,8 @@ type Product = {
   id: string;
   name: string;
   totalStock: number;
+  isPublishedOnSyncroShop?: boolean;
+  isFeaturedOnSyncroShop?: boolean;
   variants: Array<{
     id: string;
     name: string;
@@ -81,6 +98,7 @@ type Client = {
   _id?: string;
   name: string;
   documentId?: string;
+  phone?: string | null;
   walletBalance?: number;
   creditLimit?: number;
   currentDebt?: number;
@@ -172,25 +190,25 @@ const CreditRadial = ({ client }: { client: any }) => {
   return (
     <div className={`p-3 rounded-xl border ${bgLight} flex items-center justify-between gap-3 transition-all duration-300 font-sans shadow-sm`}>
       <div className="flex flex-col gap-1 flex-1 min-w-0">
-        <span className="text-[9px] font-extrabold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-1">
-          <IconCreditCard size={12} className={textColor} stroke={2.5} /> SyncroCredit Activo
+        <span className="text-[9px] font-extrabold text-muted-foreground/80 flex items-center gap-1">
+          <IconCreditCard size={12} className={textColor} stroke={2.5} /> SyncroCredit activo
         </span>
         <div className="flex flex-col">
-          <span className="text-[10px] font-semibold text-muted-foreground/80 leading-none">Cupo Disponible:</span>
+          <span className="text-[10px] font-semibold text-muted-foreground/80 leading-none">Cupo disponible:</span>
           <span className="text-base font-black text-foreground tabular-nums mt-0.5">${available.toFixed(2)}</span>
         </div>
         <div className="flex items-center gap-2.5 mt-1 pt-1.5 border-t border-border/40 text-[9px] font-bold text-muted-foreground/80">
           <div className="flex flex-col">
-            <span className="text-[7px] font-medium uppercase text-muted-foreground/60 leading-none">Límite</span>
+            <span className="text-[7px] font-medium text-muted-foreground/60 leading-none">Límite</span>
             <span className="text-foreground/95 mt-0.5">${limit.toFixed(2)}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[7px] font-medium uppercase text-muted-foreground/60 leading-none">Deuda</span>
+            <span className="text-[7px] font-medium text-muted-foreground/60 leading-none">Deuda</span>
             <span className="text-amber-600/90 mt-0.5">${debt.toFixed(2)}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[7px] font-medium uppercase text-muted-foreground/60 leading-none">Score</span>
-            <span className="text-blue-500 mt-0.5">{score.toFixed(0)} PTS</span>
+            <span className="text-[7px] font-medium text-muted-foreground/60 leading-none">Score</span>
+            <span className="text-blue-500 mt-0.5">{score.toFixed(0)} pts</span>
           </div>
         </div>
       </div>
@@ -222,7 +240,7 @@ const CreditRadial = ({ client }: { client: any }) => {
         {/* Inside circle text */}
         <div className="absolute flex flex-col items-center justify-center text-center w-full px-1">
           <span className="text-[8px] font-extrabold text-foreground tabular-nums leading-none">${available.toFixed(2)}</span>
-          <span className="text-[5px] font-extrabold text-muted-foreground uppercase leading-none mt-0.5">Disponible</span>
+          <span className="text-[5px] font-extrabold text-muted-foreground leading-none mt-0.5">Disponible</span>
         </div>
       </div>
     </div>
@@ -230,63 +248,12 @@ const CreditRadial = ({ client }: { client: any }) => {
 };
 
 // Ticket View for Printing
-const ThermalTicket = ({ order, settings }: { order: any, settings: any }) => {
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => setMounted(true), []);
+/** Rounds a money amount to cents (avoids 0.1 + 0.2 style leftovers). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-  if (!mounted) return null;
-
-  return (
-    <div className="hidden print:block font-mono text-[10px] w-[80mm] p-4 text-black bg-white mx-auto uppercase">
-      <div className="text-center mb-4">
-        <h2 className="text-sm font-black tracking-widest">{settings?.businessName || 'SYNCRO POS'}</h2>
-        <p>{settings?.businessAddress || 'S/N'}</p>
-        <p>{settings?.businessPhone || 'TEL: 000-0000000'}</p>
-        <div className="my-2 border-b border-dashed border-black" />
-      </div>
-      <div className="flex justify-between mb-1">
-        <span>#VENTA: {order.id?.substring(0, 8) || '0000'}</span>
-        <span>{order.date}</span>
-      </div>
-      <div className="flex justify-between mb-4">
-        <span>CLIENTE: {order.clientName}</span>
-      </div>
-      <div className="border-b border-dashed border-black mb-2" />
-      <table className="w-full mb-2">
-        <thead>
-          <tr className="border-b border-black">
-            <th className="text-left font-normal pb-1">CANT</th>
-            <th className="text-left font-normal pb-1 uppercase">DETALLE</th>
-            <th className="text-right font-normal pb-1">SUB</th>
-          </tr>
-        </thead>
-        <tbody>
-          {order.items.map((it: any, i: number) => (
-            <tr key={it.id || i}>
-              <td className="py-1">{it.quantity}X</td>
-              <td className="py-1 uppercase">{it.product.name}</td>
-              <td className="py-1 text-right">${(it.product.price * it.quantity).toFixed(2)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="border-t border-dashed border-black pt-2 space-y-1">
-        <div className="flex justify-between font-black text-xs">
-          <span>TOTAL USD:</span>
-          <span>${order.total.toFixed(2)}</span>
-        </div>
-        <div className="flex justify-between italic">
-          <span>TASA BCV: Bs {(order?.payments?.[0]?.exchangeRate || settings?.exchangeRate || 1).toFixed(2)}</span>
-          <span>BS: {(order.total * (order?.payments?.[0]?.exchangeRate || settings?.exchangeRate || 1)).toLocaleString('es-VE')}</span>
-        </div>
-      </div>
-      <div className="text-center mt-6">
-        <p>¡GRACIAS POR SU COMPRA!</p>
-        <p className="text-[8px] mt-2 italic text-slate-500">Documento no fiscal • Generado por Syncro POS</p>
-      </div>
-    </div>
-  );
-};
+function roundCents(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
 
 function PosNumpad({ onClose, onEnter }: { onClose: () => void, onEnter: (val: string) => void }) {
   const [display, setDisplay] = useState("");
@@ -361,7 +328,7 @@ function PosNumpad({ onClose, onEnter }: { onClose: () => void, onEnter: (val: s
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       >
-        <span className="text-xs font-bold text-muted-foreground flex items-center gap-2"><IconKeyboard size={14} /> Teclado Numérico</span>
+        <span className="text-xs font-bold text-muted-foreground flex items-center gap-2"><IconKeyboard size={14} /> Teclado numérico</span>
         <button
           onPointerDown={(e) => e.stopPropagation()}
           onClick={onClose}
@@ -377,7 +344,7 @@ function PosNumpad({ onClose, onEnter }: { onClose: () => void, onEnter: (val: s
           <span className="text-2xl font-mono font-bold tracking-tighter truncate block w-full">{display || "0"}</span>
         </div>
         <div className="grid grid-cols-3 gap-2">
-          <Button variant="outline" className="h-14 font-bold text-rose-500 bg-rose-500/10 border-none hover:bg-rose-500/20 text-sm shadow-sm" onClick={handleClear}>CLS</Button>
+          <Button variant="outline" className="h-14 font-bold text-rose-500 bg-rose-500/10 border-none hover:bg-rose-500/20 text-sm shadow-sm" onClick={handleClear}>Cls</Button>
           <Button variant="outline" className="h-14 font-bold bg-muted/50 border-none hover:bg-muted text-lg shadow-sm" onClick={handleBackspace}>←</Button>
           <Button variant="default" className="h-14 font-bold bg-primary text-primary-foreground text-sm shadow-sm" onClick={handleSubmit}>Enter</Button>
 
@@ -584,12 +551,79 @@ export default function POSPage() {
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [openingBalance, setOpeningBalance] = useState<string>("0");
-  const [showFondoBreakdown, setShowFondoBreakdown] = useState(false);
-  const [openingUsd, setOpeningUsd] = useState<string>("");
-  const [openingBs, setOpeningBs] = useState<string>("");
+  const [initialCashRows, setInitialCashRows] = useState<Array<{ id: string; amount: string; currency: "USD" | "BS" | "EUR" }>>([
+    { id: "1", amount: "", currency: "USD" },
+  ]);
+
+  const ALL_CURRENCIES = [
+    { code: "USD" as const, label: "USD ($)" },
+    { code: "BS" as const, label: "VES (Bs)" },
+    { code: "EUR" as const, label: "EUR (€)" },
+  ];
+
+  const getAvailableCurrenciesForRow = (rowId: string) => {
+    const selectedInOtherRows = new Set(
+      initialCashRows.filter((r) => r.id !== rowId).map((r) => r.currency)
+    );
+    return ALL_CURRENCIES.filter((c) => !selectedInOtherRows.has(c.code));
+  };
+
+  const calculateTotalOpeningBalance = (rows: Array<{ id: string; amount: string; currency: "USD" | "BS" | "EUR" }>) => {
+    let totalUSD = 0;
+    const rateBs = currentExchangeRate || 1;
+    const rateEur = bcvEurRate && bcvRate ? bcvEurRate / bcvRate : 1.08;
+
+    rows.forEach((row) => {
+      const val = parseFloat(row.amount) || 0;
+      if (val <= 0) return;
+      if (row.currency === "USD") {
+        totalUSD += val;
+      } else if (row.currency === "BS") {
+        totalUSD += val / rateBs;
+      } else if (row.currency === "EUR") {
+        totalUSD += val * rateEur;
+      }
+    });
+
+    return totalUSD;
+  };
+
+  const handleAddCashRow = () => {
+    const usedCurrencies = new Set(initialCashRows.map((r) => r.currency));
+    const nextAvailable = ALL_CURRENCIES.find((c) => !usedCurrencies.has(c.code));
+    if (!nextAvailable) return;
+
+    const newRow = {
+      id: Math.random().toString(36).substring(2, 9),
+      amount: "",
+      currency: nextAvailable.code,
+    };
+    const updated = [...initialCashRows, newRow];
+    setInitialCashRows(updated);
+  };
+
+  const handleRemoveCashRow = (id: string) => {
+    if (initialCashRows.length <= 1) return;
+    const updated = initialCashRows.filter((r) => r.id !== id);
+    setInitialCashRows(updated);
+    const total = calculateTotalOpeningBalance(updated);
+    setOpeningBalance(total > 0 ? total.toFixed(2) : "0");
+  };
+
+  const handleCashRowChange = (id: string, field: "amount" | "currency", value: string) => {
+    const updated = initialCashRows.map((r) => {
+      if (r.id === id) {
+        return { ...r, [field]: value };
+      }
+      return r;
+    });
+    setInitialCashRows(updated);
+    const total = calculateTotalOpeningBalance(updated);
+    setOpeningBalance(total > 0 ? total.toFixed(2) : "0");
+  };
   const [isClosingShift, setIsClosingShift] = useState(false);
   const [closingBalance, setClosingBalance] = useState<string>("0");
-  const [closeSummary, setCloseSummary] = useState<{ expected: number; reported: number; difference: number } | null>(null);
+  const [closeSummary, setCloseSummary] = useState<{ expected: number; reported: number; difference: number; isBlind?: boolean } | null>(null);
   const [isCloseSummaryOpen, setIsCloseSummaryOpen] = useState(false);
   const [cashBreakdown, setCashBreakdown] = useState({ b1: 0, b5: 0, b10: 0, b20: 0, b50: 0, b100: 0 });
   const [posBatch, setPosBatch] = useState<string>("0");
@@ -622,18 +656,35 @@ export default function POSPage() {
   const [showSplitPaymentForm, setShowSplitPaymentForm] = useState(false);
   const [tempPaymentMethod, setTempPaymentMethod] = useState<"CASH" | "CARD" | "TRANSFER" | "PAGO_MOVIL" | "BINANCE" | "ZINLI" | "PAYPAL" | "WALLET" | "CREDIT">("CASH");
   const [saveChangeToWallet, setSaveChangeToWallet] = useState(false);
-  const [printReceipt, setPrintReceipt] = useState(false);
+  const [printReceipt, setPrintReceipt] = useState(true);
+  // Send the invoice to the client's WhatsApp after the sale (remembered on this device)
+  const [sendWhatsAppInvoice, setSendWhatsAppInvoice] = useState(true);
+  useEffect(() => {
+    try {
+      setSendWhatsAppInvoice(localStorage.getItem("syncro-send-invoice-whatsapp") !== "off");
+    } catch {}
+  }, []);
+  const toggleSendWhatsAppInvoice = (value: boolean) => {
+    setSendWhatsAppInvoice(value);
+    try {
+      localStorage.setItem("syncro-send-invoice-whatsapp", value ? "on" : "off");
+    } catch {}
+  };
+  // Animated ticket shown after a sale when "Imprimir factura" is on
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [generatingPwaCode, setGeneratingPwaCode] = useState(false);
   const [creditType, setCreditType] = useState<"traditional" | "syncrocredit">("traditional");
   const [togglingSuspension, setTogglingSuspension] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [updatingLimit, setUpdatingLimit] = useState(false);
-  const [limitInputValue, setLimitInputValue] = useState<number | undefined>(undefined);
   const [showPwaCodeModal, setShowPwaCodeModal] = useState(false);
   const [generatedPwaCode, setGeneratedPwaCode] = useState("");
+  // The code goes to the client's WhatsApp; the POS only sees where it was sent
+  const [pwaCodeSentTo, setPwaCodeSentTo] = useState<string | null>(null);
+  const [pwaCodeFallbackReason, setPwaCodeFallbackReason] = useState<string | null>(null);
   const [pwaClientName, setPwaClientName] = useState("");
   const [pwaClientDocument, setPwaClientDocument] = useState("");
-  const [selectedCreditLimit, setSelectedCreditLimit] = useState<number | null>(null);
   const [selectedFrequencyDays, setSelectedFrequencyDays] = useState<number>(15);
   const [showPinAuthModal, setShowPinAuthModal] = useState(false);
   const [generatedPinCode, setGeneratedPinCode] = useState<string | null>(null);
@@ -645,7 +696,7 @@ export default function POSPage() {
   const [tempReference, setTempReference] = useState<string>("");
   const [syncingBcv, setSyncingBcv] = useState(false);
   const [settings, setSettings] = useState<any>(null);
-  const { currency, exchangeRate: bcvRate, eurExchangeRate: bcvEurRate, refreshRates, formatPrice } = useCurrency();
+  const { currency, setCurrency, exchangeRate: bcvRate, eurExchangeRate: bcvEurRate, bcvDate, refreshRates, formatPrice } = useCurrency();
   const [baseCurrency, setBaseCurrency] = useState<"USD" | "EUR">("USD");
   const [useWalletBalance, setUseWalletBalance] = useState(false);
   const [tempCurrency, setTempCurrency] = useState<"USD" | "VES">("USD");
@@ -1037,7 +1088,7 @@ export default function POSPage() {
       });
 
       if (dueClients.length > 0) {
-        toast.info(`Cobranza Pendiente: ${dueClients.length} clientes deben pagar hoy.`, {
+        toast.info(`Cobranza pendiente: ${dueClients.length} clientes deben pagar hoy.`, {
           description: "Revise el módulo de clientes para más detalles.",
           duration: 10000,
           icon: <IconAlertCircle className="text-amber-500" />
@@ -1092,7 +1143,38 @@ export default function POSPage() {
     setLoading(false);
   }, [pullRemoteData, products.length]);
 
-  const updateClientLimit = async (newLimit: number) => {
+  // SyncroCredit limit policy: the owner's initial limit, or another one with the supervisor PIN
+  const [showLimitOverride, setShowLimitOverride] = useState(false);
+  const [showManageLimit, setShowManageLimit] = useState(false);
+  const isOwnerUser = ["ownerpos", "owner", "admin", "superadmin"].includes(String(user?.role || "").toLowerCase());
+
+  const activateSyncroCredit = async (customLimit?: number, supervisorPin?: string) => {
+    if (!selectedClientId || selectedClientId === "consumidor-final") return;
+    setGeneratingPwaCode(true);
+    try {
+      const res = await fetch(`${API}/clients/${selectedClientId}/activation-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
+        body: JSON.stringify(customLimit ? { creditLimit: customLimit, supervisorPin } : {}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return toast.error(data.message || "No se pudo activar SyncroCredit");
+      setGeneratedPwaCode(data.activationCode || "");
+      setPwaCodeSentTo(data.sent ? data.sentTo : null);
+      setPwaCodeFallbackReason(data.sent ? null : data.reason || null);
+      setPwaClientName(selectedClient?.name || "Cliente");
+      setPwaClientDocument(selectedClient?.documentId || "");
+      setShowPwaCodeModal(true);
+      setShowLimitOverride(false);
+      toast.success(data.sent ? "Código enviado al WhatsApp del cliente" : "Código de activación generado");
+    } catch {
+      toast.error("Error de conexión al activar SyncroCredit");
+    } finally {
+      setGeneratingPwaCode(false);
+    }
+  };
+
+  const updateClientLimit = async (newLimit: number, supervisorPin?: string) => {
     if (newLimit < 0) return;
     setUpdatingLimit(true);
     try {
@@ -1103,7 +1185,7 @@ export default function POSPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ creditLimit: newLimit })
+        body: JSON.stringify({ creditLimit: newLimit, supervisorPin })
       });
       if (res.ok) {
         const updatedClient = await res.json();
@@ -1119,6 +1201,13 @@ export default function POSPage() {
     } finally {
       setUpdatingLimit(false);
     }
+  };
+
+  const clientMissingData = selectedClientId !== "consumidor-final" && clientIsMissingData(selectedClient);
+
+  const handleClientDataSaved = (patch: { phone?: string; documentId?: string }, updated: any) => {
+    setClients(prev => prev.map(c => ((c.id || (c as any)._id) === selectedClientId ? { ...c, ...updated, ...patch } : c)));
+    db.clients.put({ ...updated, ...patch, _id: updated.id }).catch(() => {});
   };
 
   const refreshSelectedClient = async () => {
@@ -1163,37 +1252,66 @@ export default function POSPage() {
   }, [activeShift, loadData]);
 
   // BARCODE SCANNER GLOBAL LISTENER
-  const [barcodeBuffer, setBarcodeBuffer] = useState("");
-  const [lastCharTime, setLastCharTime] = useState(0);
+
+  // ── Laser scanner as a keyboard ─────────────────────────────────────────
+  // A barcode scanner "types" the whole code in a few milliseconds and ends with Enter.
+  // "Escáner siempre activo" reads it anywhere (also over the payment summary and inside
+  // inputs, restoring the input afterwards); otherwise only when no field is focused.
+  const [scannerAlwaysOn, setScannerAlwaysOn] = useState(false);
+  useEffect(() => {
+    try { setScannerAlwaysOn(localStorage.getItem("syncro-scanner-always-on") === "1"); } catch {}
+  }, []);
+  const toggleScannerAlwaysOn = (value: boolean) => {
+    setScannerAlwaysOn(value);
+    try { localStorage.setItem("syncro-scanner-always-on", value ? "1" : "0"); } catch {}
+    toast.success(value ? "Escáner siempre activo: puedes escanear sin abrir esta ventana" : "Escáner siempre activo desactivado");
+  };
+  const processBarcodeRef = useRef<(code: string) => void>(() => {});
+  const scanBuffer = useRef({ chars: "", first: 0, last: 0, field: null as HTMLInputElement | HTMLTextAreaElement | null, fieldValue: "" });
 
   useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      // Ignore if focus is in an input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    const MAX_GAP_MS = 50; // between keys of the same scan
+    const MAX_AVG_MS = 35; // average per character for a real scanner
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (scannerOpen) return; // the scanner window reads it itself
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const field = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ? target : null;
+      if (field && !scannerAlwaysOn) return;
+      const buf = scanBuffer.current;
+      const now = performance.now();
 
-      const currentTime = new Date().getTime();
-      const diff = currentTime - lastCharTime;
-
-      // Reset buffer if delay > 50ms (typing manually vs scanner)
-      if (diff > 50) {
-        if (e.key.length === 1) setBarcodeBuffer(e.key);
-      } else {
-        if (e.key.length === 1) setBarcodeBuffer(prev => prev + e.key);
-      }
-
-      setLastCharTime(currentTime);
-
-      if (e.key === "Enter") {
-        if (barcodeBuffer.length > 2) {
-          processBarcode(barcodeBuffer);
+      if (e.key.length === 1) {
+        if (now - buf.last > MAX_GAP_MS) {
+          buf.chars = "";
+          buf.first = now;
+          buf.field = field;
+          buf.fieldValue = field?.value ?? "";
         }
-        setBarcodeBuffer("");
+        buf.chars += e.key;
+        buf.last = now;
+        return;
+      }
+      if (e.key === "Enter") {
+        const fast = buf.chars.length >= 4 && (buf.last - buf.first) / Math.max(1, buf.chars.length - 1) < MAX_AVG_MS && now - buf.last < 100;
+        if (fast) {
+          e.preventDefault();
+          e.stopPropagation();
+          // The scanner typed into a field: put back what the person had written
+          if (buf.field) {
+            const proto = buf.field instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(buf.field, buf.fieldValue);
+            buf.field.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+          processBarcodeRef.current(buf.chars);
+        }
+        buf.chars = "";
+        buf.last = 0;
       }
     };
-
-    window.addEventListener("keydown", handleKeyPress);
-    return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [barcodeBuffer, lastCharTime]);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [scannerOpen, scannerAlwaysOn]);
 
   // Calculaciones de Totales
   const originalSubtotal = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
@@ -1225,8 +1343,10 @@ export default function POSPage() {
   // Para propósitos de retrocompatibilidad con referencias a `subtotal`
   const subtotal = originalSubtotal;
 
-  const updatedTotal = subtotalAfterGlobalDiscount + (subtotalAfterGlobalDiscount * (taxRate / 100));
-  const taxAmount = subtotalAfterGlobalDiscount * (taxRate / 100);
+  // Every amount the cashier sees or charges is rounded to cents, so what is
+  // paid and what is pending always add up (in USD and in Bs).
+  const taxAmount = roundCents(subtotalAfterGlobalDiscount * (taxRate / 100));
+  const updatedTotal = roundCents(subtotalAfterGlobalDiscount + taxAmount);
 
   // Calculate IGTF based on CASH payments added
   const cashPaymentsTotal = addedPayments
@@ -1234,18 +1354,18 @@ export default function POSPage() {
     .reduce((acc, p) => acc + p.amount, 0);
 
   const igtfRateVal = settings?.igtfRate !== undefined && settings?.igtfRate !== null ? Number(settings.igtfRate) : 3;
-  const igtfAmount = cashPaymentsTotal * (igtfRateVal / 100);
-  const totalBeforeWallet = updatedTotal + igtfAmount;
+  const igtfAmount = roundCents(cashPaymentsTotal * (igtfRateVal / 100));
+  const totalBeforeWallet = roundCents(updatedTotal + igtfAmount);
 
   // Calculate Wallet Deduction
   const availableWallet = selectedClient?.walletBalance || 0;
   const availableCredit = (selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0);
-  const walletDeduction = useWalletBalance ? Math.min(availableWallet, totalBeforeWallet) : 0;
+  const walletDeduction = useWalletBalance ? roundCents(Math.min(availableWallet, totalBeforeWallet)) : 0;
 
-  const finalTotalWithIgtf = totalBeforeWallet - walletDeduction;
-  const totalPaid = addedPayments.reduce((acc, p) => acc + p.amount, 0);
-  const remainingToPay = Math.max(0, finalTotalWithIgtf - totalPaid);
-  const changeDue = Math.max(0, totalPaid - finalTotalWithIgtf);
+  const finalTotalWithIgtf = roundCents(totalBeforeWallet - walletDeduction);
+  const totalPaid = roundCents(addedPayments.reduce((acc, p) => acc + p.amount, 0));
+  const remainingToPay = Math.max(0, roundCents(finalTotalWithIgtf - totalPaid));
+  const changeDue = Math.max(0, roundCents(totalPaid - finalTotalWithIgtf));
   const changeDueBs = changeDue * currentExchangeRate;
 
   // Auto-switch tempPaymentMethod and update tempAmount when addedPayments changes
@@ -1353,6 +1473,8 @@ export default function POSPage() {
       setWaitlistOpen(true);
     }
   };
+
+  processBarcodeRef.current = processBarcode;
 
   const handleWaitlistSubmit = async () => {
     if (!waitlistData.name || !waitlistData.price) {
@@ -1575,6 +1697,7 @@ export default function POSPage() {
   };
 
   const openPaymentModal = (method: "CASH" | "CARD") => {
+    if (clientMissingData) return toast.error("Completa los datos del cliente para procesar el pago");
     setPaymentMethod(method);
     setAddedPayments([]); // Start fresh for mixed payment logic if needed, or just keep it
     setShowSplitPaymentForm(false);
@@ -1593,7 +1716,7 @@ export default function POSPage() {
       });
       if (res.ok) {
         await refreshRates();
-        toast.success(`Tasas BCV (Punto de Venta) actualizadas`);
+        toast.success(`Tasas BCV (punto de venta) actualizadas`);
       } else {
         toast.error("No se pudo sincronizar la tasa");
       }
@@ -1788,7 +1911,7 @@ export default function POSPage() {
             setGeneratedPinCode(null);
             clearInterval(interval);
             toast.success("Venta autorizada por el cliente con éxito");
-            setIsSaleSuccessModalOpen(true);
+            finishSale(buildReceipt(data.saleId || generatedPinCode || `PIN-${Date.now()}`, addedPayments));
 
             // Clean up cart and finalize POS side
             setCart([]);
@@ -1807,9 +1930,6 @@ export default function POSPage() {
               await db.clients.bulkAdd(clientsData.map((c: any) => ({ ...c, _id: c.id })));
             }
 
-            if (printReceipt) {
-              setTimeout(() => window.print(), 100);
-            }
           } else if (data.status === 'REJECTED') {
             setIsPollingPin(false);
             setShowPinAuthModal(false);
@@ -1828,6 +1948,101 @@ export default function POSPage() {
       clearInterval(interval);
     };
   }, [isPollingPin, generatedPinCode, printReceipt]);
+
+  const invoiceDesign = useMemo(() => normalizeInvoiceDesign(settings?.invoiceDesign, settings ?? undefined), [settings]);
+  const invoiceBusiness = useMemo(() => resolveInvoiceBusiness(settings, invoiceDesign, user?.companyName), [settings, invoiceDesign, user]);
+
+  /** Snapshot of the sale for the ticket, taken before the cart is cleared. */
+  const buildReceipt = (saleId: string, payments: any[], pending = false): ReceiptData => ({
+    saleId,
+    date: new Date(),
+    businessName: settings?.businessName || user?.companyName || "SYNCRO POS",
+    businessAddress: settings?.businessAddress || settings?.address || null,
+    businessPhone: settings?.businessPhone || settings?.phone || null,
+    businessRif: settings?.ruc || null,
+    clientName: selectedClient?.name || "Consumidor final",
+    clientDocument: selectedClient?.documentId || null,
+    clientPhone: selectedClient?.phone || null,
+    cashierName: user?.name || null,
+    items: cart.map((item) => {
+      const gross = item.product.price * item.quantity;
+      const discount = !item.discount ? 0 : item.discount.type === "pct" ? gross * (item.discount.value / 100) : item.discount.value;
+      return {
+        name: item.product.name,
+        code: item.product.barcode || item.product.sku || null,
+        quantity: item.quantity,
+        price: item.product.price,
+        discount: roundCents(Math.min(gross, discount)),
+        subtotal: Math.max(0, gross - discount),
+      };
+    }),
+    subtotal: subtotal,
+    discount: totalDiscountAmt,
+    taxRate,
+    tax: taxAmount,
+    igtf: payments.filter((p: any) => p.method === "CASH").reduce((acc: number, p: any) => acc + p.amount, 0) * (igtfRateVal / 100),
+    total: finalTotalWithIgtf,
+    exchangeRate: currentExchangeRate,
+    payments: [
+      ...payments.map((p: any) => ({ method: p.method, amount: p.amount, reference: p.reference })),
+      ...(useWalletBalance && walletDeduction > 0 ? [{ method: "WALLET", amount: walletDeduction }] : []),
+    ],
+    change: changeDue,
+    pending,
+  });
+
+  /** Closes every sale-related window so the next customer can be served right away. */
+  const resetAfterSale = useCallback(() => {
+    setReceipt(null);
+    setIsSaleSuccessModalOpen(false);
+    setIsPaymentModalOpen(false);
+    setIsConfirmPaymentOpen(false);
+    setShowPinAuthModal(false);
+    setIsDiscountModalOpen(false);
+    setIsNumpadOpen(false);
+    setIsCalculatorOpen(false);
+    setIsQuickClientOpen(false);
+    setIsWeightModalOpen(false);
+  }, []);
+
+  /** After a sale: animated ticket if printing is on, otherwise the success message. */
+  const finishSale = (snapshot: ReceiptData) => {
+    setIsConfirmPaymentOpen(false);
+    setIsPaymentModalOpen(false);
+    if (printReceipt) setReceipt(snapshot);
+    else setIsSaleSuccessModalOpen(true);
+    // Only sales saved on the server have an id the WhatsApp record can point to
+    const phone = snapshot.clientPhone?.trim();
+    if (sendWhatsAppInvoice && phone && !snapshot.pending && UUID_RE.test(snapshot.saleId)) {
+      deliverInvoiceWhatsApp(snapshot.saleId, phone, snapshot);
+    }
+  };
+
+  /** Sends the invoice in the background; the cashier keeps working. */
+  const deliverInvoiceWhatsApp = async (saleId: string, phone: string, data: ReceiptData) => {
+    const toastId = toast.loading(`Enviando factura por WhatsApp a ${data.clientName}…`);
+    try {
+      const result = await sendInvoiceWhatsApp(saleId, phone, data, invoiceDesign, invoiceBusiness);
+      setSalesHistory((prev) => prev.map((s) => (s.id === saleId ? { ...s, ...result } : s)));
+      toast.success(`Factura enviada por WhatsApp a ${data.clientName}`, { id: toastId });
+    } catch (e) {
+      const notConnected = e instanceof WhatsAppInvoiceError && e.notConnected;
+      setSalesHistory((prev) => prev.map((s) => (s.id === saleId ? { ...s, whatsappInvoiceStatus: "FAILED" } : s)));
+      toast.error(notConnected ? "El WhatsApp del negocio no está conectado" : "No se pudo enviar la factura por WhatsApp", {
+        id: toastId,
+        description: notConnected ? "Conéctalo en el módulo de chat, o envíala desde tu WhatsApp con el botón." : (e as Error).message,
+        action: { label: "Abrir WhatsApp", onClick: () => openInvoiceInWhatsApp(phone, data, invoiceDesign, invoiceBusiness) },
+        duration: 10000,
+      });
+    }
+  };
+
+  /** From the history: rebuilds the invoice of a saved sale and sends it again. */
+  const resendInvoiceWhatsApp = (sale: any) => {
+    const phone = sale.client?.phone?.trim();
+    if (!phone) return toast.error("Este cliente no tiene WhatsApp registrado");
+    deliverInvoiceWhatsApp(sale.id, phone, saleToInvoiceData(sale, settings));
+  };
 
   const processSale = async (overriddenPayments?: any[]) => {
     if (processing || isProcessingRef.current) return;
@@ -1893,19 +2108,16 @@ export default function POSPage() {
           createdAt: Date.now()
         });
 
-        toast.success("Venta guardada localmente (Pendiente de sincronizar)", {
+        toast.success("Venta guardada localmente (pendiente de sincronizar)", {
           description: "La venta se subirá al sistema automáticamente cuando se recupere la conexión.",
           duration: 6000
         });
 
+        finishSale(buildReceipt(`OFFLINE-${Date.now()}`, paymentsToEvaluate, true));
         setCart([]);
         setSelectedClientId("consumidor-final");
         setIsPaymentModalOpen(false);
         setProcessing(false);
-
-        if (printReceipt) {
-          setTimeout(() => window.print(), 100);
-        }
 
         return;
       }
@@ -1918,23 +2130,13 @@ export default function POSPage() {
       if (res.ok) {
         const createdSale = await res.json();
         toast.success("Venta realizada con éxito");
-        setIsSaleSuccessModalOpen(true);
+        finishSale(buildReceipt(createdSale?.id || `VENTA-${Date.now()}`, paymentsToEvaluate));
 
         if (createdSale && createdSale.pwaCode) {
           setGeneratedPwaCode(createdSale.pwaCode);
           setPwaClientName(selectedClient ? selectedClient.name : "Cliente");
           setShowPwaCodeModal(true);
         }
-        // Print logic
-        const settings = {
-          businessName: user?.companyName || "SYNCRO POS",
-          exchangeRate: currentExchangeRate
-        }
-        // Small delay to allow react to render ThermalTicket if needed
-        if (printReceipt) {
-          setTimeout(() => window.print(), 100);
-        }
-
         setCart([]);
         setAddedPayments([]);
         setSaveChangeToWallet(false);
@@ -1973,14 +2175,11 @@ export default function POSPage() {
       toast.warning("Error de red. Venta guardada localmente.", {
         description: "Se sincronizará al recuperar conexión."
       });
+      finishSale(buildReceipt(`OFFLINE-${Date.now()}`, overriddenPayments || addedPayments, true));
 
       setCart([]);
       setSelectedClientId("consumidor-final");
       setIsPaymentModalOpen(false);
-
-      if (printReceipt) {
-        setTimeout(() => window.print(), 100);
-      }
     } finally {
       isProcessingRef.current = false;
       setProcessing(false);
@@ -1989,7 +2188,7 @@ export default function POSPage() {
 
   const handleCreateClient = async () => {
     if (!newClient.name.trim()) return toast.error("El nombre es obligatorio");
-    if (!newClient.documentId.trim()) return toast.error("La Cédula / RIF es obligatoria");
+    if (!newClient.documentId.trim()) return toast.error("La cédula / RIF es obligatoria");
     setSavingClient(true);
     try {
       const res = await fetch(`${API}/clients`, {
@@ -2249,131 +2448,200 @@ export default function POSPage() {
   // SCREEN: Opening Cash Register
   if (!activeShift) {
     return (
-      <div className="h-screen w-full flex flex-col bg-muted/10">
+      <div className="h-screen w-full flex flex-col bg-[#E9E6E0]">
         {/* Header for opening screen */}
-        <header className="h-14 bg-background border-b px-6 flex items-center justify-between shrink-0">
+        <header className="h-14 bg-[#E9E6E0] border-b border-[#DAD5CC] px-6 flex items-center justify-between shrink-0">
           <div className="flex items-center">
             {canAccessDashboard && (
-              <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard")} className="h-8 w-8 mr-4">
+              <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard")} className="h-8 w-8 mr-4 text-[#16140F]">
                 <IconArrowLeft className="size-4" />
               </Button>
             )}
-            <h1 className="font-bold text-lg tracking-tight">SYNCRO POS</h1>
+            <h1 className="font-bold text-lg tracking-tight text-[#16140F]">Syncro CRM</h1>
           </div>
-          <BranchSwitcher disabled={!!activeShift} />
+          
+          <div className="flex items-center gap-3">
+            {/* FECHA VALOR STACKED */}
+            <div className="hidden sm:flex flex-col items-end mr-1">
+              <p className="text-[10px] text-[#6B665B] font-bold tracking-tight leading-none opacity-60">Fecha valor</p>
+              <p className="text-[12px] font-bold text-[#16140F] leading-none mt-1 capitalize">
+                {bcvDate && bcvDate !== "No disponible"
+                  ? bcvDate
+                  : format(new Date(), "EEEE, d MMMM yyyy", { locale: es })}
+              </p>
+            </div>
+
+            {/* BASE CURRENCY DROPDOWN PILL: [ USD ⌄ ] */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="h-9 px-3 gap-1.5 font-bold text-xs bg-[#FAF7F2] border-[#DAD5CC] text-[#16140F] hover:bg-[#F5F1E8] rounded-lg transition-all shadow-xs">
+                  {currency} <IconChevronDown size={14} className="text-[#6B665B]" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-24 border-none shadow-2xl rounded-xl p-1 bg-white">
+                {(["USD", "VES", "EUR"] as const).map((c) => (
+                  <DropdownMenuItem 
+                    key={c} 
+                    onClick={() => setCurrency(c)}
+                    className="text-[11px] font-bold py-2 rounded-lg cursor-pointer hover:bg-[#FAF7F2]"
+                  >
+                    {c}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* REFRESH BCV BUTTON PILL: [ 🔄 BCV: 853.50 ] */}
+            <Button 
+              variant="outline" 
+              disabled={syncingBcv}
+              onClick={async () => {
+                setSyncingBcv(true);
+                try {
+                  const token = localStorage.getItem("token");
+                  const res = await fetch(`${API_URL}/settings/sync-bcv`, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({ target: "pos" }),
+                  });
+                  await refreshRates();
+                  if (res.ok) {
+                    toast.success("Tasa BCV sincronizada correctamente");
+                  } else {
+                    toast.success("Tasa BCV actualizada");
+                  }
+                } catch {
+                  await refreshRates();
+                  toast.error("Error al sincronizar la tasa BCV");
+                } finally {
+                  setSyncingBcv(false);
+                }
+              }}
+              className="h-9 px-3.5 gap-2 font-bold text-xs bg-[#FAF7F2] border-[#DAD5CC] text-[#16140F] hover:bg-[#F5F1E8] rounded-lg transition-all shadow-xs disabled:opacity-50"
+            >
+              <IconRefresh size={14} className={cn("text-primary", syncingBcv && "animate-spin")} />
+              <span>BCV: {(currency === 'EUR' ? bcvEurRate : currentExchangeRate)?.toFixed(2)}</span>
+            </Button>
+
+            <BranchSwitcher disabled={!!activeShift} />
+          </div>
         </header>
 
         <div className="flex-1 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm space-y-8 bg-background border p-8 rounded-lg shadow-sm">
+          <div className="w-full max-w-md space-y-6 bg-[#FAF7F2] border border-[#E8E4DC] p-8 rounded-2xl shadow-xs">
             <div className="space-y-2 text-center">
-              <div className="size-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="size-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
                 <IconCalculator className="size-6 text-primary" />
               </div>
-              <h1 className="text-2xl font-semibold tracking-tight leading-none">Terminal de Venta</h1>
-              <p className="text-sm text-muted-foreground mt-2">
+              <h1 className="text-2xl font-bold tracking-tight leading-none text-[#16140F]">Terminal de venta</h1>
+              <p className="text-sm text-[#6B665B] mt-1.5">
                 Inicie su turno de trabajo estableciendo el fondo de caja inicial.
               </p>
             </div>
 
-            <div className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center gap-4 p-3 border rounded-md bg-muted/30">
-                  <IconUser className="size-5 text-muted-foreground" />
-                  <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-medium text-muted-foreground">Cajero</span>
-                    <span className="text-sm font-semibold leading-none">{user?.name || "Administrador"}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="opening-balance">Monto Inicial en Caja</Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
-                    <Input
-                      id="opening-balance"
-                      type="number"
-                      value={openingBalance}
-                      onChange={(e) => setOpeningBalance(e.target.value)}
-                      className="pl-7 h-12 text-xl font-semibold"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowFondoBreakdown(!showFondoBreakdown)}
-                    className="text-xs text-primary hover:underline flex items-center gap-1 font-medium transition-all"
-                  >
-                    {showFondoBreakdown ? "✕ Ocultar desglose de efectivo" : "＋ Desglosar efectivo (Dólares y Bolívares)"}
-                  </button>
-
-                  {showFondoBreakdown && (
-                    <div className="p-3 border rounded-lg bg-muted/20 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                      <div className="text-[10px] text-muted-foreground uppercase font-semibold flex justify-between">
-                        <span>Asistente de Fondo</span>
-                        <span>Tasa BCV: Bs {currentExchangeRate?.toFixed(2)}</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <Label htmlFor="opening-usd" className="text-xs text-muted-foreground">Efectivo $</Label>
-                          <div className="relative">
-                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
-                            <Input
-                              id="opening-usd"
-                              type="number"
-                              min="0"
-                              placeholder="0"
-                              className="pl-6 h-8 text-xs font-semibold"
-                              value={openingUsd}
-                              onChange={(e) => {
-                                setOpeningUsd(e.target.value);
-                                const usd = e.target.value;
-                                const bs = openingBs;
-                                const usdVal = Number(usd) || 0;
-                                const bsVal = Number(bs) || 0;
-                                const total = usdVal + (bsVal / (currentExchangeRate || 1));
-                                setOpeningBalance(total.toFixed(2));
-                              }}
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="opening-bs" className="text-xs text-muted-foreground">Efectivo Bs</Label>
-                          <div className="relative">
-                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">Bs</span>
-                            <Input
-                              id="opening-bs"
-                              type="number"
-                              min="0"
-                              placeholder="0"
-                              className="pl-8 h-8 text-xs font-semibold"
-                              value={openingBs}
-                              onChange={(e) => {
-                                setOpeningBs(e.target.value);
-                                const usd = openingUsd;
-                                const bs = e.target.value;
-                                const usdVal = Number(usd) || 0;
-                                const bsVal = Number(bs) || 0;
-                                const total = usdVal + (bsVal / (currentExchangeRate || 1));
-                                setOpeningBalance(total.toFixed(2));
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+            <div className="space-y-5">
+              <div className="flex items-center gap-3 p-3 border border-[#E5E1D9] rounded-xl bg-[#F7F5F0]">
+                <IconUser className="size-5 text-[#6B665B]" />
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-[#6B665B]">Cajero</span>
+                  <span className="text-sm font-semibold leading-none text-[#16140F]">{user?.name || "Administrador"}</span>
                 </div>
               </div>
 
+              {/* Dynamic Currency Breakdown Section */}
               <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-[#16140F]">Efectivo inicial en caja</Label>
+                </div>
+
+                <div className="space-y-2.5">
+                  {initialCashRows.map((row) => (
+                    <div key={row.id} className="flex items-center gap-2">
+                      {/* Unified Input + Currency Selector Box */}
+                      <div className="relative flex-1 flex items-center border border-[#E5E1D9] rounded-xl bg-white overflow-hidden focus-within:ring-2 focus-within:ring-primary/30 shadow-xs">
+                        <Input
+                          type="number"
+                          step="any"
+                          min="0"
+                          placeholder="0.00"
+                          value={row.amount}
+                          onChange={(e) => handleCashRowChange(row.id, "amount", e.target.value)}
+                          className="h-10 text-sm font-semibold bg-transparent border-none focus-visible:ring-0 pl-3 pr-2 shadow-none flex-1"
+                        />
+                        <div className="relative flex items-center h-10 border-l border-[#E5E1D9] bg-[#FAF7F2] hover:bg-[#F5F1E8] transition-colors group">
+                          <select
+                            value={row.currency}
+                            onChange={(e) => handleCashRowChange(row.id, "currency", e.target.value as "USD" | "BS" | "EUR")}
+                            className="h-full pl-3 pr-7 bg-transparent text-xs font-bold text-[#16140F] focus:outline-none cursor-pointer appearance-none z-10"
+                            style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
+                          >
+                            {getAvailableCurrenciesForRow(row.id).map((c) => (
+                              <option key={c.code} value={c.code} className="bg-white text-[#16140F] font-semibold py-1">
+                                {c.label}
+                              </option>
+                            ))}
+                          </select>
+                          <IconChevronDown size={13} strokeWidth={2.5} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-[#6B665B] group-hover:text-[#16140F] transition-colors" />
+                        </div>
+                      </div>
+                      {initialCashRows.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemoveCashRow(row.id)}
+                          className="h-10 w-10 text-destructive hover:bg-destructive/10 rounded-xl shrink-0"
+                          title="Eliminar esta moneda"
+                        >
+                          <IconTrash className="size-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {initialCashRows.length < ALL_CURRENCIES.length && (
+                  <button
+                    type="button"
+                    onClick={handleAddCashRow}
+                    className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 mt-1 transition-all"
+                  >
+                    ＋ Agregar otra moneda
+                  </button>
+                )}
+              </div>
+
+              {/* Calculated Total Box */}
+              <div className="p-3.5 border border-[#E5E1D9] rounded-xl bg-[#F7F5F0] flex items-center justify-between">
+                <span className="text-xs font-bold text-[#6B665B]">Total monto inicial:</span>
+                <div className="text-right space-y-0.5">
+                  <span className="text-lg font-extrabold text-[#16140F] tabular-nums block">
+                    $ {Number(openingBalance || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <div className="text-[11px] text-[#6B665B] font-medium flex items-center justify-end gap-1.5 flex-wrap">
+                    {currentExchangeRate && currentExchangeRate > 0 && (
+                      <span>~ Bs. {(Number(openingBalance || 0) * currentExchangeRate).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    )}
+                    <span className="text-[#A8A299]">·</span>
+                    <span>
+                      ~ € {(
+                        (Number(openingBalance || 0) * (currentExchangeRate || 1)) /
+                        (bcvEurRate && bcvEurRate > 0 ? bcvEurRate : ((currentExchangeRate || 1) * 1.08))
+                      ).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-1">
                 <Button
                   onClick={handleOpenShift}
-                  className="w-full h-11"
+                  className="w-full h-11 text-sm font-semibold rounded-xl bg-primary text-white hover:bg-primary/90 shadow-xs"
                 >
-                  Abrir Caja Registradora
+                  Abrir caja registradora
                 </Button>
 
                 <div className="flex flex-col gap-1">
@@ -2381,32 +2649,32 @@ export default function POSPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="w-full h-9 text-muted-foreground gap-2"
+                      className="w-full h-9 text-[#6B665B] hover:text-[#16140F] gap-2 rounded-xl"
                       onClick={() => router.push("/dashboard")}
                     >
-                      <IconArrowLeft className="size-3" /> Regresar al Dashboard
+                      <IconArrowLeft className="size-3.5" /> Regresar al dashboard
                     </Button>
                   ) : (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="w-full h-9 text-destructive hover:bg-destructive/5"
+                      className="w-full h-9 text-destructive hover:bg-destructive/5 rounded-xl"
                       onClick={() => {
                         toast.info("Sesión cerrada");
                         localStorage.clear();
                         router.push("/login");
                       }}
                     >
-                      <IconLogout className="size-4 mr-2" /> Cerrar Sesión
+                      <IconLogout className="size-4 mr-2" /> Cerrar sesión
                     </Button>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="pt-4 border-t text-center">
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest leading-none">
-                SYNCRO POS • {new Date().toLocaleDateString()}
+            <div className="pt-4 border-t border-[#E5E1D9] text-center">
+              <p className="text-[10px] font-medium text-[#6B665B] leading-none">
+                Syncro CRM • {new Date().toLocaleDateString()}
               </p>
             </div>
           </div>
@@ -2419,87 +2687,84 @@ export default function POSPage() {
   return (
     <div className="flex flex-col h-screen bg-muted/20 print:bg-white p-0">
 
-      {/* THERMAL TICKET RENDER */}
-      <ThermalTicket
-        order={{
-          id: 'POS-INTERNAL',
-          date: new Date().toLocaleDateString(),
-          clientName: clients.find(c => c.id === selectedClientId || c._id === selectedClientId)?.name || "Consumidor Final",
-          total: updatedTotal,
-          items: cart,
-          payments: addedPayments.map(p => ({
-            method: p.method,
-            amount: p.amount,
-            amountLocal: p.amountLocal,
-            exchangeRate: p.exchangeRate || currentExchangeRate
-          }))
-        }}
-        settings={{
-          businessName: "SYNCRO POS",
-          exchangeRate: currentExchangeRate
-        }}
-      />
+      {/* Animated ticket after the sale */}
+      <ReceiptPrinter receipt={receipt} design={invoiceDesign} business={invoiceBusiness} onDone={resetAfterSale} />
 
-      <header className="h-12 bg-background border-b px-3 flex items-center justify-between sticky top-0 z-10 shrink-0 print:hidden text-xs">
-        <div className="flex items-center gap-2">
+      <header className="h-13 bg-[#FAF7F2] border-b border-[#E8E4DC] px-4 flex items-center justify-between sticky top-0 z-10 shrink-0 print:hidden text-xs shadow-xs">
+        <div className="flex items-center gap-3">
           {canAccessDashboard && (
-            <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard")} className="h-7 w-7">
-              <IconArrowLeft className="size-4" />
+            <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard")} className="h-8 w-8 rounded-lg hover:bg-[#F5F1E8]">
+              <IconArrowLeft className="size-4 text-[#16140F]" />
             </Button>
           )}
-          <div className="flex items-center gap-1.5">
-            <h1 className="font-bold text-sm tracking-tight whitespace-nowrap">SYNCRO POS</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-bold text-sm tracking-tight whitespace-nowrap text-[#16140F]">Syncro CRM</h1>
             <Badge variant="outline" className={cn(
-              "hidden sm:inline-flex text-[9px] h-4 py-0 px-1 font-bold uppercase tracking-wider",
+              "hidden sm:inline-flex text-[9px] h-4.5 py-0 px-1.5 font-bold rounded-md",
               isOnline ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border-rose-500/20"
             )}>
               {isOnline ? 'Online' : 'Offline'}
             </Badge>
           </div>
+
+          <Separator orientation="vertical" className="h-5 mx-1 bg-[#DAD5CC]" />
+
+          {/* Cajero & Date Info moved to the left */}
+          <div className="hidden sm:flex items-center gap-3">
+            <div className="flex flex-col justify-center">
+              <span className="text-[9px] text-[#6B665B] font-bold leading-none">Cajero</span>
+              <span className="text-xs font-bold text-[#16140F] leading-none mt-0.5">{user?.name || "Administrador"}</span>
+            </div>
+            {settings?.bcvUpdateDate && (
+              <div className="flex flex-col justify-center border-l border-[#DAD5CC]/60 pl-3">
+                <span className="text-[9px] text-[#6B665B] font-bold leading-none">Fecha</span>
+                <span className="text-xs font-semibold text-[#6B665B] leading-none mt-0.5">{settings.bcvUpdateDate}</span>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="hidden sm:flex flex-col items-end">
-            <p className="text-[9px] text-muted-foreground leading-none">Cajero</p>
-            <p className="text-[10px] font-semibold leading-none mt-0.5">{user?.name || "Administrador"}</p>
-          </div>
-          {settings?.bcvUpdateDate && (
-            <div className="hidden xl:flex flex-col items-end mr-1">
-              <p className="text-[9px] text-muted-foreground leading-none">Fecha Valor</p>
-              <p className="text-[10px] font-semibold text-[#79716b] leading-none mt-0.5">{settings.bcvUpdateDate}</p>
-            </div>
-          )}
-          <div className="flex items-center gap-1">
-            <Select value={baseCurrency} onValueChange={(v: "USD" | "EUR") => setBaseCurrency(v)}>
-              <SelectTrigger className="h-7 w-[64px] text-[9px] font-bold border-[#79716b]/30 focus:ring-0">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="USD" className="text-xs font-semibold">USD</SelectItem>
-                <SelectItem value="EUR" className="text-xs font-semibold">EUR</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="sm" className="h-7 border-[#79716b]/30 gap-1 px-2" onClick={handleSyncBcv} disabled={syncingBcv}>
-              <IconRefresh size={12} className={syncingBcv ? "animate-spin" : ""} />
-              <span className="text-[9px] font-bold">BCV: {currentExchangeRate.toFixed(2)}</span>
-            </Button>
-          </div>
-          <Separator orientation="vertical" className="h-5 mx-0.5" />
+          {/* Base Currency Select Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-8 px-2.5 gap-1.5 font-bold text-xs bg-[#FAF7F2] border-[#DAD5CC] text-[#16140F] hover:bg-[#F5F1E8] rounded-lg transition-all shadow-xs">
+                {baseCurrency} <IconChevronDown size={13} strokeWidth={2.5} className="text-[#6B665B]" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-24 border border-[#DAD5CC] shadow-xl rounded-xl p-1 bg-white">
+              {(["USD", "EUR"] as const).map((c) => (
+                <DropdownMenuItem
+                  key={c}
+                  onClick={() => setBaseCurrency(c)}
+                  className="text-xs font-bold py-1.5 rounded-lg cursor-pointer hover:bg-[#FAF7F2]"
+                >
+                  {c}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* BCV Sync Button */}
+          <Button variant="outline" size="sm" className="h-8 border-[#DAD5CC] bg-[#FAF7F2] hover:bg-[#F5F1E8] text-[#16140F] gap-1.5 px-2.5 rounded-lg font-bold text-xs shadow-xs" onClick={handleSyncBcv} disabled={syncingBcv}>
+            <IconRefresh size={13} className={cn("text-primary", syncingBcv && "animate-spin")} />
+            <span>BCV: {currentExchangeRate.toFixed(2)}</span>
+          </Button>
+
           <BranchSwitcher disabled={!!activeShift} />
-          <div className="flex items-center gap-1">
-            <ThemeSelector />
-            <ModeSwitcher />
-          </div>
+
+          {/* Larger Cerrar Turno Button */}
           <Button
             variant="ghost"
             size="sm"
-            className="text-destructive font-medium h-7 text-[10px] px-2"
+            className="h-9 px-3 gap-1.5 font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-lg shadow-xs transition-all ml-1"
             onClick={() => {
               checkShift();
               setIsClosingShift(true);
             }}
           >
-            <IconCash size={14} className="mr-1" /> Cerrar Turno
+            <IconCash size={15} />
+            <span>Cerrar turno</span>
           </Button>
         </div>
       </header>
@@ -2510,61 +2775,64 @@ export default function POSPage() {
         <div className="flex-1 flex flex-col gap-4 overflow-hidden">
 
           {/* BARRA DE CONTROLES SUPERIOR */}
-          <div className="flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center justify-between gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
             {/* Buscador (Solo en vista POS) */}
             <div className={cn(
-              "flex items-center gap-2 bg-background border rounded-md px-2 h-8 flex-1 shadow-sm transition-all",
+              "flex items-center gap-2 bg-[#FAF7F2] border border-[#E8E4DC] rounded-xl px-3 h-11 flex-1 shadow-xs transition-all focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20",
               view === 'history' && "opacity-50 pointer-events-none grayscale"
             )}>
-              <IconSearch className="text-muted-foreground size-3.5 shrink-0" />
+              <IconSearch className="text-[#6B665B] size-4 shrink-0" />
               <Input
                 placeholder="Buscar productos por nombre o SKU..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="border-0 bg-transparent shadow-none focus-visible:ring-0 h-full p-0 text-xs"
+                className="border-0 bg-transparent shadow-none focus-visible:ring-0 h-full p-0 text-sm font-semibold placeholder:text-[#9E988D] text-[#16140F]"
                 disabled={view === 'history'}
               />
               {searchTerm && (
-                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setSearchTerm("")}>
-                  <IconX size={12} />
+                <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:bg-[#E8E4DC]" onClick={() => setSearchTerm("")}>
+                  <IconX size={14} className="text-[#6B665B]" />
                 </Button>
               )}
-              <div className="flex items-center gap-1.5 mr-1 ml-0.5">
+              <div className="flex items-center gap-2 mr-1 ml-1">
                 <Switch
                   id="stock-filter"
                   checked={showOnlyInStock}
                   onCheckedChange={setShowOnlyInStock}
-                  className="scale-65 data-[state=checked]:bg-primary"
+                  className="scale-90 data-[state=checked]:bg-primary"
                 />
-                <Label htmlFor="stock-filter" className="text-[9px] font-bold text-muted-foreground whitespace-nowrap cursor-pointer uppercase select-none">
+                <Label htmlFor="stock-filter" className="text-xs font-bold text-[#6B665B] whitespace-nowrap cursor-pointer select-none">
                   Stock
                 </Label>
               </div>
-              <Separator orientation="vertical" className="h-3 mx-0.5" />
+              <Separator orientation="vertical" className="h-5 mx-1 bg-[#DAD5CC]" />
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-primary hover:bg-primary/5"
+                className="h-8 w-8 rounded-lg text-primary hover:bg-primary/10 transition-colors"
                 onClick={() => setIsNumpadOpen(true)}
                 title="Teclado numérico"
               >
-                <IconKeyboard size={15} />
+                <IconKeyboard size={18} />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-primary hover:bg-primary/5"
+                className={cn("relative h-8 w-8 rounded-lg text-primary hover:bg-primary/10 transition-colors", scannerAlwaysOn && "bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15")}
                 onClick={() => setScannerOpen(true)}
-                title="Escanear con cámara"
+                title={scannerAlwaysOn ? "Escáner siempre activo (abrir para usar la cámara)" : "Escanear producto"}
               >
-                <IconScan size={15} />
+                <IconScan size={18} />
+                {scannerAlwaysOn && (
+                  <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background bg-emerald-500" />
+                )}
               </Button>
             </div>
 
             {/* Toggle Historial */}
             <Button
               variant={view === "history" ? "secondary" : "outline"}
-              className="h-8 px-2 gap-1 border shadow-sm shrink-0"
+              className="h-11 px-3.5 gap-2 rounded-xl border-[#DAD5CC] bg-[#FAF7F2] hover:bg-[#F5F1E8] text-[#16140F] shadow-xs shrink-0 font-bold text-xs"
               onClick={async () => {
                 if (view === 'pos') {
                   setView('history');
@@ -2585,45 +2853,45 @@ export default function POSPage() {
                 }
               }}
             >
-              <IconHistory size={15} className={view === "history" ? "text-primary" : ""} />
-              <span className="font-bold text-[10px]">Historial</span>
+              <IconHistory size={17} className={view === "history" ? "text-primary" : "text-[#6B665B]"} />
+              <span>Historial</span>
             </Button>
 
             <Button
               variant="outline"
-              className="h-8 px-2 gap-1 border shadow-sm shrink-0 border-blue-500/30 hover:bg-blue-500/5 text-blue-600"
+              className="h-11 px-3.5 gap-2 rounded-xl border-blue-500/30 bg-blue-50/50 hover:bg-blue-100/50 text-blue-700 shadow-xs shrink-0 font-bold text-xs"
               onClick={() => setIsCalculatorOpen(true)}
             >
-              <IconCalculator size={15} />
-              <span className="text-[10px] font-bold hidden md:inline">Calculadora</span>
+              <IconCalculator size={17} />
+              <span className="hidden md:inline">Calculadora</span>
             </Button>
 
             <Button
               variant="outline"
-              className="h-8 px-2 gap-1 border shadow-sm shrink-0 border-amber-500/30 hover:bg-amber-500/5 text-amber-600"
+              className="h-11 px-3.5 gap-2 rounded-xl border-amber-500/30 bg-amber-50/50 hover:bg-amber-100/50 text-amber-700 shadow-xs shrink-0 font-bold text-xs"
               onClick={() => {
                 fetchWaitlist();
                 setIsWaitlistOpen(true);
               }}
             >
-              <IconAlertCircle size={15} />
-              <span className="text-[10px] font-bold hidden md:inline">Lista de Espera</span>
+              <IconAlertCircle size={17} />
+              <span className="hidden md:inline">Lista de espera</span>
               {waitlist.length > 0 && (
-                <Badge className="ml-0.5 px-0.5 h-3 min-w-3 bg-amber-500 text-[8px] text-white flex items-center justify-center font-bold">{waitlist.length}</Badge>
+                <Badge className="ml-0.5 px-1.5 h-4 min-w-4 bg-amber-500 text-[9px] text-white flex items-center justify-center font-bold rounded-full">{waitlist.length}</Badge>
               )}
             </Button>
 
             <Button
               variant="outline"
-              className="h-8 px-2 gap-1 border shadow-sm shrink-0 border-[#79716b]/20 hover:bg-muted/50 transition-all group text-foreground"
+              className="h-11 px-3.5 gap-2 rounded-xl border-[#DAD5CC] bg-[#FAF7F2] hover:bg-[#F5F1E8] text-[#16140F] shadow-xs shrink-0 font-bold text-xs"
               onClick={() => setIsParkedModalOpen(true)}
             >
-              <div className="size-4 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                <IconPlayerPause size={10} />
+              <div className="size-5 rounded-full bg-primary/10 flex items-center justify-center text-primary transition-colors">
+                <IconPlayerPause size={12} />
               </div>
-              <span className="text-[10px] font-bold hidden md:inline">Tickets en Pausa</span>
+              <span className="hidden md:inline">Tickets en pausa</span>
               {parkedTickets.length > 0 && (
-                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">
+                <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
                   {parkedTickets.length}
                 </span>
               )}
@@ -2647,7 +2915,7 @@ export default function POSPage() {
               ) : filteredProducts.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50 pt-20">
                   <IconBox size={60} stroke={1} className="mb-4" />
-                  <p className="text-xl font-black uppercase tracking-widest text-center">Sin resultados</p>
+                  <p className="text-xl font-black text-center">Sin resultados</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-8">
@@ -2663,9 +2931,16 @@ export default function POSPage() {
                       {/* Badge de Agotado superpuesto */}
                       {p.totalStock <= 0 && (
                         <div className="absolute top-2 right-2 z-10">
-                          <Badge variant="destructive" className="text-[8px] font-bold px-1.5 h-4 uppercase">Agotado</Badge>
+                          <Badge variant="destructive" className="text-[8px] font-bold px-1.5 h-4">Agotado</Badge>
                         </div>
                       )}
+                      {/* Syncro Shop Tag Badge */}
+                      <SyncroShopBadges
+                        published={p.isPublishedOnSyncroShop}
+                        featured={p.isFeaturedOnSyncroShop}
+                        tone="solid"
+                        className="absolute top-2 left-2 z-10 flex-col items-start"
+                      />
                       <div className="aspect-square relative overflow-hidden bg-muted/30">
                         {p.image ? (
                           <img src={p.image} alt={p.name} loading="lazy" decoding="async" className="object-cover w-full h-full transition-transform group-hover:scale-105" />
@@ -2681,11 +2956,11 @@ export default function POSPage() {
                           <div className="flex items-end justify-between mt-auto pt-2">
                             <span className="font-bold text-xs">${(p.variants?.[0]?.price || 0).toFixed(2)}</span>
                             <div className="flex flex-col items-end gap-0.5 mt-1 text-right shrink-0">
-                              <p className="text-[9px] font-mono text-muted-foreground uppercase leading-none" title="SKU Interno">
+                              <p className="text-[9px] font-mono text-muted-foreground leading-none" title="SKU interno">
                                 {p.variants?.[0]?.sku || 'S/SKU'}
                               </p>
                               {p.variants?.[0]?.barcode && (
-                                <p className="text-[8.5px] font-mono text-muted-foreground/60 flex items-center justify-end gap-1 leading-none" title="Código de Barras">
+                                <p className="text-[8.5px] font-mono text-muted-foreground/60 flex items-center justify-end gap-1 leading-none" title="Código de barras">
                                   <IconBarcode size={10} stroke={1.5} />
                                   {p.variants[0].barcode}
                                 </p>
@@ -2704,9 +2979,9 @@ export default function POSPage() {
               <div className="p-4 border-b bg-muted/10 flex justify-between items-center">
                 <div>
                   <h2 className="text-sm font-bold flex items-center gap-2">
-                    <IconReceipt size={16} className="text-primary" /> Historial de Ventas
+                    <IconReceipt size={16} className="text-primary" /> Historial de ventas
                   </h2>
-                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mt-0.5">Control de actividad de facturación</p>
+                  <p className="text-[10px] text-muted-foreground font-medium mt-0.5">Control de actividad de facturación</p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="relative w-60">
@@ -2718,7 +2993,7 @@ export default function POSPage() {
                       onChange={(e) => setHistorySearchTerm(e.target.value)}
                     />
                   </div>
-                  <Button variant="outline" size="sm" className="h-8 text-[10px] uppercase font-bold tracking-widest gap-2" onClick={() => setView('pos')}>
+                  <Button variant="outline" size="sm" className="h-8 text-[10px] font-bold gap-2" onClick={() => setView('pos')}>
                     Volver al POS
                   </Button>
                 </div>
@@ -2732,20 +3007,20 @@ export default function POSPage() {
                 ) : filteredSalesHistory.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-40 py-20">
                     <IconHistory size={48} stroke={1} className="mb-2" />
-                    <p className="text-xs font-bold uppercase tracking-widest">Sin ventas registradas</p>
+                    <p className="text-xs font-bold">Sin ventas registradas</p>
                   </div>
                 ) : (
                   <div className="min-w-full inline-block align-middle">
                     <table className="w-full text-sm">
                       <thead className="bg-background sticky top-0 border-b z-10">
                         <tr>
-                          <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">ID Venta</th>
-                          <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Fecha / Hora</th>
-                          <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Cliente</th>
-                          <th className="p-4 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Cajero</th>
-                          <th className="p-4 text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Artículos</th>
-                          <th className="p-4 text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Total USD</th>
-                          <th className="p-4 text-center font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Estado</th>
+                          <th className="p-4 text-left font-bold text-[10px] text-muted-foreground">ID venta</th>
+                          <th className="p-4 text-left font-bold text-[10px] text-muted-foreground">Fecha / hora</th>
+                          <th className="p-4 text-left font-bold text-[10px] text-muted-foreground">Cliente</th>
+                          <th className="p-4 text-left font-bold text-[10px] text-muted-foreground">Cajero</th>
+                          <th className="p-4 text-right font-bold text-[10px] text-muted-foreground">Artículos</th>
+                          <th className="p-4 text-right font-bold text-[10px] text-muted-foreground">Total USD</th>
+                          <th className="p-4 text-center font-bold text-[10px] text-muted-foreground">Estado</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y bg-background/50">
@@ -2759,7 +3034,7 @@ export default function POSPage() {
                             }}
                           >
                             <td className="p-4">
-                              <code className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded uppercase">
+                              <code className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded">
                                 #{sale.id.slice(-6)}
                               </code>
                             </td>
@@ -2775,7 +3050,7 @@ export default function POSPage() {
                                   <IconUser size={12} className="text-muted-foreground opacity-70" />
                                 </div>
                                 <div className="flex flex-col">
-                                  <span className="text-[11px] font-bold group-hover:text-primary transition-colors">{sale.client?.name || "Consumidor Final"}</span>
+                                  <span className="text-[11px] font-bold group-hover:text-primary transition-colors">{sale.client?.name || "Consumidor final"}</span>
                                   <span className="text-[9px] text-muted-foreground">{sale.client?.documentId || "No identificado"}</span>
                                 </div>
                               </div>
@@ -2786,7 +3061,7 @@ export default function POSPage() {
                             <td className="p-4 text-right">
                               <div className="inline-flex flex-col items-end">
                                 <span className="font-bold text-[10px] px-1.5 py-0.5 rounded-full bg-muted/50 border text-muted-foreground">
-                                  {sale.items?.length || 0} ITEMS
+                                  {sale.items?.length || 0} items
                                 </span>
                               </div>
                             </td>
@@ -2795,7 +3070,30 @@ export default function POSPage() {
                             </td>
                             <td className="p-4 text-center">
                               <div className="flex items-center justify-center gap-3">
-                                <Badge className="text-[9px] font-black tracking-widest px-1.5 h-6 bg-emerald-500/10 text-emerald-600 border-none shadow-none">COMPLETA</Badge>
+                                <Badge className="text-[9px] font-black px-1.5 h-6 bg-emerald-500/10 text-emerald-600 border-none shadow-none">Completa</Badge>
+                                {sale.client?.phone && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={cn(
+                                      "h-8 w-8 transition-colors",
+                                      sale.whatsappInvoiceStatus === "SENT" ? "text-emerald-600 hover:bg-emerald-500/10" : sale.whatsappInvoiceStatus === "FAILED" ? "text-rose-500 hover:bg-rose-500/10" : "text-muted-foreground hover:bg-muted",
+                                    )}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      resendInvoiceWhatsApp(sale);
+                                    }}
+                                    title={
+                                      sale.whatsappInvoiceStatus === "SENT"
+                                        ? `Factura enviada a ${sale.whatsappInvoiceTo || sale.client.phone}. Toca para reenviarla`
+                                        : sale.whatsappInvoiceStatus === "FAILED"
+                                          ? `No se pudo enviar${sale.whatsappInvoiceError ? `: ${sale.whatsappInvoiceError}` : ""}. Toca para reintentar`
+                                          : "Enviar factura por WhatsApp"
+                                    }
+                                  >
+                                    <IconBrandWhatsapp size={18} />
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -2804,7 +3102,7 @@ export default function POSPage() {
                                     e.stopPropagation();
                                     openReturnModal(sale);
                                   }}
-                                  title="Procesar Devolución"
+                                  title="Procesar devolución"
                                 >
                                   <IconArrowBackUp size={18} />
                                 </Button>
@@ -2822,46 +3120,46 @@ export default function POSPage() {
         </div>
 
         {/* SECCIÓN DERECHA: CARRITO Y PAGO */}
-        <div className="w-full lg:w-[360px] flex flex-col h-full bg-background border rounded-lg overflow-hidden shadow-sm shrink-0">
-          <div className="p-3 border-b bg-muted/10 shrink-0">
+        <div className="w-full lg:w-[390px] xl:w-[410px] flex flex-col h-full bg-[#FAF7F2] border border-[#E8E4DC] rounded-2xl overflow-hidden shadow-xs shrink-0">
+          <div className="p-4 border-b border-[#E8E4DC] bg-[#FAF7F2] shrink-0">
             <div className="flex justify-between items-start">
               <div>
-                <h2 className="text-xs font-bold flex items-center gap-1.5">
-                  <IconShoppingCart className="text-primary size-3.5" /> Ticket Actual
+                <h2 className="text-sm font-bold text-[#16140F] flex items-center gap-2">
+                  <IconShoppingCart className="text-primary size-4" /> Ticket actual
                 </h2>
-                <p className="text-[9px] text-muted-foreground mt-0.5">
+                <p className="text-xs text-[#6B665B] mt-0.5 font-medium">
                   {cart.length} productos • {new Date().toLocaleDateString()}
                 </p>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 text-blue-600 hover:bg-blue-500/5"
+                  className="h-8 w-8 text-blue-600 hover:bg-blue-500/10 rounded-lg transition-colors"
                   onClick={parkTicket}
                   title="Poner ticket en espera"
                 >
-                  <IconPlayerPause size={14} />
+                  <IconPlayerPause size={16} />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 text-destructive hover:bg-destructive/5"
+                  className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                   onClick={() => setCart([])}
                   title="Vaciar carrito"
                 >
-                  <IconTrash size={14} />
+                  <IconTrash size={16} />
                 </Button>
               </div>
             </div>
 
-            <Separator className="mt-2 mb-2" />
+            <Separator className="mt-3 mb-3 bg-[#E8E4DC]" />
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <div className="flex justify-between items-center px-0.5">
-                <Label className="text-[9px] font-black uppercase text-[#79716b] tracking-widest">Identificación Cliente</Label>
-                <button className="text-primary text-[9px] font-bold hover:underline" onClick={() => setIsQuickClientOpen(true)}>
-                  + NUEVO
+                <Label className="text-[10px] font-bold text-[#6B665B]">Identificación cliente</Label>
+                <button className="text-primary text-[10px] font-bold hover:underline" onClick={() => setIsQuickClientOpen(true)}>
+                  + Nuevo
                 </button>
               </div>
               <div className="relative">
@@ -2870,26 +3168,52 @@ export default function POSPage() {
                   value={clientDocSearch}
                   onChange={e => setClientDocSearch(e.target.value)}
                   onKeyDown={handleClientDocSearch}
-                  className="h-7 text-xs pr-8"
+                  className="h-9 text-xs font-semibold pr-8 bg-white border-[#DAD5CC] rounded-xl focus:border-primary focus:ring-2 focus:ring-primary/20"
                   disabled={searchingClient}
                 />
                 {searchingClient && (
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                    <IconRefresh size={10} className="animate-spin text-muted-foreground" />
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                    <IconRefresh size={12} className="animate-spin text-muted-foreground" />
                   </div>
                 )}
               </div>
-              <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                <SelectTrigger className="h-8 text-xs bg-muted/20 border-[#79716b]/30">
-                  <SelectValue placeholder="Seleccionar Cliente" />
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-[#79716b]/30">
-                  <SelectItem value="consumidor-final">Consumidor Final</SelectItem>
-                  {clients.map(c => (
-                    <SelectItem key={c.id || (c as any)._id} value={c.id || (c as any)._id}>{c.name} ({c.documentId || 'S/D'})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <button
+                type="button"
+                onClick={() => setClientPickerOpen(true)}
+                className="flex h-9.5 w-full items-center justify-between gap-2 rounded-xl border border-[#DAD5CC] bg-white px-3 text-left text-xs font-semibold text-[#16140F] transition-colors hover:border-primary/40"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <IconUser size={14} className="shrink-0 text-[#9A9488]" />
+                  <span className="truncate">
+                    {selectedClientId === "consumidor-final" ? "Consumidor final" : selectedClient?.name ?? "Cliente seleccionado"}
+                  </span>
+                  {selectedClientId !== "consumidor-final" && selectedClient?.documentId && (
+                    <span className="shrink-0 font-mono text-[10px] font-normal text-[#9A9488]">{selectedClient.documentId}</span>
+                  )}
+                </span>
+                <span className="shrink-0 text-[10px] font-medium text-primary">Buscar</span>
+              </button>
+              <ClientPicker
+                open={clientPickerOpen}
+                onOpenChange={setClientPickerOpen}
+                selectedClientId={selectedClientId}
+                offlineClients={clients as DirectoryClient[]}
+                onCreateNew={() => setIsQuickClientOpen(true)}
+                onSelect={(client) => {
+                  if (!client) return setSelectedClientId("consumidor-final");
+                  // Keep it in the local list: wallet, debt and credit read from there
+                  // Keep the freshest data (phone, cédula) from the directory over the local copy
+                  setClients((prev) =>
+                    prev.some((c) => (c.id || (c as any)._id) === client.id)
+                      ? prev.map((c) => ((c.id || (c as any)._id) === client.id ? { ...c, ...(client as Client) } : c))
+                      : [...prev, client as Client],
+                  );
+                  setSelectedClientId(client.id);
+                }}
+              />
+              {clientMissingData && selectedClient && (
+                <ClientDataPrompt client={selectedClient} knownClients={clients} onSaved={handleClientDataSaved} country={settings?.country || user?.country} className="mt-2" />
+              )}
               {selectedClientId !== "consumidor-final" && (() => {
                 const c = clients.find(cl => (cl.id || (cl as any)._id) === selectedClientId) as any;
                 if (c) {
@@ -2898,8 +3222,8 @@ export default function POSPage() {
                       {/* Wallet Balance */}
                       {(c.walletBalance || 0) > 0 && (
                         <div className="flex items-center justify-between px-3 py-2 rounded-md bg-emerald-500/10 border border-emerald-500/20">
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 flex items-center gap-1.5">
-                            <IconWallet size={14} /> Saldo a Favor
+                          <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1.5">
+                            <IconWallet size={14} /> Saldo a favor
                           </span>
                           <span className="text-sm font-black text-emerald-600 tabular-nums">
                             ${(c.walletBalance || 0).toFixed(2)}
@@ -2920,11 +3244,11 @@ export default function POSPage() {
                           )}>
                             <div className="flex items-center justify-between">
                               <span className={cn(
-                                "text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5",
+                                "text-[10px] font-bold flex items-center gap-1.5",
                                 isBlocked ? "text-rose-600 animate-pulse" : "text-amber-600"
                               )}>
                                 {isBlocked ? <IconAlertTriangle size={14} /> : <IconHistory size={14} />}
-                                {isBlocked ? "Crédito Bloqueado" : "Deuda Activa"}
+                                {isBlocked ? "Crédito bloqueado" : "Deuda activa"}
                               </span>
                               <span className={cn(
                                 "text-sm font-black tabular-nums",
@@ -2942,7 +3266,7 @@ export default function POSPage() {
                               variant={isBlocked ? "default" : "outline"}
                               size="sm"
                               className={cn(
-                                "w-full h-7 text-[10px] font-bold uppercase tracking-wider",
+                                "w-full h-7 text-[10px] font-bold",
                                 isBlocked
                                   ? "bg-rose-600 hover:bg-rose-500 text-white border-none"
                                   : "border-amber-500/30 text-amber-700 dark:text-amber-500 hover:bg-amber-500/20"
@@ -2952,7 +3276,7 @@ export default function POSPage() {
                                 setIsPaymentModalAbonoOpen(true);
                               }}
                             >
-                              Abonar a Deuda
+                              Abonar a deuda
                             </Button>
                           </div>
                         );
@@ -2976,52 +3300,52 @@ export default function POSPage() {
             {cart.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-3 opacity-30 py-20">
                 <IconShoppingCart size={48} />
-                <p className="text-xs font-bold uppercase tracking-widest">Carrito Vacío</p>
+                <p className="text-xs font-bold">Carrito vacío</p>
               </div>
             ) : (
               cart.map(item => (
                 <div
                   key={item.product.variantId || item.product.id}
-                  className="p-3 rounded-lg border bg-muted/5 flex flex-col gap-2 relative group hover:border-primary/40 transition-colors"
+                  className="p-3.5 rounded-xl border border-[#E8E4DC] bg-white flex flex-col gap-2.5 relative group hover:border-primary/50 transition-colors shadow-2xs"
                 >
                   <div className="flex justify-between items-start gap-2">
-                    <p className="font-bold text-[11px] leading-tight flex-1 group-hover:text-primary transition-colors">{item.product.name}</p>
+                    <p className="font-bold text-xs text-[#16140F] leading-tight flex-1 group-hover:text-primary transition-colors">{item.product.name}</p>
                     <div className="flex flex-col items-end gap-0.5 shrink-0">
                       <div className="flex flex-col items-end">
                         {item.discount ? (
                           <>
                             <p className="font-bold text-xs text-rose-500 line-through opacity-70">${(item.product.price * item.quantity).toFixed(2)}</p>
-                            <p className="font-bold text-[13px] text-emerald-500">
+                            <p className="font-extrabold text-sm text-emerald-600">
                               ${(Math.max(0, (item.product.price * item.quantity) - (item.discount.type === 'pct' ? (item.product.price * item.quantity) * (item.discount.value / 100) : item.discount.value))).toFixed(2)}
                             </p>
                           </>
                         ) : (
-                          <p className="font-bold text-xs">${(item.product.price * item.quantity).toFixed(2)}</p>
+                          <p className="font-extrabold text-sm text-[#16140F]">${(item.product.price * item.quantity).toFixed(2)}</p>
                         )}
                       </div>
-                      <p className="text-[9px] font-mono text-muted-foreground uppercase leading-none">
+                      <p className="text-[9.5px] font-mono text-[#6B665B] leading-none font-semibold">
                         {item.product.sku || 'S/SKU'}
                       </p>
                       {item.product.barcode && (
-                        <p className="text-[8.5px] font-mono text-muted-foreground/60 flex items-center gap-1 leading-none">
-                          <IconBarcode size={9} stroke={1.5} />
+                        <p className="text-[9px] font-mono text-[#6B665B]/70 flex items-center gap-1 leading-none">
+                          <IconBarcode size={10} stroke={1.5} />
                           {item.product.barcode}
                         </p>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center border rounded h-7">
-                      <Button variant="ghost" size="icon" className="h-6 w-6 rounded-none border-r" onClick={(e) => { e.stopPropagation(); updateQuantity(item.product.id, -1); }}>
-                        <IconMinus size={10} />
+                    <div className="flex items-center border border-[#DAD5CC] rounded-lg h-8 bg-[#FAF7F2]">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-none border-r border-[#DAD5CC] hover:bg-[#F5F1E8]" onClick={(e) => { e.stopPropagation(); updateQuantity(item.product.id, -1); }}>
+                        <IconMinus size={12} />
                       </Button>
-                      <span className="w-8 text-center text-[10px] font-bold">{item.quantity}</span>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 rounded-none border-l" onClick={(e) => { e.stopPropagation(); updateQuantity(item.product.id, 1); }}>
-                        <IconPlus size={10} />
+                      <span className="w-9 text-center text-xs font-bold text-[#16140F]">{item.quantity}</span>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-none border-l border-[#DAD5CC] hover:bg-[#F5F1E8]" onClick={(e) => { e.stopPropagation(); updateQuantity(item.product.id, 1); }}>
+                        <IconPlus size={12} />
                       </Button>
                     </div>
                     <div className="flex gap-1 items-center">
-                      <Button variant="ghost" size="icon" title="Editar Cantidad / Peso" className="h-6 w-6 text-blue-500 hover:text-blue-600 hover:bg-blue-500/10" onClick={(e) => {
+                      <Button variant="ghost" size="icon" title="Editar cantidad / peso" className="h-7 w-7 rounded-lg text-blue-600 hover:text-blue-700 hover:bg-blue-500/10" onClick={(e) => {
                         e.stopPropagation();
                         setEditingCartItemId(item.product.id);
                         setEditingCartItemName(item.product.name);
@@ -3030,9 +3354,9 @@ export default function POSPage() {
                         setWeightUnit('ud');
                         setIsWeightModalOpen(true);
                       }}>
-                        <IconScale size={14} />
+                        <IconScale size={15} />
                       </Button>
-                      <Button variant="ghost" size="icon" title="Aplicar Descuento" className="h-6 w-6 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10" onClick={(e) => {
+                      <Button variant="ghost" size="icon" title="Aplicar descuento" className="h-7 w-7 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10" onClick={(e) => {
                         e.stopPropagation();
                         openPinVerification(() => {
                           setTargetDiscountId(item.product.id);
@@ -3041,23 +3365,22 @@ export default function POSPage() {
                           setIsDiscountModalOpen(true);
                         });
                       }}>
-                        <IconDiscount size={12} />
+                        <IconDiscount size={14} />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); removeFromCart(item.product.id); }}>
-                        <IconTrash size={12} />
+                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); removeFromCart(item.product.id); }}>
+                        <IconTrash size={14} />
                       </Button>
                     </div>
                   </div>
                   {item.discount && (
                     <div className="flex justify-start">
-                      <Badge variant="outline" className="text-[9px] h-4 px-1 py-0 border-emerald-500/30 text-emerald-600 bg-emerald-500/10 flex items-center gap-1 cursor-pointer" onClick={(e) => {
+                      <Badge variant="outline" className="text-[9.5px] h-4.5 px-1.5 py-0 border-emerald-500/30 text-emerald-600 bg-emerald-500/10 flex items-center gap-1 cursor-pointer rounded-md font-bold" onClick={(e) => {
                         e.stopPropagation();
-                        // Remove discount
                         setCart(prev => prev.map(c => c.product.id === item.product.id ? { ...c, discount: undefined } : c));
                       }}>
-                        <IconDiscount size={8} />
-                        {item.discount.type === 'pct' ? `${item.discount.value}%` : `$${item.discount.value}`} OFF
-                        <IconX size={8} className="ml-1" />
+                        <IconDiscount size={10} />
+                        {item.discount.type === 'pct' ? `${item.discount.value}%` : `$${item.discount.value}`} off
+                        <IconX size={10} className="ml-1" />
                       </Badge>
                     </div>
                   )}
@@ -3066,9 +3389,9 @@ export default function POSPage() {
             )}
           </div>
 
-          <div className="p-3 border-t bg-muted/5 shrink-0 space-y-2.5">
-            <div className="space-y-1 px-1">
-              <div className="flex justify-between text-[11px] font-medium text-muted-foreground group relative cursor-pointer" onClick={() => {
+          <div className="p-4 border-t border-[#E8E4DC] bg-[#FAF7F2] shrink-0 space-y-3">
+            <div className="space-y-1.5 px-1">
+              <div className="flex justify-between text-xs font-semibold text-[#6B665B] group relative cursor-pointer" onClick={() => {
                 openPinVerification(() => {
                   setTargetDiscountId('GLOBAL');
                   setDiscountType('pct');
@@ -3076,38 +3399,39 @@ export default function POSPage() {
                   setIsDiscountModalOpen(true);
                 });
               }}>
-                <span className="flex items-center gap-1 border-b border-dashed border-muted-foreground/30 hover:border-emerald-500 hover:text-emerald-500 transition-colors">
-                  <IconDiscount size={11} /> Descuento Global
+                <span className="flex items-center gap-1 border-b border-dashed border-[#6B665B]/30 hover:border-emerald-600 hover:text-emerald-600 transition-colors">
+                  <IconDiscount size={13} /> Descuento global
                 </span>
-                <span className={cn("tabular-nums", totalDiscountAmt > 0 ? "text-emerald-500 font-bold" : "")}>
+                <span className={cn("tabular-nums font-bold", totalDiscountAmt > 0 ? "text-emerald-600" : "")}>
                   {totalDiscountAmt > 0 ? `-$${totalDiscountAmt.toFixed(2)}` : '$0.00'}
                 </span>
               </div>
-              <div className="flex justify-between text-[11px] font-medium text-muted-foreground">
-                <span>Subtotal (Neto)</span>
-                <span className="tabular-nums">${subtotalAfterGlobalDiscount.toFixed(2)}</span>
+              <div className="flex justify-between text-xs font-semibold text-[#6B665B]">
+                <span>Subtotal (neto)</span>
+                <span className="tabular-nums font-bold text-[#16140F]">${subtotalAfterGlobalDiscount.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-[11px] font-medium text-muted-foreground">
+              <div className="flex justify-between text-xs font-semibold text-[#6B665B]">
                 <span>IVA ({taxRate}%)</span>
-                <span className="tabular-nums">${taxAmount.toFixed(2)}</span>
+                <span className="tabular-nums font-bold text-[#16140F]">${taxAmount.toFixed(2)}</span>
               </div>
             </div>
-            <div className="flex justify-between items-center pt-1.5 border-t">
+            <div className="flex justify-between items-center pt-2 border-t border-[#E8E4DC]">
               <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] font-bold text-foreground">Total Checkout</span>
-                <span className="text-[9px] text-muted-foreground font-medium tabular-nums">~ Bs {(updatedTotal * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                <span className="text-xs font-bold text-[#16140F]">Total checkout</span>
+                <span className="text-xs text-[#6B665B] font-bold tabular-nums">~ Bs {(updatedTotal * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
-              <span className="text-xl font-black tracking-tight tabular-nums">${updatedTotal.toFixed(2)}</span>
+              <span className="text-2xl font-black tracking-tight text-[#16140F] tabular-nums">${updatedTotal.toFixed(2)}</span>
             </div>
             <Button
               size="lg"
-              className="w-full h-10 font-semibold text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-md relative group overflow-hidden transition-all duration-200 rounded-lg"
+              className="w-full h-12 font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md relative group overflow-hidden transition-all duration-200 rounded-xl"
               onClick={() => openPaymentModal("CASH")}
-              disabled={cart.length === 0 || processing}
+              disabled={cart.length === 0 || processing || clientMissingData}
+              title={clientMissingData ? "Completa los datos del cliente para continuar" : undefined}
             >
-              <span className="relative flex items-center justify-center gap-1.5">
-                <IconCash className="size-4" />
-                Procesar Pago
+              <span className="relative flex items-center justify-center gap-2">
+                <IconCash className="size-5" />
+                Procesar pago
               </span>
             </Button>
           </div>
@@ -3122,7 +3446,7 @@ export default function POSPage() {
             <div className="md:col-span-5 bg-muted/20 border-r flex flex-col overflow-hidden">
               <div className="p-5 border-b bg-background/50">
                 <DialogTitle className="text-base font-semibold tracking-tight text-foreground flex items-center gap-2">
-                  <IconList className="size-4 text-primary" /> Resumen de Compra
+                  <IconList className="size-4 text-primary" /> Resumen de compra
                 </DialogTitle>
                 <p className="text-[11px] text-muted-foreground font-medium mt-0.5">{cart.length} productos en el carrito</p>
               </div>
@@ -3136,7 +3460,7 @@ export default function POSPage() {
                     </div>
                     <div className="text-right flex flex-col">
                       <span className="text-[13px] font-bold text-foreground">${(item.quantity * item.product.price).toFixed(2)}</span>
-                      <span className="text-[10px] text-muted-foreground font-medium">Bs {((item.quantity * item.product.price) * currentExchangeRate).toLocaleString('es-VE')}</span>
+                      <span className="text-[10px] text-muted-foreground font-medium">Bs {((item.quantity * item.product.price) * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   </div>
                 ))}
@@ -3154,7 +3478,7 @@ export default function POSPage() {
                   </div>
                 )}
                 <div className="flex justify-between items-center pt-2 border-t">
-                  <span className="text-[13px] font-semibold text-foreground">Total Bruto</span>
+                  <span className="text-[13px] font-semibold text-foreground">Total bruto</span>
                   <span className="text-lg font-bold text-foreground">${updatedTotal.toFixed(2)}</span>
                 </div>
               </div>
@@ -3164,13 +3488,13 @@ export default function POSPage() {
             <div className="md:col-span-7 flex flex-col overflow-hidden bg-background">
               <div className="p-5 border-b flex justify-between items-center h-[69px]">
                 <div>
-                  <DialogTitle className="text-base font-semibold tracking-tight text-foreground">Procesar Pago</DialogTitle>
+                  <DialogTitle className="text-base font-semibold tracking-tight text-foreground">Procesar pago</DialogTitle>
                   <p className="text-[11px] text-muted-foreground font-medium">Complete la información de pago</p>
                 </div>
                 <div className="flex items-center gap-2 px-3 py-1.5 mr-6 rounded-full bg-muted/40 border">
                   <IconUser size={14} className="text-muted-foreground" />
-                  <span className="text-[11px] font-semibold truncate max-w-[150px]" title={selectedClient ? selectedClient.name : "Consumidor Final"}>
-                    {selectedClient ? selectedClient.name : "Consumidor Final"}
+                  <span className="text-[11px] font-semibold truncate max-w-[150px]" title={selectedClient ? selectedClient.name : "Consumidor final"}>
+                    {selectedClient ? selectedClient.name : "Consumidor final"}
                   </span>
                 </div>
               </div>
@@ -3179,12 +3503,12 @@ export default function POSPage() {
 
                 {/* Total Display */}
                 <div className="p-6 rounded-lg bg-primary/5 border border-primary/20 flex flex-col gap-3">
-                  <p className="text-xs font-semibold text-primary/70 tracking-tight">Monto Total a Pagar</p>
+                  <p className="text-xs font-semibold text-primary/70 tracking-tight">Monto total a pagar</p>
                   <div className="flex flex-wrap items-baseline gap-x-8 gap-y-1">
                     <p className="text-4xl font-bold tracking-tight text-primary">${finalTotalWithIgtf.toFixed(2)}</p>
-                    <p className="text-3xl font-bold tracking-tight text-primary/50 tabular-nums">Bs {(finalTotalWithIgtf * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</p>
+                    <p className="text-3xl font-bold tracking-tight text-primary/50 tabular-nums">Bs {(finalTotalWithIgtf * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
-                  {igtfAmount > 0 && <p className="text-[11px] font-semibold text-emerald-600 bg-emerald-500/10 self-start px-2 py-0.5 rounded">+ IGTF (3%) Incluido</p>}
+                  {igtfAmount > 0 && <p className="text-[11px] font-semibold text-emerald-600 bg-emerald-500/10 self-start px-2 py-0.5 rounded">+ IGTF (3%) incluido</p>}
                 </div>
 
                 {/* Wallet Toggle */}
@@ -3201,7 +3525,7 @@ export default function POSPage() {
                         <IconWallet size={18} stroke={2} />
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[13px] font-semibold text-foreground">Saldo a Favor</span>
+                        <span className="text-[13px] font-semibold text-foreground">Saldo a favor</span>
                         <span className="text-[11px] text-muted-foreground font-medium">Disponible: ${availableWallet.toFixed(2)}</span>
                       </div>
                     </div>
@@ -3211,7 +3535,7 @@ export default function POSPage() {
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b pb-2">
-                    <h4 className="text-xs font-semibold text-muted-foreground tracking-tight">Métodos de Pago</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground tracking-tight">Métodos de pago</h4>
                   </div>
 
                   {/* Payment Entry Form: Dynamic Grid based on method */}
@@ -3225,10 +3549,10 @@ export default function POSPage() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="CASH" disabled={addedPayments.some(p => p.method === "CASH")}>Efectivo</SelectItem>
-                              <SelectItem value="CARD" disabled={addedPayments.some(p => p.method === "CARD")}>Tarjeta (Punto)</SelectItem>
+                              <SelectItem value="CARD" disabled={addedPayments.some(p => p.method === "CARD")}>Tarjeta (punto)</SelectItem>
                               <SelectItem value="TRANSFER" disabled={addedPayments.some(p => p.method === "TRANSFER")}>Transferencia</SelectItem>
-                              {settings?.pagoMovilEnabled && <SelectItem value="PAGO_MOVIL" disabled={addedPayments.some(p => p.method === "PAGO_MOVIL")}>Pago Móvil</SelectItem>}
-                              {settings?.binanceEnabled && <SelectItem value="BINANCE" disabled={addedPayments.some(p => p.method === "BINANCE")}>Binance Pay</SelectItem>}
+                              {settings?.pagoMovilEnabled && <SelectItem value="PAGO_MOVIL" disabled={addedPayments.some(p => p.method === "PAGO_MOVIL")}>Pago móvil</SelectItem>}
+                              {settings?.binanceEnabled && <SelectItem value="BINANCE" disabled={addedPayments.some(p => p.method === "BINANCE")}>Binance pay</SelectItem>}
                               {settings?.zinliEnabled && <SelectItem value="ZINLI" disabled={addedPayments.some(p => p.method === "ZINLI")}>Zinli</SelectItem>}
                               {settings?.paypalEnabled && <SelectItem value="PAYPAL" disabled={addedPayments.some(p => p.method === "PAYPAL")}>PayPal</SelectItem>}
                               <SelectItem value="WALLET" disabled={addedPayments.some(p => p.method === "WALLET")}>Monedero</SelectItem>
@@ -3240,8 +3564,8 @@ export default function POSPage() {
                                 }
                               >
                                 {(selectedClient?.hasAccount && ((selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0) <= 0.01 && (selectedClient?.currentDebt || 0) > 0))
-                                  ? "Crédito / Fiado (Bloqueado)"
-                                  : "Crédito / Fiado"
+                                  ? "Crédito / fiado (bloqueado)"
+                                  : "Crédito / fiado"
                                 }
                               </SelectItem>
                             </SelectContent>
@@ -3250,8 +3574,8 @@ export default function POSPage() {
                           {tempPaymentMethod === "CREDIT" && (selectedClientId === "consumidor-final" || !selectedClient?.hasAccount || creditType === "traditional") && (
                             <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-500">
                               <div className="space-y-2 px-1">
-                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.15em] ml-0.5">
-                                  Fecha Promesa de Pago
+                                <label className="text-[10px] font-black text-muted-foreground ml-0.5">
+                                  Fecha promesa de pago
                                 </label>
                                 <Popover>
                                   <PopoverTrigger asChild disabled={selectedClientId === "consumidor-final"}>
@@ -3291,7 +3615,7 @@ export default function POSPage() {
                                   </p>
                                 ) : (
                                   <p className="text-[10px] text-destructive font-bold italic ml-1 flex items-center gap-1">
-                                    <IconAlertCircle size={10} /> No se puede fiar al Consumidor Final.
+                                    <IconAlertCircle size={10} /> No se puede fiar al consumidor final.
                                   </p>
                                 )}
                               </div>
@@ -3301,7 +3625,7 @@ export default function POSPage() {
                           {tempPaymentMethod === "WALLET" && selectedClientId !== "consumidor-final" && (
                             <div className="mt-1 flex items-center gap-1.5 px-1 animate-in fade-in slide-in-from-top-1 duration-300">
                               <div className="size-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                              <span className="text-[9px] font-bold text-blue-600 tracking-tight uppercase">Saldo: ${availableWallet.toFixed(2)}</span>
+                              <span className="text-[9px] font-bold text-blue-600 tracking-tight">Saldo: ${availableWallet.toFixed(2)}</span>
                             </div>
                           )}
                         </div>
@@ -3344,10 +3668,10 @@ export default function POSPage() {
                           <div className="col-span-6 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
                             <div className="flex items-center gap-2">
                               <IconHistory className="text-amber-600 size-5" />
-                              <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-500 tracking-tight">Deuda Previa Abierta</span>
+                              <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-500 tracking-tight">Deuda previa abierta</span>
                             </div>
                             <div className="flex flex-col text-right">
-                              <span className="text-[10px] font-bold text-amber-600/80 uppercase">Libreta Actual</span>
+                              <span className="text-[10px] font-bold text-amber-600/80">Libreta actual</span>
                               <span className="text-sm font-black text-amber-600 tabular-nums">${(selectedClient.currentDebt || 0).toFixed(2)}</span>
                             </div>
                           </div>
@@ -3388,19 +3712,19 @@ export default function POSPage() {
                         <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
                           <div className="flex items-center gap-2">
                             <IconDevices className="text-blue-500 size-5" />
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 hidden sm:block">Datos Pago Móvil</span>
+                            <span className="text-[11px] font-bold text-blue-600 hidden sm:block">Datos pago móvil</span>
                           </div>
                           <div className="flex gap-4">
                             <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Banco</span>
+                              <span className="text-[9px] font-bold text-muted-foreground">Banco</span>
                               <span className="text-xs font-semibold">{settings?.pagoMovilBank || "-"}</span>
                             </div>
                             <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Cédula/RIF</span>
+                              <span className="text-[9px] font-bold text-muted-foreground">Cédula/RIF</span>
                               <span className="text-xs font-semibold">{settings?.pagoMovilId || "-"}</span>
                             </div>
                             <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Teléfono</span>
+                              <span className="text-[9px] font-bold text-muted-foreground">Teléfono</span>
                               <span className="text-xs font-semibold">{settings?.pagoMovilPhone || "-"}</span>
                             </div>
                           </div>
@@ -3411,15 +3735,15 @@ export default function POSPage() {
                         <div className="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
                           <div className="flex items-center gap-2">
                             <IconHexagon className="text-yellow-600 size-5" />
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-yellow-600 hidden sm:block">Datos Binance Pay</span>
+                            <span className="text-[11px] font-bold text-yellow-600 hidden sm:block">Datos Binance pay</span>
                           </div>
                           <div className="flex gap-4">
                             <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Binance ID</span>
+                              <span className="text-[9px] font-bold text-muted-foreground">Binance ID</span>
                               <span className="text-xs font-semibold">{settings?.binanceId || "-"}</span>
                             </div>
                             <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo</span>
+                              <span className="text-[9px] font-bold text-muted-foreground">Correo</span>
                               <span className="text-xs font-semibold">{settings?.binanceEmail || "-"}</span>
                             </div>
                           </div>
@@ -3430,11 +3754,11 @@ export default function POSPage() {
                         <div className="p-3 bg-purple-500/5 border border-purple-500/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
                           <div className="flex items-center gap-2">
                             <IconWorld className="text-purple-600 size-5" />
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-purple-600 hidden sm:block">Datos Zinli</span>
+                            <span className="text-[11px] font-bold text-purple-600 hidden sm:block">Datos Zinli</span>
                           </div>
                           <div className="flex gap-4">
                             <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo Zinli</span>
+                              <span className="text-[9px] font-bold text-muted-foreground">Correo Zinli</span>
                               <span className="text-xs font-semibold">{settings?.zinliEmail || "-"}</span>
                             </div>
                           </div>
@@ -3445,11 +3769,11 @@ export default function POSPage() {
                         <div className="p-3 bg-blue-700/5 border border-blue-700/20 rounded-md flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
                           <div className="flex items-center gap-2">
                             <IconBuilding className="text-blue-800 size-5" />
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-800 hidden sm:block">Datos PayPal</span>
+                            <span className="text-[11px] font-bold text-blue-800 hidden sm:block">Datos PayPal</span>
                           </div>
                           <div className="flex gap-4">
                             <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase">Correo PayPal</span>
+                              <span className="text-[9px] font-bold text-muted-foreground">Correo PayPal</span>
                               <span className="text-xs font-semibold">{settings?.paypalEmail || "-"}</span>
                             </div>
                           </div>
@@ -3521,8 +3845,8 @@ export default function POSPage() {
 
                             {isCredit && (
                               <div className="col-span-4 flex items-center justify-end px-2">
-                                <span className="text-[11px] font-bold text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                                  Por Cobrar en Libreta
+                                <span className="text-[11px] font-bold text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full">
+                                  Por cobrar en libreta
                                 </span>
                               </div>
                             )}
@@ -3554,7 +3878,7 @@ export default function POSPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        className="w-full py-6 border-dashed border-primary/30 hover:border-primary text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2 rounded-xl font-bold text-xs tracking-wider uppercase"
+                        className="w-full py-6 border-dashed border-primary/30 hover:border-primary text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2 rounded-xl font-bold text-xs"
                         onClick={() => setShowSplitPaymentForm(true)}
                       >
                         <IconPlus size={16} />
@@ -3567,22 +3891,22 @@ export default function POSPage() {
                   <div className="pt-2">
                     {remainingToPay > 0.001 ? (
                       <div className="p-8 rounded-lg bg-amber-500/5 border border-amber-500/20 flex flex-col items-center gap-2 shadow-sm">
-                        <span className="text-[12px] font-semibold text-amber-600 tracking-tight">Pendiente por Cobrar</span>
+                        <span className="text-[12px] font-semibold text-amber-600 tracking-tight">Pendiente por cobrar</span>
                         <div className="flex flex-col items-center gap-1 text-center">
                           <span className="text-5xl font-bold text-amber-500 tabular-nums tracking-tighter leading-none">${remainingToPay.toFixed(2)}</span>
                           <span className="text-4xl font-bold text-amber-500/70 tabular-nums tracking-tighter leading-none">
-                            Bs {(remainingToPay * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                            Bs {(remainingToPay * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </div>
                       </div>
                     ) : changeDue > 0.001 ? (
                       <div className="space-y-4">
                         <div className="p-8 rounded-lg bg-blue-500/5 border border-blue-500/20 flex flex-col items-center gap-2 shadow-sm">
-                          <span className="text-[12px] font-semibold text-blue-600 tracking-tight">Cambio para el Cliente</span>
+                          <span className="text-[12px] font-semibold text-blue-600 tracking-tight">Cambio para el cliente</span>
                           <div className="flex flex-col items-center gap-1 text-center">
                             <span className="text-5xl font-bold text-blue-600 tabular-nums tracking-tighter leading-none">${changeDue.toFixed(2)}</span>
                             <span className="text-4xl font-bold text-blue-600/70 tabular-nums tracking-tighter leading-none">
-                              Bs {(changeDue * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                              Bs {(changeDue * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                           </div>
                         </div>
@@ -3598,7 +3922,7 @@ export default function POSPage() {
                       </div>
                     ) : (
                       <div className="p-10 rounded-lg bg-emerald-500/5 border border-emerald-500/20 flex flex-col items-center gap-4 shadow-sm">
-                        <span className="text-[13px] font-semibold text-emerald-600 tracking-tight">Pago Completado</span>
+                        <span className="text-[13px] font-semibold text-emerald-600 tracking-tight">Pago completado</span>
                         <div className="size-16 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
                           <IconCircleCheckFilled size={32} />
                         </div>
@@ -3607,105 +3931,64 @@ export default function POSPage() {
                   </div>
 
                   {/* Switch to enable/disable printing receipt */}
-                  <div className="flex items-center justify-between p-4 rounded-lg bg-muted/40 border transition-all duration-300">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-semibold text-foreground/80">Imprimir Recibo al Finalizar</span>
-                      <span className="text-[11px] text-muted-foreground font-medium">Abrir el diálogo de impresión automáticamente al registrar la venta</span>
-                    </div>
-                    <Switch checked={printReceipt} onCheckedChange={setPrintReceipt} />
-                  </div>
+                  <label htmlFor="print-receipt-switch" className="flex items-center justify-between p-4 rounded-lg bg-muted/40 border transition-all duration-300 cursor-pointer">
+                    <span className="text-lg font-bold text-foreground">Imprimir factura</span>
+                    <Switch id="print-receipt-switch" checked={printReceipt} onCheckedChange={setPrintReceipt} />
+                  </label>
+
+                  {selectedClientId !== "consumidor-final" && selectedClient?.phone?.trim() && (
+                    <label htmlFor="whatsapp-invoice-switch" className="flex items-center justify-between gap-3 p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/20 cursor-pointer">
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <IconBrandWhatsapp size={22} className="shrink-0 text-emerald-600" />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-bold text-foreground">Enviar factura por WhatsApp</span>
+                          <span className="block truncate text-[11px] text-muted-foreground">{formatWhatsAppNumber(selectedClient.phone)}</span>
+                        </span>
+                      </span>
+                      <Switch id="whatsapp-invoice-switch" checked={sendWhatsAppInvoice} onCheckedChange={toggleSendWhatsAppInvoice} />
+                    </label>
+                  )}
 
                   {/* SyncroCredit activation: credit chip selector + compact generate button */}
                   {(tempPaymentMethod === 'CREDIT' || addedPayments.some((p: any) => p.method === 'CREDIT')) && selectedClientId !== "consumidor-final" && !selectedClient?.hasAccount && (
                     <div className="flex flex-col gap-2.5 p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/20 transition-all duration-300">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Acceso a SyncroCredit</span>
-                        {selectedCreditLimit !== null && (
-                          <span className="text-[11px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold">${selectedCreditLimit} USD</span>
-                        )}
+                        <span className="text-[11px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold">
+                          Límite inicial ${Number(settings?.syncroCreditInitialLimit ?? 30).toFixed(0)}
+                        </span>
                       </div>
-                      {/* Credit amount chips */}
-                      <div className="grid grid-cols-5 gap-1.5">
-                        {[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((amount) => (
-                          <button
-                            key={amount}
-                            type="button"
-                            onClick={() => setSelectedCreditLimit(selectedCreditLimit === amount ? null : amount)}
-                            className={`h-8 rounded-lg text-[11px] font-bold border transition-all duration-150 ${selectedCreditLimit === amount
-                                ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
-                                : "bg-card border-border text-foreground/70 hover:border-emerald-500/60 hover:text-emerald-700"
-                              }`}
-                          >
-                            ${amount}
-                          </button>
-                        ))}
-                      </div>
+                      <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        El límite sube solo cada vez que el cliente paga a tiempo, hasta ${Number(settings?.syncroCreditMaxLimit ?? 200).toFixed(0)}.
+                      </p>
 
-                      {/* Custom Credit Limit Input */}
-                      <div className="flex items-center gap-2 mt-1">
-                        <Label htmlFor="custom-credit-limit" className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 shrink-0">Límite Personalizado:</Label>
-                        <div className="relative flex-1">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">$</span>
-                          <Input
-                            id="custom-credit-limit"
-                            type="number"
-                            placeholder="Otro monto"
-                            className="h-8 pl-5 pr-2 rounded-lg text-xs bg-card border-border focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500 text-white"
-                            value={selectedCreditLimit !== null && ![10, 20, 30, 40, 50, 60, 70, 80, 90, 100].includes(selectedCreditLimit) ? selectedCreditLimit : ""}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (val === "") {
-                                setSelectedCreditLimit(null);
-                              } else {
-                                setSelectedCreditLimit(Number(val));
-                              }
-                            }}
-                          />
-                        </div>
-                      </div>
-                      {/* Compact generate button — only enabled when a credit limit is chosen */}
-                      <Button
-                        type="button"
-                        onClick={async () => {
-                          if (!selectedClientId || selectedCreditLimit === null) return;
-                          setGeneratingPwaCode(true);
-                          try {
-                            const token = localStorage.getItem("token");
-                            const res = await fetch(`${API}/clients/${selectedClientId}/activation-code`, {
-                              method: "POST",
-                              headers: {
-                                "Content-Type": "application/json",
-                                Authorization: `Bearer ${token}`
-                              },
-                              body: JSON.stringify({ creditLimit: selectedCreditLimit })
-                            });
-                            if (res.ok) {
-                              const data = await res.json();
-                              setGeneratedPwaCode(data.activationCode);
-                              setPwaClientName(selectedClient?.name || "Cliente");
-                              setPwaClientDocument(selectedClient?.documentId || "");
-                              setShowPwaCodeModal(true);
-                              setSelectedCreditLimit(null);
-                              toast.success("Código de activación generado con éxito");
-                            } else {
-                              const err = await res.json();
-                              toast.error(err.message || "Error al generar código");
-                            }
-                          } catch (err) {
-                            toast.error("Error de conexión al generar código");
-                          } finally {
-                            setGeneratingPwaCode(false);
-                          }
-                        }}
-                        disabled={generatingPwaCode || selectedCreditLimit === null}
-                        className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-lg text-[11px] font-bold shadow-sm flex items-center justify-center gap-1.5 h-8 transition-colors"
-                      >
-                        {generatingPwaCode ? (
-                          <><IconRefresh className="animate-spin size-3" /> Generando...</>
-                        ) : (
-                          <><IconDevices size={13} /> Generar Código SyncroCredit</>
-                        )}
-                      </Button>
+                      {showLimitOverride ? (
+                        <CreditLimitOverride
+                          needsPin={!isOwnerUser}
+                          busy={generatingPwaCode}
+                          submitLabel="Activar con este límite"
+                          onSubmit={(amount, pin) => activateSyncroCredit(amount, pin)}
+                          onCancel={() => setShowLimitOverride(false)}
+                        />
+                      ) : (
+                        <>
+                          <Button
+                            type="button"
+                            onClick={() => activateSyncroCredit()}
+                            disabled={generatingPwaCode}
+                            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-lg text-[11px] font-bold shadow-sm flex items-center justify-center gap-1.5 h-9 transition-colors"
+                          >
+                            {generatingPwaCode ? (
+                              <><IconRefresh className="animate-spin size-3" /> Activando...</>
+                            ) : (
+                              <><IconDevices size={14} /> Activar SyncroCredit</>
+                            )}
+                          </Button>
+                          <button type="button" onClick={() => setShowLimitOverride(true)} className="self-center text-[11px] font-semibold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+                            Asignar otro límite
+                          </button>
+                        </>
+                      )}
 
                       <div className="pt-2.5 flex items-center justify-between border-t border-emerald-500/10 mt-1">
                         <span className="text-[10px] text-muted-foreground font-semibold">¿Ya se registró en el portal?</span>
@@ -3725,7 +4008,7 @@ export default function POSPage() {
                           {checkingActivation ? (
                             <><IconRefresh className="animate-spin size-3" /> Verificando...</>
                           ) : (
-                            <><IconRefresh size={12} /> Verificar Estado</>
+                            <><IconRefresh size={12} /> Verificar estado</>
                           )}
                         </Button>
                       </div>
@@ -3735,7 +4018,7 @@ export default function POSPage() {
                   {/* Selector de Tipo de Fiado: Tradicional vs SyncroCredit */}
                   {(tempPaymentMethod === 'CREDIT' || addedPayments.some((p: any) => p.method === 'CREDIT')) && selectedClientId !== "consumidor-final" && selectedClient?.hasAccount && (
                     <div className="flex flex-col gap-2 p-2 bg-muted/40 border border-border/40 rounded-xl animate-in fade-in duration-200">
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">Modalidad de Fiado</span>
+                      <span className="text-[10px] font-bold text-muted-foreground px-1">Modalidad de fiado</span>
                       <div className="grid grid-cols-2 gap-1.5 p-1 bg-muted rounded-lg border">
                         <button
                           type="button"
@@ -3745,7 +4028,7 @@ export default function POSPage() {
                               : "text-muted-foreground hover:text-foreground"
                             }`}
                         >
-                          Fiado Tradicional (Libreta)
+                          Fiado tradicional (libreta)
                         </button>
                         <button
                           type="button"
@@ -3755,7 +4038,7 @@ export default function POSPage() {
                               : "text-muted-foreground hover:text-foreground"
                             }`}
                         >
-                          <IconDevices size={14} /> SyncroCredit (Digital)
+                          <IconDevices size={14} /> SyncroCredit (digital)
                         </button>
                       </div>
                     </div>
@@ -3766,7 +4049,7 @@ export default function POSPage() {
                     <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl flex items-start gap-2.5 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
                       <IconInfoCircle className="text-amber-600 shrink-0 size-4 mt-0.5" />
                       <div className="flex-1">
-                        <p className="text-xs font-bold text-amber-700 dark:text-amber-500">Fiado Directo a Libreta</p>
+                        <p className="text-xs font-bold text-amber-700 dark:text-amber-500">Fiado directo a libreta</p>
                         <p className="text-[10px] text-muted-foreground font-semibold leading-normal mt-0.5">
                           Este crédito se registrará directamente en la cuenta local del cliente sin requerir código PIN ni cuotas fijas.
                         </p>
@@ -3789,66 +4072,27 @@ export default function POSPage() {
                         <span>Gestión de SyncroCredit</span>
                       </div>
 
-                      {/* Ajustar Límite de Crédito */}
+                      {/* Límite de crédito: sube solo; cambiarlo a mano requiere PIN de supervisor */}
                       <div className="flex items-center justify-between p-2 rounded-lg bg-muted/50 border border-border/60">
                         <div className="flex flex-col">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase leading-none">Límite de Crédito</span>
-                          <span className="text-xs font-black mt-1">
-                            {selectedClient?.creditLimit === 0 ? "Sin Límite (Libreta Tradicional)" : `$${selectedClient?.creditLimit || 0}`}
-                          </span>
+                          <span className="text-[10px] font-bold text-muted-foreground leading-none">Límite de crédito</span>
+                          <span className="text-xs font-black mt-1">${Number(selectedClient?.creditLimit || 0).toFixed(0)}</span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={updatingLimit}
-                            className="h-7 px-2 text-[10px] font-bold flex items-center justify-center gap-0.5"
-                            onClick={async () => {
-                              const currentLimit = selectedClient?.creditLimit || 0;
-                              const newLimit = Math.max(0, currentLimit - 10);
-                              await updateClientLimit(newLimit);
-                            }}
-                          >
-                            -10
+                        {!showManageLimit && (
+                          <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-[10px] font-bold gap-1" onClick={() => setShowManageLimit(true)}>
+                            <IconLock size={12} /> Cambiar
                           </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={updatingLimit}
-                            className="h-7 px-2 text-[10px] font-bold flex items-center justify-center gap-0.5"
-                            onClick={async () => {
-                              const currentLimit = selectedClient?.creditLimit || 0;
-                              const newLimit = currentLimit + 10;
-                              await updateClientLimit(newLimit);
-                            }}
-                          >
-                            +10
-                          </Button>
-                          <input
-                            type="number"
-                            disabled={updatingLimit}
-                            className="w-16 h-7 text-xs font-bold text-center bg-background border rounded-md"
-                            value={limitInputValue !== undefined ? limitInputValue : (selectedClient?.creditLimit || 0)}
-                            onChange={(e) => {
-                              setLimitInputValue(Number(e.target.value));
-                            }}
-                            onBlur={async () => {
-                              if (limitInputValue !== undefined) {
-                                await updateClientLimit(limitInputValue);
-                                setLimitInputValue(undefined);
-                              }
-                            }}
-                            onKeyDown={async (e) => {
-                              if (e.key === 'Enter' && limitInputValue !== undefined) {
-                                await updateClientLimit(limitInputValue);
-                                setLimitInputValue(undefined);
-                              }
-                            }}
-                          />
-                        </div>
+                        )}
                       </div>
+                      {showManageLimit && (
+                        <CreditLimitOverride
+                          needsPin={!isOwnerUser}
+                          busy={updatingLimit}
+                          submitLabel="Guardar límite"
+                          onSubmit={async (amount, pin) => { await updateClientLimit(amount, pin); setShowManageLimit(false); }}
+                          onCancel={() => setShowManageLimit(false)}
+                        />
+                      )}
 
                       <div className="grid grid-cols-1 gap-2">
                         {/* Cambiar Contraseña */}
@@ -3865,15 +4109,18 @@ export default function POSPage() {
                                 headers: {
                                   "Content-Type": "application/json",
                                   Authorization: `Bearer ${token}`
-                                }
+                                },
+                                body: JSON.stringify({ purpose: "reset" })
                               });
                               if (res.ok) {
                                 const data = await res.json();
-                                setGeneratedPwaCode(data.activationCode);
+                                setGeneratedPwaCode(data.activationCode || "");
+                                setPwaCodeSentTo(data.sent ? data.sentTo : null);
+                                setPwaCodeFallbackReason(data.sent ? null : data.reason || null);
                                 setPwaClientName(selectedClient?.name || "Cliente");
                                 setPwaClientDocument(selectedClient?.documentId || "");
                                 setShowPwaCodeModal(true);
-                                toast.success("Código temporal de restablecimiento generado");
+                                toast.success(data.sent ? "Código enviado al WhatsApp del cliente" : "Código temporal de restablecimiento generado");
                               } else {
                                 const err = await res.json();
                                 toast.error(err.message || "Error al generar código");
@@ -3886,7 +4133,7 @@ export default function POSPage() {
                           }}
                           className="w-full text-[11px] font-bold h-9 flex items-center justify-center gap-1.5"
                         >
-                          <IconLock size={13} /> Cambiar Contraseña (OTP)
+                          <IconLock size={13} /> Cambiar contraseña (OTP)
                         </Button>
 
                         <div className="grid grid-cols-2 gap-2">
@@ -3927,9 +4174,9 @@ export default function POSPage() {
                               }`}
                           >
                             {selectedClient?.isSuspended ? (
-                              <><IconLock size={13} /> Reactivar Cuenta</>
+                              <><IconLock size={13} /> Reactivar cuenta</>
                             ) : (
-                              <><IconLock size={13} /> Pausar Cuenta</>
+                              <><IconLock size={13} /> Pausar cuenta</>
                             )}
                           </Button>
 
@@ -3975,7 +4222,7 @@ export default function POSPage() {
                             }}
                             className="w-full text-[11px] font-bold h-9 flex items-center justify-center gap-1.5"
                           >
-                            <IconTrash size={13} /> Eliminar Cuenta
+                            <IconTrash size={13} /> Eliminar cuenta
                           </Button>
                         </div>
                       </div>
@@ -3991,7 +4238,7 @@ export default function POSPage() {
                   disabled={processing || (tempPaymentMethod !== 'CREDIT' && remainingToPay > 0.01)}
                   onClick={() => {
                     if (tempPaymentMethod === 'CREDIT' && selectedClientId === 'consumidor-final') {
-                      toast.error("No se puede fiar al Consumidor Final.");
+                      toast.error("No se puede fiar al consumidor final.");
                       return;
                     }
 
@@ -4039,7 +4286,7 @@ export default function POSPage() {
                     <span className="flex items-center gap-2">
                       <IconRefresh className="animate-spin size-4" /> Procesando...
                     </span>
-                  ) : (tempPaymentMethod === 'CREDIT' && addedPayments.length === 0) ? ((selectedClient?.currentDebt || 0) > 0 ? "Agregar a Libreta" : "Confirmar Fiado") : "Finalizar Venta"}
+                  ) : (tempPaymentMethod === 'CREDIT' && addedPayments.length === 0) ? ((selectedClient?.currentDebt || 0) > 0 ? "Agregar a libreta" : "Confirmar fiado") : "Finalizar venta"}
                 </Button>
               </div>
             </div>
@@ -4054,14 +4301,14 @@ export default function POSPage() {
             <div className="size-12 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mb-3">
               <IconReceipt size={24} />
             </div>
-            <AlertDialogTitle className="text-xl font-bold tracking-tight">¿Confirmar Método de Pago?</AlertDialogTitle>
+            <AlertDialogTitle className="text-xl font-bold tracking-tight">¿Confirmar método de pago?</AlertDialogTitle>
           </AlertDialogHeader>
 
           <div className="px-6 py-4 space-y-5 text-center">
             {/* Huge Payment Method */}
             <div className="space-y-1">
               <div className={cn(
-                "font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-tight break-words leading-none",
+                "font-black text-emerald-600 dark:text-emerald-400 tracking-tight break-words leading-none",
                 (() => {
                   const name = paymentConfirmationSummary.split(" + ").map(p => p.split(" (")[0]).join(" + ");
                   if (name.length > 15) return "text-3xl";
@@ -4075,7 +4322,7 @@ export default function POSPage() {
 
             {/* Total Amount in smaller font */}
             <div className="py-2.5 px-4 rounded-xl bg-muted/40 border border-border/40 flex justify-between items-center text-sm font-semibold text-muted-foreground">
-              <span>Monto Total:</span>
+              <span>Monto total:</span>
               <span className="text-lg font-black text-foreground font-mono">
                 ${finalTotalWithIgtf.toFixed(2)} USD
               </span>
@@ -4086,7 +4333,7 @@ export default function POSPage() {
 
           <AlertDialogFooter className="p-6 pt-2 flex sm:flex-row flex-col gap-3">
             <AlertDialogCancel className="w-full sm:flex-1 rounded-xl h-12 font-bold text-sm border-border hover:bg-muted transition-colors mt-0">
-              Revisar Pago
+              Revisar pago
             </AlertDialogCancel>
             <AlertDialogAction
               disabled={processing}
@@ -4105,7 +4352,7 @@ export default function POSPage() {
               }}
               className="w-full sm:flex-1 rounded-xl h-12 px-8 font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/10 border-none transition-colors"
             >
-              Registrar Venta
+              Registrar venta
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -4122,9 +4369,9 @@ export default function POSPage() {
             <div className="size-14 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center mb-3">
               <IconLock size={28} />
             </div>
-            <DialogTitle className="text-xl font-bold tracking-tight">Autorización SyncroCredit Requerida</DialogTitle>
+            <DialogTitle className="text-xl font-bold tracking-tight">Autorización SyncroCredit requerida</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-1 flex flex-col items-center gap-0.5">
-              <span>El cliente <strong>{selectedClient?.name || "Cliente"}</strong> debe autorizar el crédito.</span>
+              <span>El cliente <strong>{selectedClient?.name || "Cliente"}</strong> Debe autorizar el crédito.</span>
             </DialogDescription>
           </DialogHeader>
 
@@ -4132,13 +4379,13 @@ export default function POSPage() {
             {isGeneratingPin ? (
               <div className="flex flex-col items-center justify-center gap-3 py-6">
                 <IconRefresh className="animate-spin text-blue-500 size-8" />
-                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Generando PIN...</span>
+                <span className="text-xs font-bold text-muted-foreground">Generando PIN...</span>
               </div>
             ) : generatedPinCode ? (
               <div className="space-y-6">
                 <div className="flex flex-col items-center justify-center gap-1.5">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Dicta este PIN al cliente:</span>
-                  <div className="text-5xl font-black tracking-widest text-blue-600 font-mono select-all select-none py-3 px-6 bg-blue-500/5 rounded-2xl border border-blue-500/10 shadow-inner">
+                  <span className="text-[10px] font-bold text-muted-foreground">Dicta este PIN al cliente:</span>
+                  <div className="text-5xl font-black text-blue-600 font-mono select-all select-none py-3 px-6 bg-blue-500/5 rounded-2xl border border-blue-500/10 shadow-inner">
                     {generatedPinCode}
                   </div>
                 </div>
@@ -4173,7 +4420,7 @@ export default function POSPage() {
               }}
               className="w-full h-12 rounded-xl text-xs font-black"
             >
-              Cancelar Operación
+              Cancelar operación
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4186,7 +4433,7 @@ export default function POSPage() {
             <div className="size-14 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-3">
               <IconDevices size={28} />
             </div>
-            <DialogTitle className="text-xl font-bold tracking-tight">Acceso SyncroCredit Generado</DialogTitle>
+            <DialogTitle className="text-xl font-bold tracking-tight">{pwaCodeSentTo ? "Código enviado por WhatsApp" : "Acceso SyncroCredit generado"}</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-1 flex flex-col items-center gap-0.5">
               <span>Código de activación para <strong>{pwaClientName}</strong></span>
               {pwaClientDocument && (
@@ -4197,7 +4444,23 @@ export default function POSPage() {
             </DialogDescription>
           </DialogHeader>
 
+          {pwaCodeSentTo ? (
+            <div className="py-6 text-center space-y-3">
+              <div className="mx-auto flex w-fit items-center gap-2 rounded-full bg-emerald-500/10 px-4 py-2 text-emerald-700 dark:text-emerald-400">
+                <IconBrandWhatsapp size={18} />
+                <span className="text-sm font-bold tabular-nums">{formatWhatsAppNumber(pwaCodeSentTo)}</span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed px-2">
+                El cliente recibió el código y el enlace para activar su cuenta. Por seguridad, el código no se muestra en la caja.
+              </p>
+            </div>
+          ) : (
           <div className="py-6 space-y-6 text-center">
+            {pwaCodeFallbackReason && (
+              <p className="mx-auto w-fit rounded-lg bg-amber-500/10 px-3 py-1.5 text-[11px] font-semibold text-amber-700">
+                {pwaCodeFallbackReason}. Entrégale este código solo al cliente.
+              </p>
+            )}
             {/* 6-digit OTP code display */}
             <div className="flex justify-center gap-2">
               {generatedPwaCode.split("").map((digit, idx) => (
@@ -4211,8 +4474,10 @@ export default function POSPage() {
               ))}
             </div>
           </div>
+          )}
 
           <DialogFooter className="flex gap-2 sm:flex-row flex-col">
+            {!pwaCodeSentTo && (
             <Button
               onClick={() => {
                 navigator.clipboard.writeText(generatedPwaCode);
@@ -4221,8 +4486,9 @@ export default function POSPage() {
               variant="outline"
               className="w-full sm:flex-1 rounded-xl h-11 font-bold text-xs flex items-center justify-center gap-2"
             >
-              Copiar Código
+              Copiar código
             </Button>
+            )}
             <Button
               onClick={async () => {
                 await refreshSelectedClient();
@@ -4236,14 +4502,14 @@ export default function POSPage() {
         </DialogContent>
       </Dialog>
       {/* DIALOG: VENTA PROCESADA EXITOSAMENTE */}
-      <Dialog open={isSaleSuccessModalOpen} onOpenChange={setIsSaleSuccessModalOpen}>
+      <Dialog open={isSaleSuccessModalOpen} onOpenChange={(open) => { if (!open) resetAfterSale(); }}>
         <DialogContent className="sm:max-w-[400px] rounded-2xl border-none shadow-2xl p-6 bg-card text-foreground text-center flex flex-col items-center justify-center space-y-4">
           <div className="size-16 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
             <IconCheck size={36} stroke={3} />
           </div>
           <DialogHeader className="text-center flex flex-col items-center">
             <DialogTitle className="text-2xl font-black tracking-tight text-emerald-600 dark:text-emerald-500">
-              ¡Venta Procesada!
+              ¡Venta procesada!
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground mt-2 font-medium">
               La transacción ha sido registrada y autorizada con éxito en el sistema. El carrito de compras ha sido limpiado para la siguiente venta.
@@ -4251,7 +4517,8 @@ export default function POSPage() {
           </DialogHeader>
           <Button
             className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold h-11 rounded-xl shadow-lg shadow-emerald-600/20 transition-all duration-300"
-            onClick={() => setIsSaleSuccessModalOpen(false)}
+            onClick={resetAfterSale}
+            autoFocus
           >
             Aceptar
           </Button>
@@ -4263,7 +4530,7 @@ export default function POSPage() {
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-600">
-              <IconHistory size={18} /> Abonar a Deuda
+              <IconHistory size={18} /> Abonar a deuda
             </DialogTitle>
             <DialogDescription>
               Registra un pago para reducir la deuda activa del cliente.
@@ -4271,7 +4538,7 @@ export default function POSPage() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>Monto a Abonar (USD) <span className="text-destructive">*</span></Label>
+              <Label>Monto a abonar (USD) <span className="text-destructive">*</span></Label>
               <Input
                 type="number"
                 placeholder="0.00"
@@ -4281,15 +4548,15 @@ export default function POSPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Método de Pago</Label>
+              <Label>Método de pago</Label>
               <Select value={abonoPaymentMethod} onValueChange={setAbonoPaymentMethod}>
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccione método" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="CASH">Efectivo</SelectItem>
-                  <SelectItem value="CARD">Punto de Venta</SelectItem>
-                  <SelectItem value="PAGO_MOVIL">Pago Móvil</SelectItem>
+                  <SelectItem value="CARD">Punto de venta</SelectItem>
+                  <SelectItem value="PAGO_MOVIL">Pago móvil</SelectItem>
                   <SelectItem value="TRANSFER">Transferencia</SelectItem>
                   <SelectItem value="ZELLE">Zelle</SelectItem>
                   <SelectItem value="BINANCE">Binance</SelectItem>
@@ -4297,7 +4564,7 @@ export default function POSPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Referencia / Notas</Label>
+              <Label>Referencia / notas</Label>
               <Input
                 placeholder="Opcional"
                 value={abonoNotes}
@@ -4309,7 +4576,7 @@ export default function POSPage() {
             <Button variant="ghost" onClick={() => setIsPaymentModalAbonoOpen(false)} disabled={isSubmittingAbono}>Cancelar</Button>
             <Button onClick={handleRegisterAbono} disabled={isSubmittingAbono} className="bg-amber-600 hover:bg-amber-700 text-white">
               {isSubmittingAbono ? <IconRefresh className="animate-spin size-4 mr-2" /> : null}
-              Registrar Abono
+              Registrar abono
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4320,7 +4587,7 @@ export default function POSPage() {
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <IconUserPlus size={18} className="text-primary" /> Nuevo Cliente
+              <IconUserPlus size={18} className="text-primary" /> Nuevo cliente
             </DialogTitle>
             <DialogDescription>
               Completa los datos para registrar el cliente en el sistema.
@@ -4328,9 +4595,9 @@ export default function POSPage() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>Nombre Completo <span className="text-destructive">*</span></Label>
+              <Label>Nombre completo <span className="text-destructive">*</span></Label>
               <Input
-                placeholder="Juan Pérez"
+                placeholder="Juan pérez"
                 value={newClient.name}
                 onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
               />
@@ -4359,7 +4626,7 @@ export default function POSPage() {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setIsQuickClientOpen(false)}>Cancelar</Button>
             <Button onClick={handleCreateClient} disabled={savingClient}>
-              {savingClient ? "Guardando..." : "Registrar Cliente"}
+              {savingClient ? "Guardando..." : "Registrar cliente"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4370,7 +4637,7 @@ export default function POSPage() {
         <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
-              <IconCalculator className="text-primary" size={20} /> Arqueo de Caja Detallado
+              <IconCalculator className="text-primary" size={20} /> Arqueo de caja detallado
             </DialogTitle>
             <DialogDescription>
               Ingrese los montos físicos para realizar el cierre de caja. El sistema calculará los sobrantes o faltantes.
@@ -4382,12 +4649,12 @@ export default function POSPage() {
             {/* Expected Totals Summary */}
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="p-3 rounded-lg bg-muted/30 border space-y-1">
-                <p className="text-muted-foreground text-xs font-medium">Efectivo USD Esperado</p>
+                <p className="text-muted-foreground text-xs font-medium">Efectivo USD esperado</p>
                 <p className="font-semibold text-base">${activeShift?.expectedTotals?.CASH?.toFixed(2) || '0.00'}</p>
               </div>
               <div className="p-3 rounded-lg bg-muted/30 border space-y-1">
-                <p className="text-muted-foreground text-xs font-medium">Punto y Pago Móvil</p>
-                <p className="font-semibold text-base">Bs {((activeShift?.expectedTotals?.CARD || 0) + (activeShift?.expectedTotals?.PAGO_MOVIL || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</p>
+                <p className="text-muted-foreground text-xs font-medium">Punto y pago móvil</p>
+                <p className="font-semibold text-base">Bs {((activeShift?.expectedTotals?.CARD || 0) + (activeShift?.expectedTotals?.PAGO_MOVIL || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
             </div>
 
@@ -4415,7 +4682,7 @@ export default function POSPage() {
 
             {/* Bs Cash and Digital */}
             <div className="space-y-3">
-              <h4 className="text-sm font-semibold">Bolívares y Digital</h4>
+              <h4 className="text-sm font-semibold">Bolívares y digital</h4>
               <div className="grid grid-cols-1 gap-3">
                 <div className="flex items-center gap-3">
                   <Label className="w-1/3 text-xs text-muted-foreground">Efectivo Bs</Label>
@@ -4425,14 +4692,14 @@ export default function POSPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Label className="w-1/3 text-xs text-muted-foreground">Lote Punto Venta</Label>
+                  <Label className="w-1/3 text-xs text-muted-foreground">Lote punto venta</Label>
                   <div className="relative flex-1">
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-medium">Bs</span>
                     <Input type="number" className="pl-8 h-9" value={posBatch} onChange={e => setPosBatch(e.target.value)} />
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Label className="w-1/3 text-xs text-muted-foreground">Total Pago Móvil</Label>
+                  <Label className="w-1/3 text-xs text-muted-foreground">Total pago móvil</Label>
                   <div className="relative flex-1">
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-medium">Bs</span>
                     <Input type="number" className="pl-8 h-9" value={pagoMovilBatch} onChange={e => setPagoMovilBatch(e.target.value)} />
@@ -4444,7 +4711,7 @@ export default function POSPage() {
             {/* Validation Panel */}
             <div className="p-4 rounded-xl bg-muted/50 border space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Efectivo Contado (USD eq):</span>
+                <span className="text-sm font-medium">Efectivo contado (USD eq):</span>
                 <span className="text-base font-bold tabular-nums">
                   ${(
                     cashBreakdown.b1 + (cashBreakdown.b5 * 5) + (cashBreakdown.b10 * 10) +
@@ -4454,8 +4721,8 @@ export default function POSPage() {
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs text-muted-foreground">
-                <span>Total Digital Contado (Bs):</span>
-                <span className="tabular-nums">Bs {((Number(posBatch) || 0) + (Number(pagoMovilBatch) || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                <span>Total digital contado (Bs):</span>
+                <span className="tabular-nums">Bs {((Number(posBatch) || 0) + (Number(pagoMovilBatch) || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             </div>
 
@@ -4463,7 +4730,7 @@ export default function POSPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsClosingShift(false)}>Cancelar</Button>
             <Button onClick={handleCloseShift} disabled={isClosingShift && processing} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              {processing ? "Procesando..." : "Confirmar Arqueo y Cerrar Caja"}
+              {processing ? "Procesando..." : "Confirmar arqueo y cerrar caja"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4479,14 +4746,14 @@ export default function POSPage() {
                   <div className="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-500">
                     <IconShieldCheck className="size-5" />
                   </div>
-                  <span>Arqueo Ciego Registrado</span>
+                  <span>Arqueo ciego registrado</span>
                 </>
               ) : (
                 <>
                   <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
                     <IconCheck className="size-5" />
                   </div>
-                  <span>Caja Cerrada Exitosamente</span>
+                  <span>Caja cerrada exitosamente</span>
                 </>
               )}
             </DialogTitle>
@@ -4502,21 +4769,21 @@ export default function POSPage() {
             <div className="space-y-4 py-3">
               <div className="p-4 rounded-xl bg-muted/40 border border-border/80 space-y-3 shadow-2xs">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground font-medium">Efectivo Total Declarado:</span>
+                  <span className="text-muted-foreground font-medium">Efectivo total declarado:</span>
                   <span className="font-extrabold text-foreground text-base tabular-nums">
                     ${closeSummary?.reported?.toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-xs text-muted-foreground">
-                  <span>Modo de Seguridad:</span>
+                  <span>Modo de seguridad:</span>
                   <Badge variant="outline" className="text-[10px] text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/5 font-semibold">
-                    <IconShieldLock className="size-3 mr-1" /> Arqueo Ciego Activo
+                    <IconShieldLock className="size-3 mr-1" /> Arqueo ciego activo
                   </Badge>
                 </div>
               </div>
 
               <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs leading-relaxed">
-                🛡️ <strong>Comprobante de Entrega:</strong> Los fondos contados fueron transferidos al Administrador para su verificación. Ya puedes retirar tu gaveta.
+                🛡️ <strong>Comprobante de entrega:</strong> Los fondos contados fueron transferidos al administrador para su verificación. Ya puedes retirar tu gaveta.
               </div>
             </div>
           ) : (
@@ -4524,18 +4791,18 @@ export default function POSPage() {
             <div className="space-y-4 py-3">
               <div className="p-4 rounded-xl bg-muted/40 border border-border/80 space-y-3 shadow-2xs">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground font-medium">Efectivo Esperado (Sistema):</span>
+                  <span className="text-muted-foreground font-medium">Efectivo esperado (sistema):</span>
                   <span className="font-semibold text-foreground tabular-nums">${closeSummary?.expected?.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground font-medium">Efectivo Contado (Declarado):</span>
+                  <span className="text-muted-foreground font-medium">Efectivo contado (declarado):</span>
                   <span className="font-bold text-foreground tabular-nums">${closeSummary?.reported?.toFixed(2)}</span>
                 </div>
 
                 <Separator />
 
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold">Diferencia de Cuadre:</span>
+                  <span className="text-sm font-semibold">Diferencia de cuadre:</span>
                   <span className={`text-base font-extrabold tabular-nums ${(closeSummary?.difference || 0) < -0.01
                       ? 'text-rose-500'
                       : (closeSummary?.difference || 0) > 0.01
@@ -4548,7 +4815,7 @@ export default function POSPage() {
                         ? '(Faltante)'
                         : (closeSummary?.difference || 0) > 0.01
                           ? '(Sobrante)'
-                          : '(Cuadrado Perfecto)'}
+                          : '(Cuadrado perfecto)'}
                     </span>
                   </span>
                 </div>
@@ -4568,8 +4835,7 @@ export default function POSPage() {
                 setIsCloseSummaryOpen(false);
                 setActiveShift(null);
                 setOpeningBalance("0");
-                setOpeningUsd("");
-                setOpeningBs("");
+                setInitialCashRows([{ id: "1", amount: "", currency: "USD" }]);
               }}
               className="w-full"
             >
@@ -4581,18 +4847,57 @@ export default function POSPage() {
 
       {/* DIALOG: ESCÁNER Y CÁMARA (ESTILO UNIFICADO) */}
       <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>
-        <DialogContent className={cn("overflow-hidden bg-black/95 border-white/10 shadow-2xl p-0 transition-all duration-300", useCamera ? "sm:max-w-[320px]" : "sm:max-w-md")}>
-          <DialogHeader className="sr-only">
-            <DialogTitle>Captura de Código de Barras</DialogTitle>
-          </DialogHeader>
+        <DialogContent className={cn("overflow-hidden rounded-3xl border border-[#D8D4CB] bg-[#E8E6E0] p-0 shadow-2xl transition-all duration-300 [&>button]:hidden", useCamera ? "sm:max-w-[380px]" : "sm:max-w-md")}>
+          <div className="flex items-start justify-between px-6 pt-5">
+            <DialogHeader className="space-y-0.5 text-left">
+              <DialogTitle className="text-base font-bold text-[#16140F]">Escanear producto</DialogTitle>
+              <DialogDescription className="text-xs text-[#6B665C]">
+                {useCamera ? "Apunta la cámara al código de barras" : "Pasa el producto por el lector láser"}
+              </DialogDescription>
+            </DialogHeader>
+            <Button variant="ghost" size="icon" className="-mr-2 size-8 rounded-full text-[#6B665C] hover:bg-black/5 hover:text-[#16140F]" onClick={() => setScannerOpen(false)} aria-label="Cerrar">
+              <IconX size={16} />
+            </Button>
+          </div>
 
-          <Button variant="ghost" size="icon" className="absolute top-3 right-3 size-8 rounded-full bg-black/50 hover:bg-white/10 text-white z-50" onClick={() => setScannerOpen(false)}>
-            <IconX size={16} />
-          </Button>
+          {/* Always-on scanner */}
+          <div className="px-6 pt-4">
+            <label htmlFor="scanner-always-on" className={cn("flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 transition-colors", scannerAlwaysOn ? "border-emerald-500/30 bg-emerald-500/5" : "border-[#D8D4CB] bg-[#F4F2EC]")}>
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-[#16140F]">
+                  {scannerAlwaysOn && <span className="size-2 rounded-full bg-emerald-500" />}
+                  Escáner siempre activo
+                </span>
+                <span className="block text-[11px] text-[#6B665C]">
+                  Lee códigos en cualquier momento, también con el resumen de compra abierto, sin abrir esta ventana.
+                </span>
+              </span>
+              <Switch id="scanner-always-on" checked={scannerAlwaysOn} onCheckedChange={toggleScannerAlwaysOn} className="shrink-0 data-[state=checked]:bg-emerald-500" />
+            </label>
+          </div>
 
-          <div className={cn("relative w-full flex flex-col items-center justify-center transition-all duration-300", useCamera ? "h-[320px]" : "h-[360px] sm:h-[400px]")}>
+          {/* Mode switch */}
+          <div className="px-6 pt-4">
+            <div className="grid grid-cols-2 gap-1 rounded-xl border border-[#D8D4CB] bg-[#DEDBD3]/60 p-1">
+              {([[false, "Lector láser", IconBarcode], [true, "Cámara", IconCamera]] as const).map(([camera, label, Icon]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setUseCamera(camera)}
+                  className={cn(
+                    "flex h-9 items-center justify-center gap-2 rounded-lg text-xs font-semibold transition-all",
+                    useCamera === camera ? "bg-[#F7F5F0] text-[#16140F] shadow-sm" : "text-[#6B665C] hover:text-[#16140F]",
+                  )}
+                >
+                  <Icon size={15} className={useCamera === camera ? "text-primary/80" : ""} /> {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className={cn("relative w-full px-6 pb-6 pt-4 transition-all duration-300", useCamera ? "h-[360px]" : "")}>
             {!useCamera ? (
-              <div className="flex flex-col items-center w-full max-w-[280px] text-center space-y-6 pt-4 animate-in zoom-in-95 duration-500">
+              <div className="animate-in fade-in zoom-in-95 duration-300">
                 <input
                   ref={scannerInputRef}
                   autoFocus
@@ -4610,51 +4915,51 @@ export default function POSPage() {
                     }
                   }}
                 />
-                <div className="w-full flex flex-col items-center justify-center py-12 gap-8 bg-muted/10 border border-muted/20 rounded-2xl relative overflow-hidden">
-                  <div className="size-24 rounded-xl bg-background border border-muted/50 shadow-sm flex items-center justify-center text-muted-foreground relative z-10">
-                    <IconBarcode size={48} stroke={1.2} />
+                <div className="relative flex flex-col items-center justify-center gap-6 overflow-hidden rounded-2xl border border-[#D8D4CB] bg-[#F4F2EC] py-12">
+                  {/* Subtle scan line */}
+                  <div className="pointer-events-none absolute inset-x-10 h-px animate-scanline bg-primary/30 shadow-[0_0_10px_rgba(228,87,46,0.25)]" />
+                  <div className="relative">
+                    <span className="absolute inset-0 animate-ping rounded-2xl bg-primary/10" />
+                    <div className="relative flex size-24 items-center justify-center rounded-2xl border border-[#E2DED5] bg-white text-[#3D3A33] shadow-sm">
+                      <IconBarcode size={46} stroke={1.3} />
+                    </div>
                   </div>
-                  <div className="text-center space-y-2 relative z-10">
-                    <p className="font-semibold text-lg tracking-tight">Escáner Listo</p>
-                    <p className="text-[11px] text-muted-foreground/50 font-normal tracking-tight">Esperando lector láser...</p>
+                  <div className="space-y-1.5 text-center">
+                    <p className="text-lg font-semibold tracking-tight text-[#16140F]">Escáner listo</p>
+                    <p className="flex items-center justify-center gap-1.5 text-xs text-[#6B665C]">
+                      <span className="relative flex size-2">
+                        <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary/40" />
+                        <span className="relative inline-flex size-2 rounded-full bg-primary/60" />
+                      </span>
+                      Esperando lector láser…
+                    </p>
                   </div>
                 </div>
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="mx-auto size-14 hover:bg-primary/5 transition-all group"
-                  onClick={() => setUseCamera(true)}
-                  title="Usar Cámara"
-                >
-                  <IconCamera size={32} className="text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all duration-500" />
-                </Button>
               </div>
             ) : (
-              <div className="w-full h-full relative flex flex-col items-center justify-center p-4">
+              <div className="relative h-full w-full">
                 <div className={cn(
-                  "relative w-full h-full rounded-xl overflow-hidden border shadow-2xl bg-black flex items-center justify-center",
-                  isDetected ? "border-green-500" : "border-white/10"
+                  "relative flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border-2 bg-[#1F1D19] shadow-inner transition-colors duration-300",
+                  isDetected ? "border-emerald-500" : "border-[#D8D4CB]",
                 )}>
                   {/* the #reader container must be square-ish so the camera stretches nicely */}
                   <div id="reader" className="w-full h-full [&_video]:object-cover [&_video]:w-full [&_video]:h-full [&_video]:min-h-full [&_#qr-shaded-region]:hidden"></div>
 
-                  {/* Láser Minimalista (Oscilante) */}
+                  {/* Scan line */}
                   <div className={cn(
-                    "absolute inset-x-8 z-10 animate-scanline transition-all duration-300 h-0.5 shadow-[0_0_8px_currentColor]",
-                    isDetected ? "text-green-500 bg-green-500" : "text-primary bg-primary"
+                    "absolute inset-x-8 z-10 h-0.5 animate-scanline transition-all duration-300",
+                    isDetected ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-primary/50 shadow-[0_0_8px_rgba(228,87,46,0.35)]",
                   )} />
 
-                  {/* Esquinas Rectangulares Transparentes */}
-                  <div className="absolute inset-6 z-20 pointer-events-none opacity-40 mix-blend-difference filter drop-shadow-md">
-                    <div className={cn("absolute top-0 left-0 size-8 border-t-2 border-l-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
-                    <div className={cn("absolute top-0 right-0 size-8 border-t-2 border-r-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
-                    <div className={cn("absolute bottom-0 left-0 size-8 border-b-2 border-l-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
-                    <div className={cn("absolute bottom-0 right-0 size-8 border-b-2 border-r-2 transition-colors duration-500", isDetected ? "border-green-500" : "border-white")} />
+                  {/* Corners */}
+                  <div className="pointer-events-none absolute inset-6 z-20">
+                    {["top-0 left-0 border-t-2 border-l-2 rounded-tl-lg", "top-0 right-0 border-t-2 border-r-2 rounded-tr-lg", "bottom-0 left-0 border-b-2 border-l-2 rounded-bl-lg", "bottom-0 right-0 border-b-2 border-r-2 rounded-br-lg"].map((pos) => (
+                      <div key={pos} className={cn("absolute size-8 transition-colors duration-500", pos, isDetected ? "border-emerald-400" : "border-primary/50")} />
+                    ))}
                   </div>
 
                   {isDetected && (
-                    <div className="absolute inset-0 bg-green-500/20 z-10 animate-in fade-in zoom-in duration-300" />
+                    <div className="absolute inset-0 z-10 bg-emerald-500/15 animate-in fade-in zoom-in duration-300" />
                   )}
                 </div>
               </div>
@@ -4671,14 +4976,14 @@ export default function POSPage() {
               <IconAlertCircle className="text-amber-500" /> Producto no registrado
             </DialogTitle>
             <DialogDescription className="text-xs">
-              El código <strong>{waitlistData.barcode}</strong> no existe. Ingréselo en la lista de espera para poder facturarlo.
+              El código <strong>{waitlistData.barcode}</strong> No existe. Ingréselo en la lista de espera para poder facturarlo.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>Nombre del Producto <span className="text-destructive">*</span></Label>
+              <Label>Nombre del producto <span className="text-destructive">*</span></Label>
               <Input
-                placeholder="Ej. Refresco Cola 2L"
+                placeholder="Ej. Refresco cola 2l"
                 value={waitlistData.name}
                 onChange={(e) => setWaitlistData({ ...waitlistData, name: e.target.value })}
               />
@@ -4694,7 +4999,7 @@ export default function POSPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Stock Inicial</Label>
+                <Label>Stock inicial</Label>
                 <Input
                   type="number"
                   placeholder="1"
@@ -4707,7 +5012,7 @@ export default function POSPage() {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setWaitlistOpen(false)}>Cancelar</Button>
             <Button onClick={handleWaitlistSubmit} disabled={savingWaitlist} className="bg-amber-500 hover:bg-amber-600">
-              {savingWaitlist ? "Guardando..." : "Agregar a Espera y Carrito"}
+              {savingWaitlist ? "Guardando..." : "Agregar a espera y carrito"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4722,8 +5027,8 @@ export default function POSPage() {
                 <IconArrowBackUp size={24} />
               </div>
               <div className="space-y-1 text-left">
-                <DialogTitle className="text-lg font-black uppercase tracking-tight">Procesar Devolución</DialogTitle>
-                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                <DialogTitle className="text-lg font-black tracking-tight">Procesar devolución</DialogTitle>
+                <DialogDescription className="text-[10px] font-bold text-muted-foreground">
                   {selectedSaleForReturn ? `Venta #${selectedSaleForReturn.id.slice(-8).toUpperCase()}` : "Cargando detalles..."}
                 </DialogDescription>
               </div>
@@ -4733,13 +5038,13 @@ export default function POSPage() {
           {fetchingSaleDetails ? (
             <div className="flex-1 flex flex-col items-center justify-center py-12 gap-4">
               <IconRefresh size={40} className="animate-spin text-muted-foreground opacity-20" />
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground animate-pulse">Obteniendo información...</p>
+              <p className="text-xs font-bold text-muted-foreground animate-pulse">Obteniendo información...</p>
             </div>
           ) : selectedSaleForReturn && (
             <div className="flex-1 flex flex-col overflow-hidden py-4 gap-6">
               <div className="space-y-3">
                 <div className="flex justify-between items-end px-1">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Artículos de la Venta</Label>
+                  <Label className="text-[10px] font-black text-muted-foreground">Artículos de la venta</Label>
                   <span className="text-[9px] font-medium text-muted-foreground italic">Seleccione la cantidad a devolver</span>
                 </div>
 
@@ -4762,15 +5067,15 @@ export default function POSPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-[11px] font-bold truncate leading-tight">{item.variant?.product?.name || "Producto"} {item.variant?.name !== 'Principal' ? `(${item.variant?.name})` : ''}</p>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[9px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded uppercase">Vendido: {item.quantity}</span>
-                            {returnedQty > 0 && <span className="text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded uppercase">Devuelto: {returnedQty}</span>}
+                            <span className="text-[9px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Vendido: {item.quantity}</span>
+                            {returnedQty > 0 && <span className="text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded">Devuelto: {returnedQty}</span>}
                           </div>
                         </div>
 
                         <div className="flex items-center gap-3 shrink-0">
                           <div className="flex flex-col items-end gap-1">
                             <span className="text-[10px] font-bold tabular-nums">${item.price.toFixed(2)}</span>
-                            <span className="text-[8px] text-muted-foreground font-medium uppercase tracking-tighter">Sub: ${(item.price * currentReturnQty).toFixed(2)}</span>
+                            <span className="text-[8px] text-muted-foreground font-medium tracking-tighter">Sub: ${(item.price * currentReturnQty).toFixed(2)}</span>
                           </div>
                           <div className="flex items-center border rounded-lg h-9 bg-background shadow-sm">
                             <Button
@@ -4804,7 +5109,7 @@ export default function POSPage() {
                   }) && (
                       <div className="p-8 text-center text-muted-foreground space-y-2">
                         <IconCircleCheckFilled size={32} className="mx-auto text-emerald-500 opacity-50" />
-                        <p className="text-[10px] font-black uppercase tracking-widest">Todos los artículos han sido devueltos</p>
+                        <p className="text-[10px] font-black">Todos los artículos han sido devueltos</p>
                       </div>
                     )}
                 </div>
@@ -4812,9 +5117,9 @@ export default function POSPage() {
 
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Motivo de la Devolución</Label>
+                  <Label className="text-[10px] font-black text-muted-foreground">Motivo de la devolución</Label>
                   <Input
-                    placeholder="Ej. Producto defectuoso, Error en la compra..."
+                    placeholder="Ej. Producto defectuoso, error en la compra..."
                     className="h-10 text-xs"
                     value={returnReason}
                     onChange={(e) => setReturnReason(e.target.value)}
@@ -4823,7 +5128,7 @@ export default function POSPage() {
 
                 <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex justify-between items-center">
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">Total a Reembolsar</span>
+                    <span className="text-[10px] font-black text-amber-600">Total a reembolsar</span>
                     <span className="text-[9px] text-muted-foreground font-medium italic">Incluye impuestos proporcionales</span>
                   </div>
                   <div className="text-right">
@@ -4840,13 +5145,13 @@ export default function POSPage() {
           )}
 
           <DialogFooter className="pt-2 border-t mt-auto">
-            <Button variant="ghost" onClick={() => setIsReturnModalOpen(false)} className="font-bold text-[10px] uppercase">Cancelar</Button>
+            <Button variant="ghost" onClick={() => setIsReturnModalOpen(false)} className="font-bold text-[10px]">Cancelar</Button>
             <Button
               onClick={handleReturnSubmit}
               disabled={processingReturn || !selectedSaleForReturn || Object.values(returnQuantities).every(q => q === 0)}
-              className="bg-amber-500 hover:bg-amber-600 h-11 font-black text-[10px] uppercase tracking-widest px-8"
+              className="bg-amber-500 hover:bg-amber-600 h-11 font-black text-[10px] px-8"
             >
-              {processingReturn ? "PROCESANDO..." : "CONFIRMAR DEVOLUCIÓN"}
+              {processingReturn ? "Procesando..." : "Confirmar devolución"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4861,8 +5166,8 @@ export default function POSPage() {
                 <IconReceipt size={20} />
               </div>
               <div>
-                <DialogTitle className="text-base font-bold tracking-tight text-white">Detalle de la Orden</DialogTitle>
-                <DialogDescription className="text-zinc-500 text-[10px] uppercase font-mono tracking-wider mt-0.5">
+                <DialogTitle className="text-base font-bold tracking-tight text-white">Detalle de la orden</DialogTitle>
+                <DialogDescription className="text-zinc-500 text-[10px] font-mono mt-0.5">
                   ID: {selectedSale?.id}
                 </DialogDescription>
               </div>
@@ -4872,38 +5177,38 @@ export default function POSPage() {
           {/* Client & Date Info */}
           <div className="grid grid-cols-2 gap-4 py-4 border-b border-[#79716b]/10 text-xs">
             <div className="space-y-1">
-              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Cliente</span>
-              <div className="font-bold text-white uppercase">{selectedSale?.client || "Consumidor Final"}</div>
+              <span className="text-zinc-500 text-[10px] font-bold">Cliente</span>
+              <div className="font-bold text-white">{selectedSale?.client || "Consumidor final"}</div>
               {selectedSale?.clientDocument && (
                 <div className="text-zinc-500 font-mono text-[10px]">{selectedSale.clientDocument}</div>
               )}
               {selectedSale?.seller && (
                 <div className="text-[10px] text-zinc-400 mt-2">
-                  <span className="font-semibold text-zinc-500 uppercase text-[9px] tracking-wider block">Cajero / Vendedor</span>
+                  <span className="font-semibold text-zinc-500 text-[9px] block">Cajero / vendedor</span>
                   <span className="font-bold text-zinc-200">{selectedSale.seller}</span>
                 </div>
               )}
             </div>
             <div className="space-y-1 text-right">
-              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Fecha y Hora</span>
+              <span className="text-zinc-500 text-[10px] font-bold">Fecha y hora</span>
               <div className="font-semibold text-zinc-300">
                 {selectedSale && format(new Date(selectedSale.date), "dd 'de' MMMM 'de' yyyy, hh:mm a", { locale: es })}
               </div>
-              <div className="text-zinc-500 text-[10px] uppercase font-bold">Sucursal: {selectedSale?.branch || "N/A"}</div>
+              <div className="text-zinc-500 text-[10px] font-bold">Sucursal: {selectedSale?.branch || "N/A"}</div>
             </div>
           </div>
 
           {/* Products List */}
           <div className="py-4 space-y-3">
-            <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">Productos Comprados</span>
+            <span className="text-zinc-500 text-[10px] font-bold">Productos comprados</span>
             <div className="rounded-xl border border-[#79716b]/10 overflow-hidden max-h-48 overflow-y-auto">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-muted/30 border-b border-[#79716b]/10">
                   <tr>
-                    <th className="h-8 p-2 text-[9px] uppercase font-bold text-zinc-400">Producto</th>
-                    <th className="h-8 p-2 text-center text-[9px] uppercase font-bold text-zinc-400 w-[60px]">Cant.</th>
-                    <th className="h-8 p-2 text-right text-[9px] uppercase font-bold text-zinc-400 w-[85px]">P. Unit</th>
-                    <th className="h-8 p-2 text-right text-[9px] uppercase font-bold text-zinc-400 w-[90px]">Subtotal</th>
+                    <th className="h-8 p-2 text-[9px] font-bold text-zinc-400">Producto</th>
+                    <th className="h-8 p-2 text-center text-[9px] font-bold text-zinc-400 w-[60px]">Cant.</th>
+                    <th className="h-8 p-2 text-right text-[9px] font-bold text-zinc-400 w-[85px]">P. Unit</th>
+                    <th className="h-8 p-2 text-right text-[9px] font-bold text-zinc-400 w-[90px]">Subtotal</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#79716b]/5">
@@ -4944,21 +5249,21 @@ export default function POSPage() {
           {/* Payment & Totals */}
           <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#79716b]/10">
             <div className="space-y-2">
-              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider block">Método de Pago</span>
+              <span className="text-zinc-500 text-[10px] font-bold block">Método de pago</span>
               <div className="space-y-1">
                 {selectedSale?.payments && selectedSale.payments.length > 0 ? (
                   selectedSale.payments.map((p: any, idx: number) => (
                     <div key={idx} className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-muted/20 border border-[#79716b]/5">
                       <span className="text-zinc-400 font-medium">
                         {p.method === "CASH" ? "Efectivo" :
-                          p.method === "CARD" ? "Tarjeta / Punto" :
+                          p.method === "CARD" ? "Tarjeta / punto" :
                             p.method === "TRANSFER" ? "Transferencia" :
                               p.method === "WALLET" ? "Billetera" :
                                 p.method === "CREDIT" ? "Fiado" :
-                                  p.method === "PAGO_MOVIL" ? "Pago Móvil" :
+                                  p.method === "PAGO_MOVIL" ? "Pago móvil" :
                                     p.method === "BINANCE" ? "Binance" :
                                       p.method === "ZINLI" ? "Zinli" :
-                                        p.method === "PAYPAL" ? "Paypal" : p.method}
+                                        p.method === "PAYPAL" ? "PayPal" : p.method}
                       </span>
                       <span className="font-bold text-white font-mono">{formatPrice(p.amount)}</span>
                     </div>
@@ -4994,8 +5299,8 @@ export default function POSPage() {
           {/* Other Purchases Section */}
           {selectedSale?.clientId && (
             <div className="py-4 border-t border-[#79716b]/10 space-y-2.5">
-              <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider block">
-                Historial de Compras del Cliente ({clientHistory.length})
+              <span className="text-zinc-500 text-[10px] font-bold block">
+                Historial de compras del cliente ({clientHistory.length})
               </span>
               {loadingHistory ? (
                 <div className="text-[11px] text-zinc-500 animate-pulse">Cargando historial...</div>
@@ -5011,7 +5316,7 @@ export default function POSPage() {
                         key={histSale.id}
                         onClick={() => setSelectedSale(histSale)}
                         className={cn(
-                          "w-full text-left px-3.5 py-2.5 rounded-xl border text-[11px] font-bold transition-all uppercase tracking-tight cursor-pointer flex items-center justify-between",
+                          "w-full text-left px-3.5 py-2.5 rounded-xl border text-[11px] font-bold transition-all tracking-tight cursor-pointer flex items-center justify-between",
                           isCurrent
                             ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
                             : "bg-[#121110]/60 border-[#79716b]/20 hover:border-zinc-500 text-zinc-400 hover:text-white"
@@ -5038,8 +5343,8 @@ export default function POSPage() {
                 <IconAlertCircle size={24} />
               </div>
               <div className="space-y-1 text-left">
-                <DialogTitle className="text-lg font-black uppercase tracking-tight">Lista de Espera</DialogTitle>
-                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                <DialogTitle className="text-lg font-black tracking-tight">Lista de espera</DialogTitle>
+                <DialogDescription className="text-[10px] font-bold text-muted-foreground">
                   Productos escaneados no registrados en el sistema
                 </DialogDescription>
               </div>
@@ -5050,12 +5355,12 @@ export default function POSPage() {
             {loadingWaitlist ? (
               <div className="flex flex-col items-center justify-center py-20 gap-4">
                 <IconRefresh className="animate-spin text-muted-foreground opacity-20" size={40} />
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Cargando lista...</p>
+                <p className="text-[10px] font-black text-muted-foreground">Cargando lista...</p>
               </div>
             ) : waitlist.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-4 grayscale opacity-40">
                 <IconBox size={60} strokeWidth={1} />
-                <p className="text-xs font-bold uppercase tracking-widest">No hay productos en espera</p>
+                <p className="text-xs font-bold">No hay productos en espera</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-3">
@@ -5070,21 +5375,21 @@ export default function POSPage() {
                   >
                     <div className="space-y-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-black uppercase truncate">{item.name}</h4>
-                        <Badge variant="outline" className="text-[9px] px-1.5 h-5 font-bold uppercase tracking-tighter bg-background">
+                        <h4 className="text-sm font-black truncate">{item.name}</h4>
+                        <Badge variant="outline" className="text-[9px] px-1.5 h-5 font-bold tracking-tighter bg-background">
                           {item.barcode}
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-medium uppercase tracking-tight">
+                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-medium tracking-tight">
                         <span className="flex items-center gap-1"><IconBuilding size={10} /> {item.branch?.name || "Todas"}</span>
                         <span>•</span>
-                        <span>Stock Sugerido: {item.stock}</span>
+                        <span>Stock sugerido: {item.stock}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-4 shrink-0">
                       <div className="text-right">
                         <p className="text-lg font-black tabular-nums text-foreground">${item.price.toFixed(2)}</p>
-                        <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest">Precio Sugerido</p>
+                        <p className="text-[8px] font-bold text-muted-foreground">Precio sugerido</p>
                       </div>
                     </div>
                   </div>
@@ -5094,7 +5399,7 @@ export default function POSPage() {
           </div>
 
           <DialogFooter className="pt-2 border-t">
-            <Button variant="ghost" onClick={() => setIsWaitlistOpen(false)} className="font-bold text-[10px] uppercase">Cerrar</Button>
+            <Button variant="ghost" onClick={() => setIsWaitlistOpen(false)} className="font-bold text-[10px]">Cerrar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -5108,7 +5413,7 @@ export default function POSPage() {
                 <IconPlayerPause size={24} />
               </div>
               <div className="space-y-1 text-left">
-                <DialogTitle className="text-xl font-semibold">Ventas en Suspenso</DialogTitle>
+                <DialogTitle className="text-xl font-semibold">Ventas en suspenso</DialogTitle>
                 <DialogDescription className="text-sm text-muted-foreground">
                   Gestión de carritos pausados para facturación posterior
                 </DialogDescription>
@@ -5133,7 +5438,7 @@ export default function POSPage() {
                           <span className="text-xs text-muted-foreground font-medium">{new Date(ticket.parkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                         <h4 className="text-sm font-semibold">
-                          {clients.find(c => (c.id || (c as any)._id) === ticket.selectedClientId)?.name || "Consumidor Final"}
+                          {clients.find(c => (c.id || (c as any)._id) === ticket.selectedClientId)?.name || "Consumidor final"}
                         </h4>
                       </div>
                       <div className="text-right">
@@ -5150,7 +5455,7 @@ export default function POSPage() {
                         className="flex-1 h-10 font-medium text-sm"
                         onClick={() => resumeTicket(ticket)}
                       >
-                        Recuperar Venta
+                        Recuperar venta
                       </Button>
                       <Button
                         variant="outline"
@@ -5173,7 +5478,7 @@ export default function POSPage() {
               onClick={() => setIsParkedModalOpen(false)}
               className="w-full font-medium text-sm"
             >
-              Cerrar Ventana
+              Cerrar ventana
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -5190,14 +5495,14 @@ export default function POSPage() {
                 <IconLock size={18} />
               </div>
               <div>
-                <DialogTitle className="text-base font-semibold leading-snug">Verificación Requerida</DialogTitle>
+                <DialogTitle className="text-base font-semibold leading-snug">Verificación requerida</DialogTitle>
                 <p className="text-xs text-muted-foreground">Ingrese el PIN del propietario para continuar.</p>
               </div>
             </div>
           </div>
           <div className="px-6 py-6 space-y-5">
             <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">PIN de 4 Dígitos</Label>
+              <Label className="text-xs font-semibold text-muted-foreground">PIN de 4 dígitos</Label>
               <Input
                 ref={pinInputRef}
                 type="password"
@@ -5206,7 +5511,7 @@ export default function POSPage() {
                 placeholder="••••"
                 value={pinInput}
                 onChange={e => { setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4)); setPinError(''); }}
-                className={cn("text-center font-mono text-2xl tracking-[0.7em] h-14", pinError ? "border-destructive" : "")}
+                className={cn("text-center font-mono text-2xl h-14", pinError ? "border-destructive" : "")}
                 onKeyDown={e => { if (e.key === 'Enter') handlePinConfirm(); }}
               />
               {pinError && (
@@ -5256,7 +5561,7 @@ export default function POSPage() {
                 <IconDiscount size={18} />
               </div>
               <div>
-                <DialogTitle className="text-base font-semibold leading-snug">Aplicar Descuento</DialogTitle>
+                <DialogTitle className="text-base font-semibold leading-snug">Aplicar descuento</DialogTitle>
                 <p className="text-xs text-muted-foreground">
                   {targetDiscountId === 'GLOBAL' ? 'A toda la compra' : 'Al producto seleccionado'}
                 </p>
@@ -5281,8 +5586,8 @@ export default function POSPage() {
               </button>
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Valor del Descuento
+              <Label className="text-xs font-semibold text-muted-foreground">
+                Valor del descuento
               </Label>
               <div className="relative">
                 {discountType === 'amt' && (
@@ -5307,7 +5612,7 @@ export default function POSPage() {
               className="w-full h-11 font-semibold bg-emerald-500 hover:bg-emerald-600 text-white"
               onClick={handleApplyDiscount}
             >
-              Aplicar Descuento
+              Aplicar descuento
             </Button>
           </div>
         </DialogContent>
@@ -5323,14 +5628,14 @@ export default function POSPage() {
           <div className="px-6 pt-6 pb-5 border-b bg-muted/20" style={{ paddingRight: '3.5rem' }}>
             <div className="space-y-1.5">
               <DialogTitle className="text-base font-semibold leading-snug">
-                {editingCartItemId ? 'Editar Cantidad / Peso' : 'Ingresar Peso'}
+                {editingCartItemId ? 'Editar cantidad / peso' : 'Ingresar peso'}
               </DialogTitle>
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="text-sm text-muted-foreground font-medium truncate max-w-[220px]">
                   {editingCartItemId ? editingCartItemName : weighableProduct?.name}
                 </p>
-                <Badge variant="outline" className="shrink-0 text-[10px] font-bold uppercase tracking-wider border-primary/30 text-primary bg-primary/5 flex items-center gap-1">
-                  {weightUnit === 'kg' ? <><IconScale size={11} /> Por Peso</> : <><IconPackage size={11} /> Por Unidad</>}
+                <Badge variant="outline" className="shrink-0 text-[10px] font-bold border-primary/30 text-primary bg-primary/5 flex items-center gap-1">
+                  {weightUnit === 'kg' ? <><IconScale size={11} /> Por peso</> : <><IconPackage size={11} /> Por unidad</>}
                 </Badge>
               </div>
             </div>
@@ -5340,7 +5645,7 @@ export default function POSPage() {
           <div className="px-6 py-6 space-y-5">
             {/* Unit selector */}
             <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tipo de Medida</Label>
+              <Label className="text-xs font-semibold text-muted-foreground">Tipo de medida</Label>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
@@ -5375,8 +5680,8 @@ export default function POSPage() {
 
             {/* Input */}
             <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {weightUnit === 'kg' ? 'Peso (Kg)' : 'Cantidad (Unidades)'}
+              <Label className="text-xs font-semibold text-muted-foreground">
+                {weightUnit === 'kg' ? 'Peso (kg)' : 'Cantidad (unidades)'}
               </Label>
               <div className="relative">
                 <Input
@@ -5405,7 +5710,7 @@ export default function POSPage() {
             {/* Preview */}
             {weightValue && parseFloat(weightValue) > 0 && (
               <div className="rounded-xl bg-muted/30 border border-border/50 px-4 py-3 space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Vista Previa</p>
+                <p className="text-[10px] font-bold text-muted-foreground">Vista previa</p>
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground">
                     {parseFloat(weightValue || '0').toFixed(weightUnit === 'kg' ? 3 : 0)} {weightUnit === 'kg' ? 'Kg' : 'Ud'} × ${editingCartItemPrice > 0 ? editingCartItemPrice.toFixed(2) : (weighableProduct?.variants?.[0]?.price || 0).toFixed(2)}

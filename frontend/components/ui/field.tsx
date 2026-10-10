@@ -17,7 +17,7 @@ FieldSet.displayName = "FieldSet"
 
 const FieldLegend = React.forwardRef<HTMLLegendElement, React.HTMLAttributes<HTMLLegendElement>>(
   ({ className, ...props }, ref) => (
-    <legend ref={ref} className={cn("text-sm font-bold uppercase tracking-widest text-primary mb-2", className)} {...props} />
+    <legend ref={ref} className={cn("text-sm font-bold text-primary mb-2", className)} {...props} />
   )
 )
 FieldLegend.displayName = "FieldLegend"

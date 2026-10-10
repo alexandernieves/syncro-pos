@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  IconPlus, IconBarcode, IconDeviceFloppy, IconX, IconArrowLeft, IconTrash, IconSettings
+  IconPlus, IconBarcode, IconDeviceFloppy, IconX, IconArrowLeft, IconTrash, IconSettings, IconBuildingStore, IconStar
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
@@ -50,6 +50,9 @@ export function ProductForm({ productId }: { productId?: string }) {
   const [categoryId, setCategoryId] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [isWeighable, setIsWeighable] = useState(false);
+  const [isSyncroVendor, setIsSyncroVendor] = useState(false);
+  const [isPublishedOnSyncroShop, setIsPublishedOnSyncroShop] = useState(false);
+  const [isFeaturedOnSyncroShop, setIsFeaturedOnSyncroShop] = useState(false);
   const [variants, setVariants] = useState<VariantForm[]>([emptyVariant(0)]);
   const [categories, setCategories] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -58,6 +61,19 @@ export function ProductForm({ productId }: { productId?: string }) {
   const [image, setImage] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const storedVendor = localStorage.getItem("isSyncroVendor");
+    if (storedVendor !== null) {
+      setIsSyncroVendor(storedVendor === "true");
+    }
+    const handleUpdate = () => {
+      const stored = localStorage.getItem("isSyncroVendor");
+      if (stored !== null) setIsSyncroVendor(stored === "true");
+    };
+    window.addEventListener("settingsUpdated", handleUpdate);
+    return () => window.removeEventListener("settingsUpdated", handleUpdate);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -80,6 +96,8 @@ export function ProductForm({ productId }: { productId?: string }) {
             setCategoryId(p.categoryId || "");
             setSupplierId(p.supplierId || "");
             setIsWeighable(p.isWeighable || false);
+            setIsPublishedOnSyncroShop(p.isPublishedOnSyncroShop || false);
+            setIsFeaturedOnSyncroShop(p.isFeaturedOnSyncroShop || false);
             setImage(p.image || "");
             setVariants(p.variants.map((v: any) => ({
               ...v,
@@ -147,6 +165,8 @@ export function ProductForm({ productId }: { productId?: string }) {
         categoryId,
         supplierId,
         isWeighable,
+        isPublishedOnSyncroShop: isSyncroVendor ? isPublishedOnSyncroShop : false,
+        isFeaturedOnSyncroShop: isSyncroVendor ? isFeaturedOnSyncroShop : false,
         image,
         variants: variants.map(v => ({
           ...v,
@@ -187,23 +207,23 @@ export function ProductForm({ productId }: { productId?: string }) {
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()}><IconArrowLeft size={18}/></Button>
           <div>
-            <h1 className="text-2xl font-black">{productId ? 'Editar Producto' : 'Nuevo Producto'}</h1>
+            <h1 className="text-2xl font-black">{productId ? 'Editar producto' : 'Nuevo producto'}</h1>
             <p className="text-sm text-muted-foreground">Configuración de producto real (B2C)</p>
           </div>
         </div>
         <Button onClick={handleSave} disabled={saving} className="gap-2">
-          <IconDeviceFloppy size={18}/> {saving ? 'Guardando...' : 'Guardar Producto'}
+          <IconDeviceFloppy size={18}/> {saving ? 'Guardando...' : 'Guardar producto'}
         </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2 space-y-6">
           <div className="p-6 bg-card rounded-2xl border shadow-sm space-y-4">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-primary">Información General</h2>
+            <h2 className="text-sm font-bold text-primary">Información general</h2>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Nombre del Producto</Label>
-                <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Zapatos Deportivos XYZ" className="h-12 text-lg font-bold" />
+                <Label>Nombre del producto</Label>
+                <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ej: zapatos deportivos xyz" className="h-12 text-lg font-bold" />
               </div>
               <div className="space-y-2">
                 <Label>Descripción</Label>
@@ -228,10 +248,10 @@ export function ProductForm({ productId }: { productId?: string }) {
               <div className="flex items-center justify-between p-4 border border-border/50 rounded-xl bg-muted/10 mt-2">
                 <div className="space-y-1">
                   <Label htmlFor="weighable-switch" className="font-bold text-sm cursor-pointer block">
-                    Producto Pesable
+                    Producto pesable
                   </Label>
                   <p className="text-xs text-muted-foreground font-normal leading-relaxed max-w-[90%]">
-                    Activa esta opción si este producto se vende por peso fraccionado (Ej: 1.250 Kg). El cajero deberá ingresar el peso manualmente al facturar.
+                    Activa esta opción si este producto se vende por peso fraccionado (ej: 1.250 kg). El cajero deberá ingresar el peso manualmente al facturar.
                   </p>
                 </div>
                 <Switch 
@@ -241,14 +261,52 @@ export function ProductForm({ productId }: { productId?: string }) {
                   className="data-[state=checked]:bg-emerald-500 shrink-0"
                 />
               </div>
+
+              {isSyncroVendor && (
+                <>
+                  <div className="flex items-center justify-between p-4 border border-border/60 rounded-xl bg-muted/10 mt-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="syncro-shop-switch" className="font-bold text-sm cursor-pointer flex items-center gap-1.5 text-foreground">
+                        <IconBuildingStore size={16} className="text-primary" /> Publicar en Syncro Shop
+                      </Label>
+                      <p className="text-xs text-muted-foreground font-normal leading-relaxed max-w-[90%]">
+                        Muestra y vende este producto en tu tienda Syncro Shop.
+                      </p>
+                    </div>
+                    <Switch 
+                      id="syncro-shop-switch" 
+                      checked={isPublishedOnSyncroShop} 
+                      onCheckedChange={setIsPublishedOnSyncroShop} 
+                      className="data-[state=checked]:bg-primary shrink-0"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 border border-amber-500/30 rounded-xl bg-amber-500/5 mt-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="syncro-shop-featured-switch" className="font-bold text-sm cursor-pointer flex items-center gap-1.5 text-amber-600">
+                        <IconStar size={16} className="text-amber-500 fill-amber-500" /> Producto destacado en Syncro Shop
+                      </Label>
+                      <p className="text-xs text-muted-foreground font-normal leading-relaxed max-w-[90%]">
+                        Los productos destacados aparecen en los primeros lugares de tu catálogo en la página principal de Syncro Shop.
+                      </p>
+                    </div>
+                    <Switch 
+                      id="syncro-shop-featured-switch" 
+                      checked={isFeaturedOnSyncroShop} 
+                      onCheckedChange={setIsFeaturedOnSyncroShop} 
+                      className="data-[state=checked]:bg-amber-500 shrink-0"
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-primary">Variantes y Precios</h2>
+              <h2 className="text-sm font-bold text-primary">Variantes y precios</h2>
               <Button variant="outline" size="sm" onClick={() => setVariants([...variants, emptyVariant(variants.length)])} className="gap-2">
-                <IconPlus size={14}/> Añadir Variante
+                <IconPlus size={14}/> Añadir variante
               </Button>
             </div>
 
@@ -261,10 +319,10 @@ export function ProductForm({ productId }: { productId?: string }) {
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="sm:col-span-2 space-y-2">
-                    <Label className="text-xs">Nombre de Variante (Color/Talla/etc)</Label>
+                    <Label className="text-xs">Nombre de variante (color/talla/etc)</Label>
                     <Input value={v.name} onChange={e => {
                       const n = [...variants]; n[idx].name = e.target.value; setVariants(n);
-                    }} placeholder="Ej: Rojo / 42" />
+                    }} placeholder="Ej: rojo / 42" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-xs">SKU</Label>
@@ -273,7 +331,7 @@ export function ProductForm({ productId }: { productId?: string }) {
                     }} className="font-mono text-xs" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs">Código de Barras</Label>
+                    <Label className="text-xs">Código de barras</Label>
                     <div className="relative">
                       <IconBarcode size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                       <Input value={v.barcode} onChange={e => {
@@ -284,7 +342,7 @@ export function ProductForm({ productId }: { productId?: string }) {
 
                   {/* Sección de Códigos Secundarios (Tags) */}
                   <div className="sm:col-span-3 space-y-2">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground/60 tracking-wider">Códigos de Barras Secundarios</Label>
+                    <Label className="text-[10px] font-bold text-muted-foreground/60">Códigos de barras secundarios</Label>
                     <div className="flex flex-wrap gap-2 p-3 bg-muted/10 rounded-xl border border-dashed border-muted-foreground/10">
                       {(v as any).secondaryBarcodes?.map((bc: string, bIdx: number) => (
                         <div key={`${bc}-${bIdx}`} className="bg-background border px-3 py-1 rounded-lg text-[10px] font-mono flex items-center gap-2">
@@ -320,7 +378,7 @@ export function ProductForm({ productId }: { productId?: string }) {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold text-primary">Precio Venta</Label>
+                    <Label className="text-xs font-bold text-primary">Precio venta</Label>
                     <Input type="number" value={v.price} onChange={e => {
                       const n = [...variants]; n[idx].price = e.target.value; setVariants(n);
                     }} placeholder="0.00" />
@@ -332,19 +390,19 @@ export function ProductForm({ productId }: { productId?: string }) {
                     }} placeholder="0.00" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs">Stock Inicial</Label>
+                    <Label className="text-xs">Stock inicial</Label>
                     <Input type="number" value={v.stock} onChange={e => {
                       const n = [...variants]; n[idx].stock = e.target.value; setVariants(n);
                     }} />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs">Precio Promo</Label>
+                    <Label className="text-xs">Precio promo</Label>
                     <Input type="number" value={v.promoPrice} onChange={e => {
                       const n = [...variants]; n[idx].promoPrice = e.target.value; setVariants(n);
                     }} className="border-orange-200" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs">Precio Mayor</Label>
+                    <Label className="text-xs">Precio mayor</Label>
                     <Input type="number" value={v.bulkPrice} onChange={e => {
                       const n = [...variants]; n[idx].bulkPrice = e.target.value; setVariants(n);
                     }} className="border-blue-200" />
@@ -357,28 +415,28 @@ export function ProductForm({ productId }: { productId?: string }) {
 
         <div className="space-y-6">
           <div className="p-6 bg-card rounded-2xl border shadow-sm space-y-4">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Ayuda</h2>
+            <h2 className="text-sm font-bold text-muted-foreground">Ayuda</h2>
             <div className="space-y-4 text-sm text-muted-foreground">
               <p>• Las variantes permiten gestionar tallas, colores o presentaciones de un mismo producto.</p>
-              <p>• El <strong>Precio Promo</strong> tiene prioridad si está configurado.</p>
-              <p>• El <strong>Precio Mayor</strong> se activa automáticamente en ventas por volumen (próximamente).</p>
+              <p>• El <strong>precio promo</strong> tiene prioridad si está configurado.</p>
+              <p>• El <strong>precio mayor</strong> se activa automáticamente en ventas por volumen (próximamente).</p>
             </div>
           </div>
           
           <div className="p-6 bg-card rounded-2xl border shadow-sm space-y-4">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-primary">Imagen Colectiva</h2>
+            <h2 className="text-sm font-bold text-primary">Imagen colectiva</h2>
             <div className="relative border-2 border-dashed border-[#79716b]/30 rounded-xl bg-card hover:bg-muted/30 transition-colors flex flex-col items-center justify-center p-6 text-center cursor-pointer min-h-[200px]" onClick={() => fileInputRef.current?.click()}>
               <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
               {uploadingImage ? (
                 <div className="space-y-2">
                   <div className="size-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
-                  <p className="text-sm text-muted-foreground font-medium">Subiendo a AWS S3...</p>
+                  <p className="text-sm text-muted-foreground font-medium">Subiendo a aws S3...</p>
                 </div>
               ) : image ? (
                 <div className="space-y-4 relative w-full group">
                   <img src={image} alt="Producto" className="mx-auto max-h-[160px] object-contain rounded-md" />
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-md">
-                    <p className="text-white text-sm font-bold flex items-center gap-2"><IconPlus size={16} /> Cambiar Imagen</p>
+                    <p className="text-white text-sm font-bold flex items-center gap-2"><IconPlus size={16} /> Cambiar imagen</p>
                   </div>
                 </div>
               ) : (
@@ -386,8 +444,8 @@ export function ProductForm({ productId }: { productId?: string }) {
                   <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center mb-3 mx-auto">
                     <IconPlus className="text-primary size-6" />
                   </div>
-                  <p className="text-sm font-bold mb-1">Subir Imagen Colectiva</p>
-                  <p className="text-xs text-muted-foreground px-4 leading-relaxed">Esta imagen representará el producto principal en el POS. Soporta JPG, PNG, WEBP.</p>
+                  <p className="text-sm font-bold mb-1">Subir imagen colectiva</p>
+                  <p className="text-xs text-muted-foreground px-4 leading-relaxed">Esta imagen representará el producto principal en el POS. Soporta jpg, png, webp.</p>
                 </>
               )}
             </div>

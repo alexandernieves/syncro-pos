@@ -247,7 +247,7 @@ export default function SuppliersPage() {
       {/* Deuda Total / Balance */}
       <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
         <CardHeader>
-          <CardDescription>Pasivos Totales</CardDescription>
+          <CardDescription>Pasivos totales</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatPrice(alertsSummary?.summary?.totalBalance || 0)}
           </CardTitle>
@@ -271,7 +271,7 @@ export default function SuppliersPage() {
       {/* Proveedores Críticos */}
       <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
         <CardHeader>
-          <CardDescription>Alertas Críticas</CardDescription>
+          <CardDescription>Alertas críticas</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-rose-600">
             {alertsSummary?.summary?.critical || 0}
           </CardTitle>
@@ -294,7 +294,7 @@ export default function SuppliersPage() {
       {/* Cuentas Activas */}
       <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
         <CardHeader>
-          <CardDescription>Proveedores Activos</CardDescription>
+          <CardDescription>Proveedores activos</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {suppliers.length}
           </CardTitle>
@@ -307,7 +307,7 @@ export default function SuppliersPage() {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            {suppliers.filter(s => s.status === 'ACTIVE').length} En operación dinámica
+            {suppliers.filter(s => s.status === 'ACTIVE').length} en operación dinámica
           </div>
           <div className="text-muted-foreground">Directorio general actualizado</div>
         </CardFooter>
@@ -316,7 +316,7 @@ export default function SuppliersPage() {
       {/* Confiabilidad */}
       <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
         <CardHeader>
-          <CardDescription>Tasa de Cumplimiento</CardDescription>
+          <CardDescription>Tasa de cumplimiento</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {suppliers.length > 0 ? "100%" : "0%"}
           </CardTitle>
@@ -339,7 +339,7 @@ export default function SuppliersPage() {
 
       <div className="flex items-center justify-between px-4 lg:px-6">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight">Directorio de Proveedores</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Directorio de proveedores</h1>
           <p className="text-sm text-muted-foreground font-medium">Gestión integral de suministros y relaciones comerciales.</p>
         </div>
         
@@ -351,13 +351,13 @@ export default function SuppliersPage() {
             <DialogTrigger asChild>
               <Button size="sm" className="gap-2 h-9 shadow-none font-bold text-xs px-5">
                   <IconPlus size={16} />
-                  <span className="hidden lg:inline">Nuevo Proveedor</span>
+                  <span className="hidden lg:inline">Nuevo proveedor</span>
                   <span className="lg:hidden">Nuevo</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>{editingSupplierId ? "Editar Proveedor" : "Nuevo Proveedor"}</DialogTitle>
+                <DialogTitle>{editingSupplierId ? "Editar proveedor" : "Nuevo proveedor"}</DialogTitle>
                 <DialogDescription>
                   {editingSupplierId ? "Actualice la información del proveedor" : "Complete la información del nuevo proveedor"}
                 </DialogDescription>
@@ -366,10 +366,10 @@ export default function SuppliersPage() {
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Nombre / Razón Social</Label>
+                    <Label htmlFor="name">Nombre / razón social</Label>
                     <Input 
                       id="name"
-                      placeholder="Ej: Inversiones Globales C.A." 
+                      placeholder="Ej: inversiones globales c.a." 
                       value={formData.name || ""}
                       onChange={e => setFormData({...formData, name: e.target.value})}
                     />
@@ -409,7 +409,7 @@ export default function SuppliersPage() {
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="contactPerson">Persona de Contacto</Label>
+                    <Label htmlFor="contactPerson">Persona de contacto</Label>
                     <Input 
                       id="contactPerson"
                       placeholder="Nombre del contacto" 
@@ -435,7 +435,7 @@ export default function SuppliersPage() {
                   <Label htmlFor="address">Dirección</Label>
                   <Input 
                     id="address"
-                    placeholder="Ciudad, Estado, Calle..." 
+                    placeholder="Ciudad, estado, calle..." 
                     value={formData.address || ""}
                     onChange={e => setFormData({...formData, address: e.target.value})}
                   />
@@ -443,7 +443,7 @@ export default function SuppliersPage() {
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="paymentType">Tipo de Pago</Label>
+                    <Label htmlFor="paymentType">Tipo de pago</Label>
                     <Select value={formData.paymentType} onValueChange={v => setFormData({...formData, paymentType: v})}>
                       <SelectTrigger>
                         <SelectValue placeholder="Tipo" />
@@ -455,7 +455,7 @@ export default function SuppliersPage() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="creditDays">Días de Crédito</Label>
+                    <Label htmlFor="creditDays">Días de crédito</Label>
                     <Input 
                       id="creditDays"
                       type="number"
@@ -473,40 +473,40 @@ export default function SuppliersPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="ORDINARIO">Contribuyente Ordinario</SelectItem>
-                        <SelectItem value="ESPECIAL">Contribuyente Especial</SelectItem>
-                        <SelectItem value="EXENTO">Exento / No Sujeto</SelectItem>
+                        <SelectItem value="ORDINARIO">Contribuyente ordinario</SelectItem>
+                        <SelectItem value="ESPECIAL">Contribuyente especial</SelectItem>
+                        <SelectItem value="EXENTO">Exento / no sujeto</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="currency">Moneda de Facturación</Label>
+                    <Label htmlFor="currency">Moneda de facturación</Label>
                     <Select value={formData.currency} onValueChange={v => setFormData({...formData, currency: v})}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="USD">Divisas (USD)</SelectItem>
-                        <SelectItem value="VED">Bolívares (VED)</SelectItem>
+                        <SelectItem value="VED">Bolívares (ved)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
 
                 <div className="border-t pt-4 mt-2">
-                  <h3 className="text-sm font-bold mb-3">Datos Bancarios / Pago Móvil</h3>
+                  <h3 className="text-sm font-bold mb-3">Datos bancarios / pago móvil</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="bankName">Banco</Label>
                       <Input 
                         id="bankName"
-                        placeholder="Banesco, Mercantil, etc." 
+                        placeholder="Banesco, mercantil, etc." 
                         value={formData.bankName || ""}
                         onChange={e => setFormData({...formData, bankName: e.target.value})}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="bankPhone">Teléfono (Pago Móvil)</Label>
+                      <Label htmlFor="bankPhone">Teléfono (pago móvil)</Label>
                       <Input 
                         id="bankPhone"
                         placeholder="0412..." 
@@ -527,7 +527,7 @@ export default function SuppliersPage() {
                   Cancelar
                 </Button>
                 <Button onClick={handleCreate}>
-                  {editingSupplierId ? "Guardar Cambios" : "Crear Proveedor"}
+                  {editingSupplierId ? "Guardar cambios" : "Crear proveedor"}
                 </Button>
               </DialogFooter>
             </DialogContent>

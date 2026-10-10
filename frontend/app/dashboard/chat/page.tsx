@@ -1,8 +1,15 @@
 "use client";
+import { cn } from "@/lib/utils";
+import { NewChatPanel } from "@/components/chat/new-chat-panel";
+import { WaAvatar, WaChip, WaIconButton, WaPreview, formatChatTime } from "@/components/chat/whatsapp-ui";
+import { DayDivider, MessageBubble, ReplyPreview, WA_WALLPAPER, dayLabel } from "@/components/chat/conversation-ui";
+import { formatWhatsAppNumber } from "@/lib/phone-countries";
+import { ContactInfoDrawer } from "@/components/chat/contact-info-drawer";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { API_URL } from "@/lib/constants";
-import { io, Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
+import { connectSocket } from "@/lib/socket";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +24,8 @@ import {
   IconAlertCircle, IconCheck, IconChecks, IconDeviceMobile, IconHistory,
   IconCash, IconReload, IconSearch, IconArrowLeft, IconInfoCircle, IconMessage,
   IconMoodSmile, IconPlus, IconPhoto, IconFileText, IconMicrophone, IconTrash, IconDownload,
-  IconChevronDown, IconPin, IconArchive, IconEyeOff, IconStar, IconVolumeOff, IconMail, IconFolderPlus, IconBan, IconLock, IconEye, IconFolder, IconDotsVertical, IconMessagePlus
+  IconChevronDown, IconPin, IconArchive, IconEyeOff, IconStar, IconVolumeOff, IconMail, IconFolderPlus, IconBan, IconLock, IconEye, IconFolder, IconDotsVertical, IconMessagePlus,
+  IconPhotoOff, IconMessageCircle, IconAddressBook, IconLogout, IconLoader2, IconBellOff, IconPinnedOff, IconMessageDots, IconHeart, IconCircleMinus, IconPaperclip, IconX,
 } from "@tabler/icons-react";
 import {
   DropdownMenu,
@@ -53,6 +61,19 @@ const EMOJIS = [
 
 // CustomAudioPlayer removed in favor of reusable WhatsAppAudioPlayer
 
+const MEDIA_UNAVAILABLE = "__unavailable__";
+
+/** "últ. vez hoy a las 3:20 p. m." like WhatsApp. */
+function lastSeenLabel(value: string) {
+  const d = new Date(value);
+  const time = d.toLocaleTimeString("es-VE", { hour: "numeric", minute: "2-digit" });
+  const today = new Date();
+  const yesterday = new Date(Date.now() - 86400000);
+  if (d.toDateString() === today.toDateString()) return `Últ. vez hoy a las ${time}`;
+  if (d.toDateString() === yesterday.toDateString()) return `Últ. vez ayer a las ${time}`;
+  return `Últ. vez el ${d.toLocaleDateString("es-VE", { day: "numeric", month: "short" })} a las ${time}`;
+}
+
 function MediaMessageRenderer({
   msg,
   messageMedia,
@@ -74,6 +95,17 @@ function MediaMessageRenderer({
 
   const base64 = msg.mediaUrl || messageMedia[msg.id];
 
+  if (base64 === MEDIA_UNAVAILABLE) {
+    return (
+      <div className="space-y-1">
+        <p className="flex items-center gap-1.5 py-1 text-xs italic opacity-70">
+          <IconPhotoOff size={14} /> Archivo no disponible en Syncro
+        </p>
+        {msg.text && !/^\[(Archivo|image|audio|video|document)/i.test(msg.text) && <p className="mt-1 leading-relaxed whitespace-pre-wrap">{msg.text}</p>}
+      </div>
+    );
+  }
+
   if (!base64) {
     return (
       <div className="flex items-center gap-2 py-2 text-zinc-400">
@@ -85,7 +117,8 @@ function MediaMessageRenderer({
 
   // Detect mime type or format
   let src = base64;
-  if (!src.startsWith("data:")) {
+  // Stored files come as a link; Evolution media comes as raw base64
+  if (!src.startsWith("data:") && !/^(https?:)?\/\//.test(src) && !src.startsWith("/")) {
     // Determine mime based on msg.type
     let mime = "image/jpeg";
     if (msg.type === "audio") mime = "audio/ogg";
@@ -156,9 +189,32 @@ function MediaMessageRenderer({
 
 export default function WhatsAppChatPage() {
   const [chats, setChats] = useState<any[]>([]);
+  const chatsRef = useRef<any[]>([]);
+  chatsRef.current = chats;
+  // Contact presence per chat (online, typing, recording) as WhatsApp reports it
+  const [presenceByChat, setPresenceByChat] = useState<Record<string, { presence: string; at: number; lastSeen: string | null }>>({});
+  const [, setPresenceTick] = useState(0);
+  useEffect(() => {
+    // "escribiendo…" fades by itself if WhatsApp never sends "paused"
+    const timer = setInterval(() => setPresenceTick((t) => t + 1), 4000);
+    return () => clearInterval(timer);
+  }, []);
+  const presenceOf = (chat: any) => {
+    if (!chat) return null;
+    const entry = presenceByChat[chat.id] || presenceByChat[String(chat.phone || "").replace(/\D/g, "")];
+    if (!entry) return null;
+    const fresh = Date.now() - entry.at < 15000;
+    if ((entry.presence === "composing" || entry.presence === "recording") && !fresh) return { ...entry, presence: "available" };
+    return entry;
+  };
   const [activeChat, setActiveChat] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState("");
+  // Message being answered, and search inside the open chat
+  const [replyTo, setReplyTo] = useState<any>(null);
+  const [contactInfoOpen, setContactInfoOpen] = useState(false);
+  const [chatSearchOpen, setChatSearchOpen] = useState(false);
+  const [chatSearch, setChatSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [loadingChats, setLoadingChats] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -191,13 +247,8 @@ export default function WhatsAppChatPage() {
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [loadingQr, setLoadingQr] = useState(false);
 
-  // New Chat Modal States
+  // "Nuevo chat" contact list over the sidebar
   const [newChatOpen, setNewChatOpen] = useState(false);
-  const [clientsList, setClientsList] = useState<any[]>([]);
-  const [loadingClients, setLoadingClients] = useState(false);
-  const [newChatSearch, setNewChatSearch] = useState("");
-  const [customPhone, setCustomPhone] = useState("");
-  const [customName, setCustomName] = useState("");
 
   // Abono Modal
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -563,8 +614,8 @@ export default function WhatsAppChatPage() {
   };
 
   // 3. Load active chat messages
-  const loadMessages = async (chatId: string) => {
-    setLoadingMessages(true);
+  const loadMessages = async (chatId: string, silent = false) => {
+    if (!silent) setLoadingMessages(true);
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`${API}/whatsapp/chats/${chatId}/messages`, {
@@ -619,14 +670,12 @@ export default function WhatsAppChatPage() {
       const res = await fetch(`${API}/whatsapp/messages/${msgId}/media`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.base64) {
-          setMessageMedia(prev => ({ ...prev, [msgId]: data.base64 }));
-        }
-      }
+      const data = res.ok ? await res.json().catch(() => null) : null;
+      // Evolution doesn't keep every file: mark it so the bubble stops loading
+      setMessageMedia(prev => ({ ...prev, [msgId]: data?.base64 || MEDIA_UNAVAILABLE }));
     } catch (e) {
       console.error("Error loading message media", e);
+      setMessageMedia(prev => ({ ...prev, [msgId]: MEDIA_UNAVAILABLE }));
     }
   }, []);
 
@@ -637,7 +686,7 @@ export default function WhatsAppChatPage() {
     setShowAttachMenu(false);
 
     if (file.size > 10 * 1024 * 1024) {
-      toast.error("El archivo supera el límite de 10MB");
+      toast.error("El archivo supera el límite de 10mb");
       return;
     }
 
@@ -797,77 +846,96 @@ export default function WhatsAppChatPage() {
     }
   }, [activeChat, fetchAvatar, avatars]);
 
-  // Initialize Socket.io
+  // Real time (Socket.IO): one connection for the whole page; the open chat is read from a ref
+  const activeChatRef = useRef<any>(null);
+  activeChatRef.current = activeChat;
+
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const userStr = localStorage.getItem("user");
-    const storedUser = JSON.parse(userStr || "{}");
+    const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
     if (!storedUser.id) return;
 
-    socketRef.current = io(API, {
-      transports: ["websocket", "polling"],
-      query: { userId: storedUser.id },
-      reconnection: true,
-      reconnectionDelay: 1000,
-    });
+    // The backend only accepts authenticated sockets and takes the business from the token
+    const socket = connectSocket({ auth: { token: localStorage.getItem("token") } });
+    socketRef.current = socket;
 
-    const socket = socketRef.current;
-    if (!socket) return;
+    const joinRoom = () => socket.emit("joinBusiness", {});
+    socket.on("connect", joinRoom);
 
-    socket.on("connect", () => {
-      console.log("Connected to WebSockets");
-      // Join this business's private room for isolated real-time events
-      if (storedUser.businessId) {
-        socket.emit("joinBusiness", { businessId: storedUser.businessId });
-      }
-    });
+    // A chat opened from the contacts has the phone as a temporary id until its first message
+    const isOpenChat = (chatId: string, phone?: string) => {
+      const open = activeChatRef.current;
+      if (!open) return false;
+      return open.id === chatId || (!!phone && String(open.phone || open.id).replace(/\D/g, "") === String(phone).replace(/\D/g, ""));
+    };
 
     socket.on("whatsapp_newMessage", (msg: any) => {
-      // If message belongs to active chat, append it
-      if (activeChat && msg.chatId === activeChat.id) {
+      const chatInList = chatsRef.current.find((c) => c.id === msg.chatId);
+      const open = isOpenChat(msg.chatId, chatInList?.phone);
+      if (open && msg.senderType === "CLIENT" && document.visibilityState === "visible") {
+        markOpenChatRead(msg.chatId);
+      }
+      if (open) {
         setMessages((prev) => {
-          if (prev.some(m => m.id === msg.id)) return prev;
+          // Same message again with more data (stored file, reaction, status)
+          if (prev.some((m) => m.id === msg.id)) return prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m));
           return [...prev, msg];
         });
-        setTimeout(scrollToBottom, 100);
+        setTimeout(scrollToBottom, 80);
       }
+      // Chat list: last message preview, order and unread mark
+      setChats((prev) => {
+        const chat = prev.find((c) => c.id === msg.chatId);
+        if (!chat) return prev;
+        const isNewest = !chat.messages?.[0] || chat.messages[0].id === msg.id || new Date(msg.createdAt) >= new Date(chat.messages[0].createdAt);
+        if (!isNewest) return prev;
+        const updated = {
+          ...chat,
+          messages: [msg],
+          lastMessage: msg.text || chat.lastMessage,
+          lastMessageTime: msg.createdAt,
+          isUnread: chat.isUnread || (!open && msg.senderType === "CLIENT"),
+        };
+        return [updated, ...prev.filter((c) => c.id !== msg.chatId)];
+      });
     });
 
     socket.on("whatsapp_chatUpdated", (updatedChat: any) => {
+      // Events can carry only part of the chat: merge, never replace
       setChats((prev) => {
-        const filtered = prev.filter(c => c.id !== updatedChat.id);
-        return [updatedChat, ...filtered];
+        const existing = prev.find((c) => c.id === updatedChat.id);
+        const merged = { ...existing, ...updatedChat, client: updatedChat.client ?? existing?.client, messages: updatedChat.messages ?? existing?.messages };
+        return [merged, ...prev.filter((c) => c.id !== updatedChat.id)];
       });
-      setActiveChat((prev: any) => {
-        if (prev && prev.id === updatedChat.id) {
-          return updatedChat;
-        }
-        return prev;
-      });
+      const open = activeChatRef.current;
+      if (open && isOpenChat(updatedChat.id, updatedChat.phone)) {
+        const becameReal = open.id !== updatedChat.id;
+        setActiveChat((prev: any) => ({ ...prev, ...updatedChat, client: updatedChat.client ?? prev?.client }));
+        // The temporary chat now has its real id: load what was saved under it
+        if (becameReal) loadMessages(updatedChat.id, true);
+      }
+    });
+
+    socket.on("whatsapp_presence", (data: any) => {
+      const entry = { presence: data.presence, at: Date.now(), lastSeen: data.lastSeen ?? null };
+      setPresenceByChat((prev) => ({ ...prev, [data.chatId]: entry, [String(data.phone).replace(/\D/g, "")]: entry }));
     });
 
     socket.on("whatsapp_chatDeleted", (data: any) => {
-      setChats((prev) => prev.filter(c => c.id !== data.id));
-      setActiveChat((prev: any) => {
-        if (prev && prev.id === data.id) {
-          return null;
-        }
-        return prev;
-      });
+      setChats((prev) => prev.filter((c) => c.id !== data.id));
+      setActiveChat((prev: any) => (prev && prev.id === data.id ? null : prev));
     });
 
     socket.on("whatsapp_messageStatusUpdated", (data: any) => {
-      if (activeChat && data.chatId === activeChat.id) {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === data.messageId ? { ...m, status: data.status } : m))
-        );
-      }
+      setMessages((prev) => prev.map((m) => (m.id === data.messageId ? { ...m, status: data.status } : m)));
+      setChats((prev) => prev.map((c) => (c.id === data.chatId && c.messages?.[0]?.id === data.messageId ? { ...c, messages: [{ ...c.messages[0], status: data.status }] } : c)));
     });
 
     return () => {
       socket.disconnect();
+      socketRef.current = null;
     };
-  }, [activeChat]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load Initial Data
   useEffect(() => {
@@ -891,12 +959,23 @@ export default function WhatsAppChatPage() {
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (qrModalOpen) {
+      let ticks = 0;
       interval = setInterval(async () => {
         const status = await checkConnectionStatus();
         if (status.connected) {
           toast.success("¡WhatsApp se ha conectado exitosamente!");
           setQrModalOpen(false);
           loadChats();
+          return;
+        }
+        // WhatsApp replaces the code about every 20 s: keep showing the current one
+        ticks += 1;
+        if (ticks % 4 === 0) {
+          try {
+            const res = await fetch(`${API}/whatsapp/qr`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+            const data = res.ok ? await res.json() : null;
+            if (data?.qr) setQrCode(data.qr);
+          } catch {}
         }
       }, 4000);
     }
@@ -938,77 +1017,67 @@ export default function WhatsAppChatPage() {
     }
   };
 
-  // Open New Chat Modal & Load Clients
-  const handleOpenNewChatModal = async () => {
-    setNewChatOpen(true);
-    setLoadingClients(true);
-    setNewChatSearch("");
-    setCustomPhone("");
-    setCustomName("");
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API}/clients`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setClientsList(await res.json());
-      }
-    } catch {
-      toast.error("Error al cargar lista de clientes");
-    } finally {
-      setLoadingClients(false);
-    }
+  // Read receipts (the contact sees blue ticks) and our presence towards the contact
+  const markReadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const markOpenChatRead = (chatId: string) => {
+    if (markReadTimer.current) clearTimeout(markReadTimer.current);
+    markReadTimer.current = setTimeout(() => {
+      fetch(`${API}/whatsapp/chats/${chatId}/read`, { method: "POST", headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }).catch(() => {});
+      setChats((prev) => prev.map((c) => (c.id === chatId ? { ...c, isUnread: false } : c)));
+    }, 600);
   };
-
-  // Select a Client to start a chat
-  const handleSelectClientForChat = (client: any) => {
-    if (!client.phone) {
-      toast.error("Este cliente no tiene un teléfono registrado");
-      return;
-    }
-    // Clean phone number (leave digits only)
-    const cleanPhone = client.phone.replace(/\D/g, "");
-    if (!cleanPhone) {
-      toast.error("Número de teléfono inválido");
-      return;
-    }
-
-    // Set as active chat (using phone as the temp ID)
-    handleSelectChat({
-      id: cleanPhone,
-      name: client.name,
-      phone: cleanPhone,
-      client: client
-    });
-    setNewChatOpen(false);
+  const sendPresence = (chatId: string, presence: "composing" | "paused" | "available") => {
+    fetch(`${API}/whatsapp/chats/${chatId}/presence`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
+      body: JSON.stringify({ presence }),
+    }).catch(() => {});
   };
-
-  // Start chat with a custom number
-  const handleStartCustomChat = () => {
-    if (!customPhone.trim()) {
-      toast.error("Ingresa un número de teléfono");
+  const typingRef = useRef<{ lastSent: number; idle: ReturnType<typeof setTimeout> | null }>({ lastSent: 0, idle: null });
+  const notifyTyping = (text: string) => {
+    const chat = activeChatRef.current;
+    if (!chat) return;
+    const typing = typingRef.current;
+    if (typing.idle) clearTimeout(typing.idle);
+    if (!text.trim()) {
+      if (typing.lastSent) { sendPresence(chat.id, "paused"); typing.lastSent = 0; }
       return;
     }
-    const cleanPhone = customPhone.replace(/\D/g, "");
-    if (!cleanPhone || cleanPhone.length < 8) {
-      toast.error("Ingresa un número de teléfono válido (con código de país)");
-      return;
+    if (Date.now() - typing.lastSent > 4000) {
+      sendPresence(chat.id, "composing");
+      typing.lastSent = Date.now();
     }
-
-    handleSelectChat({
-      id: cleanPhone,
-      name: customName.trim() || `Contacto ${cleanPhone}`,
-      phone: cleanPhone,
-      client: null
-    });
-    setNewChatOpen(false);
+    typing.idle = setTimeout(() => { sendPresence(chat.id, "paused"); typing.lastSent = 0; }, 3500);
   };
 
   // Select a conversation
   const handleSelectChat = (chat: any) => {
+    // Subscribes to the contact's presence and sends the read receipts
+    sendPresence(chat.id, "available");
+    markOpenChatRead(chat.id);
+    setReplyTo(null);
+    setChatSearchOpen(false);
+    setChatSearch("");
     setActiveChat(chat);
     setMobileView("chat");
     loadMessages(chat.id);
+  };
+
+  // Reaction on a message (empty emoji removes ours)
+  const handleReactToMessage = async (msg: any, emoji: string) => {
+    const before = msg.reaction ?? null;
+    setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, reaction: emoji || null } : m)));
+    try {
+      const res = await fetch(`${API}/whatsapp/messages/${msg.id}/react`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
+        body: JSON.stringify({ emoji }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message);
+    } catch (e) {
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, reaction: before } : m)));
+      toast.error((e as Error).message || "No se pudo enviar la reacción");
+    }
   };
 
   // Send a WhatsApp Message
@@ -1017,6 +1086,8 @@ export default function WhatsAppChatPage() {
     setSendingMessage(true);
     const textToSend = inputText;
     setInputText("");
+    if (typingRef.current.idle) clearTimeout(typingRef.current.idle);
+    typingRef.current.lastSent = 0;
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`${API}/whatsapp/chats/${activeChat.id}/send`, {
@@ -1025,13 +1096,23 @@ export default function WhatsAppChatPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ text: textToSend })
+        body: JSON.stringify({ text: textToSend, quotedMessageId: replyTo?.id })
       });
       if (!res.ok) {
         toast.error("Error al despachar mensaje");
         setInputText(textToSend); // Restore text
       } else {
-        loadChats(); // Refresh chat list updatedAt/lastMessage
+        setReplyTo(null);
+        // Show our bubble right away; the socket event for it is merged by id
+        const sent = await res.json().catch(() => null);
+        if (sent?.id) {
+          setMessages((prev) => (prev.some((m) => m.id === sent.id) ? prev : [...prev, sent]));
+          setTimeout(scrollToBottom, 80);
+          if (sent.chatId && activeChat.id !== sent.chatId) {
+            setActiveChat((prev: any) => (prev ? { ...prev, id: sent.chatId } : prev));
+            loadChats();
+          }
+        }
       }
     } catch {
       toast.error("Error de conexión");
@@ -1163,21 +1244,25 @@ export default function WhatsAppChatPage() {
   });
 
   return (
-    <div className="flex bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-2xl overflow-hidden h-[calc(100vh-100px)] font-sans shadow-md">
+    <div
+      className={cn(
+        "relative flex overflow-hidden h-[calc(100vh-100px)] font-sans",
+      )}
+    >
       {showLockScreen ? (
-        <div className="flex-1 flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-6 animate-in fade-in duration-200">
+        <div className="flex-1 flex flex-col items-center justify-center p-6 animate-in fade-in duration-200">
           <div className="max-w-sm w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-2xl flex flex-col items-center text-center space-y-4">
             <div className="size-16 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
               <IconLock size={32} />
             </div>
             <div className="space-y-1">
-              <h2 className="text-base font-bold text-zinc-850 dark:text-zinc-100">WhatsApp Bloqueado</h2>
+              <h2 className="text-base font-bold text-zinc-850 dark:text-zinc-100">WhatsApp bloqueado</h2>
               <p className="text-xs text-zinc-400">Ingresa tu PIN de seguridad para acceder al panel de chat.</p>
             </div>
             <Input
               type="password"
               placeholder="PIN de seguridad"
-              className="text-center font-bold tracking-widest text-lg h-12 rounded-xl bg-zinc-50 dark:bg-zinc-950/40 border-zinc-200 dark:border-zinc-800 text-zinc-850 dark:text-zinc-150"
+              className="text-center font-bold text-lg h-12 rounded-xl bg-zinc-50 dark:bg-zinc-950/40 border-zinc-200 dark:border-zinc-800 text-zinc-850 dark:text-zinc-150"
               value={unlockInput}
               onChange={(e) => setUnlockInput(e.target.value)}
               onKeyDown={(e) => {
@@ -1197,7 +1282,7 @@ export default function WhatsAppChatPage() {
       ) : (
         <>
           {!connectionStatus.connected ? (
-            <div className="flex-1 flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-6 animate-in fade-in duration-200">
+            <div className="flex-1 flex flex-col items-center justify-center p-6 animate-in fade-in duration-200">
               <div className="max-w-md w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center space-y-6">
                 <div className="size-20 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-inner">
                   <IconBrandWhatsapp size={48} />
@@ -1219,243 +1304,207 @@ export default function WhatsAppChatPage() {
             </div>
           ) : (
             <>
-              {/* ─── BARRA LATERAL IZQUIERDA: CHATS ──────────────────────────────── */}
-              <aside className={`w-full md:w-[320px] xl:w-[350px] shrink-0 border-r border-zinc-200 dark:border-zinc-900 flex flex-col bg-white dark:bg-zinc-950/40 ${mobileView === "chat" ? "hidden md:flex" : "flex"}`}>
-        {/* Header de Conexión estilo WhatsApp Web */}
-        <div className="p-4 pb-3 border-b border-zinc-200 dark:border-zinc-900 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-950/20 shrink-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold text-zinc-800 dark:text-zinc-100 tracking-tight">WhatsApp</h1>
-            <span
-              className={`size-2.5 rounded-full shrink-0 ${connectionStatus.connected ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`}
-              title={connectionStatus.connected ? "Conectado" : "Desconectado"}
-            />
-          </div>
-          <div className="flex items-center gap-2">
+              {/* ─── BARRA LATERAL IZQUIERDA: CHATS (estilo WhatsApp Web) ───────── */}
+              <nav className="hidden w-16 shrink-0 flex-col items-center justify-between border-r border-[#E9EDEF] bg-[#F7F5F3] py-3 dark:border-zinc-900 dark:bg-zinc-950 md:flex">
+                <div className="flex flex-col items-center gap-2">
+                  <button
+                    type="button"
+                    title="Chats"
+                    onClick={() => { setNewChatOpen(false); setSpecialView("none"); setActiveTab("all"); }}
+                    className={cn("relative flex size-10 items-center justify-center rounded-full transition-colors", !newChatOpen && specialView === "none" ? "bg-black/[.06] text-[#111B21] dark:bg-white/10 dark:text-white" : "text-[#54656F] hover:bg-black/5")}
+                  >
+                    <IconMessageCircle size={22} />
+                    {chats.filter(c => c.isUnread && !c.isArchived).length > 0 && (
+                      <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#25D366] px-1 text-[11px] font-semibold text-white ring-2 ring-[#F7F5F3] dark:ring-zinc-950">
+                        {chats.filter(c => c.isUnread && !c.isArchived).length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    title="Contactos"
+                    onClick={() => setNewChatOpen(true)}
+                    className={cn("flex size-10 items-center justify-center rounded-full transition-colors", newChatOpen ? "bg-black/[.06] text-[#111B21] dark:bg-white/10 dark:text-white" : "text-[#54656F] hover:bg-black/5")}
+                  >
+                    <IconAddressBook size={22} />
+                  </button>
+                  <button
+                    type="button"
+                    title="Archivados"
+                    onClick={() => { setNewChatOpen(false); setSpecialView("archived"); }}
+                    className={cn("flex size-10 items-center justify-center rounded-full transition-colors", !newChatOpen && specialView === "archived" ? "bg-black/[.06] text-[#111B21] dark:bg-white/10 dark:text-white" : "text-[#54656F] hover:bg-black/5")}
+                  >
+                    <IconArchive size={22} />
+                  </button>
+                </div>
+                <div className="flex flex-col items-center gap-3">
+                  <button type="button" title="Bloqueo de aplicación" onClick={() => setAppLockOpen(true)} className="flex size-10 items-center justify-center rounded-full text-[#54656F] hover:bg-black/5">
+                    <IconLock size={21} />
+                  </button>
+                  <span className="flex size-9 items-center justify-center rounded-full bg-[#16140F] text-white" title="WhatsApp del negocio conectado">
+                    <IconBrandWhatsapp size={19} />
+                  </span>
+                </div>
+              </nav>
+
+              <aside className={`w-full md:w-[360px] xl:w-[400px] relative shrink-0 border-r border-[#E9EDEF] dark:border-zinc-900 flex flex-col bg-white dark:bg-zinc-950 ${mobileView === "chat" ? "hidden md:flex" : "flex"}`}>
+        {newChatOpen && (
+          <NewChatPanel
+            className="absolute inset-0 z-20 animate-in slide-in-from-left-4 fade-in duration-150"
+            country={settings?.country}
+            onClose={() => setNewChatOpen(false)}
+            onPick={({ phone, name, client }) => {
+              handleSelectChat({ id: phone, name, phone, client });
+              setNewChatOpen(false);
+            }}
+          />
+        )}
+
+        {/* Encabezado */}
+        <div className="flex h-[64px] shrink-0 items-center justify-between pl-5 pr-3">
+          {specialView === "none" ? (
+            <h1 className="text-[22px] font-bold tracking-tight text-[#1DAA61]">WhatsApp</h1>
+          ) : (
+            <div className="flex items-center gap-4">
+              <WaIconButton title="Volver" onClick={() => setSpecialView("none")} className="-ml-2 text-[#111B21]">
+                <IconArrowLeft size={22} />
+              </WaIconButton>
+              <h1 className="text-[17px] text-[#111B21] dark:text-zinc-100">{specialView === "archived" ? "Archivados" : "Chats restringidos"}</h1>
+            </div>
+          )}
+          <div className="flex items-center gap-1">
             {!connectionStatus.connected && (
-              <Button
-                onClick={handleOpenQrModal}
-                size="sm"
-                className="h-7 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-2 flex items-center gap-1 border-none shadow-sm shrink-0"
-              >
-                <IconBrandWhatsapp size={12} /> Conectar
+              <Button onClick={handleOpenQrModal} size="sm" className="mr-1 h-8 gap-1 rounded-full border-none bg-[#1DAA61] px-3 text-xs font-semibold text-white hover:bg-[#189a57]">
+                <IconBrandWhatsapp size={14} /> Conectar
               </Button>
             )}
-            <button
-              onClick={() => setNewChatOpen(true)}
-              title="Nuevo chat"
-              className="h-8 w-8 rounded-full hover:bg-zinc-150 dark:hover:bg-zinc-800 text-zinc-650 dark:text-zinc-350 flex items-center justify-center transition-all shrink-0"
-            >
-              <IconMessagePlus size={18} />
-            </button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button
-                  title="Menú"
-                  className="h-8 w-8 rounded-full hover:bg-zinc-150 dark:hover:bg-zinc-800 text-zinc-650 dark:text-zinc-350 flex items-center justify-center transition-all shrink-0"
-                >
-                  <IconDotsVertical size={18} />
+                <button type="button" title="Menú" className="flex size-10 items-center justify-center rounded-full text-[#54656F] hover:bg-black/5 data-[state=open]:bg-black/5 dark:text-zinc-300">
+                  <IconDotsVertical size={22} />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent
-                side="right"
-                align="start"
-                sideOffset={10}
-                className="w-52 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-xl bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
-              >
-                <DropdownMenuItem onClick={() => setNewChatOpen(true)} className="text-xs gap-2.5 cursor-pointer text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                  <IconMessage size={14} className="text-zinc-500 dark:text-zinc-400" /> Nuevo chat
+              <DropdownMenuContent align="end" sideOffset={6} className="w-60 rounded-2xl border-none p-2 shadow-[0_4px_24px_rgba(11,20,26,.18)] bg-white dark:bg-zinc-900">
+                <DropdownMenuItem onClick={() => setNewChatOpen(true)} className="gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#3B4A54] dark:text-zinc-200">
+                  <IconMessagePlus size={20} className="text-[#54656F]" /> Nuevo chat
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleActionToast("Nuevo grupo")} className="text-xs gap-2.5 cursor-pointer text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                  <IconFolderPlus size={14} className="text-zinc-500 dark:text-zinc-400" /> Nuevo grupo
+                <DropdownMenuItem onClick={() => setNewListDialogOpen(true)} className="gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#3B4A54] dark:text-zinc-200">
+                  <IconFolderPlus size={20} className="text-[#54656F]" /> Nueva lista
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleActionToast("Mensajes destacados")} className="text-xs gap-2.5 cursor-pointer text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                  <IconStar size={14} className="text-zinc-500 dark:text-zinc-400" /> Mensajes destacados
+                <DropdownMenuItem onClick={handleMarkAllAsRead} className="gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#3B4A54] dark:text-zinc-200">
+                  <IconMail size={20} className="text-[#54656F]" /> Marcar todos como leídos
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleActionToast("Seleccionar chats")} className="text-xs gap-2.5 cursor-pointer text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                  <IconCheck size={14} className="text-zinc-500 dark:text-zinc-400" /> Seleccionar chats
+                <DropdownMenuItem onClick={() => setAppLockOpen(true)} className="gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#3B4A54] dark:text-zinc-200">
+                  <IconLock size={20} className="text-[#54656F]" /> Bloqueo de aplicación
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleMarkAllAsRead} className="text-xs gap-2.5 cursor-pointer text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                  <IconMail size={14} className="text-zinc-500 dark:text-zinc-400" /> Marcar todos como leídos
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setAppLockOpen(true)} className="text-xs gap-2.5 cursor-pointer text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                  <IconLock size={14} className="text-zinc-500 dark:text-zinc-400" /> Bloqueo de aplicación
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800" />
-                <DropdownMenuItem onClick={handleLogoutInstance} className="text-xs gap-2.5 cursor-pointer text-rose-650 focus:text-rose-500 focus:bg-rose-500/10 hover:bg-rose-50 dark:hover:bg-rose-950/20">
-                  <IconBan size={14} className="text-rose-500" /> Desvincular WhatsApp
+                <DropdownMenuSeparator className="my-1 bg-[#E9EDEF] dark:bg-zinc-800" />
+                <DropdownMenuItem onClick={handleLogoutInstance} className="gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#EA0038] focus:text-[#EA0038]">
+                  <IconLogout size={20} /> Desvincular WhatsApp
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <button
+              type="button"
+              onClick={() => setNewChatOpen(true)}
+              title="Nuevo chat"
+              className="ml-1 flex size-10 items-center justify-center rounded-full bg-[#1DAA61] text-white shadow-sm transition-colors hover:bg-[#189a57]"
+            >
+              <IconMessagePlus size={20} />
+            </button>
           </div>
         </div>
 
         {/* Buscador */}
         {connectionStatus.connected && (
-          <div className="p-3 pb-2 relative">
-            <IconSearch className="absolute left-6 top-1/2 -translate-y-1/2 text-zinc-400" size={15} />
-            <Input
-              placeholder="Buscar conversación..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 h-9 rounded-xl border-zinc-200 dark:border-zinc-900 text-xs bg-zinc-50 dark:bg-zinc-950/40 text-foreground"
-            />
+          <div className="shrink-0 px-3 pb-2">
+            <label className="flex h-10 items-center gap-3 rounded-full bg-[#F0F2F5] px-4 focus-within:bg-white focus-within:ring-2 focus-within:ring-[#1DAA61] dark:bg-zinc-900">
+              <IconSearch size={18} className="shrink-0 text-[#54656F]" />
+              <input
+                placeholder="Buscar un chat o iniciar uno nuevo"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-full min-w-0 flex-1 bg-transparent text-[15px] text-[#111B21] outline-none placeholder:text-[#667781] dark:text-zinc-100"
+              />
+            </label>
           </div>
         )}
 
-        {/* Filtros de Categorías / Listas */}
-        {connectionStatus.connected && (
-          <div className="px-3 pb-3 border-b border-zinc-150 dark:border-zinc-900 flex items-center gap-1.5 overflow-x-auto shrink-0 scrollbar-none">
-            <button
-              onClick={() => { setActiveTab("all"); setSpecialView("none"); }}
-              className={`h-7 px-3 rounded-full text-[11px] font-bold transition-all shrink-0 ${
-                activeTab === "all" && specialView === "none"
-                  ? "bg-emerald-600 text-white shadow-sm"
-                  : "bg-zinc-100 dark:bg-zinc-900 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-              }`}
-            >
-              Todos
-            </button>
-            <button
-              onClick={() => { setActiveTab("unread"); setSpecialView("none"); }}
-              className={`h-7 px-3 rounded-full text-[11px] font-bold transition-all shrink-0 flex items-center gap-1 ${
-                activeTab === "unread" && specialView === "none"
-                  ? "bg-emerald-600 text-white shadow-sm"
-                  : "bg-zinc-100 dark:bg-zinc-900 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-              }`}
-            >
+        {/* Filtros */}
+        {connectionStatus.connected && specialView === "none" && (
+          <div className="flex shrink-0 items-center gap-2 overflow-x-auto px-3 pb-2 pt-1 scrollbar-none">
+            <WaChip active={activeTab === "all"} onClick={() => setActiveTab("all")}>Todos</WaChip>
+            <WaChip active={activeTab === "unread"} onClick={() => setActiveTab("unread")}>
               No leídos
-              {chats.filter(c => c.isUnread).length > 0 && (
-                <span className="text-[9px] bg-emerald-500 text-white rounded-full px-1.5 shrink-0">
-                  {chats.filter(c => c.isUnread).length}
-                </span>
+              {chats.filter(c => c.isUnread && !c.isArchived).length > 0 && (
+                <span className="text-[12px] opacity-80">{chats.filter(c => c.isUnread && !c.isArchived).length}</span>
               )}
-            </button>
-            <button
-              onClick={() => { setActiveTab("favorites"); setSpecialView("none"); }}
-              className={`h-7 px-3 rounded-full text-[11px] font-bold transition-all shrink-0 ${
-                activeTab === "favorites" && specialView === "none"
-                  ? "bg-emerald-600 text-white shadow-sm"
-                  : "bg-zinc-100 dark:bg-zinc-900 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-              }`}
-            >
-              Favoritos
-            </button>
+            </WaChip>
+            <WaChip active={activeTab === "favorites"} onClick={() => setActiveTab("favorites")}>Favoritos</WaChip>
             {activeTab.startsWith("list:") && (
-              <button
-                className="h-7 px-3 rounded-full text-[11px] font-bold transition-all shrink-0 bg-emerald-600 text-white shadow-sm flex items-center gap-1"
-                onClick={() => setActiveTab("all")}
-              >
-                <span>{activeTab.replace("list:", "")}</span>
-                <span className="text-[9px] opacity-75 font-black">×</span>
-              </button>
+              <WaChip active onClick={() => setActiveTab("all")}>
+                {activeTab.replace("list:", "")} <span className="text-[12px]">×</span>
+              </WaChip>
             )}
-
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="h-7 w-7 rounded-full bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 flex items-center justify-center transition-all shrink-0">
-                  <IconChevronDown size={14} />
+                <button type="button" className="flex size-8 shrink-0 items-center justify-center rounded-full border border-[#D1D7DB] text-[#54656F] hover:bg-[#F5F6F6] data-[state=open]:bg-[#F5F6F6] dark:border-zinc-700">
+                  <IconChevronDown size={16} />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent
-                side="right"
-                align="start"
-                sideOffset={10}
-                className="w-48 border border-zinc-200 dark:border-zinc-800 shadow-xl rounded-xl bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
-              >
+              <DropdownMenuContent align="start" sideOffset={6} className="w-56 rounded-2xl border-none p-2 shadow-[0_4px_24px_rgba(11,20,26,.18)] bg-white dark:bg-zinc-900">
                 {customLists.map(listName => (
                   <DropdownMenuItem
                     key={listName}
-                    onClick={() => { setActiveTab(`list:${listName}`); setSpecialView("none"); }}
-                    className="text-xs cursor-pointer flex justify-between items-center text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 group/list"
+                    onClick={() => setActiveTab(`list:${listName}`)}
+                    className="group/list flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#3B4A54] dark:text-zinc-200"
                   >
-                    <span className="truncate flex-1 pr-2">{listName}</span>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
-                        {chats.filter(c => c.lists?.includes(listName)).length}
-                      </span>
+                    <span className="flex-1 truncate">{listName}</span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <span className="text-[12px] text-[#667781]">{chats.filter(c => c.lists?.includes(listName)).length}</span>
                       <button
                         onClick={(e) => handleDeleteList(listName, e)}
-                        className="text-zinc-400 hover:text-rose-500 transition-colors p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 opacity-0 group-hover/list:opacity-100 focus:opacity-100 shrink-0"
+                        className="rounded p-0.5 text-[#8696A0] opacity-0 hover:text-[#EA0038] group-hover/list:opacity-100"
                         title="Eliminar lista"
                       >
-                        <IconTrash size={12} />
+                        <IconTrash size={14} />
                       </button>
-                    </div>
+                    </span>
                   </DropdownMenuItem>
                 ))}
-                <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800" />
-                <DropdownMenuItem
-                  onClick={() => setNewListDialogOpen(true)}
-                  className="text-xs cursor-pointer text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                >
-                  <IconPlus size={14} className="text-emerald-600 dark:text-emerald-400" /> Nueva lista
+                {customLists.length > 0 && <DropdownMenuSeparator className="my-1 bg-[#E9EDEF] dark:bg-zinc-800" />}
+                <DropdownMenuItem onClick={() => setNewListDialogOpen(true)} className="gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#008069]">
+                  <IconPlus size={18} /> Nueva lista
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         )}
 
-        {/* Lista de Conversaciones */}
-        <div className="flex-1 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-900/60 p-2 space-y-1">
-          {/* Header de Vista Especial */}
-          {specialView !== "none" && (
-            <div className="flex items-center gap-2.5 pb-2 border-b border-zinc-150 dark:border-zinc-900/80 mb-2 shrink-0">
-              <button
-                onClick={() => setSpecialView("none")}
-                className="size-7 flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
-              >
-                <IconArrowLeft size={14} />
-              </button>
-              <span className="text-xs font-bold text-zinc-850 dark:text-zinc-100 uppercase tracking-wider">
-                {specialView === "archived" ? "Chats Archivados" : "Chats Restringidos"}
-              </span>
-            </div>
+        {/* Lista de conversaciones */}
+        <div className="flex-1 overflow-y-auto pb-2">
+          {specialView === "none" && chats.some(c => c.isRestricted) && (
+            <button type="button" onClick={handleOpenRestrictedChats} className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-[#F5F6F6] dark:hover:bg-zinc-800/60">
+              <span className="flex w-[49px] justify-center text-[#54656F]"><IconLock size={20} /></span>
+              <span className="flex-1 text-[16px] text-[#111B21] dark:text-zinc-100">Chats restringidos</span>
+              <span className="text-[12px] text-[#667781]">{chats.filter(c => c.isRestricted).length}</span>
+            </button>
           )}
-
-          {/* Accesos rápidos a Archivados y Restringidos en Vista Principal */}
-          {specialView === "none" && (
-            <div className="space-y-1 pb-2 border-b border-zinc-150 dark:border-zinc-900/60 mb-2">
-              {chats.some(c => c.isRestricted) && (
-                <div
-                  onClick={handleOpenRestrictedChats}
-                  className="flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all hover:bg-zinc-50 dark:hover:bg-zinc-900/30 text-zinc-650 dark:text-zinc-400"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="size-9 rounded-full bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-350 shrink-0">
-                      <IconLock size={16} />
-                    </div>
-                    <span className="text-xs font-bold text-zinc-805 dark:text-zinc-200">Chats restringidos</span>
-                  </div>
-                  <span className="text-[10px] bg-zinc-150 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 rounded-full px-2 py-0.5 font-bold">
-                    {chats.filter(c => c.isRestricted).length}
-                  </span>
-                </div>
-              )}
-              {chats.some(c => c.isArchived) && (
-                <div
-                  onClick={() => setSpecialView("archived")}
-                  className="flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all hover:bg-zinc-50 dark:hover:bg-zinc-900/30 text-zinc-650 dark:text-zinc-400"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="size-9 rounded-full bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-350 shrink-0">
-                      <IconArchive size={16} />
-                    </div>
-                    <span className="text-xs font-bold text-zinc-805 dark:text-zinc-200">Archivados</span>
-                  </div>
-                  <span className="text-[10px] bg-zinc-150 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 rounded-full px-2 py-0.5 font-bold">
-                    {chats.filter(c => c.isArchived).length}
-                  </span>
-                </div>
-              )}
-            </div>
+          {specialView === "none" && chats.some(c => c.isArchived) && (
+            <button type="button" onClick={() => setSpecialView("archived")} className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-[#F5F6F6] dark:hover:bg-zinc-800/60">
+              <span className="flex w-[49px] justify-center text-[#54656F]"><IconArchive size={20} /></span>
+              <span className="flex-1 text-[16px] text-[#111B21] dark:text-zinc-100">Archivados</span>
+              <span className="text-[12px] font-medium text-[#1DAA61]">{chats.filter(c => c.isArchived).length}</span>
+            </button>
           )}
 
           {loadingChats ? (
-            <div className="text-center py-12 text-zinc-400 text-xs tracking-wider uppercase animate-pulse font-semibold">Cargando chats...</div>
+            <div className="flex justify-center py-12 text-[#8696A0]"><IconLoader2 size={22} className="animate-spin" /></div>
           ) : filteredChats.length === 0 ? (
-            <div className="text-center py-12 text-zinc-400 text-xs">No hay conversaciones activas.</div>
+            <div className="px-8 py-12 text-center text-[14px] text-[#667781]">
+              {searchTerm ? "No se encontraron chats." : specialView === "archived" ? "No hay chats archivados." : "Aún no hay conversaciones. Toca el botón verde para escribirle a un cliente."}
+            </div>
           ) : (
-            // Sort chats: pinned first, then by lastMessageTime/updatedAt desc
+            // Pinned first, then by last message
             [...filteredChats]
               .sort((a, b) => {
                 if (a.isPinned && !b.isPinned) return -1;
@@ -1468,128 +1517,100 @@ export default function WhatsAppChatPage() {
                 const isActive = activeChat?.id === c.id;
                 const hasDebt = c.client && c.client.currentDebt > 0;
                 const avatarSrc = c.avatarUrl || avatars[c.id];
+                const last = c.messages?.[0];
+                const menuItem = "gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#3B4A54] dark:text-zinc-200";
                 return (
                   <div
                     key={c.id}
                     onClick={() => handleSelectChat(c)}
-                    className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border group relative ${
-                      isActive
-                        ? "bg-emerald-500/10 border-emerald-500/25 dark:bg-emerald-500/5 text-emerald-800 dark:text-emerald-400"
-                        : "hover:bg-zinc-50 dark:hover:bg-zinc-900/30 border-transparent text-zinc-650 dark:text-zinc-400"
-                    }`}
+                    className={cn(
+                      "group relative mx-2 flex cursor-pointer items-center gap-3 rounded-xl px-3 transition-colors",
+                      isActive ? "bg-[#F0F2F5] dark:bg-zinc-800" : "hover:bg-[#F5F6F6] dark:hover:bg-zinc-800/60",
+                    )}
                   >
-                    {/* Left: Avatar */}
-                    <div className="size-10 rounded-full bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center overflow-hidden border border-zinc-200 dark:border-zinc-800 shrink-0">
-                      {avatarSrc ? (
-                        <img src={avatarSrc} alt="Avatar" className="size-full object-cover" />
-                      ) : (
-                        <IconUser size={18} className="text-zinc-600 dark:text-zinc-300" />
-                      )}
-                    </div>
-
-                    {/* Middle: Name and Last Message */}
-                    <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 self-stretch">
-                      {/* Name Row */}
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {c.isPinned && <IconPin size={12} className="text-emerald-600 dark:text-emerald-400 rotate-45 shrink-0" />}
-                        {c.isMuted && <IconVolumeOff size={12} className="text-zinc-400 shrink-0" />}
-                        <p className={`text-xs font-bold truncate ${isActive ? "text-emerald-700 dark:text-emerald-350" : "text-zinc-800 dark:text-zinc-200"}`}>
-                          {getChatDisplayName(c)}
-                        </p>
+                    <WaAvatar src={avatarSrc} seed={c.id} />
+                    <div className="flex min-w-0 flex-1 flex-col justify-center py-3">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="truncate text-[16px] text-[#111B21] dark:text-zinc-100">{getChatDisplayName(c)}</p>
+                        <span className={cn("shrink-0 text-[12px]", c.isUnread ? "font-medium text-[#1DAA61]" : "text-[#667781]")}>
+                          {formatChatTime(c.lastMessageTime)}
+                        </span>
                       </div>
-
-                      {/* Last Message Row */}
-                      <p className="text-[10px] text-zinc-400 truncate font-medium mt-1">
-                        {c.lastMessage || "Sin mensajes"}
-                      </p>
-                    </div>
-
-                    {/* Right: Time and Chevron / Actions */}
-                    <div className="flex flex-col items-end justify-between py-0.5 self-stretch shrink-0 min-w-[65px] text-right">
-                      {/* Time Row */}
-                      <span className="text-[9px] text-zinc-400 font-medium font-mono shrink-0">
-                        {c.lastMessageTime ? format(new Date(c.lastMessageTime), "hh:mm a") : ""}
-                      </span>
-                      
-                      {/* Chevron / Badges Row */}
-                      <div className="flex items-center gap-1 mt-1 shrink-0 relative min-h-[20px]">
-                        {c.isUnread && (
-                          <span className="size-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                        )}
-                        {hasDebt && (
-                          <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-455 border border-rose-200/20 hover:bg-rose-500/10 text-[9px] h-4 px-1 font-bold shrink-0">
-                            Fiado
-                          </Badge>
-                        )}
-                        
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
+                      <div className="mt-0.5 flex items-center justify-between gap-2">
+                        <span className="min-w-0 flex-1 text-[14px] text-[#667781]">
+                          {["composing", "recording"].includes(presenceOf(c)?.presence ?? "")
+                            ? <span className="text-[#1DAA61]">{presenceOf(c)?.presence === "recording" ? "Grabando audio…" : "Escribiendo…"}</span>
+                            : <WaPreview message={last} fallback={c.lastMessage} />}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1.5 text-[#8696A0]">
+                          {hasDebt && <span className="rounded-full bg-[#FFE5E9] px-1.5 text-[11px] font-medium text-[#C12A4B]">Fiado</span>}
+                          {c.isMuted && <IconBellOff size={17} />}
+                          {c.isUnread && <span className="size-[18px] rounded-full bg-[#25D366]" title="No leído" />}
+                          {c.isPinned && <IconPin size={17} />}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                onClick={(e) => e.stopPropagation()}
+                                className="-mr-1 w-0 overflow-hidden text-[#8696A0] opacity-0 transition-all group-hover:w-6 group-hover:opacity-100 data-[state=open]:w-6 data-[state=open]:opacity-100"
+                                title="Opciones del chat"
+                              >
+                                <IconChevronDown size={20} />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
                               onClick={(e) => e.stopPropagation()}
-                              className="text-zinc-400 hover:text-zinc-650 dark:hover:text-zinc-200 transition-all opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 p-0.5 rounded-full hover:bg-zinc-150 dark:hover:bg-zinc-800 shrink-0"
+                              align="start"
+                              sideOffset={6}
+                              className="w-64 rounded-2xl border-none p-2 shadow-[0_4px_24px_rgba(11,20,26,.18)] bg-white dark:bg-zinc-900"
                             >
-                              <IconChevronDown size={14} />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            onClick={(e) => e.stopPropagation()}
-                            side="right"
-                            align="start"
-                            sideOffset={10}
-                            className="w-48 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-xl bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
-                          >
-                            <DropdownMenuItem onClick={() => toggleChatProperty(c.id, 'isArchived', c.isArchived)} className="text-xs gap-2 cursor-pointer text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                              <IconArchive size={14} className="text-zinc-500 dark:text-zinc-400 shrink-0" /> {c.isArchived ? "Desarchivar chat" : "Archivar chat"}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleChatProperty(c.id, 'isMuted', c.isMuted)} className="text-xs gap-2 cursor-pointer text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                              <IconVolumeOff size={14} className="text-zinc-500 dark:text-zinc-400 shrink-0" /> {c.isMuted ? "Desactivar silencio" : "Silenciar notificaciones"}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleChatProperty(c.id, 'isPinned', c.isPinned)} className="text-xs gap-2 cursor-pointer text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                              <IconPin size={14} className="text-zinc-500 dark:text-zinc-400 shrink-0" /> {c.isPinned ? "Desfijar chat" : "Fijar chat"}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleChatProperty(c.id, 'isUnread', c.isUnread)} className="text-xs gap-2 cursor-pointer text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                              <IconMail size={14} className="text-zinc-500 dark:text-zinc-400 shrink-0" /> {c.isUnread ? "Marcar como leído" : "Marcar como no leído"}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleChatProperty(c.id, 'isFavorite', c.isFavorite)} className="text-xs gap-2 cursor-pointer text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                              <IconStar size={14} className="text-zinc-500 dark:text-zinc-400 shrink-0" /> {c.isFavorite ? "Quitar de Favoritos" : "Añadir a Favoritos"}
-                            </DropdownMenuItem>
-                            
-                            {customLists.length > 0 && (
+                              <DropdownMenuItem onClick={() => toggleChatProperty(c.id, 'isArchived', c.isArchived)} className={menuItem}>
+                                <IconArchive size={20} className="text-[#54656F]" /> {c.isArchived ? "Desarchivar chat" : "Archivar chat"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => toggleChatProperty(c.id, 'isMuted', c.isMuted)} className={menuItem}>
+                                <IconBellOff size={20} className="text-[#54656F]" /> {c.isMuted ? "Activar notificaciones" : "Silenciar notificaciones"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => toggleChatProperty(c.id, 'isPinned', c.isPinned)} className={menuItem}>
+                                {c.isPinned ? <IconPinnedOff size={20} className="text-[#54656F]" /> : <IconPin size={20} className="text-[#54656F]" />} {c.isPinned ? "Desfijar chat" : "Fijar chat"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => toggleChatProperty(c.id, 'isUnread', c.isUnread)} className={menuItem}>
+                                <IconMessageDots size={20} className="text-[#54656F]" /> {c.isUnread ? "Marcar como leído" : "Marcar como no leído"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => toggleChatProperty(c.id, 'isFavorite', c.isFavorite)} className={menuItem}>
+                                <IconHeart size={20} className="text-[#54656F]" /> {c.isFavorite ? "Quitar de favoritos" : "Añadir a favoritos"}
+                              </DropdownMenuItem>
                               <DropdownMenuSub>
-                                <DropdownMenuSubTrigger className="text-xs gap-2 cursor-pointer text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                                  <IconFolderPlus size={14} className="text-zinc-500 dark:text-zinc-400 shrink-0" /> Añadir a la lista
+                                <DropdownMenuSubTrigger className={menuItem}>
+                                  <IconAddressBook size={20} className="text-[#54656F]" /> Añadir a la lista
                                 </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent className="w-44 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 border border-zinc-250 dark:border-zinc-800 shadow-xl rounded-xl">
-                                  {customLists.map(listName => {
-                                    const isInList = c.lists?.includes(listName);
-                                    return (
-                                      <DropdownMenuItem key={listName} onClick={() => toggleChatList(c.id, listName)} className="text-xs flex justify-between items-center cursor-pointer text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                                        <span>{listName}</span>
-                                        {isInList && <IconCheck size={12} className="text-emerald-500 shrink-0" />}
-                                      </DropdownMenuItem>
-                                    );
-                                  })}
+                                <DropdownMenuSubContent className="w-52 rounded-2xl border-none p-2 shadow-[0_4px_24px_rgba(11,20,26,.18)] bg-white dark:bg-zinc-900">
+                                  {customLists.map(listName => (
+                                    <DropdownMenuItem key={listName} onClick={() => toggleChatList(c.id, listName)} className={cn(menuItem, "justify-between")}>
+                                      <span className="truncate">{listName}</span>
+                                      {c.lists?.includes(listName) && <IconCheck size={16} className="text-[#1DAA61]" />}
+                                    </DropdownMenuItem>
+                                  ))}
+                                  {customLists.length > 0 && <DropdownMenuSeparator className="my-1 bg-[#E9EDEF] dark:bg-zinc-800" />}
+                                  <DropdownMenuItem onClick={() => setNewListDialogOpen(true)} className={cn(menuItem, "text-[#008069]")}>
+                                    <IconPlus size={18} /> Nueva lista
+                                  </DropdownMenuItem>
                                 </DropdownMenuSubContent>
                               </DropdownMenuSub>
-                            )}
-                            
-                            <DropdownMenuItem onClick={() => toggleChatProperty(c.id, 'isRestricted', c.isRestricted)} className="text-xs gap-2 cursor-pointer text-zinc-750 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                              <IconLock size={14} className="text-zinc-500 dark:text-zinc-400 shrink-0" /> {c.isRestricted ? "Quitar restricción" : "Restringir chat"}
-                            </DropdownMenuItem>
-                            
-                            <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800" />
-                            
-                            <DropdownMenuItem onClick={() => toggleChatProperty(c.id, 'isBlocked', c.isBlocked)} className="text-xs gap-2 cursor-pointer text-amber-600 focus:text-amber-500 focus:bg-amber-500/10 hover:bg-amber-50 dark:hover:bg-amber-950/20">
-                              <IconBan size={14} className="text-amber-500 shrink-0" /> {c.isBlocked ? "Desbloquear" : "Bloquear"}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleClearChat(c.id)} className="text-xs gap-2 cursor-pointer text-rose-500 focus:text-rose-500 focus:bg-rose-500/10 hover:bg-rose-50 dark:hover:bg-rose-950/20">
-                              <IconTrash size={14} className="text-rose-500 shrink-0" /> Vaciar chat
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDeleteChat(c.id)} className="text-xs gap-2 cursor-pointer text-rose-650 focus:text-rose-650 focus:bg-rose-500/10 hover:bg-rose-50 dark:hover:bg-rose-950/20">
-                              <IconTrash size={14} className="text-rose-650 dark:text-rose-500 shrink-0" /> Eliminar chat
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                              <DropdownMenuItem onClick={() => toggleChatProperty(c.id, 'isRestricted', c.isRestricted)} className={menuItem}>
+                                <IconLock size={20} className="text-[#54656F]" /> {c.isRestricted ? "Quitar restricción" : "Restringir chat"}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator className="my-1 bg-[#E9EDEF] dark:bg-zinc-800" />
+                              <DropdownMenuItem onClick={() => toggleChatProperty(c.id, 'isBlocked', c.isBlocked)} className={menuItem}>
+                                <IconBan size={20} className="text-[#54656F]" /> {c.isBlocked ? "Desbloquear" : "Bloquear"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleClearChat(c.id)} className={menuItem}>
+                                <IconCircleMinus size={20} className="text-[#54656F]" /> Vaciar chat
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleDeleteChat(c.id)} className={cn(menuItem, "text-[#EA0038] focus:text-[#EA0038]")}>
+                                <IconTrash size={20} /> Eliminar chat
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1599,116 +1620,147 @@ export default function WhatsAppChatPage() {
         </div>
       </aside>
 
-      {/* ─── AREA CENTRAL: CONVERSACIÓN ─────────────────────────────────── */}
-      <main className={`flex-1 flex flex-col bg-white dark:bg-zinc-950/20 ${mobileView === "list" ? "hidden md:flex" : "flex"}`}>
+      {/* ─── AREA CENTRAL: CONVERSACIÓN (estilo WhatsApp Web) ───────────── */}
+      <main className={`flex-1 min-w-0 flex flex-col bg-[#EFEAE2] dark:bg-zinc-950 ${mobileView === "list" ? "hidden md:flex" : "flex"}`}>
         {activeChat ? (
           <>
-            {/* Header del Chat */}
-            <div className="px-5 py-3 border-b border-zinc-200 dark:border-zinc-900 flex items-center justify-between bg-white dark:bg-zinc-950/40 shrink-0">
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="md:hidden size-8 -ml-2 text-zinc-400 hover:text-zinc-600"
-                  onClick={() => setMobileView("list")}
-                >
-                  <IconArrowLeft size={18} />
-                </Button>
-                <div className="size-9 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center overflow-hidden font-bold shrink-0">
-                  {activeChat.avatarUrl || avatars[activeChat.id] ? (
-                    <img src={activeChat.avatarUrl || avatars[activeChat.id]!} alt="Avatar" className="size-full object-cover" />
-                  ) : (
-                    getChatDisplayName(activeChat)?.charAt(0) || <IconUser size={16} />
-                  )}
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{getChatDisplayName(activeChat)}</p>
-                  <p className="text-[10px] text-zinc-400 font-mono">+{activeChat.phone}</p>
-                </div>
+            {/* Encabezado del chat */}
+            <div className="flex h-[64px] shrink-0 items-center justify-between gap-3 border-b border-[#E9EDEF] bg-white px-4 dark:border-zinc-900 dark:bg-zinc-950">
+              <div className="flex min-w-0 items-center gap-3">
+                <WaIconButton title="Volver" onClick={() => setMobileView("list")} className="-ml-2 md:hidden">
+                  <IconArrowLeft size={22} />
+                </WaIconButton>
+                <button type="button" onClick={() => setContactInfoOpen(true)} className="flex min-w-0 items-center gap-3 text-left" title="Info del contacto">
+                  <WaAvatar src={activeChat.avatarUrl || avatars[activeChat.id]} seed={activeChat.id} size={40} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[16px] text-[#111B21] dark:text-zinc-100">{getChatDisplayName(activeChat)}</span>
+                    {(() => {
+                      const p = presenceOf(activeChat);
+                      if (p?.presence === "composing") return <span className="block truncate text-[13px] text-[#1DAA61]">Escribiendo…</span>;
+                      if (p?.presence === "recording") return <span className="block truncate text-[13px] text-[#1DAA61]">Grabando audio…</span>;
+                      if (p?.presence === "available") return <span className="block truncate text-[13px] text-[#667781]">En línea</span>;
+                      if (p?.lastSeen) return <span className="block truncate text-[13px] text-[#667781]">{lastSeenLabel(p.lastSeen)}</span>;
+                      return <span className="block truncate text-[13px] text-[#667781]">{contactInfoOpen ? (activeChat.phone ? formatWhatsAppNumber(`+${String(activeChat.phone).replace(/\D/g, "")}`) : "") : "Haz clic aquí para ver la info del contacto"}</span>;
+                    })()}
+                  </span>
+                </button>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                {chatSearchOpen && (
+                  <input
+                    autoFocus
+                    value={chatSearch}
+                    onChange={(e) => setChatSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === "Escape" && (setChatSearchOpen(false), setChatSearch(""))}
+                    placeholder="Buscar en el chat"
+                    className="h-9 w-56 rounded-full bg-[#F0F2F5] px-4 text-[14px] outline-none placeholder:text-[#667781] dark:bg-zinc-900"
+                  />
+                )}
+                <WaIconButton title="Buscar en el chat" onClick={() => { setChatSearchOpen((v) => !v); setChatSearch(""); }}>
+                  <IconSearch size={22} />
+                </WaIconButton>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" title="Menú" className="flex size-10 items-center justify-center rounded-full text-[#54656F] hover:bg-black/5 data-[state=open]:bg-black/5 dark:text-zinc-300">
+                      <IconDotsVertical size={22} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" sideOffset={6} className="w-60 rounded-2xl border-none bg-white p-2 shadow-[0_4px_24px_rgba(11,20,26,.18)] dark:bg-zinc-900">
+                    <DropdownMenuItem onClick={() => setContactInfoOpen(true)} className="gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#3B4A54] dark:text-zinc-200">
+                      <IconInfoCircle size={20} className="text-[#54656F]" /> Info del contacto
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => toggleChatProperty(activeChat.id, "isMuted", activeChat.isMuted)} className="gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#3B4A54] dark:text-zinc-200">
+                      <IconBellOff size={20} className="text-[#54656F]" /> {activeChat.isMuted ? "Activar notificaciones" : "Silenciar notificaciones"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => toggleChatProperty(activeChat.id, "isFavorite", activeChat.isFavorite)} className="gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#3B4A54] dark:text-zinc-200">
+                      <IconHeart size={20} className="text-[#54656F]" /> {activeChat.isFavorite ? "Quitar de favoritos" : "Añadir a favoritos"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => toggleChatProperty(activeChat.id, "isArchived", activeChat.isArchived)} className="gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#3B4A54] dark:text-zinc-200">
+                      <IconArchive size={20} className="text-[#54656F]" /> {activeChat.isArchived ? "Desarchivar chat" : "Archivar chat"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setActiveChat(null)} className="gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#3B4A54] dark:text-zinc-200">
+                      <IconX size={20} className="text-[#54656F]" /> Cerrar chat
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="my-1 bg-[#E9EDEF] dark:bg-zinc-800" />
+                    <DropdownMenuItem onClick={() => handleClearChat(activeChat.id)} className="gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#3B4A54] dark:text-zinc-200">
+                      <IconCircleMinus size={20} className="text-[#54656F]" /> Vaciar chat
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleDeleteChat(activeChat.id)} className="gap-3 rounded-xl px-3 py-2.5 text-[14.5px] text-[#EA0038] focus:text-[#EA0038]">
+                      <IconTrash size={20} /> Eliminar chat
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
-            {/* Historial de Mensajes */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-zinc-50/50 dark:bg-zinc-950/20">
+            {/* Mensajes */}
+            <div className="flex-1 overflow-y-auto pb-3 dark:bg-zinc-950" style={WA_WALLPAPER}>
               {loadingMessages ? (
-                <div className="flex items-center justify-center h-full text-xs text-zinc-400 font-semibold animate-pulse uppercase tracking-wider">
-                  Cargando conversación...
-                </div>
+                <div className="flex h-full items-center justify-center text-[#667781]"><IconLoader2 size={24} className="animate-spin" /></div>
               ) : messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-zinc-400 text-xs">
-                  <IconMessage size={32} className="mb-2 opacity-50" />
-                  Escribe un mensaje para iniciar la conversación.
+                <div className="flex h-full items-center justify-center p-6">
+                  <span className="rounded-lg bg-[#FFEECD] px-4 py-2 text-center text-[12.5px] text-[#54656F] shadow-[0_1px_.5px_rgba(11,20,26,.13)]">
+                    Escribe un mensaje para iniciar la conversación.
+                  </span>
                 </div>
               ) : (
-                messages.map((m) => {
-                  const isAgent = m.senderType === "AGENT";
-                  return (
-                    <div
-                      key={m.id}
-                      className={`flex ${isAgent ? "justify-end" : "justify-start"} animate-in fade-in-30 duration-200`}
-                    >
-                      <div
-                        className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-xs shadow-sm border ${
-                          isAgent
-                            ? "bg-emerald-600 text-white border-emerald-600 dark:bg-emerald-700/80 dark:border-emerald-700/40 rounded-tr-none"
-                            : "bg-white text-zinc-800 border-zinc-150 dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-850 rounded-tl-none"
-                        }`}
-                      >
-                        {m.type === "text" ? (
-                          <p className="leading-relaxed whitespace-pre-wrap">{m.text}</p>
-                        ) : (
-                          <MediaMessageRenderer
-                            msg={m}
-                            messageMedia={messageMedia}
-                            fetchMessageMedia={fetchMessageMedia}
-                            senderAvatar={!isAgent && activeChat ? (activeChat.avatarUrl || avatars[activeChat.id]) : undefined}
-                            senderFallback={!isAgent && activeChat ? (activeChat.name ? activeChat.name.substring(0, 2).toUpperCase() : undefined) : undefined}
-                          />
-                        )}
-                        {!(m.type === "audio" || m.type === "AUDIO") && (
-                          <div className="flex items-center justify-end gap-1 mt-1">
-                            <span className={`text-[8px] font-mono font-medium ${isAgent ? "text-emerald-100" : "text-zinc-400"}`}>
-                              {format(new Date(m.createdAt), "hh:mm a")}
-                            </span>
-                            {isAgent && (
-                              <span className="flex items-center">
-                                {m.status === "READ" ? (
-                                  <IconChecks size={13} className="text-sky-300 dark:text-sky-400 shrink-0" />
-                                ) : m.status === "DELIVERED" ? (
-                                  <IconChecks size={13} className="text-emerald-200/70 shrink-0" />
-                                ) : (
-                                  <IconCheck size={13} className="text-emerald-200/70 shrink-0" />
-                                )}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
+                (() => {
+                  const term = chatSearch.trim().toLowerCase();
+                  const visible = term ? messages.filter((m) => (m.text || "").toLowerCase().includes(term)) : messages;
+                  if (term && visible.length === 0) {
+                    return <div className="flex justify-center pt-10"><span className="rounded-lg bg-white px-4 py-2 text-[13px] text-[#667781] shadow-sm">No hay mensajes con “{chatSearch}”</span></div>;
+                  }
+                  const contactName = getChatDisplayName(activeChat);
+                  return visible.map((m, i) => {
+                    const own = m.senderType !== "CLIENT";
+                    const prev = visible[i - 1];
+                    const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
+                    const first = newDay || !prev || (prev.senderType !== "CLIENT") !== own;
+                    const isAudio = m.type === "audio" || m.type === "AUDIO";
+                    return (
+                      <React.Fragment key={m.id}>
+                        {newDay && <DayDivider label={dayLabel(m.createdAt)} />}
+                        <MessageBubble
+                          msg={m}
+                          own={own}
+                          first={first}
+                          contactName={contactName}
+                          hideMeta={isAudio}
+                          onReply={() => { setReplyTo(m); inputRef.current?.focus(); }}
+                          onReact={(emoji) => handleReactToMessage(m, emoji)}
+                        >
+                          {m.type === "text" ? (
+                            <span className="whitespace-pre-wrap break-words">{m.text}</span>
+                          ) : (
+                            <MediaMessageRenderer
+                              msg={m}
+                              messageMedia={messageMedia}
+                              fetchMessageMedia={fetchMessageMedia}
+                              senderAvatar={!own ? (activeChat.avatarUrl || avatars[activeChat.id]) : undefined}
+                              senderFallback={!own && activeChat.name ? activeChat.name.substring(0, 2).toUpperCase() : undefined}
+                            />
+                          )}
+                        </MessageBubble>
+                      </React.Fragment>
+                    );
+                  });
+                })()
               )}
               <div ref={scrollRef} />
             </div>
 
-            {/* Input de Envío estilo WhatsApp Web */}
-            <div className="p-3 border-t border-zinc-200 dark:border-zinc-900 bg-zinc-100 dark:bg-zinc-950/60 flex items-center gap-2.5 shrink-0 relative">
-              {/* Emoji Picker Popover */}
+            {/* Barra para escribir */}
+            <div className="relative shrink-0 px-3 pb-3 pt-1" style={WA_WALLPAPER}>
+              {/* Emojis */}
               {showEmojiPicker && (
-                <div className="absolute bottom-14 left-4 z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl p-3 w-[290px]">
-                  <div className="flex justify-between items-center mb-2 pb-1 border-b border-zinc-100 dark:border-zinc-800">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Emojis Populares</span>
-                    <button onClick={() => setShowEmojiPicker(false)} className="text-[10px] text-zinc-400 hover:text-zinc-650 font-bold">Cerrar</button>
-                  </div>
-                  <div className="grid grid-cols-8 gap-2 max-h-[160px] overflow-y-auto">
+                <div className="absolute bottom-[72px] left-4 z-50 w-[320px] rounded-2xl bg-white p-3 shadow-[0_4px_24px_rgba(11,20,26,.18)] dark:bg-zinc-900">
+                  <div className="grid max-h-[220px] grid-cols-8 gap-1 overflow-y-auto">
                     {EMOJIS.map(emoji => (
                       <button
                         key={emoji}
-                        onClick={() => {
-                          setInputText(prev => prev + emoji);
-                          inputRef.current?.focus();
-                        }}
-                        className="text-lg hover:scale-125 transition-transform duration-100 p-0.5"
+                        type="button"
+                        onClick={() => { setInputText(prev => prev + emoji); inputRef.current?.focus(); }}
+                        className="flex size-9 items-center justify-center rounded-lg text-[22px] hover:bg-[#F0F2F5]"
                       >
                         {emoji}
                       </button>
@@ -1717,224 +1769,99 @@ export default function WhatsAppChatPage() {
                 </div>
               )}
 
-              {/* Attachment Menu Popover */}
+              {/* Adjuntar */}
               {showAttachMenu && (
-                <div className="absolute bottom-14 left-12 z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl py-1.5 w-[160px] flex flex-col">
-                  <button
-                    onClick={() => { imageInputRef.current?.click(); }}
-                    className="px-3.5 py-2 text-xs text-left hover:bg-zinc-50 dark:hover:bg-zinc-800 flex items-center gap-2 text-zinc-700 dark:text-zinc-300 font-medium"
-                  >
-                    <IconPhoto size={15} className="text-blue-500" /> Imagen / Video
+                <div className="absolute bottom-[72px] left-4 z-50 w-52 rounded-2xl bg-white p-2 shadow-[0_4px_24px_rgba(11,20,26,.18)] dark:bg-zinc-900">
+                  <button type="button" onClick={() => docInputRef.current?.click()} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14.5px] text-[#3B4A54] hover:bg-[#F5F6F6] dark:text-zinc-200">
+                    <IconFileText size={20} className="text-[#7F66FF]" /> Documento
                   </button>
-                  <button
-                    onClick={() => { docInputRef.current?.click(); }}
-                    className="px-3.5 py-2 text-xs text-left hover:bg-zinc-50 dark:hover:bg-zinc-800 flex items-center gap-2 text-zinc-700 dark:text-zinc-300 font-medium"
-                  >
-                    <IconFileText size={15} className="text-emerald-500" /> Documento
+                  <button type="button" onClick={() => imageInputRef.current?.click()} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14.5px] text-[#3B4A54] hover:bg-[#F5F6F6] dark:text-zinc-200">
+                    <IconPhoto size={20} className="text-[#007BFC]" /> Fotos y videos
                   </button>
                 </div>
               )}
 
-              {/* Hidden Inputs */}
-              <input
-                type="file"
-                ref={imageInputRef}
-                className="hidden"
-                accept="image/*,video/*"
-                onChange={(e) => handleFileSelect(e, "image")}
-              />
-              <input
-                type="file"
-                ref={docInputRef}
-                className="hidden"
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
-                onChange={(e) => handleFileSelect(e, "document")}
-              />
+              <input type="file" ref={imageInputRef} className="hidden" accept="image/*,video/*" onChange={(e) => handleFileSelect(e, "image")} />
+              <input type="file" ref={docInputRef} className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" onChange={(e) => handleFileSelect(e, "document")} />
 
-              {isRecording ? (
-                // Recording Panel
-                <div className="flex-1 flex items-center justify-between bg-zinc-50 dark:bg-zinc-900 px-4 py-2 rounded-full border border-zinc-200 dark:border-zinc-800 h-10 animate-pulse">
-                  <div className="flex items-center gap-2">
-                    <span className="size-2 rounded-full bg-rose-500 animate-ping" />
-                    <span className="text-xs font-bold text-rose-500">Grabando...</span>
-                    <span className="text-xs font-mono text-zinc-500 font-medium ml-2">
-                      {Math.floor(recordingDuration / 60).toString().padStart(2, "0")}:
-                      {(recordingDuration % 60).toString().padStart(2, "0")}
+              <div className="rounded-[26px] bg-white shadow-[0_1px_2px_rgba(11,20,26,.12)] dark:bg-zinc-900">
+                {replyTo && <ReplyPreview msg={replyTo} contactName={getChatDisplayName(activeChat)} onCancel={() => setReplyTo(null)} />}
+                {isRecording ? (
+                  <div className="flex h-[52px] items-center gap-3 px-3">
+                    <button type="button" onClick={() => stopRecording(true)} title="Descartar" className="flex size-10 items-center justify-center rounded-full text-[#54656F] hover:bg-black/5">
+                      <IconTrash size={22} />
+                    </button>
+                    <span className="size-2.5 rounded-full bg-[#EA0038]" />
+                    <span className="flex-1 text-[15px] tabular-nums text-[#3B4A54] dark:text-zinc-200">
+                      {Math.floor(recordingDuration / 60).toString().padStart(2, "0")}:{(recordingDuration % 60).toString().padStart(2, "0")}
                     </span>
+                    <button type="button" onClick={() => stopRecording(false)} title="Enviar audio" className="flex size-10 items-center justify-center rounded-full bg-[#1DAA61] text-white hover:bg-[#189a57]">
+                      <IconSend size={19} />
+                    </button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => stopRecording(true)}
-                      className="size-8 text-rose-500 hover:text-rose-600 hover:bg-rose-100/50 dark:hover:bg-rose-950/30 rounded-full"
-                    >
-                      <IconTrash size={16} />
-                    </Button>
-                    <Button
-                      onClick={() => stopRecording(false)}
-                      className="size-8 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full flex items-center justify-center p-0"
-                    >
-                      <IconSend size={14} />
-                    </Button>
+                ) : (
+                  <div className="flex min-h-[52px] items-center gap-1 px-2">
+                    <WaIconButton title="Adjuntar" onClick={() => { setShowAttachMenu(!showAttachMenu); setShowEmojiPicker(false); }} className={cn(showAttachMenu && "bg-black/5")}>
+                      <IconPaperclip size={23} className="-rotate-45" />
+                    </WaIconButton>
+                    <WaIconButton title="Emojis" onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowAttachMenu(false); }} className={cn(showEmojiPicker && "bg-black/5")}>
+                      <IconMoodSmile size={23} />
+                    </WaIconButton>
+                    <input
+                      ref={inputRef}
+                      placeholder="Escribe un mensaje"
+                      value={inputText}
+                      onChange={(e) => { setInputText(e.target.value); notifyTyping(e.target.value); }}
+                      onFocus={() => { setShowEmojiPicker(false); setShowAttachMenu(false); }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
+                        if (e.key === "Escape") setReplyTo(null);
+                      }}
+                      className="h-10 min-w-0 flex-1 bg-transparent px-2 text-[15px] text-[#111B21] outline-none placeholder:text-[#667781] dark:text-zinc-100"
+                    />
+                    {inputText.trim() ? (
+                      <button type="button" onClick={handleSendMessage} disabled={sendingMessage} title="Enviar" className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#1DAA61] text-white transition-colors hover:bg-[#189a57] disabled:opacity-60">
+                        <IconSend size={19} />
+                      </button>
+                    ) : (
+                      <WaIconButton title="Grabar audio" onClick={startRecording}>
+                        <IconMicrophone size={23} />
+                      </WaIconButton>
+                    )}
                   </div>
-                </div>
-              ) : (
-                // Standard Input Bar
-                <div className="flex-1 flex items-center bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full px-2 py-0.5 focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-500 transition-shadow">
-                  {/* Emoji Button inside the wrapper */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowAttachMenu(false); }}
-                    className={`size-7 rounded-full shrink-0 ${showEmojiPicker ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-500 hover:text-zinc-750"}`}
-                  >
-                    <IconMoodSmile size={18} />
-                  </Button>
-                  
-                  {/* Plus Button inside the wrapper */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => { setShowAttachMenu(!showAttachMenu); setShowEmojiPicker(false); }}
-                    className={`size-7 rounded-full shrink-0 ${showAttachMenu ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-500 hover:text-zinc-750"}`}
-                  >
-                    <IconPlus size={18} />
-                  </Button>
-
-                  {/* Text Input */}
-                  <Input
-                    ref={inputRef}
-                    placeholder="Escribe un mensaje de WhatsApp..."
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    onFocus={() => { setShowEmojiPicker(false); setShowAttachMenu(false); }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    className="flex-1 border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-2 py-1 h-7 text-xs text-zinc-850 dark:text-zinc-150"
-                  />
-
-                  {/* Action button inside the wrapper */}
-                  {inputText.trim() ? (
-                    <Button
-                      onClick={handleSendMessage}
-                      disabled={sendingMessage}
-                      className="size-7 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full flex items-center justify-center p-0 border-none shadow-sm shrink-0"
-                    >
-                      <IconSend size={12} />
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={startRecording}
-                      className="size-7 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-650 dark:text-zinc-300 rounded-full flex items-center justify-center p-0 border-none shadow-sm shrink-0"
-                    >
-                      <IconMicrophone size={13} />
-                    </Button>
-                  )}
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </>
         ) : (
-          <div className="flex flex-col items-center justify-center flex-1 text-zinc-400 text-xs">
-            <IconBrandWhatsapp size={48} className="mb-3 opacity-30 text-emerald-500" />
-            Selecciona un chat en la barra lateral para comenzar.
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-[#F7F5F3] px-8 text-center dark:bg-zinc-950">
+            <span className="flex size-20 items-center justify-center rounded-full bg-[#D9FDD3] text-[#1DAA61]"><IconBrandWhatsapp size={40} /></span>
+            <p className="text-[22px] font-light text-[#41525D] dark:text-zinc-200">WhatsApp de tu negocio</p>
+            <p className="max-w-md text-[14px] text-[#667781]">Elige un chat para leer y responder. Las facturas que envías desde el punto de venta también aparecen aquí.</p>
           </div>
         )}
       </main>
 
-      {/* ─── BARRA LATERAL DERECHA: FICHA DEL CLIENTE ────────────────────── */}
-      {activeChat && activeChat.client && (
-        <aside className="w-[280px] xl:w-[320px] shrink-0 border-l border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-950/40 p-4 flex flex-col gap-4 overflow-y-auto hidden lg:flex">
-          <div className="flex flex-col items-center text-center pb-3 border-b border-zinc-150 dark:border-zinc-900">
-            <div className="size-14 rounded-full bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center overflow-hidden font-bold text-lg border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-200 shrink-0">
-              {activeChat.avatarUrl || avatars[activeChat.id] ? (
-                <img src={activeChat.avatarUrl || avatars[activeChat.id]!} alt="Avatar" className="size-full object-cover" />
-              ) : (
-                activeChat.client.name.charAt(0)
-              )}
-            </div>
-            <h4 className="text-xs font-bold text-zinc-850 dark:text-zinc-100 mt-2.5 truncate max-w-full">
-              {activeChat.client.name}
-            </h4>
-            <p className="text-[10px] font-mono text-zinc-400 mt-0.5">{activeChat.client.documentId || "Sin RIF"}</p>
-          </div>
-
-          <div className="space-y-3 flex-1">
-            {/* Score */}
-            <div className="flex justify-between items-center text-[10px] border-b border-zinc-100 dark:border-zinc-900/60 pb-2">
-              <span className="text-zinc-400 font-bold uppercase tracking-tight">Syncro Score</span>
-              {(() => {
-                const stars = Math.round((activeChat.client.creditScore || 0) / 20);
-                const color = stars >= 4 ? "text-emerald-500" : stars >= 2 ? "text-amber-400" : "text-rose-400";
-                return (
-                  <div className={`flex items-center gap-0.5 ${color} font-black`}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                    </svg>
-                    <span>{stars}/5</span>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Financial indicators */}
-            <div className="grid grid-cols-2 gap-2.5 pt-1">
-              <div className="p-3 rounded-xl bg-rose-500/5 dark:bg-rose-500/10 border border-rose-200/20 space-y-1">
-                <span className="text-[8px] font-bold text-rose-500 uppercase tracking-widest">Deuda Actual</span>
-                <p className="text-sm font-black text-rose-600 dark:text-rose-455 tabular-nums">${activeChat.client.currentDebt.toFixed(2)}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-200/20 space-y-1">
-                <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Límite Autorizado</span>
-                <p className="text-sm font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
-                  {activeChat.client.creditLimit === 0 ? "Tradicional" : `$${activeChat.client.creditLimit.toFixed(0)}`}
-                </p>
-              </div>
-            </div>
-
-            {/* Contact Details */}
-            <div className="space-y-2 pt-2 text-[10px]">
-              <span className="font-bold text-zinc-400 uppercase tracking-widest block">Información de Contacto</span>
-              {activeChat.client.phone && (
-                <div className="flex items-center gap-1.5 text-zinc-650 dark:text-zinc-350">
-                  <IconDeviceMobile size={12} className="text-zinc-400 shrink-0" />
-                  <span>{activeChat.client.phone}</span>
-                </div>
-              )}
-              {activeChat.client.email && (
-                <div className="flex items-center gap-1.5 text-zinc-650 dark:text-zinc-350">
-                  <IconUser size={12} className="text-zinc-400 shrink-0" />
-                  <span className="truncate">{activeChat.client.email}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="space-y-2 pt-4 border-t border-zinc-150 dark:border-zinc-900 shrink-0">
-            {activeChat.client.currentDebt > 0 && (
-              <>
-                <Button
-                  onClick={handleSendReminder}
-                  disabled={sendingMessage}
-                  className="w-full h-10 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-850 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 font-bold text-xs flex items-center justify-center gap-1.5"
-                >
-                  <IconAlertCircle size={14} className="text-amber-500" /> Enviar Cobro WhatsApp
-                </Button>
-                <Button
-                  onClick={handleOpenPayment}
-                  className="w-full h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 border-none shadow-md"
-                >
-                  <IconCash size={14} /> Registrar Abono
-                </Button>
-              </>
-            )}
-          </div>
-        </aside>
+      {/* ─── INFO DEL CONTACTO (drawer) ─────────────────────────────────── */}
+      {activeChat && contactInfoOpen && (
+        <ContactInfoDrawer
+          className="absolute inset-y-0 right-0 z-30 w-full max-w-[420px] shadow-[-8px_0_24px_rgba(11,20,26,.12)] animate-in slide-in-from-right-8 fade-in duration-200 xl:static xl:w-[400px] xl:shrink-0 xl:shadow-none"
+          chat={activeChat}
+          displayName={getChatDisplayName(activeChat)}
+          avatarSrc={activeChat.avatarUrl || avatars[activeChat.id]}
+          messages={messages}
+          messageMedia={messageMedia}
+          customLists={customLists}
+          sending={sendingMessage}
+          onClose={() => setContactInfoOpen(false)}
+          onSearch={() => { setChatSearchOpen(true); setChatSearch(""); }}
+          onToggle={(property, current) => toggleChatProperty(activeChat.id, property, current)}
+          onToggleList={(listName) => toggleChatList(activeChat.id, listName)}
+          onClear={() => handleClearChat(activeChat.id)}
+          onDelete={() => { setContactInfoOpen(false); handleDeleteChat(activeChat.id); }}
+          onSendReminder={handleSendReminder}
+          onOpenPayment={handleOpenPayment}
+        />
       )}
             </>
           )}
@@ -1947,7 +1874,7 @@ export default function WhatsAppChatPage() {
               <IconBrandWhatsapp size={20} className="text-emerald-500" /> Vincular WhatsApp Web
             </DialogTitle>
             <DialogDescription className="text-xs mt-1">
-              Escanea el código QR desde la aplicación de WhatsApp de tu teléfono (Dispositivos Vinculados).
+              Escanea el código QR desde la aplicación de WhatsApp de tu teléfono (dispositivos vinculados).
             </DialogDescription>
           </DialogHeader>
 
@@ -1955,12 +1882,12 @@ export default function WhatsAppChatPage() {
             {loadingQr ? (
               <div className="flex flex-col items-center justify-center gap-2">
                 <div className="size-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
-                <p className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider animate-pulse">Generando instancia...</p>
+                <p className="text-[10px] text-zinc-400 font-semibold animate-pulse">Generando instancia...</p>
               </div>
             ) : qrCode ? (
               <div className="p-3 bg-white rounded-xl border border-zinc-200 shadow-inner">
                 {/* QR Code Container */}
-                <img src={qrCode.startsWith("data:") ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code" className="w-[180px] h-[180px]" />
+                <img src={qrCode.startsWith("data:") ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR code" className="w-[180px] h-[180px]" />
               </div>
             ) : (
               <div className="text-xs text-rose-500 flex items-center gap-1">
@@ -1980,110 +1907,12 @@ export default function WhatsAppChatPage() {
       </Dialog>
 
       {/* ─── DIALOG DE NUEVO CHAT ───────────────────────────────────────── */}
-      <Dialog open={newChatOpen} onOpenChange={setNewChatOpen}>
-        <DialogContent className="rounded-2xl p-6 max-w-md border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-200">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-bold flex items-center gap-2 text-zinc-850 dark:text-zinc-100">
-              <IconMessage size={18} className="text-emerald-500" /> Iniciar Nueva Conversación
-            </DialogTitle>
-            <DialogDescription className="text-xs mt-1">
-              Selecciona un cliente registrado o ingresa un número de WhatsApp personalizado para iniciar.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-3">
-            {/* Custom Phone section */}
-            <div className="p-3.5 rounded-xl border border-zinc-150 dark:border-zinc-850 bg-zinc-50/50 dark:bg-zinc-950/20 space-y-3">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Número Personalizado</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  placeholder="Ej. 584121234567"
-                  className="rounded-xl h-9 text-xs"
-                  value={customPhone}
-                  onChange={(e) => setCustomPhone(e.target.value)}
-                />
-                <Input
-                  placeholder="Nombre opcional"
-                  className="rounded-xl h-9 text-xs"
-                  value={customName}
-                  onChange={(e) => setCustomName(e.target.value)}
-                />
-              </div>
-              <Button
-                onClick={handleStartCustomChat}
-                className="w-full h-9 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs border-none shadow-sm"
-              >
-                Iniciar Chat Manual
-              </Button>
-            </div>
-
-            {/* Clients List search section */}
-            <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Buscar Cliente Registrado</Label>
-              <Input
-                placeholder="Buscar por nombre o documento..."
-                className="rounded-xl h-9 text-xs"
-                value={newChatSearch}
-                onChange={(e) => setNewChatSearch(e.target.value)}
-              />
-
-              <div className="max-h-[180px] overflow-y-auto border border-zinc-150 dark:border-zinc-900 rounded-xl divide-y divide-zinc-100 dark:divide-zinc-900/60">
-                {loadingClients ? (
-                  <div className="text-center py-6 text-zinc-400 text-xs animate-pulse font-semibold">Cargando clientes...</div>
-                ) : clientsList.length === 0 ? (
-                  <div className="text-center py-6 text-zinc-450 text-xs">No hay clientes registrados</div>
-                ) : (
-                  (() => {
-                    const filtered = clientsList.filter(c => 
-                      c.name?.toLowerCase().includes(newChatSearch.toLowerCase()) ||
-                      c.documentId?.includes(newChatSearch)
-                    );
-                    if (filtered.length === 0) {
-                      return <div className="text-center py-6 text-zinc-450 text-xs">Sin coincidencias</div>;
-                    }
-                    return filtered.map(c => (
-                      <div
-                        key={c.id}
-                        onClick={() => handleSelectClientForChat(c)}
-                        className="p-2.5 text-xs hover:bg-zinc-50 dark:hover:bg-zinc-900/30 cursor-pointer flex justify-between items-center"
-                      >
-                        <div>
-                          <p className="font-bold text-zinc-800 dark:text-zinc-200">{c.name}</p>
-                          <p className="text-[10px] text-zinc-450 font-mono">{c.documentId || "Sin RIF"}</p>
-                        </div>
-                        {c.phone ? (
-                          <span className="text-[10px] text-emerald-600 dark:text-emerald-450 font-mono font-bold">
-                            +{c.phone}
-                          </span>
-                        ) : (
-                          <span className="text-[9px] text-rose-500 font-bold">Sin teléfono</span>
-                        )}
-                      </div>
-                    ));
-                  })()
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-2 justify-end">
-            <Button
-              variant="outline"
-              onClick={() => setNewChatOpen(false)}
-              className="w-full h-10 border-zinc-200 dark:border-zinc-800 bg-transparent rounded-xl"
-            >
-              Cancelar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* ─── DIALOG DE ABONO ─────────────────────────────────────────────── */}
       <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
         <DialogContent className="rounded-2xl p-6 max-w-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-205">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2 text-emerald-500">
-              <IconCash size={20} /> Recibir Abono
+              <IconCash size={20} /> Recibir abono
             </DialogTitle>
             <DialogDescription className="text-xs mt-1">
               Registra un pago para <strong>{activeChat?.client?.name}</strong> — Deuda actual: <strong className="text-rose-500">${activeChat?.client?.currentDebt?.toFixed(2)}</strong>
@@ -2092,7 +1921,7 @@ export default function WhatsAppChatPage() {
 
           <div className="grid gap-4 py-3">
             <div className="space-y-1">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Moneda de Pago</Label>
+              <Label className="text-[10px] font-bold text-zinc-400">Moneda de pago</Label>
               <select
                 value={paymentCurrency}
                 onChange={(e: any) => { setPaymentCurrency(e.target.value); setPaidAmountRaw(""); setCustomRate(""); }}
@@ -2100,12 +1929,12 @@ export default function WhatsAppChatPage() {
               >
                 <option value="USD">Dólares (USD)</option>
                 <option value="VES">Bolívares (VES)</option>
-                <option value="COP">Pesos Colombianos (COP)</option>
+                <option value="COP">Pesos colombianos (cop)</option>
               </select>
             </div>
             {paymentCurrency !== "USD" && (
               <div className="space-y-1">
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Tasa de Cambio</Label>
+                <Label className="text-[10px] font-bold text-zinc-400">Tasa de cambio</Label>
                 <Input
                   type="number"
                   className="rounded-xl h-10 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-xs"
@@ -2116,7 +1945,7 @@ export default function WhatsAppChatPage() {
               </div>
             )}
             <div className="space-y-1">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Monto Recibido ({paymentCurrency})</Label>
+              <Label className="text-[10px] font-bold text-zinc-400">Monto recibido ({paymentCurrency})</Label>
               <Input
                 type="number"
                 className="rounded-xl h-11 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-base font-bold text-center"
@@ -2127,14 +1956,14 @@ export default function WhatsAppChatPage() {
             </div>
             {paymentCurrency !== "USD" && (
               <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/10 flex justify-between items-center text-xs">
-                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1">
+                <span className="text-[10px] font-black text-emerald-500 flex items-center gap-1">
                   <IconInfoCircle size={12} /> Equivalente USD
                 </span>
                 <span className="text-base font-black text-emerald-600 dark:text-emerald-400">${paymentAmount || "0.00"}</span>
               </div>
             )}
             <div className="space-y-1">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Concepto / Notas</Label>
+              <Label className="text-[10px] font-bold text-zinc-400">Concepto / notas</Label>
               <Input
                 placeholder="Ej. Pago móvil, efectivo..."
                 className="rounded-xl h-10 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-xs"
@@ -2151,7 +1980,7 @@ export default function WhatsAppChatPage() {
               disabled={isSubmittingPayment}
               className="flex-1 rounded-xl h-11 bg-emerald-600 hover:bg-emerald-500 text-white font-bold border-none"
             >
-              {isSubmittingPayment ? "Procesando..." : "Confirmar Abono"}
+              {isSubmittingPayment ? "Procesando..." : "Confirmar abono"}
             </Button>
           </div>
         </DialogContent>
@@ -2162,7 +1991,7 @@ export default function WhatsAppChatPage() {
         <DialogContent className="rounded-2xl p-6 max-w-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-200">
           <DialogHeader>
             <DialogTitle className="text-sm font-bold flex items-center gap-2 text-zinc-850 dark:text-zinc-100">
-              <IconFolderPlus size={18} className="text-emerald-500" /> Crear Nueva Lista
+              <IconFolderPlus size={18} className="text-emerald-500" /> Crear nueva lista
             </DialogTitle>
             <DialogDescription className="text-xs mt-1">
               Ingresa el nombre de la lista para agrupar tus conversaciones de WhatsApp.
@@ -2172,7 +2001,7 @@ export default function WhatsAppChatPage() {
           <div className="py-4 space-y-3">
             <Label className="text-xs font-bold text-zinc-500">Nombre de la lista</Label>
             <Input
-              placeholder="Ej. Clientes VIP, Prospectos..."
+              placeholder="Ej. Clientes vip, prospectos..."
               value={newListName}
               onChange={(e) => setNewListName(e.target.value)}
               onKeyDown={(e) => {
@@ -2196,7 +2025,7 @@ export default function WhatsAppChatPage() {
               onClick={handleCreateList}
               className="flex-1 h-10 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold border-none"
             >
-              Crear Lista
+              Crear lista
             </Button>
           </div>
         </DialogContent>
@@ -2207,7 +2036,7 @@ export default function WhatsAppChatPage() {
         <DialogContent className="rounded-2xl p-6 max-w-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-200">
           <DialogHeader>
             <DialogTitle className="text-sm font-bold flex items-center gap-2 text-zinc-850 dark:text-zinc-100">
-              <IconLock size={18} className="text-emerald-500" /> Configurar Bloqueo de App
+              <IconLock size={18} className="text-emerald-500" /> Configurar bloqueo de app
             </DialogTitle>
             <DialogDescription className="text-xs mt-1">
               Establece un PIN numérico para proteger tus conversaciones. Déjalo vacío para desactivar el bloqueo.
@@ -2215,13 +2044,13 @@ export default function WhatsAppChatPage() {
           </DialogHeader>
 
           <div className="py-4 space-y-3">
-            <Label className="text-xs font-bold text-zinc-500">PIN de Seguridad (4+ dígitos)</Label>
+            <Label className="text-xs font-bold text-zinc-500">PIN de seguridad (4+ dígitos)</Label>
             <Input
               type="password"
               placeholder="Ingresa PIN o deja vacío para desactivar"
               value={lockPassword}
               onChange={(e) => setLockPassword(e.target.value)}
-              className="h-10 rounded-xl text-xs text-center font-bold tracking-widest bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-850 dark:text-zinc-150"
+              className="h-10 rounded-xl text-xs text-center font-bold bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-850 dark:text-zinc-150"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   handleSaveAppLock();
@@ -2266,7 +2095,7 @@ export default function WhatsAppChatPage() {
               placeholder="PIN de seguridad"
               value={restrictedUnlockInput}
               onChange={(e) => setRestrictedUnlockInput(e.target.value)}
-              className="h-10 rounded-xl text-xs text-center font-bold tracking-widest bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-850 dark:text-zinc-150"
+              className="h-10 rounded-xl text-xs text-center font-bold bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-850 dark:text-zinc-150"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   handleVerifyRestrictedLock();

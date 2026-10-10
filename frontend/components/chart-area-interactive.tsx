@@ -68,9 +68,9 @@ export function ChartAreaInteractive({ data = [] }: { data?: any[] }) {
     <Card className="@container/card border-none shadow-sm bg-card/50 overflow-hidden">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="grid gap-1">
-          <CardTitle className="text-sm font-black uppercase tracking-[0.2em] text-[#79716b]">Tendencia de Ventas</CardTitle>
-          <CardDescription className="text-[10px] uppercase font-bold text-muted-foreground/60">
-            Ingresos vs Volumen de Órdenes diarias
+          <CardTitle className="text-sm font-black text-[#79716b]">Tendencia de ventas</CardTitle>
+          <CardDescription className="text-[10px] font-bold text-muted-foreground/60">
+            Ingresos vs volumen de órdenes diarias
           </CardDescription>
         </div>
         <CardAction>

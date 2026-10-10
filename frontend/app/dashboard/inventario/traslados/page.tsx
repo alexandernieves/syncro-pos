@@ -179,11 +179,11 @@ export default function TrasladosPage() {
     <div className="flex flex-col gap-6 py-4 md:gap-8 md:py-6 font-sans px-4 lg:px-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Traslados de Inventario</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Traslados de inventario</h1>
           <p className="text-muted-foreground">Mueve mercancía entre tus bodegas de forma segura.</p>
         </div>
         <Button onClick={() => setIsCreateOpen(true)} className="rounded-xl shadow-lg shadow-primary/20">
-          <IconPlus className="mr-2 h-4 w-4" /> Nuevo Traslado
+          <IconPlus className="mr-2 h-4 w-4" /> Nuevo traslado
         </Button>
       </div>
 
@@ -207,7 +207,7 @@ export default function TrasladosPage() {
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between mb-2">
                     <Badge variant={t.status === 'COMPLETED' ? 'default' : t.status === 'CANCELLED' ? 'destructive' : 'secondary'} className="rounded-full px-3">
-                      {t.status === 'COMPLETED' ? 'Completado' : t.status === 'CANCELLED' ? 'Cancelado' : 'En Tránsito'}
+                      {t.status === 'COMPLETED' ? 'Completado' : t.status === 'CANCELLED' ? 'Cancelado' : 'En tránsito'}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
                       {format(new Date(t.createdAt), "dd MMM yyyy", { locale: es })}
@@ -215,19 +215,19 @@ export default function TrasladosPage() {
                   </div>
                   <div className="flex items-center gap-3 text-sm font-medium">
                     <div className="flex flex-col">
-                      <span className="text-[10px] uppercase text-muted-foreground">Origen</span>
+                      <span className="text-[10px] text-muted-foreground">Origen</span>
                       <span className="truncate max-w-[100px]">{t.sourceBranch.name}</span>
                     </div>
                     <IconArrowRight size={16} className="text-muted-foreground" />
                     <div className="flex flex-col">
-                      <span className="text-[10px] uppercase text-muted-foreground">Destino</span>
+                      <span className="text-[10px] text-muted-foreground">Destino</span>
                       <span className="truncate max-w-[100px]">{t.destinationBranch.name}</span>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="pb-4">
                   <div className="space-y-2">
-                    <span className="text-[10px] uppercase text-muted-foreground font-bold">Items</span>
+                    <span className="text-[10px] text-muted-foreground font-bold">Items</span>
                     <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-2 text-sm">
                       {t.items.slice(0, 2).map((item: any) => (
                         <div key={item.id} className="flex justify-between py-1">
@@ -267,7 +267,7 @@ export default function TrasladosPage() {
         <DialogContent className="max-w-[95vw] lg:max-w-[90vw] xl:max-w-7xl rounded-3xl p-6">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-              <IconTruck className="text-primary" /> Nuevo Traslado de Mercancía
+              <IconTruck className="text-primary" /> Nuevo traslado de mercancía
             </DialogTitle>
             <DialogDescription>
               Retira mercancía de tu bodega actual para enviarla a otra sucursal.
@@ -276,7 +276,7 @@ export default function TrasladosPage() {
 
           <div className="grid gap-6 py-4">
             <div className="space-y-2">
-              <Label>Sucursal de Destino</Label>
+              <Label>Sucursal de destino</Label>
               <Select value={targetBranchId} onValueChange={setTargetBranchId}>
                 <SelectTrigger className="rounded-xl h-12">
                   <SelectValue placeholder="Selecciona la bodega destino" />
@@ -291,14 +291,14 @@ export default function TrasladosPage() {
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <Label className="text-lg font-bold">Productos a Trasladar</Label>
+                <Label className="text-lg font-bold">Productos a trasladar</Label>
                 <Badge variant="outline" className="font-bold">{selectedItems.length} seleccionados</Badge>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-[550px]">
                 {/* Selector de productos */}
                 <div className="border rounded-2xl overflow-hidden flex flex-col">
-                  <div className="bg-muted p-2 text-xs font-bold uppercase tracking-wider">Catálogo Master</div>
+                  <div className="bg-muted p-2 text-xs font-bold">Catálogo master</div>
                   <ScrollArea className="flex-1 p-2">
                     <div className="space-y-1">
                       {products.map(p => (
@@ -319,7 +319,7 @@ export default function TrasladosPage() {
 
                 {/* Lista de seleccionados */}
                 <div className="border rounded-2xl overflow-hidden flex flex-col bg-zinc-50 dark:bg-zinc-900/50">
-                  <div className="bg-primary/10 p-2 text-xs font-bold uppercase tracking-wider text-primary">Para enviar</div>
+                  <div className="bg-primary/10 p-2 text-xs font-bold text-primary">Para enviar</div>
                   <ScrollArea className="flex-1 p-2">
                     <div className="space-y-2">
                       {selectedItems.map(item => (
@@ -357,7 +357,7 @@ export default function TrasladosPage() {
               disabled={isSubmitting || selectedItems.length === 0}
               className="rounded-xl h-12 px-8 bg-primary shadow-lg shadow-primary/30"
             >
-              {isSubmitting ? "Procesando..." : "Confirmar Envío"}
+              {isSubmitting ? "Procesando..." : "Confirmar envío"}
             </Button>
           </DialogFooter>
         </DialogContent>
