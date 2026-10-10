@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { ClassNoticeKind, GymRemindersService } from './gym-reminders.service';
@@ -133,6 +133,23 @@ export class GymNotificationsService {
     } catch (e) {
       await this.prisma.gymNotification.create({ data: { ...base, status: 'FAILED', error: String(e.message).slice(0, 300) } });
       return false;
+    }
+  }
+
+  /** A one-off message to a member (their routine, a note from the trainer), logged like the notices. */
+  async sendToMember(businessId: string, memberId: string, kind: string, text: string) {
+    const member = await this.prisma.gymMember.findFirst({ where: { id: memberId, businessId }, include: { client: { select: { phone: true } } } });
+    if (!member) throw new NotFoundException('Socio no encontrado');
+    if (!member.client.phone) throw new BadRequestException('El socio no tiene WhatsApp registrado');
+    if (!(await this.whatsapp.getStatus(businessId)).connected) throw new BadRequestException('El WhatsApp del negocio no está conectado');
+    const base = { businessId, memberId, kind, phone: member.client.phone, text: text.slice(0, 4000) };
+    try {
+      await this.whatsapp.sendTextMessage(member.client.phone, text, businessId);
+      await this.prisma.gymNotification.create({ data: { ...base, status: 'SENT' } });
+      return { sent: true };
+    } catch (e) {
+      await this.prisma.gymNotification.create({ data: { ...base, status: 'FAILED', error: String(e.message).slice(0, 300) } });
+      throw e;
     }
   }
 

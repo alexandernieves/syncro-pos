@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SignaturePad, type SignaturePadHandle } from "@/components/gym/signature-pad";
+import { type Progress, ProgressSummary } from "@/components/gym/progress";
+import type { Routine } from "@/components/gym/routine-builder";
 import { IconBarbell, IconCalendarEvent, IconCheck, IconChevronRight, IconClock, IconFileText, IconHourglass, IconLoader2, IconMapPin, IconUser, IconX } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { API_URL } from "@/lib/constants";
@@ -173,6 +175,124 @@ function PendingDocuments({ onChange }: { onChange?: () => void }) {
         </button>
       ))}
       {open && <SignSheet doc={open} onClose={() => setOpen(null)} onSigned={() => { setOpen(null); load(); onChange?.(); }} />}
+    </section>
+  );
+}
+
+// ── Routine, progress and reports ────────────────────────────────────────────
+
+function MyTraining() {
+  const [data, setData] = useState<{ routine: Routine | null; logs: { id: string; dayIndex: number | null; dayName: string | null; doneAt: string }[]; workoutsLast4Weeks: number; assessments: Progress } | null>(null);
+  const [openDay, setOpenDay] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => { portalApi<NonNullable<typeof data>>("/training").then(setData).catch(() => {}); }, []);
+  useEffect(load, [load]);
+  if (!data || (!data.routine && !data.assessments.items.length)) return null;
+  const r = data.routine;
+  const lastFor = (i: number) => data.logs.find((l) => l.dayIndex === i)?.doneAt;
+  const done = async (i: number) => {
+    if (!r) return;
+    setBusy(true);
+    try {
+      await portalApi("/workouts", "POST", { routineId: r.id, dayIndex: i });
+      toast.success(`¡Bien hecho! Registraste ${r.days[i].name}`);
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      {r && (
+        <section className="space-y-2">
+          <div className="flex items-baseline justify-between px-1">
+            <h3 className="text-sm font-bold text-zinc-900">Mi rutina</h3>
+            <span className="text-[11px] text-zinc-500">{data.workoutsLast4Weeks === 1 ? "1 entreno" : `${data.workoutsLast4Weeks} entrenos`} en 4 semanas</span>
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm">
+            <div className="border-b border-zinc-100 px-4 py-3">
+              <p className="text-sm font-bold text-zinc-900">{r.name}</p>
+              {r.goal && <p className="text-xs text-zinc-500">{r.goal}</p>}
+            </div>
+            {r.days.map((d, i) => {
+              const last = lastFor(i);
+              const isOpen = openDay === i;
+              return (
+                <div key={i} className="border-b border-zinc-100 last:border-0">
+                  <button type="button" onClick={() => setOpenDay(isOpen ? null : i)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-sm font-black text-amber-800">{String.fromCharCode(65 + i)}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-zinc-900">{d.name}</span>
+                      <span className="block text-[11px] text-zinc-500">{d.exercises.length} ejercicios{last ? ` · último ${fmt(last, "America/Caracas", { weekday: "short", day: "numeric" })}` : ""}</span>
+                    </span>
+                    <IconChevronRight size={16} className={cn("shrink-0 text-zinc-400 transition", isOpen && "rotate-90")} />
+                  </button>
+                  {isOpen && (
+                    <div className="space-y-2 px-4 pb-4">
+                      {d.exercises.map((e, k) => (
+                        <div key={k} className="flex items-center justify-between gap-3 rounded-xl bg-zinc-50 px-3 py-2">
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium text-zinc-800">{e.name}</span>
+                            {e.notes && <span className="block truncate text-[11px] text-zinc-500">{e.notes}</span>}
+                          </span>
+                          <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-zinc-700">{e.sets} × {e.reps}{e.weight ? <span className="block font-normal text-zinc-500">{e.weight}</span> : null}</span>
+                        </div>
+                      ))}
+                      <button type="button" disabled={busy} onClick={() => done(i)} className="flex w-full items-center justify-center gap-2 rounded-full bg-zinc-900 py-2.5 text-sm font-bold text-white disabled:opacity-50">
+                        {busy ? <IconLoader2 size={16} className="animate-spin" /> : <IconCheck size={16} />} Terminé este día
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+      {data.assessments.items.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="px-1 text-sm font-bold text-zinc-900">Mi progreso</h3>
+          <div className="rounded-2xl border border-zinc-100 bg-white p-3 shadow-sm"><ProgressSummary progress={data.assessments} compact /></div>
+        </section>
+      )}
+    </>
+  );
+}
+
+function ReportMachine() {
+  const [open, setOpen] = useState(false);
+  const [list, setList] = useState<{ id: string; name: string; area: string | null }[]>([]);
+  const [equipmentId, setEquipmentId] = useState("");
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (open && !list.length) portalApi<typeof list>("/equipment").then((l) => { setList(l); setEquipmentId(l[0]?.id ?? ""); }).catch(() => {}); }, [open, list.length]);
+  const send = async () => {
+    setBusy(true);
+    try {
+      await portalApi("/equipment-report", "POST", { equipmentId, text });
+      toast.success("Gracias por avisar. El equipo del gimnasio lo va a revisar");
+      setOpen(false);
+      setText("");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!open) return <button type="button" onClick={() => setOpen(true)} className="w-full py-1 text-center text-xs font-medium text-zinc-500 underline-offset-2 hover:underline">¿Una máquina no funciona? Avísanos</button>;
+  return (
+    <section className="space-y-2 rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm">
+      <p className="text-sm font-bold text-zinc-900">Reportar una máquina</p>
+      <select value={equipmentId} onChange={(e) => setEquipmentId(e.target.value)} className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm">
+        {list.map((e) => <option key={e.id} value={e.id}>{e.name}{e.area ? ` · ${e.area}` : ""}</option>)}
+      </select>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="¿Qué le pasa?" className="w-full resize-none rounded-xl border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-amber-400" />
+      <div className="flex gap-2">
+        <button type="button" disabled={busy || !equipmentId || !text.trim()} onClick={send} className="flex-1 rounded-full bg-amber-400 py-2 text-sm font-bold text-amber-950 disabled:opacity-40">Enviar</button>
+        <button type="button" onClick={() => setOpen(false)} className="rounded-full px-4 py-2 text-sm text-zinc-500">Cancelar</button>
+      </div>
     </section>
   );
 }
@@ -413,6 +533,8 @@ export function PortalGym() {
         )}
       </section>
 
+      <MyTraining />
+
       {/* Visits */}
       {me.visits.length > 0 && (
         <section className="rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm">
@@ -427,6 +549,7 @@ export function PortalGym() {
           </div>
         </section>
       )}
+      <ReportMachine />
     </div>
   );
 }

@@ -14,12 +14,14 @@ import { GymStaffService } from './gym-staff.service';
 import { GymVisitsService } from './gym-visits.service';
 import { GymAutomationService } from './gym-automation.service';
 import { GymDocumentsService } from './gym-documents.service';
+import { GymEquipmentService } from './gym-equipment.service';
+import { GymTrainingService } from './gym-training.service';
 import { GymService } from './gym.service';
 
 @Module({
   imports: [PrismaModule, WhatsAppModule, UploadsModule],
   controllers: [GymPortalController, GymController],
-  providers: [GymService, GymRemindersService, GymClassesService, GymNotificationsService, GymPortalService, GymCrmService, GymStaffService, GymVisitsService, GymAutomationService, GymDocumentsService, GymStaffGuard, GymMemberGuard],
+  providers: [GymService, GymRemindersService, GymClassesService, GymNotificationsService, GymPortalService, GymCrmService, GymStaffService, GymVisitsService, GymAutomationService, GymDocumentsService, GymEquipmentService, GymTrainingService, GymStaffGuard, GymMemberGuard],
   exports: [GymService],
 })
 export class GymModule {}

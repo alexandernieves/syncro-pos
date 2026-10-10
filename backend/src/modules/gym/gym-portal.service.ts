@@ -4,6 +4,8 @@ import { GymService, membershipOwed } from './gym.service';
 import { GymClassesService } from './gym-classes.service';
 import { GymRemindersService } from './gym-reminders.service';
 import { GymDocumentsService } from './gym-documents.service';
+import { GymTrainingService } from './gym-training.service';
+import { GymEquipmentService } from './gym-equipment.service';
 
 const DAY = 24 * 60 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
@@ -25,7 +27,33 @@ export class GymPortalService {
     private classes: GymClassesService,
     private settings: GymRemindersService,
     private docs: GymDocumentsService,
+    private trainingService: GymTrainingService,
+    private equipmentService: GymEquipmentService,
   ) {}
+
+  /** The member's routine, recent workouts and body progress. */
+  async training(clientId: string, businessId: string) {
+    const { id } = await this.memberFor(clientId, businessId);
+    const [t, a] = await Promise.all([this.trainingService.memberTraining(businessId, id), this.trainingService.assessments(businessId, id)]);
+    return { routine: t.current, logs: t.logs.slice(0, 10), workoutsLast4Weeks: t.workoutsLast4Weeks, assessments: a };
+  }
+
+  async logWorkout(clientId: string, businessId: string, body: any) {
+    const { id } = await this.memberFor(clientId, businessId);
+    return this.trainingService.logWorkout(businessId, id, body);
+  }
+
+  async equipment(clientId: string, businessId: string) {
+    await this.memberFor(clientId, businessId);
+    return this.equipmentService.listForMembers(businessId);
+  }
+
+  async reportEquipment(clientId: string, businessId: string, body: { equipmentId?: string; text?: string }) {
+    const { id } = await this.memberFor(clientId, businessId);
+    const member = await this.prisma.gymMember.findUnique({ where: { id }, include: { client: { select: { name: true } } } });
+    const t = await this.equipmentService.report(businessId, { equipmentId: body.equipmentId, kind: 'REPAIR', title: (body.text || '').slice(0, 200) }, `Socio: ${member?.client.name ?? ''}`);
+    return { id: t.id };
+  }
 
   async documents(clientId: string, businessId: string) {
     const { id } = await this.memberFor(clientId, businessId);

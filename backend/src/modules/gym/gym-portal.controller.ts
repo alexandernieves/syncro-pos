@@ -34,6 +34,26 @@ export class GymPortalController {
     return this.portal.sign(req.user.id, req.user.businessId, id, body, req.ip, req.headers['user-agent']);
   }
 
+  @Get('training')
+  training(@Request() req: any) {
+    return this.portal.training(req.user.id, req.user.businessId);
+  }
+
+  @Post('workouts')
+  logWorkout(@Body() body: any, @Request() req: any) {
+    return this.portal.logWorkout(req.user.id, req.user.businessId, body);
+  }
+
+  @Get('equipment')
+  equipment(@Request() req: any) {
+    return this.portal.equipment(req.user.id, req.user.businessId);
+  }
+
+  @Post('equipment-report')
+  reportEquipment(@Body() body: any, @Request() req: any) {
+    return this.portal.reportEquipment(req.user.id, req.user.businessId, body);
+  }
+
   @Post('bookings/:id/cancel')
   cancel(@Param('id') id: string, @Request() req: any) {
     return this.portal.cancel(req.user.id, req.user.businessId, id);

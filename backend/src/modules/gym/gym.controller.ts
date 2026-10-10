@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Request, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GymService } from './gym.service';
 import { GymRemindersService } from './gym-reminders.service';
@@ -9,6 +9,8 @@ import { GymCrmService } from './gym-crm.service';
 import { GymStaffService } from './gym-staff.service';
 import { GymVisitsService } from './gym-visits.service';
 import { DOCUMENT_STARTERS, GymDocumentsService } from './gym-documents.service';
+import { GymEquipmentService } from './gym-equipment.service';
+import { GymTrainingService } from './gym-training.service';
 
 @UseGuards(JwtAuthGuard, GymStaffGuard)
 @Controller('gym')
@@ -22,7 +24,127 @@ export class GymController {
     private readonly staff: GymStaffService,
     private readonly visits: GymVisitsService,
     private readonly documents: GymDocumentsService,
+    private readonly equipment: GymEquipmentService,
+    private readonly training: GymTrainingService,
   ) {}
+
+  // Equipment and maintenance
+  @Get('equipment/stats')
+  equipmentStats(@Request() req: any) {
+    return this.equipment.stats(req.user.businessId);
+  }
+
+  @Get('equipment')
+  listEquipment(@Request() req: any) {
+    return this.equipment.list(req.user.businessId);
+  }
+
+  @Get('equipment/:id')
+  getEquipment(@Param('id') id: string, @Request() req: any) {
+    return this.equipment.get(req.user.businessId, id);
+  }
+
+  @Post('equipment')
+  createEquipment(@Body() body: any, @Request() req: any) {
+    return this.equipment.create(req.user.businessId, body);
+  }
+
+  @Put('equipment/:id')
+  updateEquipment(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.equipment.update(req.user.businessId, id, body);
+  }
+
+  @Post('maintenance')
+  reportMaintenance(@Body() body: any, @Request() req: any) {
+    return this.equipment.report(req.user.businessId, body, req.user.name);
+  }
+
+  @Patch('maintenance/:id')
+  maintenanceStatus(@Param('id') id: string, @Body('status') status: 'OPEN' | 'IN_PROGRESS', @Request() req: any) {
+    return this.equipment.setStatus(req.user.businessId, id, status);
+  }
+
+  @Post('maintenance/:id/complete')
+  completeMaintenance(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.equipment.complete(req.user.businessId, id, body, req.user.id);
+  }
+
+  // Training: exercises, routines, workouts, assessments
+  @Get('exercises')
+  listExercises(@Request() req: any) {
+    return this.training.listExercises(req.user.businessId);
+  }
+
+  @Post('exercises')
+  createExercise(@Body() body: any, @Request() req: any) {
+    return this.training.saveExercise(req.user.businessId, null, body);
+  }
+
+  @Put('exercises/:id')
+  updateExercise(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.training.saveExercise(req.user.businessId, id, body);
+  }
+
+  @Get('routines')
+  listRoutines(@Request() req: any) {
+    return this.training.listTemplates(req.user.businessId);
+  }
+
+  @Post('routines')
+  createRoutine(@Body() body: any, @Request() req: any) {
+    return this.training.createTemplate(req.user.businessId, body);
+  }
+
+  @Put('routines/:id')
+  updateRoutine(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.training.updateRoutine(req.user.businessId, id, body);
+  }
+
+  @Get('members/:id/training')
+  memberTraining(@Param('id') id: string, @Request() req: any) {
+    return this.training.memberTraining(req.user.businessId, id);
+  }
+
+  @Post('members/:id/routine')
+  assignRoutine(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.training.assign(req.user.businessId, id, body);
+  }
+
+  @Post('members/:id/routine/send')
+  sendRoutine(@Param('id') id: string, @Body('text') text: string, @Request() req: any) {
+    if (!text?.trim()) throw new BadRequestException('No hay rutina para enviar');
+    return this.notices.sendToMember(req.user.businessId, id, 'ROUTINE', text.trim());
+  }
+
+  @Post('members/:id/workouts')
+  logWorkout(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.training.logWorkout(req.user.businessId, id, body);
+  }
+
+  @Get('assessments')
+  recentAssessments(@Request() req: any) {
+    return this.training.recentAssessments(req.user.businessId);
+  }
+
+  @Get('members/:id/assessments')
+  memberAssessments(@Param('id') id: string, @Request() req: any) {
+    return this.training.assessments(req.user.businessId, id);
+  }
+
+  @Post('members/:id/assessments')
+  addAssessment(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.training.addAssessment(req.user.businessId, id, body);
+  }
+
+  @Put('assessments/:id')
+  updateAssessment(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.training.updateAssessment(req.user.businessId, id, body);
+  }
+
+  @Delete('assessments/:id')
+  deleteAssessment(@Param('id') id: string, @Request() req: any) {
+    return this.training.deleteAssessment(req.user.businessId, id);
+  }
 
   // Contracts and consents
   @Get('documents/starters')

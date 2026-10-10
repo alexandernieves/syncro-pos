@@ -26,7 +26,7 @@ const WRITE = process.argv.includes("--write");
 const ACRONYMS = [
   "IVA", "IGTF", "ISLR", "RUC", "NIF", "NIT", "RFC", "BCV", "USD", "VES", "EUR", "USDT", "RIF", "CI", "SKU", "PIN", "PWA", "POS", "CRM", "ERP", "API", "QR",
   "PDF", "CSV", "XLSX", "XLS", "JSON", "ID", "IDs", "SENIAT", "IA", "KPI", "KPIs", "URL", "SMS", "OK", "GPS", "IP", "EAN", "UPC", "UTC",
-  "COD", "OTP", "IN", "OUT", "FIFO", "LIFO", "IMEI", "NFC", "HTML", "CSS", "UI", "UX", "AM", "PM", "IGV", "S.A.", "C.A.", "2FA", "TV", "LED", "USB",
+  "COD", "OTP", "IN", "OUT", "FIFO", "LIFO", "IMEI", "NFC", "HTML", "CSS", "UI", "UX", "AM", "PM", "IGV", "S.A.", "C.A.", "2FA", "TV", "LED", "USB", "IMC",
 ];
 const PROPER = [
   "Syncro", "SyncroCredit", "Syncro Credit", "Syncro Shop", "Syncro POS", "Syncro Score", "Syncro IA", "WhatsApp Web", "WhatsApp", "Binance", "Zinli", "PayPal", "Zelle", "Google",

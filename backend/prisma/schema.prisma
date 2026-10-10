@@ -58,6 +58,12 @@ model Business {
   gymVisits             GymVisit[]
   gymDocumentTemplates  GymDocumentTemplate[]
   gymSignatures         GymSignature[]
+  gymEquipment          GymEquipment[]
+  gymMaintenance        GymMaintenance[]
+  gymExercises          GymExercise[]
+  gymRoutines           GymRoutine[]
+  gymWorkoutLogs        GymWorkoutLog[]
+  gymAssessments        GymAssessment[]
 }
 
 model Conversation {
@@ -1305,6 +1311,9 @@ model GymMember {
   leads            GymLead[]
   hostedVisits     GymVisit[]        @relation("VisitHost")
   signatures       GymSignature[]
+  routines         GymRoutine[]
+  workoutLogs      GymWorkoutLog[]
+  assessments      GymAssessment[]
 
   @@unique([businessId, memberNumber])
 }
@@ -1428,6 +1437,8 @@ model GymTrainer {
   sessions     GymClassSession[]
   availability GymStaffAvailability[]
   shifts       GymStaffShift[]
+  routines     GymRoutine[]
+  assessments  GymAssessment[]
 
   @@index([businessId])
 }
@@ -1682,4 +1693,154 @@ model GymSignature {
 
   @@index([memberId], map: "GymSignature_member_idx")
   @@index([templateId, memberId], map: "GymSignature_template_member_idx")
+}
+
+/// A machine or piece of equipment of the gym
+model GymEquipment {
+  id               String           @id @default(uuid())
+  businessId       String
+  name             String
+  /// CARDIO, STRENGTH, FREE_WEIGHTS, FUNCTIONAL or OTHER
+  category         String           @default("STRENGTH")
+  brand            String?
+  model            String?
+  serial           String?
+  area             String?
+  photoUrl         String?
+  purchaseDate     DateTime?
+  purchasePrice    Float?
+  warrantyUntil    DateTime?
+  /// OK, NEEDS_SERVICE, OUT_OF_ORDER or RETIRED
+  status           String           @default("OK")
+  /// Preventive service every N days (0 = none)
+  serviceEveryDays Int              @default(0)
+  lastServiceAt    DateTime?
+  nextServiceAt    DateTime?
+  notes            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @default(now()) @updatedAt
+  business         Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  maintenance      GymMaintenance[]
+
+  @@index([businessId], map: "GymEquipment_business_idx")
+}
+
+/// A repair, a preventive service or an inspection of a machine
+model GymMaintenance {
+  id                String       @id @default(uuid())
+  businessId        String
+  equipmentId       String
+  /// REPAIR, PREVENTIVE or INSPECTION
+  kind              String       @default("REPAIR")
+  /// OPEN, IN_PROGRESS or DONE
+  status            String       @default("OPEN")
+  title             String
+  description       String?
+  /// Who reported it: staff name or "Socio: name"
+  reportedBy        String?
+  scheduledFor      DateTime?
+  doneAt            DateTime?
+  cost              Float?
+  vendor            String?
+  resolution        String?
+  accountingEntryId String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @default(now()) @updatedAt
+  business          Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  equipment         GymEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, status], map: "GymMaintenance_business_status_idx")
+  @@index([equipmentId], map: "GymMaintenance_equipment_idx")
+}
+
+/// An exercise of the library
+model GymExercise {
+  id           String   @id @default(uuid())
+  businessId   String
+  name         String
+  /// CHEST, BACK, LEGS, GLUTES, SHOULDERS, ARMS, CORE, CARDIO or FULL_BODY
+  muscleGroup  String
+  equipment    String?
+  instructions String?
+  videoUrl     String?
+  imageUrl     String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, muscleGroup], map: "GymExercise_business_group_idx")
+}
+
+/// A training plan by days. A template (no member) or a copy assigned to a member.
+model GymRoutine {
+  id          String          @id @default(uuid())
+  businessId  String
+  name        String
+  goal        String?
+  /// BEGINNER, INTERMEDIATE or ADVANCED
+  level       String          @default("BEGINNER")
+  description String?
+  memberId    String?
+  trainerId   String?
+  templateId  String?
+  /// [{ name, exercises: [{ exerciseId, name, sets, reps, weight, restSec, notes }] }]
+  days        Json
+  startsAt    DateTime?
+  endsAt      DateTime?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @default(now()) @updatedAt
+  business    Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  member      GymMember?      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  trainer     GymTrainer?     @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  logs        GymWorkoutLog[]
+
+  @@index([businessId, memberId], map: "GymRoutine_business_member_idx")
+}
+
+/// A workout the member did (from their app or at the gym)
+model GymWorkoutLog {
+  id         String      @id @default(uuid())
+  businessId String
+  memberId   String
+  routineId  String?
+  dayIndex   Int?
+  dayName    String?
+  /// [{ exerciseId, name, sets: [{ reps, weight }] }]
+  entries    Json?
+  notes      String?
+  doneAt     DateTime    @default(now())
+  business   Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  member     GymMember   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  routine    GymRoutine? @relation(fields: [routineId], references: [id], onDelete: SetNull)
+
+  @@index([memberId, doneAt], map: "GymWorkoutLog_member_done_idx")
+}
+
+/// Body measurements of a member on a date
+model GymAssessment {
+  id            String      @id @default(uuid())
+  businessId    String
+  memberId      String
+  trainerId     String?
+  date          DateTime    @default(now())
+  weightKg      Float?
+  heightCm      Float?
+  bodyFatPct    Float?
+  muscleMassKg  Float?
+  waistCm       Float?
+  hipCm         Float?
+  chestCm       Float?
+  armCm         Float?
+  thighCm       Float?
+  restingHr     Int?
+  bloodPressure String?
+  notes         String?
+  photos        String[]    @default([])
+  createdAt     DateTime    @default(now())
+  business      Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  member        GymMember   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  trainer       GymTrainer? @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+
+  @@index([memberId, date], map: "GymAssessment_member_date_idx")
 }

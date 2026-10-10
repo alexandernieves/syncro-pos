@@ -54,6 +54,8 @@ import { StatCard, StatGrid } from "@/components/stat-card";
 import { FilterChips, GymPage, GymPageHeader, MemberAvatar, PersonCell, StatusBadge } from "@/components/gym/gym-ui";
 import { printMembershipReceipt, sendMembershipReceipt } from "@/lib/gym-receipt";
 import { SignDocumentDialog, SignedDocumentDialog } from "@/components/gym/sign-document-dialog";
+import { type Routine, RoutineBuilder, levelLabel, routineText } from "@/components/gym/routine-builder";
+import { AssessmentDialog, type Progress, ProgressSummary } from "@/components/gym/progress";
 
 const FILTERS: [string, string][] = [
   ["", "Todos"],
@@ -304,6 +306,116 @@ function NewMemberDialog({ open, onOpenChange, onCreated, member }: { open: bool
   );
 }
 
+// ── Training and progress (inside the member card) ─────────────────────────
+
+type Training = { current: Routine | null; previous: Routine[]; logs: { id: string; dayName: string | null; doneAt: string }[]; workoutsLast4Weeks: number };
+
+function TrainingSection({ member }: { member: GymMemberDetail }) {
+  const [training, setTraining] = useState<Training | null>(null);
+  const [progress, setProgress] = useState<Progress | null>(null);
+  const [templates, setTemplates] = useState<Routine[] | null>(null);
+  const [assigning, setAssigning] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [measuring, setMeasuring] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => {
+    gymApi<Training>(`/members/${member.id}/training`).then(setTraining).catch(() => {});
+    gymApi<Progress>(`/members/${member.id}/assessments`).then(setProgress).catch(() => {});
+  }, [member.id]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (assigning && !templates) gymApi<Routine[]>("/routines").then((r) => setTemplates(r.filter((x) => x.isActive))).catch(() => setTemplates([])); }, [assigning, templates]);
+
+  const assign = async (templateId: string) => {
+    setBusy(true);
+    try {
+      await gymApi(`/members/${member.id}/routine`, { method: "POST", json: { templateId } });
+      toast.success("Rutina asignada. El socio ya la ve en su app");
+      setAssigning(false);
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const send = async () => {
+    if (!training?.current) return;
+    setBusy(true);
+    try {
+      await gymApi(`/members/${member.id}/routine/send`, { method: "POST", json: { text: routineText(training.current, member.client.name.split(" ")[0]) } });
+      toast.success("Rutina enviada por WhatsApp");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const r = training?.current;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-semibold">Entrenamiento y progreso</p>
+      <div className="space-y-3 rounded-xl border p-3">
+        {r ? (
+          <>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">{r.name}</p>
+                <p className="text-xs text-muted-foreground">{levelLabel(r.level)} · {r.days.length} {r.days.length === 1 ? "día" : "días"}{r.startsAt ? ` · desde el ${shortDate(r.startsAt)}` : ""}{r.trainer ? ` · ${r.trainer.name}` : ""}</p>
+              </div>
+              <span className="shrink-0 text-right text-xs text-muted-foreground"><span className="block text-base font-bold text-foreground tabular-nums">{training!.workoutsLast4Weeks}</span>Entrenos en 4 semanas</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {r.days.map((d, i) => <span key={i} className="rounded-full bg-muted px-2.5 py-0.5 text-xs">{d.name}</span>)}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">Sin rutina asignada.</p>
+        )}
+        {assigning ? (
+          <div className="space-y-1.5 border-t pt-2">
+            {!templates && <IconLoader2 size={16} className="animate-spin text-muted-foreground" />}
+            {templates && !templates.length && <p className="text-xs text-muted-foreground">Crea rutinas en la sección de entrenamiento.</p>}
+            {templates?.map((t) => (
+              <button key={t.id} type="button" disabled={busy} onClick={() => assign(t.id)} className="flex w-full items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2 text-left text-sm hover:bg-muted">
+                <span className="truncate font-medium">{t.name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{levelLabel(t.level)} · {t.days.length} días</span>
+              </button>
+            ))}
+            <Button size="sm" variant="ghost" onClick={() => setAssigning(false)}>Cancelar</Button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant={r ? "outline" : "default"} onClick={() => setAssigning(true)}>{r ? "Cambiar rutina" : "Asignar rutina"}</Button>
+            {r && <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Ajustar para este socio</Button>}
+            {r && member.client.phone && <Button size="sm" variant="ghost" className="gap-1.5 text-emerald-700" disabled={busy} onClick={send}><IconBrandWhatsapp size={14} /> Enviar</Button>}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-3 rounded-xl border p-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-medium">Evaluaciones{progress?.items.length ? ` (${progress.items.length})` : ""}</p>
+          <Button size="sm" variant="outline" onClick={() => setMeasuring(true)}>Nueva evaluación</Button>
+        </div>
+        {progress && progress.items.length ? <ProgressSummary progress={progress} compact /> : <p className="text-sm text-muted-foreground">Registra peso y medidas para ver su progreso.</p>}
+      </div>
+
+      {r && (
+        <RoutineBuilder
+          open={editing}
+          routine={r}
+          title={`Rutina de ${member.client.name.split(" ")[0]}`}
+          onClose={() => setEditing(false)}
+          onSaved={load}
+          save={(body) => gymApi(`/routines/${r.id}`, { method: "PUT", json: body })}
+        />
+      )}
+      <AssessmentDialog memberId={member.id} open={measuring} onClose={() => setMeasuring(false)} onSaved={load} />
+    </div>
+  );
+}
+
 // ── Member detail ───────────────────────────────────────────────────────────
 
 function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string | null; plans: GymPlan[]; onClose: () => void; onChanged: () => void }) {
@@ -534,6 +646,8 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
             )}
             <SignDocumentDialog memberId={member.id} templateId={signing} onClose={() => setSigning(null)} onSigned={() => { load(); onChanged(); }} />
             <SignedDocumentDialog signatureId={viewing} onClose={() => setViewing(null)} />
+
+            <TrainingSection member={member} />
 
             {/* History */}
             <div className="space-y-2">
