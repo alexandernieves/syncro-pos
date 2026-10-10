@@ -11,6 +11,7 @@ import { GymVisitsService } from './gym-visits.service';
 import { DOCUMENT_STARTERS, GymDocumentsService } from './gym-documents.service';
 import { GymEquipmentService } from './gym-equipment.service';
 import { GymTrainingService } from './gym-training.service';
+import { GymReportsService } from './gym-reports.service';
 
 @UseGuards(JwtAuthGuard, GymStaffGuard)
 @Controller('gym')
@@ -26,7 +27,24 @@ export class GymController {
     private readonly documents: GymDocumentsService,
     private readonly equipment: GymEquipmentService,
     private readonly training: GymTrainingService,
+    private readonly reports: GymReportsService,
   ) {}
+
+  // Reports
+  @Get('reports/attendance')
+  reportAttendance(@Query('days') days: string, @Request() req: any) {
+    return this.reports.attendance(req.user.businessId, days);
+  }
+
+  @Get('reports/retention')
+  reportRetention(@Query('days') days: string, @Request() req: any) {
+    return this.reports.retention(req.user.businessId, days);
+  }
+
+  @Get('reports/classes')
+  reportClasses(@Query('days') days: string, @Request() req: any) {
+    return this.reports.classes(req.user.businessId, days);
+  }
 
   // Equipment and maintenance
   @Get('equipment/stats')
