@@ -89,7 +89,7 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
             })),
             items: (s.items || []).map((item: any) => ({
               id: item.id,
-              name: item.variant?.product?.name || "Producto Desconocido",
+              name: item.variant?.product?.name || item.description || "Producto Desconocido",
               variantName: item.variant?.name || "",
               quantity: item.quantity,
               price: item.price,
@@ -145,7 +145,7 @@ const RecentSalesTable = ({ sales }: { sales: any[] }) => {
             })),
             items: s.items.map((item: any) => ({
               id: item.id,
-              name: item.variant?.product?.name || "Producto Desconocido",
+              name: item.variant?.product?.name || item.description || "Producto Desconocido",
               variantName: item.variant?.name || "",
               quantity: item.quantity,
               price: item.price,

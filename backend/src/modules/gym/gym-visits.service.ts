@@ -117,7 +117,7 @@ export class GymVisitsService {
       });
       if (price > 0) {
         const label = kind === 'GUEST' ? `Pase de invitado · ${v.name}${host ? ` (de ${host.name})` : ''}` : `Pase de día · ${v.name}`;
-        await this.gym.recordPayment(tx, businessId, { visitId: v.id, description: label, category: 'PASE_GYM' }, { ...data.payment!, amount: price }, userId);
+        await this.gym.recordPayment(tx, businessId, { visitId: v.id, description: label, itemName: kind === 'GUEST' ? 'Pase de invitado' : 'Pase de día', category: 'PASE_GYM' }, { ...data.payment!, amount: price }, userId);
       }
       return v;
     });

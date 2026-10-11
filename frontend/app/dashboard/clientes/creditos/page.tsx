@@ -772,7 +772,7 @@ export default function CreditosPage() {
                               <div key={idx} className="flex items-center justify-between px-3 py-2.5">
                                 <div className="flex-1 min-w-0">
                                   <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 truncate">
-                                    {item.variant?.product?.name || "Artículo"}
+                                    {item.variant?.product?.name || item.description || "Artículo"}
                                   </p>
                                   <p className="text-[9px] text-zinc-400 font-medium">
                                     {item.quantity} × ${(item.price || 0).toFixed(2)}

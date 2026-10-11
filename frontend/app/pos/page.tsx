@@ -962,7 +962,7 @@ export default function POSPage() {
       })),
       items: (s.items || []).map((item: any) => ({
         id: item.id,
-        name: item.variant?.product?.name || "Producto Desconocido",
+        name: item.variant?.product?.name || item.description || "Producto Desconocido",
         variantName: item.variant?.name || "",
         quantity: item.quantity,
         price: item.price,
@@ -1006,7 +1006,7 @@ export default function POSPage() {
             })),
             items: s.items.map((item: any) => ({
               id: item.id,
-              name: item.variant?.product?.name || "Producto Desconocido",
+              name: item.variant?.product?.name || item.description || "Producto Desconocido",
               variantName: item.variant?.name || "",
               quantity: item.quantity,
               price: item.price,
@@ -5065,7 +5065,7 @@ export default function POSPage() {
                     return (
                       <div key={item.id} className="p-4 flex items-center justify-between gap-4 group hover:bg-muted/10 transition-colors">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-bold truncate leading-tight">{item.variant?.product?.name || "Producto"} {item.variant?.name !== 'Principal' ? `(${item.variant?.name})` : ''}</p>
+                          <p className="text-[11px] font-bold truncate leading-tight">{item.variant?.product?.name || item.description || "Producto"} {item.variant && item.variant?.name !== 'Principal' ? `(${item.variant?.name})` : ''}</p>
                           <div className="flex items-center gap-2 mt-1">
                             <span className="text-[9px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Vendido: {item.quantity}</span>
                             {returnedQty > 0 && <span className="text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded">Devuelto: {returnedQty}</span>}

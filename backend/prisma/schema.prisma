@@ -438,6 +438,8 @@ model ProductWaitlist {
 model SaleItem {
   id          String           @id @default(uuid())
   saleId      String
+  /// Name of a line that isn\'t a product (gym membership, day pass…)
+  description String?
   variantId   String?
   waitlistId  String?
   quantity    Float
@@ -1374,6 +1376,8 @@ model GymPayment {
   branchId          String?
   shiftId           String?
   accountingEntryId String?
+  /// The sale this charge created (shows in sales, history and reports like a POS sale)
+  saleId            String?
   createdAt         DateTime       @default(now())
   business          Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
   membership        GymMembership? @relation(fields: [membershipId], references: [id], onDelete: Cascade)

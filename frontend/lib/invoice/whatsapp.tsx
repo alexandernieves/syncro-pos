@@ -120,7 +120,7 @@ export function saleToInvoiceData(sale: any, settings: any): InvoiceData {
     clientPhone: sale.client?.phone || null,
     cashierName: sale.user?.name || null,
     items: (sale.items || []).map((i: any) => ({
-      name: i.variant?.product?.name || i.waitlist?.name || "Producto",
+      name: i.variant?.product?.name || i.waitlist?.name || i.description || "Producto",
       code: i.variant?.barcode || i.variant?.sku || null,
       quantity: Number(i.quantity) || 0,
       price: Number(i.price) || 0,

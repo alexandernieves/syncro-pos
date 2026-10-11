@@ -57,7 +57,7 @@ export default function ReportsPage() {
     const counts: any = {};
     sales.forEach(s => {
       s.items?.forEach((it: any) => {
-        const name = it.variant?.product?.name || "Desconocido";
+        const name = it.variant?.product?.name || it.description || "Desconocido";
         counts[name] = (counts[name] || 0) + it.quantity;
       });
     });

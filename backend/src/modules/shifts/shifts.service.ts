@@ -51,7 +51,8 @@ export class ShiftsService {
     }, 0);
     
     // Gym memberships charged in cash during this shift
-    const gymCash = await this.prisma.gymPayment.aggregate({ where: { shiftId: id, method: 'CASH' }, _sum: { amount: true } });
+    // Older gym charges without their own sale (new ones are already among the shift's sales)
+    const gymCash = await this.prisma.gymPayment.aggregate({ where: { shiftId: id, method: 'CASH', saleId: null }, _sum: { amount: true } });
     const expectedBalance = shift.openingBalance + totalCashPayments + (gymCash._sum.amount ?? 0);
     const difference = Number(closingBalance) - expectedBalance;
 
@@ -106,11 +107,12 @@ export class ShiftsService {
     });
 
     // Gym memberships charged during this shift count like sales
-    const gymPayments = await this.prisma.gymPayment.findMany({ where: { shiftId: shift.id }, select: { method: true, amount: true } });
+    const gymPayments = await this.prisma.gymPayment.findMany({ where: { shiftId: shift.id }, select: { method: true, amount: true, saleId: true } });
     let gymTotal = 0;
     gymPayments.forEach((p) => {
       gymTotal += p.amount;
-      if (expectedTotals[p.method as keyof typeof expectedTotals] !== undefined) {
+      // Charges with their own sale were already added with the shift's sales
+      if (!p.saleId && expectedTotals[p.method as keyof typeof expectedTotals] !== undefined) {
         expectedTotals[p.method as keyof typeof expectedTotals] += p.amount;
       }
     });

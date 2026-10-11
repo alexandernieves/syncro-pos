@@ -433,7 +433,7 @@ export class GymService {
       });
       if (data.payment) {
         const extra = quote.feeItems.length ? ` + ${quote.feeItems.map((f) => f.label.toLowerCase()).join(' y ')}` : '';
-        await this.recordPayment(tx, businessId, { membershipId: membership.id, description: `Membresía ${plan.name}${extra}${memberName ? ` · ${memberName}` : ''}` }, { ...data.payment, amount: paid }, userId);
+        await this.recordPayment(tx, businessId, { membershipId: membership.id, clientId: member?.clientId, itemName: `Membresía ${plan.name}${extra}`, description: `Membresía ${plan.name}${extra}${memberName ? ` · ${memberName}` : ''}` }, { ...data.payment, amount: paid }, userId);
       }
       return tx.gymMembership.findUnique({ where: { id: membership.id }, include: { payments: true } });
     });
@@ -446,7 +446,7 @@ export class GymService {
   async recordPayment(
     tx: Prisma.TransactionClient,
     businessId: string,
-    target: { membershipId?: string; visitId?: string; description: string; category?: string },
+    target: { membershipId?: string; visitId?: string; description: string; category?: string; clientId?: string | null; itemName?: string },
     payment: PaymentInput,
     userId?: string,
   ) {
@@ -460,6 +460,25 @@ export class GymService {
     }
     if (!branchId) branchId = (await tx.branch.findFirst({ where: { businessId }, orderBy: { isMain: 'desc' }, select: { id: true } }))?.id ?? null;
 
+    // The charge is a sale like any other: it shows in sales of the day, history, reports and the shift
+    const sale = userId && branchId
+      ? await tx.sale.create({
+          data: {
+            branchId,
+            userId,
+            businessId,
+            clientId: target.clientId ?? null,
+            paymentMethod: method as any,
+            subtotal: payment.amount,
+            total: payment.amount,
+            channel: 'GYM',
+            shiftId: shift?.id ?? null,
+            items: { create: [{ description: target.itemName || target.description, quantity: 1, price: payment.amount, subtotal: payment.amount }] },
+            payments: { create: [{ method: method as any, amount: payment.amount, reference: payment.reference?.trim() || null, exchangeRate: payment.exchangeRate ? Number(payment.exchangeRate) : null }] },
+          },
+        })
+      : null;
+
     const entry = userId
       ? await tx.accountingEntry.create({
           data: {
@@ -469,6 +488,7 @@ export class GymService {
             category: target.category || 'MEMBRESIA_GYM',
             branchId,
             userId,
+            ...(sale && { saleId: sale.id }),
           },
         })
       : null;
@@ -486,6 +506,7 @@ export class GymService {
         branchId,
         shiftId: shift?.id ?? null,
         accountingEntryId: entry?.id ?? null,
+        saleId: sale?.id ?? null,
       },
     });
   }
@@ -508,7 +529,7 @@ export class GymService {
     const balance = membershipTotal(m) - m.payments.reduce((s, p) => s + p.amount, 0);
     if (amount - balance > 0.009) throw new BadRequestException(`El saldo pendiente es $${Math.max(0, balance).toFixed(2)}`);
     return this.prisma.$transaction((tx) =>
-      this.recordPayment(tx, businessId, { membershipId: m.id, description: `Membresía ${m.planName} · ${m.member.client.name}` }, { ...payment, amount }, userId),
+      this.recordPayment(tx, businessId, { membershipId: m.id, clientId: m.member.clientId, itemName: `Abono membresía ${m.planName}`, description: `Membresía ${m.planName} · ${m.member.client.name}` }, { ...payment, amount }, userId),
     );
   }
 
@@ -561,7 +582,7 @@ export class GymService {
       });
       if (fee > 0 && data.payment) {
         const member = await tx.gymMember.findUnique({ where: { id: m.memberId }, include: { client: { select: { name: true } } } });
-        await this.recordPayment(tx, businessId, { membershipId: id, description: `Congelamiento ${m.planName} · ${member?.client.name ?? ''}` }, { ...data.payment, amount: fee }, userId);
+        await this.recordPayment(tx, businessId, { membershipId: id, clientId: member?.clientId, itemName: `Congelamiento ${m.planName}`, description: `Congelamiento ${m.planName} · ${member?.client.name ?? ''}` }, { ...data.payment, amount: fee }, userId);
       }
       return updated;
     });
