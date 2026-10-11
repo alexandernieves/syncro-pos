@@ -482,8 +482,8 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
   const planOf = (m: GymMembership) => plans.find((p) => p.id === m.planId);
 
   return (
-    <Sheet open={!!memberId} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+    <Sheet open={!!memberId} onOpenChange={(open) => !open && onClose()} modal={!printing}>
+      <SheetContent className="w-full overflow-y-auto sm:max-w-xl" onInteractOutside={(e) => printing && e.preventDefault()}>
         <SheetHeader><SheetTitle>Ficha del socio</SheetTitle></SheetHeader>
         {!member ? (
           <div className="space-y-3 p-4"><Skeleton className="h-24" /><Skeleton className="h-40" /></div>

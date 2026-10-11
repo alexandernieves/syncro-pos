@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { IconPrinter, IconPlus, IconVolume, IconVolumeOff, IconCircleCheckFilled } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { InvoiceDocument } from "@/components/invoice/invoice-document";
@@ -108,8 +109,9 @@ export function ReceiptPrinter({ receipt, design, business, onDone, doneLabel = 
     } catch {}
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/60 backdrop-blur-sm px-4 py-8" role="dialog" aria-modal="true" aria-label="Recibo de la venta">
+  // Drawn on the body so the backdrop covers the whole screen even when opened from a side panel
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/60 backdrop-blur-sm px-4 py-8" style={{ pointerEvents: "auto" }} role="dialog" aria-modal="true" aria-label="Recibo de la venta">
       <style>{`
         @keyframes rp-feed { 0% { transform: translateY(-100%); } 100% { transform: translateY(0); } }
         @keyframes rp-led { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
@@ -201,6 +203,7 @@ export function ReceiptPrinter({ receipt, design, business, onDone, doneLabel = 
         </div>
         {finished && <p className="mt-3 text-center text-[11px] text-white/70">{doneLabel === "Nueva venta" ? "Presiona Enter para empezar una nueva venta" : "Presiona Enter para cerrar"}</p>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
