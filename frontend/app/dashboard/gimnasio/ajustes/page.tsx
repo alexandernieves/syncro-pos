@@ -159,7 +159,7 @@ function DocumentsCard() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1.5">
             <CardTitle className="flex items-center gap-2"><IconFileText size={18} className="text-muted-foreground" /> Contratos y consentimientos</CardTitle>
-            <CardDescription>Los socios los firman en la pantalla de recepción o desde su app. Si cambias el texto, se pide una firma nueva.</CardDescription>
+            <CardDescription>Los socios los firman en la pantalla de recepción. Si cambias el texto, se pide una firma nueva.</CardDescription>
           </div>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setDraft({ kind: "OTHER", title: "", body: "", required: true, isActive: true })}><IconPlus size={14} /> Nuevo documento</Button>
         </div>
@@ -308,25 +308,6 @@ export default function GymSettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-1.5">
-              <CardTitle className="flex items-center gap-2"><IconDeviceMobile size={18} className="text-muted-foreground" /> Reservas desde la app del socio</CardTitle>
-              <CardDescription>Tus socios reservan y cancelan clases desde su app de Syncro. En recepción siempre puedes anotarlos sin estas reglas.</CardDescription>
-            </div>
-            <label className="flex items-center gap-2 text-sm font-medium">
-              {b.portalEnabled ? "Activadas" : "Desactivadas"}
-              <Switch checked={b.portalEnabled} onCheckedChange={(v) => setBooking({ portalEnabled: v })} />
-            </label>
-          </div>
-        </CardHeader>
-        <CardContent className={cn("grid gap-6 sm:grid-cols-3", !b.portalEnabled && "pointer-events-none opacity-50")}>
-          <NumberField label="Anticipación" suffix={b.daysAhead === 1 ? "día" : "días"} min={1} max={30} value={b.daysAhead} onChange={(v) => setBooking({ daysAhead: v })} hint="Hasta cuántos días antes pueden reservar." />
-          <NumberField label="Cancelar hasta" suffix={b.cancelHours === 1 ? "hora antes" : "horas antes"} min={0} max={72} value={b.cancelHours} onChange={(v) => setBooking({ cancelHours: v })} hint="Después de eso deben avisar en recepción. Con 0 pueden cancelar hasta que empiece." />
-          <NumberField label="Reservas a la vez" suffix="por socio" min={0} max={50} value={b.maxActive} onChange={(v) => setBooking({ maxActive: v })} hint="Clases futuras que puede tener reservadas. Con 0 no hay límite." />
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>

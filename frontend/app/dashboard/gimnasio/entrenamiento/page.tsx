@@ -152,7 +152,7 @@ export default function GymTrainingPage() {
             <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
               <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"><IconClipboardList size={24} /></span>
               <p className="font-semibold">Crea tu primera rutina</p>
-              <p className="max-w-sm text-sm text-muted-foreground">Arma plantillas por nivel u objetivo y asígnalas a tus socios. Ellos la ven en su app y marcan cada entrenamiento.</p>
+              <p className="max-w-sm text-sm text-muted-foreground">Arma plantillas por nivel u objetivo, asígnalas a tus socios y envíaselas por WhatsApp.</p>
               <Button className="mt-2 gap-2" onClick={() => setBuilder({ open: true, routine: null })}><IconPlus size={16} /> Nueva rutina</Button>
             </CardContent>
           </Card>

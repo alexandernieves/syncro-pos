@@ -98,7 +98,7 @@ export const DEFAULT_GYM_SETTINGS: GymSettings = {
     templates: {
       CLASS_CANCELLED: 'Hola {nombre}, la clase de *{clase}* del *{fecha}* fue cancelada.{motivo} Disculpa las molestias 🙏 — {gimnasio}',
       CLASS_MOVED: 'Hola {nombre}, la clase de *{clase}* cambió de horario: ahora es el *{fecha}* (antes {antes}). Tu cupo sigue reservado ✅ — {gimnasio}',
-      WAITLIST_PROMOTED: '¡Buenas noticias, {nombre}! 🎉 Se liberó un cupo y ya estás anotado en *{clase}* el *{fecha}*. Si no puedes ir, cancela desde tu app para dárselo a otro socio — {gimnasio}',
+      WAITLIST_PROMOTED: '¡Buenas noticias, {nombre}! 🎉 Se liberó un cupo y ya estás anotado en *{clase}* el *{fecha}*. Si no puedes ir, avísanos para dárselo a otro socio — {gimnasio}',
       TRIAL_BOOKED: 'Hola {nombre} 👋 Te esperamos en *{gimnasio}* para tu clase de prueba de *{clase}* el *{fecha}*. Trae ropa cómoda, toalla e hidratación 💧',
     },
   },
@@ -177,7 +177,8 @@ export class GymRemindersService {
       },
       notices: {
         ...(Object.fromEntries(kinds.map((k) => [k, n[k] !== false])) as Record<ClassNoticeKind, boolean>),
-        templates: Object.fromEntries(kinds.map((k) => [k, n.templates?.[k]?.trim() || dn.templates[k]])) as Record<ClassNoticeKind, string>,
+        // Old default text that mentioned the member app (no longer offered) becomes the current default
+        templates: Object.fromEntries(kinds.map((k) => [k, (n.templates?.[k]?.trim() || dn.templates[k]).replace('cancela desde tu app para dárselo', 'avísanos para dárselo')])) as Record<ClassNoticeKind, string>,
       },
       visits: {
         dayPassPrice: money(v.dayPassPrice, DEFAULT_GYM_SETTINGS.visits.dayPassPrice),

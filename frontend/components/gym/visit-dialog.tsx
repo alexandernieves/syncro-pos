@@ -21,7 +21,9 @@ const KINDS: { kind: Kind; title: string; hint: string; icon: React.ReactNode }[
 ];
 
 /** Registers someone without a membership at reception, charging the pass in the cash shift. */
-export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: boolean; onClose: () => void; onSaved: () => void; dayPassPrice: number }) {
+export type SavedVisit = { visit: { id: string; name: string; documentId: string | null; phone: string | null; kind: string; checkedInAt: string }; price: number; method: string };
+
+export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: boolean; onClose: () => void; onSaved: (v: SavedVisit) => void; dayPassPrice: number }) {
   const [kind, setKind] = useState<Kind>("DAY_PASS");
   const [form, setForm] = useState({ name: "", documentId: "", phone: "", notes: "", price: "" });
   const [method, setMethod] = useState("CASH");
@@ -65,7 +67,7 @@ export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: bo
     setSaving(true);
     try {
       const phone = form.phone || null;
-      const res = await gymApi<{ price: number; previousVisits: number; visit: { leadId: string | null } }>("/visits", {
+      const res = await gymApi<{ price: number; previousVisits: number; visit: SavedVisit["visit"] & { leadId: string | null } }>("/visits", {
         method: "POST",
         json: {
           kind,
@@ -80,7 +82,7 @@ export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: bo
       });
       const extra = [res.price > 0 ? `Cobrado ${money(res.price)} en tu turno de caja.` : null, res.previousVisits >= 2 ? `Es su visita n.º ${res.previousVisits + 1}: ofrécele un plan.` : null, res.visit.leadId ? "Quedó en tus prospectos para darle seguimiento." : null].filter(Boolean).join(" ");
       toast.success(`Entrada registrada: ${form.name}`, { description: extra || undefined });
-      onSaved();
+      onSaved({ visit: res.visit, price: res.price, method });
       onClose();
     } catch (e) {
       toast.error((e as Error).message);

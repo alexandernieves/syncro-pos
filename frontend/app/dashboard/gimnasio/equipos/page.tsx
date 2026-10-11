@@ -307,7 +307,7 @@ export default function GymEquipmentPage() {
         <Card className="gap-3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><IconTool size={18} className="text-muted-foreground" /> Pendientes</CardTitle>
-            <CardDescription>Fallas reportadas (también por socios desde su app) y servicios programados.</CardDescription>
+            <CardDescription>Fallas reportadas y servicios programados.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {tickets.map((t) => (

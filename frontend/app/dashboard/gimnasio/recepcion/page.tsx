@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   IconAlertTriangle,
+  IconCheck,
+  IconSignature,
+  IconX,
   IconCircleCheckFilled,
   IconCircleXFilled,
   IconDoorEnter,
@@ -25,6 +28,10 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VisitDialog } from "@/components/gym/visit-dialog";
 import { SignDocumentDialog } from "@/components/gym/sign-document-dialog";
+import { ReceiptPrinter } from "@/components/pos/receipt-printer";
+import { visitReceiptParts } from "@/lib/gym-receipt";
+import { API_URL } from "@/lib/constants";
+import type { SavedVisit } from "@/components/gym/visit-dialog";
 import { money } from "@/lib/gym";
 
 type CheckInResult = {
@@ -65,6 +72,98 @@ function Avatar({ src, name, size }: { src?: string | null; name: string; size: 
   return <MemberAvatar src={src} name={name} size={size} />;
 }
 
+/** Big, clear answer for the door: green to let in, red to stop, with the member's data at a glance. */
+function EntryResult({ result, checking, showOverride, overrideNote, setOverrideNote, onShowOverride, onOverride, onSign }: {
+  result: CheckInResult;
+  checking: boolean;
+  showOverride: boolean;
+  overrideNote: string;
+  setOverrideNote: (v: string) => void;
+  onShowOverride: () => void;
+  onOverride: () => void;
+  onSign: (templateId: string) => void;
+}) {
+  const m = result.member;
+  const ms = m.currentMembership;
+  const ok = result.granted;
+  const title = ok ? (result.overridden ? "Pase autorizado" : "Puede pasar") : "Acceso denegado";
+  const total = ms ? Math.max(1, (new Date(ms.endDate).getTime() - new Date(ms.startDate).getTime()) / 86400000) : 1;
+  const left = m.daysLeft ?? 0;
+  const pct = ms && m.daysLeft != null ? Math.max(0, Math.min(100, (left / total) * 100)) : 0;
+  return (
+    <div className={cn("overflow-hidden rounded-3xl shadow-sm animate-in fade-in zoom-in-95 duration-200", ok ? "bg-emerald-500/[0.07]" : "bg-rose-500/[0.07]")}>
+      <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-center">
+        {/* Photo with the verdict on it */}
+        <div className="relative mx-auto shrink-0 sm:mx-0">
+          <div className={cn("rounded-full p-1.5", ok ? "bg-emerald-500" : "bg-rose-500")}>
+            <div className="rounded-full bg-background p-1"><Avatar src={m.photoUrl} name={m.client.name} size={132} /></div>
+          </div>
+          <span className={cn("absolute -bottom-1 right-1 flex size-11 items-center justify-center rounded-full text-white shadow-lg ring-4 ring-background", ok ? "bg-emerald-500" : "bg-rose-500")}>
+            {ok ? <IconCheck size={24} stroke={3} /> : <IconX size={24} stroke={3} />}
+          </span>
+        </div>
+
+        <div className="min-w-0 flex-1 space-y-4 text-center sm:text-left">
+          <div>
+            <p className={cn("text-sm font-semibold", ok ? "text-emerald-700" : "text-rose-700")}>{title} · {time(result.checkIn.createdAt)}</p>
+            <p className="truncate text-3xl font-bold tracking-tight">{m.client.name}</p>
+            <p className="text-sm text-muted-foreground">Socio n.º {m.memberNumber}{m.client.documentId ? ` · ${m.client.documentId}` : ""}</p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-2xl bg-background/80 p-3">
+              <p className="text-[11px] text-muted-foreground">Plan</p>
+              <p className="truncate text-sm font-semibold">{ms?.planName ?? "Sin plan"}</p>
+            </div>
+            <div className="rounded-2xl bg-background/80 p-3">
+              <p className="text-[11px] text-muted-foreground">Vence</p>
+              <p className="text-sm font-semibold">{ms ? shortDate(ms.endDate) : "—"}</p>
+            </div>
+            <div className="rounded-2xl bg-background/80 p-3">
+              <p className="text-[11px] text-muted-foreground">Quedan</p>
+              <p className={cn("text-sm font-semibold tabular-nums", ok && left <= 3 ? "text-amber-700" : "")}>{m.daysLeft != null ? (left === 0 ? "Vence hoy" : `${left} ${left === 1 ? "día" : "días"}`) : "—"}</p>
+            </div>
+          </div>
+          {ms && m.daysLeft != null && (
+            <div className="h-1.5 overflow-hidden rounded-full bg-background">
+              <div className={cn("h-full rounded-full", left <= 3 ? "bg-amber-500" : ok ? "bg-emerald-500" : "bg-rose-500")} style={{ width: `${pct}%` }} />
+            </div>
+          )}
+
+          <p className={cn("rounded-2xl px-4 py-2.5 text-sm font-medium", ok ? "bg-emerald-500/10 text-emerald-800" : "bg-rose-500/10 text-rose-800")}>{result.reason}</p>
+
+          {result.warnings.length > 0 && (
+            <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
+              {result.warnings.map((w) => (
+                <span key={w} className="flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-800"><IconAlertTriangle size={14} /> {w}</span>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
+            {!!result.pendingDocuments?.length && (
+              <Button size="sm" className="gap-1.5" onClick={() => onSign(result.pendingDocuments![0].id)}><IconSignature size={15} /> Firmar {result.pendingDocuments[0].title.toLowerCase()}</Button>
+            )}
+            {!ok && (
+              <>
+                <Button size="sm" asChild className="gap-1.5"><Link href={`/dashboard/gimnasio/socios?socio=${m.id}`}><IconRefresh size={15} /> Renovar membresía</Link></Button>
+                {!showOverride && <Button size="sm" variant="outline" onClick={onShowOverride}>Dejar pasar igual</Button>}
+              </>
+            )}
+            {ok && <Button size="sm" variant="ghost" asChild><Link href={`/dashboard/gimnasio/socios?socio=${m.id}`}>Ver ficha</Link></Button>}
+          </div>
+          {!ok && showOverride && (
+            <div className="flex flex-wrap gap-2">
+              <Input autoFocus value={overrideNote} onChange={(e) => setOverrideNote(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onOverride()} placeholder="Motivo (ej.: paga hoy en la tarde)" className="min-w-0 flex-1 bg-background" />
+              <Button variant="outline" disabled={checking || !overrideNote.trim()} onClick={onOverride}>Autorizar</Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function GymReceptionPage() {
   const [q, setQ] = useState("");
   const [matches, setMatches] = useState<GymMemberRow[]>([]);
@@ -78,6 +177,11 @@ export default function GymReceptionPage() {
   const [visits, setVisits] = useState<{ items: VisitRow[]; revenue: number; inside: number } | null>(null);
   const [visitOpen, setVisitOpen] = useState(false);
   const [signing, setSigning] = useState<string | null>(null);
+  const [passReceipt, setPassReceipt] = useState<SavedVisit | null>(null);
+  const [bizSettings, setBizSettings] = useState<any>(null);
+  useEffect(() => {
+    fetch(`${API_URL}/settings`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }).then((r) => (r.ok ? r.json() : null)).then(setBizSettings).catch(() => {});
+  }, []);
   const [dayPassPrice, setDayPassPrice] = useState(5);
   const [feedTab, setFeedTab] = useState<"entries" | "visits">("entries");
   const [onDuty, setOnDuty] = useState<OnDuty[]>([]);
@@ -203,51 +307,22 @@ export default function GymReceptionPage() {
         {!result ? (
           <Card className="gap-0 py-0">
             <CardContent className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
-              <IconDoorEnter size={44} className="opacity-40" />
-              <p className="text-sm">El resultado de cada entrada aparece aquí.</p>
+              <span className="flex size-16 items-center justify-center rounded-full bg-muted"><IconDoorEnter size={30} className="opacity-60" /></span>
+              <p className="text-sm">Busca a un socio para registrar su entrada.</p>
             </CardContent>
           </Card>
         ) : (
-          <Card key={result.checkIn.id} className={cn("gap-0 overflow-hidden py-0 animate-in fade-in zoom-in-95 duration-200", result.granted ? "border-emerald-500/40" : "border-rose-500/40")}>
-            <div className={cn("flex items-center gap-3 px-6 py-4 text-white", result.granted ? "bg-emerald-600" : "bg-rose-600")}>
-              {result.granted ? <IconCircleCheckFilled size={32} /> : <IconCircleXFilled size={32} />}
-              <div>
-                <p className="text-xl font-bold">{result.granted ? (result.overridden ? "Pase autorizado" : "Puede pasar") : "Acceso denegado"}</p>
-                <p className="text-sm opacity-90">{result.reason}</p>
-              </div>
-              <span className="ml-auto text-sm opacity-80">{time(result.checkIn.createdAt)}</span>
-            </div>
-            <CardContent className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center">
-              <Avatar src={m?.photoUrl} name={m?.client.name || ""} size={120} />
-              <div className="min-w-0 flex-1 space-y-2">
-                <p className="text-2xl font-bold">{m?.client.name}</p>
-                <p className="text-sm text-muted-foreground">Socio n.º {m?.memberNumber}{m?.client.documentId ? ` · ${m.client.documentId}` : ""}</p>
-                {m?.currentMembership && (
-                  <p className="text-sm">{m.currentMembership.planName} · vence {shortDate(m.currentMembership.endDate)}</p>
-                )}
-                {result.warnings.map((w) => (
-                  <p key={w} className="flex items-center gap-1.5 text-sm font-medium text-amber-700"><IconAlertTriangle size={16} /> {w}</p>
-                ))}
-                {!!result.pendingDocuments?.length && (
-                  <Button size="sm" variant="outline" className="mt-1" onClick={() => setSigning(result.pendingDocuments![0].id)}>Firmar {result.pendingDocuments[0].title.toLowerCase()} ahora</Button>
-                )}
-              </div>
-            </CardContent>
-            {!result.granted && m && (
-              <div className="space-y-3 border-t px-6 py-4">
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild className="gap-2"><Link href={`/dashboard/gimnasio/socios?socio=${m.id}`}><IconRefresh size={16} /> Renovar membresía</Link></Button>
-                  {!showOverride && <Button variant="outline" onClick={() => setShowOverride(true)}>Dejar pasar igual</Button>}
-                </div>
-                {showOverride && (
-                  <div className="flex flex-wrap gap-2">
-                    <Input autoFocus value={overrideNote} onChange={(e) => setOverrideNote(e.target.value)} onKeyDown={(e) => e.key === "Enter" && checkIn(m, true)} placeholder="Motivo (ej.: paga hoy en la tarde)" className="min-w-0 flex-1" />
-                    <Button variant="outline" disabled={checking || !overrideNote.trim()} onClick={() => checkIn(m, true)}>Autorizar</Button>
-                  </div>
-                )}
-              </div>
-            )}
-          </Card>
+          <EntryResult
+            key={result.checkIn.id}
+            result={result}
+            checking={checking}
+            showOverride={showOverride}
+            overrideNote={overrideNote}
+            setOverrideNote={setOverrideNote}
+            onShowOverride={() => setShowOverride(true)}
+            onOverride={() => m && checkIn(m, true)}
+            onSign={(id) => setSigning(id)}
+          />
         )}
       </div>
 
@@ -311,7 +386,11 @@ export default function GymReceptionPage() {
       </Card>
     </div>
       {m && <SignDocumentDialog memberId={m.id} templateId={signing} onClose={() => setSigning(null)} onSigned={() => { setResult((r) => (r ? { ...r, pendingDocuments: r.pendingDocuments?.filter((d) => d.id !== signing), warnings: r.warnings.filter((w) => !w.startsWith("Falta firmar")) } : r)); }} />}
-      <VisitDialog open={visitOpen} onClose={() => setVisitOpen(false)} onSaved={() => { loadFeed(); setFeedTab("visits"); }} dayPassPrice={dayPassPrice} />
+      <VisitDialog open={visitOpen} onClose={() => setVisitOpen(false)} onSaved={(v) => { loadFeed(); setFeedTab("visits"); if (v.price > 0) setPassReceipt(v); }} dayPassPrice={dayPassPrice} />
+      {passReceipt && (() => {
+        const { data, design, business } = visitReceiptParts(passReceipt.visit, passReceipt.price, passReceipt.method, bizSettings);
+        return <ReceiptPrinter receipt={data} design={design} business={business} doneLabel="Listo" onDone={() => setPassReceipt(null)} />;
+      })()}
     </GymPage>
   );
 }

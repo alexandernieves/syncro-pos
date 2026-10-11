@@ -25,10 +25,14 @@ type ReceiptPrinterProps = {
   business: InvoiceBusiness;
   /** "Nueva venta": closes everything so the next customer can be served. */
   onDone: () => void;
+  /** Text of the closing button (the POS says "Nueva venta"). */
+  doneLabel?: string;
+  /** Extra buttons next to "Imprimir" (for example, send by WhatsApp). */
+  extraActions?: React.ReactNode;
 };
 
 /** Animated receipt that comes out of a printer after a sale, with printer and cash register sounds. */
-export function ReceiptPrinter({ receipt, design, business, onDone }: ReceiptPrinterProps) {
+export function ReceiptPrinter({ receipt, design, business, onDone, doneLabel = "Nueva venta", extraActions }: ReceiptPrinterProps) {
   const [finished, setFinished] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const ticketAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -187,14 +191,15 @@ export function ReceiptPrinter({ receipt, design, business, onDone }: ReceiptPri
         )}
 
         <div className={`mt-4 flex gap-2 transition-all duration-300 ${finished ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0"}`}>
+          {extraActions}
           <Button variant="outline" className="h-12 flex-1 gap-2 rounded-xl bg-background font-semibold" onClick={() => printInvoice(receipt, design, business)}>
             <IconPrinter size={18} /> Imprimir en impresora
           </Button>
           <Button ref={doneRef} className="h-12 flex-1 gap-2 rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-500" onClick={onDone}>
-            <IconPlus size={18} /> Nueva venta
+            {doneLabel === "Nueva venta" ? <IconPlus size={18} /> : <IconCircleCheckFilled size={18} />} {doneLabel}
           </Button>
         </div>
-        {finished && <p className="mt-3 text-center text-[11px] text-white/70">Presiona Enter para empezar una nueva venta</p>}
+        {finished && <p className="mt-3 text-center text-[11px] text-white/70">{doneLabel === "Nueva venta" ? "Presiona Enter para empezar una nueva venta" : "Presiona Enter para cerrar"}</p>}
       </div>
     </div>
   );

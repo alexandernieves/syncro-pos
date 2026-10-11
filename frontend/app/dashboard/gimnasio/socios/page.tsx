@@ -54,7 +54,8 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { PosTable } from "@/components/pos-table";
 import { StatCard, StatGrid } from "@/components/stat-card";
 import { FilterChips, GymPage, GymPageHeader, MemberAvatar, PersonCell, StatusBadge } from "@/components/gym/gym-ui";
-import { printMembershipReceipt, sendMembershipReceipt } from "@/lib/gym-receipt";
+import { membershipReceiptParts, printMembershipReceipt, sendMembershipReceipt } from "@/lib/gym-receipt";
+import { ReceiptPrinter } from "@/components/pos/receipt-printer";
 import { SignDocumentDialog, SignedDocumentDialog } from "@/components/gym/sign-document-dialog";
 import { DocumentField, EmailField, Optional, PhoneField } from "@/components/forms/contact-fields";
 import { type Routine, RoutineBuilder, levelLabel, routineText } from "@/components/gym/routine-builder";
@@ -335,7 +336,7 @@ function TrainingSection({ member }: { member: GymMemberDetail }) {
     setBusy(true);
     try {
       await gymApi(`/members/${member.id}/routine`, { method: "POST", json: { templateId } });
-      toast.success("Rutina asignada. El socio ya la ve en su app");
+      toast.success("Rutina asignada", { description: "También puedes mandársela por WhatsApp desde aquí." });
       setAssigning(false);
       load();
     } catch (e) {
@@ -434,6 +435,7 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
   const [editing, setEditing] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const [justSold, setJustSold] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
   const [sendingReceipt, setSendingReceipt] = useState<string | null>(null);
   const [freezing, setFreezing] = useState(false);
   const [freezePolicy, setFreezePolicy] = useState<FreezePolicy | null>(null);
@@ -468,7 +470,7 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
     gymApi<GymMemberDetail>(`/members/${memberId}`).then(setMember).catch((e) => toast.error(e.message));
     gymApi<MemberDocs>(`/members/${memberId}/documents`).then(setDocs).catch(() => setDocs(null));
   }, [memberId]);
-  useEffect(() => { setMember(null); setDocs(null); setSelling(false); setFreezing(false); setPayFor(null); setJustSold(null); load(); }, [load]);
+  useEffect(() => { setMember(null); setDocs(null); setSelling(false); setFreezing(false); setPayFor(null); setJustSold(null); setPrinting(false); load(); }, [load]);
 
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
@@ -529,33 +531,7 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
                     <IconBrandWhatsapp size={14} /> Recordar
                   </Button>
                 )}
-                {!member.hasAppAccess && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    disabled={busy}
-                    title="Le envía por WhatsApp un código para crear su contraseña en la app de socios"
-                    onClick={async () => {
-                      if (!member.client.documentId) return toast.error("Anota la cédula del socio: es su usuario para entrar a la app");
-                      if (!member.client.phone) return toast.error("Anota el WhatsApp del socio para enviarle el código");
-                      setBusy(true);
-                      try {
-                        const res = await fetch(`${API_URL}/clients/${member.client.id}/activation-code`, { method: "POST", headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" }, body: JSON.stringify({ purpose: "gym" }) });
-                        const data = await res.json().catch(() => ({}));
-                        if (!res.ok) throw new Error(data.message || "No se pudo generar el código");
-                        if (data.sent) toast.success("Le enviamos por WhatsApp el código para entrar a la app");
-                        else toast.warning(`${data.reason}. Dale este código: ${data.activationCode}`, { duration: 15000 });
-                      } catch (e) {
-                        toast.error((e as Error).message);
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                  >
-                    <IconDeviceMobile size={14} /> Invitar a la app
-                  </Button>
-                )}
+                
               </div>
             </div>
             <NewMemberDialog open={editing} onOpenChange={setEditing} member={member} onCreated={() => { load(); onChanged(); }} />
@@ -619,13 +595,33 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
                       memberId={member.id}
                       plans={plans}
                       saving={busy}
-                      onSubmit={(body) => run(async () => { const sold = await gymApi<GymMembership>(`/members/${member.id}/memberships`, { method: "POST", json: body }); setSelling(false); setJustSold(sold.id); }, "Membresía registrada")}
+                      onSubmit={(body) => run(async () => { const sold = await gymApi<GymMembership>(`/members/${member.id}/memberships`, { method: "POST", json: body }); setSelling(false); setJustSold(sold.id); if (sold.payments?.length) setPrinting(true); }, "Membresía registrada")}
                     />
                   </div>
                 )}
               </CardContent>
             </Card>
 
+            {(() => {
+              // The receipt comes out of the printer, like a sale in the POS
+              const sold = printing && justSold && member.memberships.find((m) => m.id === justSold);
+              if (!sold) return null;
+              const { data, design, business } = membershipReceiptParts(member, sold, settings);
+              return (
+                <ReceiptPrinter
+                  receipt={data}
+                  design={design}
+                  business={business}
+                  doneLabel="Listo"
+                  onDone={() => setPrinting(false)}
+                  extraActions={member.client.phone ? (
+                    <Button variant="outline" className="h-12 flex-1 gap-2 rounded-xl bg-background font-semibold text-emerald-700" disabled={sendingReceipt === sold.id} onClick={() => sendReceipt(sold)}>
+                      {sendingReceipt === sold.id ? <IconLoader2 size={18} className="animate-spin" /> : <IconBrandWhatsapp size={18} />} WhatsApp
+                    </Button>
+                  ) : undefined}
+                />
+              );
+            })()}
             {(() => {
               const sold = justSold && member.memberships.find((m) => m.id === justSold);
               if (!sold) return null;

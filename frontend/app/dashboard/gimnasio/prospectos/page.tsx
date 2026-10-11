@@ -328,13 +328,13 @@ function TrialPicker({ lead, onClose, onDone }: { lead: GymLead | null; onClose:
                     onClick={() => { setDay(d.key); setPicked(null); }}
                     className={cn(
                       "flex w-[68px] shrink-0 flex-col items-center rounded-2xl py-2.5 outline-none transition",
-                      active ? "bg-foreground text-background shadow-md" : "bg-muted/60 text-foreground hover:bg-muted",
+                      active ? "bg-primary text-primary-foreground shadow-md shadow-primary/25" : "bg-background text-foreground ring-1 ring-border hover:bg-muted",
                       !d.free && !active && "opacity-50",
                     )}
                   >
-                    <span className={cn("text-[11px] font-medium", active ? "text-background/70" : "text-muted-foreground")}>{d.date.toLocaleDateString("es-VE", { weekday: "short" }).replace(".", "")}</span>
+                    <span className={cn("text-[11px] font-medium", active ? "text-primary-foreground/80" : "text-muted-foreground")}>{d.date.toLocaleDateString("es-VE", { weekday: "short" }).replace(".", "")}</span>
                     <span className="text-xl font-bold leading-tight tabular-nums">{d.date.getDate()}</span>
-                    <span className={cn("text-[10px]", active ? "text-background/70" : "text-muted-foreground")}>{d.free ? `${d.free} ${d.free === 1 ? "clase" : "clases"}` : "Llenas"}</span>
+                    <span className={cn("text-[10px]", active ? "text-primary-foreground/80" : "text-muted-foreground")}>{d.free ? `${d.free} ${d.free === 1 ? "clase" : "clases"}` : "Llenas"}</span>
                   </button>
                 );
               })}
