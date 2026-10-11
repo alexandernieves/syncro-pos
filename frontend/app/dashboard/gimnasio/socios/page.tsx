@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   IconBan,
+  IconDeviceMobile,
   IconBrandWhatsapp,
   IconPrinter,
   IconCircleCheckFilled,
@@ -521,6 +522,33 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
                     onClick={() => run(() => gymApi(`/members/${member.id}/remind`, { method: "POST" }), "Recordatorio enviado por WhatsApp")}
                   >
                     <IconBrandWhatsapp size={14} /> Recordar
+                  </Button>
+                )}
+                {!member.hasAppAccess && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={busy}
+                    title="Le envía por WhatsApp un código para crear su contraseña en la app de socios"
+                    onClick={async () => {
+                      if (!member.client.documentId) return toast.error("Anota la cédula del socio: es su usuario para entrar a la app");
+                      if (!member.client.phone) return toast.error("Anota el WhatsApp del socio para enviarle el código");
+                      setBusy(true);
+                      try {
+                        const res = await fetch(`${API_URL}/clients/${member.client.id}/activation-code`, { method: "POST", headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" }, body: JSON.stringify({ purpose: "gym" }) });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok) throw new Error(data.message || "No se pudo generar el código");
+                        if (data.sent) toast.success("Le enviamos por WhatsApp el código para entrar a la app");
+                        else toast.warning(`${data.reason}. Dale este código: ${data.activationCode}`, { duration: 15000 });
+                      } catch (e) {
+                        toast.error((e as Error).message);
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    <IconDeviceMobile size={14} /> Invitar a la app
                   </Button>
                 )}
               </div>

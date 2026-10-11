@@ -61,6 +61,7 @@ export type GymMemberRow = {
 };
 
 export type GymMemberDetail = GymMemberRow & {
+  hasAppAccess?: boolean;
   birthDate: string | null;
   gender: string | null;
   emergencyContact: string | null;

@@ -974,7 +974,7 @@ export class ClientsService {
     clientId: string,
     businessId: string,
     customLimit?: number,
-    purpose: 'activation' | 'reset' = 'activation',
+    purpose: 'activation' | 'reset' | 'gym' = 'activation',
     supervisorPin?: string,
     role?: string,
   ) {
@@ -1025,13 +1025,15 @@ export class ClientsService {
     const firstName = (client.name || '').trim().split(/\s+/)[0];
     const intro = purpose === 'reset'
       ? `Hola ${firstName}, este es tu código para restablecer tu contraseña de *SyncroCredit* en *${businessName}*:`
-      : `Hola ${firstName}, *${businessName}* te dio acceso a *SyncroCredit* con un límite de *$${Number(creditLimit ?? client.creditLimit).toFixed(0)}*.\n\nTu código de activación es:`;
+      : purpose === 'gym'
+        ? `Hola ${firstName}, ya puedes usar la app de *${businessName}*: tu plan, tus reservas de clases y tu rutina.\n\nTu código para crear tu contraseña es:`
+        : `Hola ${firstName}, *${businessName}* te dio acceso a *SyncroCredit* con un límite de *$${Number(creditLimit ?? client.creditLimit).toFixed(0)}*.\n\nTu código de activación es:`;
     const text = [
       intro,
       '',
       `*${activationCode}*`,
       '',
-      portalUrl ? `${purpose === 'reset' ? 'Ingresa aquí' : 'Actívalo aquí'} con tu cédula: ${portalUrl}` : 'Ingresa al portal de SyncroCredit con tu cédula.',
+      portalUrl ? `${purpose === 'reset' ? 'Ingresa aquí' : 'Actívalo aquí'} con tu cédula: ${portalUrl}` : purpose === 'gym' ? 'Entra a la app con tu cédula.' : 'Ingresa al portal de SyncroCredit con tu cédula.',
       'Vence en 24 horas. No lo compartas con nadie, ni con el personal de la tienda.',
     ].join('\n');
     const masked = text.replace(activationCode, '••••••');

@@ -300,7 +300,7 @@ export class ClientsController {
   @Post(':id/activation-code')
   generateActivationCode(@Param('id') id: string, @Body() body: any, @Request() req: any) {
     const businessId = req.user.businessId;
-    return this.clientsService.generateActivationCode(id, businessId, body?.creditLimit, body?.purpose === 'reset' ? 'reset' : 'activation', body?.supervisorPin, req.user.role);
+    return this.clientsService.generateActivationCode(id, businessId, body?.creditLimit, body?.purpose === 'reset' ? 'reset' : body?.purpose === 'gym' ? 'gym' : 'activation', body?.supervisorPin, req.user.role);
   }
 
   @Patch(':id/toggle-suspension')

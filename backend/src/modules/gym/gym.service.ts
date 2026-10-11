@@ -258,15 +258,18 @@ export class GymService {
     const member = await this.prisma.gymMember.findFirst({
       where: { id, businessId },
       include: {
-        client: { select: { id: true, name: true, documentId: true, phone: true, email: true } },
+        client: { select: { id: true, name: true, documentId: true, phone: true, email: true, password: true } },
         memberships: { orderBy: { startDate: 'desc' }, include: { payments: { orderBy: { createdAt: 'desc' } } } },
         checkIns: { orderBy: { createdAt: 'desc' }, take: 20 },
       },
     });
     if (!member) throw new NotFoundException('Socio no encontrado');
     const now = new Date();
+    const { password, ...client } = member.client;
     return {
-      ...this.presentMember(member),
+      ...this.presentMember({ ...member, client }),
+      // Whether the member already created their password for the app (never the hash itself)
+      hasAppAccess: !!password,
       birthDate: member.birthDate,
       gender: member.gender,
       emergencyContact: member.emergencyContact,
