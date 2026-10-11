@@ -25,6 +25,7 @@ import {
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DateField, toDay } from "@/components/forms/date-field";
 import { type GymLead, type LeadActivity, type LeadStage, LEAD_SOURCES, LEAD_STAGES, LEAD_STAGE_CLASS, accountCountry, gymApi, leadSourceLabel, leadStageLabel } from "@/lib/gym";
 import { formatWhatsAppNumber } from "@/lib/phone-countries";
 import { DocumentField, EmailField, Optional, PhoneField } from "@/components/forms/contact-fields";
@@ -495,7 +496,7 @@ function LeadSheet({ leadId, version, onClose, onChanged, onEdit, onLost, onTria
                   {[["Mañana", 1], ["En 3 días", 3], ["En una semana", 7]].map(([label, n]) => (
                     <button key={label} type="button" onClick={() => run(() => gymApi(`/leads/${lead.id}`, { method: "PUT", json: { nextFollowUpAt: inDays(n as number) } }), `Seguimiento: ${String(label).toLowerCase()}`)} className="rounded-full border px-3 py-1 text-xs text-muted-foreground hover:text-foreground">{label}</button>
                   ))}
-                  <input type="date" className="h-7 rounded-full border bg-background px-2 text-xs" value={lead.nextFollowUpAt ? new Date(lead.nextFollowUpAt).toLocaleDateString("en-CA") : ""} onChange={(e) => e.target.value && run(() => gymApi(`/leads/${lead.id}`, { method: "PUT", json: { nextFollowUpAt: new Date(`${e.target.value}T10:00:00`).toISOString() } }))} />
+                  <DateField size="sm" className="w-auto" value={lead.nextFollowUpAt ? toDay(new Date(lead.nextFollowUpAt)) : ""} min={toDay(new Date())} placeholder="Otra fecha" onChange={(v) => v && run(() => gymApi(`/leads/${lead.id}`, { method: "PUT", json: { nextFollowUpAt: new Date(`${v}T10:00:00`).toISOString() } }), "Seguimiento programado")} />
                 </div>
                 {lead.nextFollowUpAt && <p className={cn("text-xs", isOverdue(lead) ? "font-medium text-rose-600" : "text-muted-foreground")}>{isOverdue(lead) ? "Vencido desde el" : "Programado para el"} {dayTime(lead.nextFollowUpAt)}</p>}
               </div>

@@ -105,12 +105,20 @@ export class GymService {
 
   // ── Plans ──────────────────────────────────────────────────────────────────
 
-  listPlans(businessId: string) {
-    return this.prisma.gymPlan.findMany({
-      where: { businessId },
-      orderBy: [{ isActive: 'desc' }, { durationDays: 'asc' }],
-      include: { _count: { select: { memberships: true } } },
-    });
+  /** Plans with how they sell: members on each plan right now and what was charged in the last 30 days. */
+  async listPlans(businessId: string) {
+    const now = new Date();
+    const since = new Date(now.getTime() - 30 * DAY);
+    const [plans, active, revenue] = await Promise.all([
+      this.prisma.gymPlan.findMany({ where: { businessId }, orderBy: [{ isActive: 'desc' }, { durationDays: 'asc' }], include: { _count: { select: { memberships: true } } } }),
+      this.prisma.gymMembership.groupBy({ by: ['planId'], where: { businessId, status: { in: ['ACTIVE', 'FROZEN'] }, startDate: { lte: now }, endDate: { gte: now } }, _count: { _all: true } }),
+      this.prisma.gymPayment.findMany({ where: { businessId, createdAt: { gte: since }, membershipId: { not: null } }, select: { amount: true, membership: { select: { planId: true } } } }),
+    ]);
+    return plans.map((p) => ({
+      ...p,
+      activeMembers: active.find((a) => a.planId === p.id)?._count._all ?? 0,
+      revenue30d: Math.round(revenue.filter((r) => r.membership?.planId === p.id).reduce((t, r) => t + r.amount, 0) * 100) / 100,
+    }));
   }
 
   private validatePlan(data: Partial<PlanInput>, partial = false) {

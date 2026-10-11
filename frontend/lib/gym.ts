@@ -17,6 +17,8 @@ export type GymPlan = {
   allowedClassIds?: string[];
   isActive: boolean;
   _count?: { memberships: number };
+  activeMembers?: number;
+  revenue30d?: number;
 };
 
 export type MembershipState = "ACTIVE" | "SCHEDULED" | "FROZEN" | "EXPIRED" | "CANCELLED";

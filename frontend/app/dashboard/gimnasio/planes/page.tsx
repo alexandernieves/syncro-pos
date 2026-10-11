@@ -1,19 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { IconCalendarRepeat, IconLoader2, IconPencil, IconPlus, IconSnowflake } from "@tabler/icons-react";
+import Link from "next/link";
+import { IconCalendarRepeat, IconCash, IconCheck, IconLoader2, IconPencil, IconPlus, IconTrophy, IconUsers, IconX } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { StatCard, StatGrid } from "@/components/stat-card";
+import { Optional } from "@/components/forms/contact-fields";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { type GymPlan, durationLabel, gymApi, money } from "@/lib/gym";
-import { GymPage, GymPageHeader } from "@/components/gym/gym-ui";
+import { FilterChips, GymPage, GymPageHeader } from "@/components/gym/gym-ui";
 
 const COLORS = ["#E4572E", "#2563EB", "#059669", "#7C3AED", "#DB2777", "#D97706", "#16140F"];
 const DURATIONS: [number, string][] = [[1, "Pase diario"], [7, "Semanal"], [15, "Quincenal"], [30, "Mensual"], [90, "Trimestral"], [180, "Semestral"], [365, "Anual"]];
@@ -98,16 +101,34 @@ export default function GymPlansPage() {
     }
   };
 
+  const [filter, setFilter] = useState<"active" | "inactive">("active");
+  const shown = (plans ?? []).filter((p) => (filter === "active" ? p.isActive : !p.isActive));
+  const activePlans = (plans ?? []).filter((p) => p.isActive);
+  const totalMembers = activePlans.reduce((t, p) => t + (p.activeMembers ?? 0), 0);
+  const revenue = (plans ?? []).reduce((t, p) => t + (p.revenue30d ?? 0), 0);
+  const top = [...activePlans].sort((a, b) => (b.activeMembers ?? 0) - (a.activeMembers ?? 0))[0];
+  const topId = top && (top.activeMembers ?? 0) > 0 ? top.id : null;
+  const set = (patch: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
+
   return (
     <GymPage>
       <GymPageHeader
         title="Planes y membresías"
-        description="Los planes que vendes: duración, precio y días que se pueden congelar."
+        description="Lo que vendes: precio, duración y qué incluye cada plan."
         actions={<Button className="gap-2" onClick={() => setDraft({ ...emptyDraft })}><IconPlus size={16} /> Nuevo plan</Button>}
       />
 
+      <StatGrid>
+        <StatCard label="Planes a la venta" value={plans ? activePlans.length : "—"} icon={<IconCalendarRepeat size={20} />} title={`${(plans ?? []).length - activePlans.length} desactivados`} hint="Los desactivados no se pueden vender" />
+        <StatCard label="Socios con plan" value={plans ? totalMembers : "—"} icon={<IconUsers size={20} />} tone="good" title="Membresías vigentes hoy" hint="Incluye las congeladas" />
+        <StatCard label="Cobrado en 30 días" value={plans ? money(revenue) : "—"} icon={<IconCash size={20} />} tone="primary" title="Planes vendidos y abonos" hint="Sin pases de día" />
+        <StatCard label="El más vendido" value={topId ? top!.name : "—"} icon={<IconTrophy size={20} />} title={topId ? `${top!.activeMembers} socios activos` : "Todavía sin socios"} hint="Por socios con el plan hoy" />
+      </StatGrid>
+
+      <FilterChips value={filter} onChange={setFilter} options={[["active", "A la venta"], ["inactive", "Desactivados"]]} counts={{ active: activePlans.length, inactive: (plans ?? []).length - activePlans.length }} />
+
       {!plans ? (
-        <div className="grid gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}</div>
+        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-96 rounded-3xl" />)}</div>
       ) : plans.length === 0 ? (
         <Card className="gap-0 py-0">
           <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
@@ -117,152 +138,225 @@ export default function GymPlansPage() {
             <Button className="mt-2 gap-2" onClick={() => setDraft({ ...emptyDraft })}><IconPlus size={16} /> Nuevo plan</Button>
           </CardContent>
         </Card>
+      ) : !shown.length ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">No hay planes desactivados.</p>
       ) : (
-        <div className="grid gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-3">
-          {plans.map((p) => (
-            <Card key={p.id} className={cn("@container/card relative overflow-hidden bg-gradient-to-t from-primary/5 to-card shadow-xs", !p.isActive && "opacity-60")}>
-              <div className="absolute inset-x-0 top-0 h-1" style={{ background: p.color || COLORS[0] }} />
-              <CardHeader>
-                <CardDescription>{durationLabel(p.durationDays)}</CardDescription>
-                <CardTitle className="text-xl font-semibold">{p.name}</CardTitle>
-                <CardAction>
-                  <Button variant="ghost" size="icon" className="size-8" title="Editar plan" onClick={() => setDraft(toDraft(p))}>
-                    <IconPencil size={16} />
-                  </Button>
-                </CardAction>
-              </CardHeader>
-              <CardContent className="space-y-1">
-                <p className="text-3xl font-semibold tabular-nums">{money(p.price)}</p>
-                {p.description ? (
-                  <p className="line-clamp-2 text-sm text-muted-foreground">{p.description}</p>
-                ) : p.durationDays >= 60 ? (
-                  <p className="text-sm text-muted-foreground">Equivale a {money(p.price / (p.durationDays / 30))} al mes</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">{p.durationDays === 1 ? "Acceso por un día" : `Acceso por ${durationLabel(p.durationDays)}`}</p>
-                )}
-              </CardContent>
-              <CardFooter className="flex flex-wrap gap-1.5">
-                <Badge variant="outline">{p._count?.memberships ?? 0} vendidas</Badge>
-                {p.maxFreezeDays > 0 && <Badge variant="outline" className="gap-1"><IconSnowflake size={12} /> Congela hasta {p.maxFreezeDays} días</Badge>}
-                {(p.guestPassesPerMonth ?? 0) > 0 && <Badge variant="outline">{p.guestPassesPerMonth} {p.guestPassesPerMonth === 1 ? "invitado" : "invitados"} al mes</Badge>}
-                {(p.accessWindows as Window[] | null)?.length ? <Badge variant="outline">{(p.accessWindows as Window[]).map((w) => `${hm(w.start)}–${hm(w.end)}`).join(", ")}</Badge> : null}
-                {(p.maxEntriesPerWeek ?? 0) > 0 && <Badge variant="outline">{p.maxEntriesPerWeek} veces por semana</Badge>}
-                {(p.totalEntries ?? 0) > 0 && <Badge variant="outline">Paquete de {p.totalEntries} entradas</Badge>}
-                {p.includesClasses === false && <Badge variant="outline">Sin clases</Badge>}
-                {!p.isActive && <Badge variant="outline">Desactivado</Badge>}
-              </CardFooter>
-            </Card>
-          ))}
+        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+          {shown.map((p) => <PlanCard key={p.id} plan={p} classes={classes} popular={p.id === topId} onEdit={() => setDraft(toDraft(p))} />)}
+          {filter === "active" && (
+            <button type="button" onClick={() => setDraft({ ...emptyDraft })} className="flex min-h-64 flex-col items-center justify-center gap-2 rounded-3xl border-2 border-dashed text-muted-foreground transition hover:border-primary/40 hover:text-primary">
+              <IconPlus size={24} />
+              <span className="text-sm font-medium">Nuevo plan</span>
+            </button>
+          )}
         </div>
       )}
 
       <Dialog open={!!draft} onOpenChange={(open) => !open && setDraft(null)}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader><DialogTitle>{draft?.id ? "Editar plan" : "Nuevo plan"}</DialogTitle></DialogHeader>
+        <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto p-0 sm:max-w-2xl">
+          <DialogHeader className="border-b px-6 py-5">
+            <DialogTitle>{draft?.id ? `Editar ${draft.name || "plan"}` : "Nuevo plan"}</DialogTitle>
+            <DialogDescription>Los cambios aplican a las ventas nuevas; las membresías ya vendidas conservan su precio y fechas.</DialogDescription>
+          </DialogHeader>
           {draft && (
-            <div className="grid gap-4">
-              <div className="space-y-1.5">
-                <Label>Nombre</Label>
-                <Input autoFocus value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Mensual" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Duración</Label>
+            <div className="divide-y">
+              <section className="grid gap-4 px-6 py-5 sm:grid-cols-[1fr_auto]">
+                <div className="space-y-1.5">
+                  <Label>Nombre</Label>
+                  <Input autoFocus value={draft.name} onChange={(e) => set({ name: e.target.value })} placeholder="Ej.: mensual" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Color</Label>
+                  <div className="flex h-9 items-center gap-1.5">
+                    {COLORS.map((c) => (
+                      <button key={c} type="button" onClick={() => set({ color: c })} className={cn("size-6 rounded-full transition", draft.color === c ? "ring-2 ring-offset-2 ring-offset-background" : "opacity-80 hover:opacity-100")} style={{ background: c, ["--tw-ring-color" as string]: c }} title={c} />
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Descripción <Optional /></Label>
+                  <Input value={draft.description} onChange={(e) => set({ description: e.target.value })} placeholder="Ej.: sala de máquinas y clases grupales" />
+                </div>
+              </section>
+
+              <section className="space-y-4 px-6 py-5">
+                <p className="text-sm font-semibold">Precio y duración</p>
                 <div className="flex flex-wrap gap-1.5">
                   {DURATIONS.map(([days, label]) => (
-                    <button key={days} type="button" onClick={() => setDraft({ ...draft, durationDays: days })} className={cn("h-8 rounded-full border px-3 text-xs font-semibold", draft.durationDays === days ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground")}>
+                    <button key={days} type="button" onClick={() => set({ durationDays: days })} className={cn("h-8 rounded-full border px-3 text-xs font-semibold transition", draft.durationDays === days ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground")}>
                       {label}
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center gap-2 pt-1">
-                  <Input type="number" min={1} value={draft.durationDays} onChange={(e) => setDraft({ ...draft, durationDays: Number(e.target.value) })} className="w-28" />
-                  <span className="text-sm text-muted-foreground">Días</span>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label>Duración en días</Label>
+                    <Input type="number" min={1} value={draft.durationDays} onChange={(e) => set({ durationDays: Number(e.target.value) })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Precio ($)</Label>
+                    <Input type="number" min={0} step="0.01" value={draft.price} onChange={(e) => set({ price: e.target.value })} placeholder="25.00" />
+                    {Number(draft.price) > 0 && draft.durationDays >= 60 && <p className="text-xs text-muted-foreground">Equivale a {money(Number(draft.price) / (draft.durationDays / 30))} al mes</p>}
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Precio ($)</Label>
-                  <Input type="number" min={0} step="0.01" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value })} placeholder="25.00" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Días para congelar</Label>
-                  <Input type="number" min={0} value={draft.maxFreezeDays} onChange={(e) => setDraft({ ...draft, maxFreezeDays: e.target.value })} />
-                </div>
-                <div className="col-span-2 space-y-1.5">
-                  <Label>Invitados gratis al mes</Label>
-                  <Input type="number" min={0} value={draft.guestPassesPerMonth} onChange={(e) => setDraft({ ...draft, guestPassesPerMonth: e.target.value })} />
-                  <p className="text-xs text-muted-foreground">Pases para que el socio traiga a alguien sin costo. Después se cobra el pase de día.</p>
-                </div>
-              </div>
-              <div className="space-y-3 rounded-xl bg-muted/40 p-3">
-                <p className="text-sm font-semibold">Reglas de acceso</p>
+              </section>
+
+              <section className="space-y-4 px-6 py-5">
+                <p className="text-sm font-semibold">Qué incluye</p>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs">Horario en que puede entrar</Label>
-                    <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => setDraft({ ...draft, windows: [...draft.windows, { days: [1, 2, 3, 4, 5], start: "06:00", end: "12:00" }] })}>Agregar horario</button>
+                    <Label>Horario en que puede entrar</Label>
+                    <Button size="sm" variant="ghost" className="h-7 gap-1 text-primary" onClick={() => set({ windows: [...draft.windows, { days: [1, 2, 3, 4, 5], start: "06:00", end: "12:00" }] })}><IconPlus size={14} /> Agregar horario</Button>
                   </div>
-                  {draft.windows.length === 0 && <p className="text-xs text-muted-foreground">A cualquier hora que abra el gimnasio.</p>}
+                  {draft.windows.length === 0 && <p className="rounded-xl bg-muted/40 px-3 py-2 text-sm text-muted-foreground">A cualquier hora que abra el gimnasio.</p>}
                   {draft.windows.map((w, i) => (
-                    <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg bg-background p-2">
+                    <div key={i} className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/40 p-2">
                       <div className="flex gap-1">
                         {WEEK.map(([d, l]) => {
                           const on = w.days.includes(d);
-                          return <button key={d} type="button" onClick={() => setDraft({ ...draft, windows: draft.windows.map((x, j) => (j === i ? { ...x, days: on ? x.days.filter((y) => y !== d) : [...x.days, d] } : x)) })} className={cn("size-7 rounded-md text-[11px] font-semibold", on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>{l}</button>;
+                          return <button key={d} type="button" onClick={() => set({ windows: draft.windows.map((x, j) => (j === i ? { ...x, days: on ? x.days.filter((y) => y !== d) : [...x.days, d] } : x)) })} className={cn("size-7 rounded-md text-[11px] font-semibold", on ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground")}>{l}</button>;
                         })}
                       </div>
-                      <Input type="time" value={w.start} onChange={(e) => setDraft({ ...draft, windows: draft.windows.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)) })} className="h-8 w-28" />
+                      <Input type="time" value={w.start} onChange={(e) => set({ windows: draft.windows.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)) })} className="h-8 w-28 bg-background" />
                       <span className="text-xs text-muted-foreground">a</span>
-                      <Input type="time" value={w.end} onChange={(e) => setDraft({ ...draft, windows: draft.windows.map((x, j) => (j === i ? { ...x, end: e.target.value } : x)) })} className="h-8 w-28" />
-                      <button type="button" className="ml-auto text-xs text-rose-600 hover:underline" onClick={() => setDraft({ ...draft, windows: draft.windows.filter((_, j) => j !== i) })}>Quitar</button>
+                      <Input type="time" value={w.end} onChange={(e) => set({ windows: draft.windows.map((x, j) => (j === i ? { ...x, end: e.target.value } : x)) })} className="h-8 w-28 bg-background" />
+                      <Button size="icon" variant="ghost" className="ml-auto size-8 text-rose-600" title="Quitar horario" onClick={() => set({ windows: draft.windows.filter((_, j) => j !== i) })}><IconX size={15} /></Button>
                     </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="space-y-1"><Label className="text-xs">Entradas por día</Label><Input type="number" min={0} value={draft.maxEntriesPerDay} onChange={(e) => setDraft({ ...draft, maxEntriesPerDay: e.target.value })} className="h-8" /></div>
-                  <div className="space-y-1"><Label className="text-xs">Por semana</Label><Input type="number" min={0} value={draft.maxEntriesPerWeek} onChange={(e) => setDraft({ ...draft, maxEntriesPerWeek: e.target.value })} className="h-8" /></div>
-                  <div className="space-y-1"><Label className="text-xs">Paquete total</Label><Input type="number" min={0} value={draft.totalEntries} onChange={(e) => setDraft({ ...draft, totalEntries: e.target.value })} className="h-8" /></div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5"><Label>Entradas por día</Label><Input type="number" min={0} value={draft.maxEntriesPerDay} onChange={(e) => set({ maxEntriesPerDay: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label>Entradas por semana</Label><Input type="number" min={0} value={draft.maxEntriesPerWeek} onChange={(e) => set({ maxEntriesPerWeek: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label>Paquete de entradas</Label><Input type="number" min={0} value={draft.totalEntries} onChange={(e) => set({ totalEntries: e.target.value })} /></div>
                 </div>
-                <p className="text-xs text-muted-foreground">Con 0 no hay límite. El paquete sirve para planes de, por ejemplo, 12 entradas en el mes.</p>
-                <label className="flex items-center justify-between gap-3 text-sm">
-                  Incluye clases grupales
-                  <Switch checked={draft.includesClasses} onCheckedChange={(v) => setDraft({ ...draft, includesClasses: v })} />
-                </label>
-                {draft.includesClasses && classes.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-muted-foreground">{draft.allowedClassIds.length ? "Solo las clases marcadas:" : "Todas las clases. Marca algunas para limitarlo:"}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {classes.filter((c) => c.isActive).map((c) => {
-                        const on = draft.allowedClassIds.includes(c.id);
-                        return <button key={c.id} type="button" onClick={() => setDraft({ ...draft, allowedClassIds: on ? draft.allowedClassIds.filter((x) => x !== c.id) : [...draft.allowedClassIds, c.id] })} className={cn("rounded-full border px-3 py-1 text-xs", on ? "border-primary bg-primary/10 text-primary" : "bg-background text-muted-foreground")}>{c.name}</button>;
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Descripción (opcional)</Label>
-                <Input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Acceso libre a sala de máquinas y clases grupales" />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex gap-1.5">
-                  {COLORS.map((c) => (
-                    <button key={c} type="button" onClick={() => setDraft({ ...draft, color: c })} className={cn("size-6 rounded-full ring-1 ring-black/10", draft.color === c && "ring-2 ring-foreground ring-offset-2")} style={{ background: c }} title={c} />
-                  ))}
+                <p className="-mt-1 text-xs text-muted-foreground">Con 0 no hay límite. El paquete sirve para planes como "12 entradas en el mes".</p>
+                <div className="space-y-2 rounded-xl bg-muted/40 p-3">
+                  <label className="flex items-center justify-between gap-3 text-sm font-medium">
+                    Incluye clases grupales
+                    <Switch checked={draft.includesClasses} onCheckedChange={(v) => set({ includesClasses: v })} />
+                  </label>
+                  {draft.includesClasses && classes.length > 0 && (
+                    <>
+                      <p className="text-xs text-muted-foreground">{draft.allowedClassIds.length ? "Solo las clases marcadas:" : "Todas las clases. Marca algunas para limitarlo:"}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {classes.filter((c) => c.isActive).map((c) => {
+                          const on = draft.allowedClassIds.includes(c.id);
+                          return <button key={c.id} type="button" onClick={() => set({ allowedClassIds: on ? draft.allowedClassIds.filter((x) => x !== c.id) : [...draft.allowedClassIds, c.id] })} className={cn("rounded-full border px-3 py-1 text-xs", on ? "border-primary bg-primary/10 text-primary" : "bg-background text-muted-foreground")}>{c.name}</button>;
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </section>
+
+              <section className="grid gap-4 px-6 py-5 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Días que se puede congelar</Label>
+                  <Input type="number" min={0} value={draft.maxFreezeDays} onChange={(e) => set({ maxFreezeDays: e.target.value })} />
+                  <p className="text-xs text-muted-foreground">Con 0 no se puede congelar.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Invitados gratis al mes</Label>
+                  <Input type="number" min={0} value={draft.guestPassesPerMonth} onChange={(e) => set({ guestPassesPerMonth: e.target.value })} />
+                  <p className="text-xs text-muted-foreground">Después se cobra el pase de día.</p>
                 </div>
                 {draft.id && (
-                  <label className="flex items-center gap-2 text-sm">
-                    <Switch checked={draft.isActive} onCheckedChange={(v) => setDraft({ ...draft, isActive: v })} /> Activo
+                  <label className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 px-3 py-2 text-sm sm:col-span-2">
+                    <span>
+                      <span className="block font-medium">A la venta</span>
+                      <span className="block text-xs text-muted-foreground">Desactívalo para dejar de venderlo; los socios que ya lo tienen no se afectan.</span>
+                    </span>
+                    <Switch checked={draft.isActive} onCheckedChange={(v) => set({ isActive: v })} />
                   </label>
                 )}
-              </div>
+              </section>
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="border-t px-6 py-4">
             <Button variant="outline" onClick={() => setDraft(null)}>Cancelar</Button>
-            <Button onClick={save} disabled={saving} className="gap-2">{saving && <IconLoader2 size={16} className="animate-spin" />} Guardar</Button>
+            <Button onClick={save} disabled={saving || !draft?.name.trim() || !(Number(draft?.price) >= 0)} className="gap-2">{saving && <IconLoader2 size={16} className="animate-spin" />} Guardar plan</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </GymPage>
+  );
+}
+
+/** Pricing card: what the plan costs, what it includes and how it's selling. */
+function PlanCard({ plan: p, classes, popular, onEdit }: { plan: GymPlan; classes: { id: string; name: string }[]; popular: boolean; onEdit: () => void }) {
+  const color = p.color || COLORS[0];
+  const windows = (p.accessWindows as Window[] | null) ?? [];
+  const perMonth = p.durationDays >= 60 ? p.price / (p.durationDays / 30) : null;
+  const allowed = p.allowedClassIds?.length ? classes.filter((c) => p.allowedClassIds!.includes(c.id)).map((c) => c.name) : [];
+  const dayNames = (days: number[]) => {
+    const order = [1, 2, 3, 4, 5, 6, 0];
+    const sorted = order.filter((d) => days.includes(d));
+    const names = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+    if (sorted.length === 7) return "Todos los días";
+    if (sorted.join() === "1,2,3,4,5") return "Lun a vie";
+    return sorted.map((d) => names[d]).join(", ");
+  };
+  const features: { ok: boolean; text: string }[] = [
+    windows.length ? { ok: true, text: windows.map((w) => `${dayNames(w.days)} · ${hm(w.start)} a ${hm(w.end)}`).join(" / ") } : { ok: true, text: "Acceso en todo el horario del gimnasio" },
+    p.includesClasses === false ? { ok: false, text: "Sin clases grupales" } : { ok: true, text: allowed.length ? `Clases: ${allowed.join(", ")}` : "Todas las clases grupales" },
+    ...((p.maxEntriesPerDay ?? 0) > 0 || (p.maxEntriesPerWeek ?? 0) > 0
+      ? [{ ok: true, text: [p.maxEntriesPerDay ? `${p.maxEntriesPerDay} ${p.maxEntriesPerDay === 1 ? "entrada" : "entradas"} al día` : null, p.maxEntriesPerWeek ? `${p.maxEntriesPerWeek} por semana` : null].filter(Boolean).join(" · ") }]
+      : [{ ok: true, text: "Entradas ilimitadas" }]),
+    ...((p.totalEntries ?? 0) > 0 ? [{ ok: true, text: `Paquete de ${p.totalEntries} entradas` }] : []),
+    p.maxFreezeDays > 0 ? { ok: true, text: `Congela hasta ${p.maxFreezeDays} días` } : { ok: false, text: "No se puede congelar" },
+    ...((p.guestPassesPerMonth ?? 0) > 0 ? [{ ok: true, text: `${p.guestPassesPerMonth} ${p.guestPassesPerMonth === 1 ? "invitado gratis" : "invitados gratis"} al mes` }] : []),
+  ];
+
+  return (
+    <div className={cn("relative flex flex-col rounded-3xl bg-card p-6 shadow-sm ring-1 ring-border/60 transition hover:shadow-md", popular && "ring-2 ring-primary/50", !p.isActive && "opacity-60")}>
+      {popular && <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-1 text-[11px] font-bold text-primary-foreground shadow-sm">El más vendido</span>}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex size-11 items-center justify-center rounded-2xl" style={{ background: `color-mix(in oklab, ${color} 22%, var(--card))`, color: `color-mix(in oklab, ${color} 45%, black)` }}>
+            <IconCalendarRepeat size={22} />
+          </span>
+          <div>
+            <p className="text-lg font-bold leading-tight">{p.name}</p>
+            <p className="text-xs text-muted-foreground">{p.durationDays === 1 ? "Un día" : durationLabel(p.durationDays)}</p>
+          </div>
+        </div>
+        <Button variant="ghost" size="icon" className="size-8 text-muted-foreground" title="Editar plan" onClick={onEdit}><IconPencil size={16} /></Button>
+      </div>
+
+      <div className="mt-5">
+        <p className="flex items-baseline gap-1.5">
+          <span className="text-4xl font-bold tracking-tight tabular-nums">{money(p.price)}</span>
+          <span className="text-sm text-muted-foreground">/ {p.durationDays === 1 ? "día" : durationLabel(p.durationDays)}</span>
+        </p>
+        <p className="mt-1 min-h-5 text-sm text-muted-foreground">{perMonth ? `Equivale a ${money(perMonth)} al mes` : p.description || ""}</p>
+        {perMonth && p.description && <p className="text-sm text-muted-foreground">{p.description}</p>}
+      </div>
+
+      <ul className="mt-5 flex-1 space-y-2.5">
+        {features.map((f) => (
+          <li key={f.text} className={cn("flex items-start gap-2.5 text-sm", !f.ok && "text-muted-foreground")}>
+            <span className={cn("mt-0.5 flex size-4.5 shrink-0 items-center justify-center rounded-full", f.ok ? "bg-emerald-500/15 text-emerald-700" : "bg-muted text-muted-foreground")}>
+              {f.ok ? <IconCheck size={12} stroke={3} /> : <IconX size={11} stroke={3} />}
+            </span>
+            {f.text}
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-6 grid grid-cols-2 gap-2 rounded-2xl bg-muted/40 p-3 text-center">
+        <div>
+          <p className="text-lg font-bold tabular-nums">{p.activeMembers ?? 0}</p>
+          <p className="text-[11px] text-muted-foreground">{p.activeMembers === 1 ? "Socio activo" : "Socios activos"}</p>
+        </div>
+        <div>
+          <p className="text-lg font-bold tabular-nums">{money(p.revenue30d ?? 0)}</p>
+          <p className="text-[11px] text-muted-foreground">Cobrado en 30 días</p>
+        </div>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <Button asChild variant="outline" className="flex-1"><Link href="/dashboard/gimnasio/socios">Vender a un socio</Link></Button>
+        <Button variant="ghost" onClick={onEdit}>Editar</Button>
+      </div>
+    </div>
   );
 }

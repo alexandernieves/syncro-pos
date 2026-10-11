@@ -5,6 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { IconAlertTriangle, IconBarbell, IconCash, IconCheck, IconLoader2, IconPlus, IconTool, IconTools } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DateField, FUTURE_PRESETS } from "@/components/forms/date-field";
 import { gymApi, money, shortDate } from "@/lib/gym";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -100,12 +101,12 @@ function EquipmentDialog({ item, open, onClose, onSaved }: { item: Equipment | n
           <div className="space-y-1.5"><Label>Modelo</Label><Input value={f.model} onChange={(e) => set("model", e.target.value)} /></div>
           <div className="space-y-1.5"><Label>Serial</Label><Input value={f.serial} onChange={(e) => set("serial", e.target.value)} /></div>
           <div className="space-y-1.5"><Label>Costo ($)</Label><Input value={f.purchasePrice} onChange={(e) => set("purchasePrice", e.target.value.replace(/[^\d.]/g, ""))} inputMode="decimal" /></div>
-          <div className="space-y-1.5"><Label>Fecha de compra</Label><Input type="date" value={f.purchaseDate} onChange={(e) => set("purchaseDate", e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Garantía hasta</Label><Input type="date" value={f.warrantyUntil} onChange={(e) => set("warrantyUntil", e.target.value)} /></div>
+          <div className="space-y-1.5"><Label>Fecha de compra</Label><DateField value={f.purchaseDate} onChange={(v) => set("purchaseDate", v)} yearPicker={{ from: 2005, to: new Date().getFullYear() }} placeholder="Opcional" clearable /></div>
+          <div className="space-y-1.5"><Label>Garantía hasta</Label><DateField value={f.warrantyUntil} onChange={(v) => set("warrantyUntil", v)} yearPicker={{ from: 2005, to: new Date().getFullYear() + 10 }} placeholder="Opcional" clearable /></div>
         </div>
         <div className="grid gap-3 rounded-xl bg-muted/40 p-3 sm:grid-cols-2">
           <div className="space-y-1.5"><Label>Servicio preventivo cada (días)</Label><Input type="number" min={0} value={f.serviceEveryDays} onChange={(e) => set("serviceEveryDays", e.target.value)} className="w-24" /></div>
-          <div className="space-y-1.5"><Label>Último servicio</Label><Input type="date" value={f.lastServiceAt} onChange={(e) => set("lastServiceAt", e.target.value)} /></div>
+          <div className="space-y-1.5"><Label>Último servicio</Label><DateField value={f.lastServiceAt} onChange={(v) => set("lastServiceAt", v)} max={new Date().toLocaleDateString("en-CA")} yearPicker={{ from: 2005, to: new Date().getFullYear() }} placeholder="Opcional" clearable /></div>
           <p className="text-xs text-muted-foreground sm:col-span-2">Con 0 no se programa. Tres días antes se abre solo un servicio preventivo.</p>
         </div>
         <div className="space-y-1.5"><Label>Notas</Label><Input value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Proveedor de servicio, repuestos…" /></div>
@@ -178,7 +179,7 @@ function EquipmentSheet({ id, onClose, onChanged, onEdit }: { id: string | null;
                 {report.kind === "REPAIR" ? (
                   <label className="flex items-center justify-between text-sm">Sacarla de servicio mientras tanto<Switch checked={report.outOfOrder} onCheckedChange={(v) => setReport({ ...report, outOfOrder: v })} /></label>
                 ) : (
-                  <Input type="date" value={report.scheduledFor} onChange={(e) => setReport({ ...report, scheduledFor: e.target.value })} />
+                  <DateField value={report.scheduledFor} min={new Date().toLocaleDateString("en-CA")} onChange={(v) => setReport({ ...report, scheduledFor: v })} presets={FUTURE_PRESETS} />
                 )}
                 <div className="flex gap-2">
                   <Button size="sm" disabled={busy || !report.title.trim()} onClick={() => run(async () => { await gymApi("/maintenance", { method: "POST", json: { equipmentId: item.id, ...report } }); setReport(null); }, report.kind === "REPAIR" ? "Falla reportada" : "Servicio programado")}>Guardar</Button>

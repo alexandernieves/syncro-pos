@@ -5,6 +5,7 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { IconLoader2 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DateField, FUTURE_PRESETS } from "@/components/forms/date-field";
 import { gymApi } from "@/lib/gym";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,7 +82,7 @@ export function AssessmentDialog({ memberId, open, onClose, onSaved }: { memberI
           <DialogDescription>Anota solo las medidas que tomaste. La estatura se repite de la evaluación anterior.</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div className="space-y-1.5"><Label>Fecha</Label><Input type="date" value={f.date ?? ""} onChange={(e) => setF({ ...f, date: e.target.value })} /></div>
+          <div className="space-y-1.5"><Label>Fecha</Label><DateField value={f.date ?? ""} max={new Date().toLocaleDateString("en-CA")} onChange={(v) => setF({ ...f, date: v })} /></div>
           {FIELDS.map(([k, label, unit]) => (
             <div key={k as string} className="space-y-1.5">
               <Label>{label} <span className="font-normal text-muted-foreground">({unit})</span></Label>

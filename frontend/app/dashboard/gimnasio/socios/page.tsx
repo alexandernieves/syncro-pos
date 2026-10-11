@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { API_URL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { DateField, FUTURE_PRESETS } from "@/components/forms/date-field";
 import { countryFromAccount, formatWhatsAppNumber, toWhatsAppNumber } from "@/lib/phone-countries";
 import {
   type GymMemberDetail,
@@ -130,7 +131,7 @@ function SellPlanForm({ memberId, plans, onSubmit, saving }: { memberId: string;
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Inicia</Label>
-          <Input type="date" value={startDate || (quote ? quote.start.slice(0, 10) : "")} onChange={(e) => setStartDate(e.target.value)} />
+          <DateField value={startDate || (quote ? quote.start.slice(0, 10) : "")} onChange={setStartDate} />
         </div>
       </div>
       {quote && (
@@ -192,8 +193,8 @@ function FreezeForm({ membership, maxDays, policy, saving, onSubmit, onCancel }:
   return (
     <div className="space-y-3 border-t pt-3">
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5"><Label className="text-xs">Desde</Label><Input type="date" min={today} value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-        <div className="space-y-1.5"><Label className="text-xs">Regresa el</Label><Input type="date" min={plus(from, 1)} value={until} onChange={(e) => setUntil(e.target.value)} /></div>
+        <div className="space-y-1.5"><Label className="text-xs">Desde</Label><DateField min={today} value={from} onChange={setFrom} presets={FUTURE_PRESETS} /></div>
+        <div className="space-y-1.5"><Label className="text-xs">Regresa el</Label><DateField min={plus(from, 1)} value={until} onChange={setUntil} /></div>
       </div>
       <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={policy?.requireReason ? "Motivo (viaje, lesión…)" : "Motivo (opcional)"} />
       <p className={cn("text-xs", days > left || days < (policy?.minDays ?? 1) ? "text-rose-600" : "text-muted-foreground")}>
@@ -297,7 +298,7 @@ function NewMemberDialog({ open, onOpenChange, onCreated, member }: { open: bool
             <div className="space-y-1.5"><Label>Cédula</Label><DocumentField value={form.documentId} onChange={field("documentId")} /></div>
             <div className="space-y-1.5"><Label>WhatsApp</Label><PhoneField value={form.phone} onChange={field("phone")} accountCountry={accountCountry()} /></div>
             <div className="space-y-1.5 sm:col-span-2"><Label>Correo <Optional /></Label><EmailField value={form.email} onChange={field("email")} /></div>
-            <div className="space-y-1.5"><Label>Fecha de nacimiento</Label><Input type="date" value={form.birthDate} onChange={(e) => set("birthDate", e.target.value)} /></div>
+            <div className="space-y-1.5"><Label>Fecha de nacimiento</Label><DateField value={form.birthDate} onChange={(v) => set("birthDate", v)} max={new Date().toLocaleDateString("en-CA")} yearPicker={{ from: 1930, to: new Date().getFullYear() }} openAt={`${new Date().getFullYear() - 25}-01-01`} placeholder="Opcional" clearable /></div>
             <div className="space-y-1.5"><Label>Contacto de emergencia</Label><Input value={form.emergencyContact} onChange={(e) => set("emergencyContact", e.target.value)} placeholder="Nombre" /></div>
             <div className="space-y-1.5"><Label>Teléfono de emergencia</Label><PhoneField value={form.emergencyPhone} onChange={field("emergencyPhone")} accountCountry={accountCountry()} /></div>
             <div className="space-y-1.5 sm:col-span-2"><Label>Objetivo</Label><Input value={form.goal} onChange={(e) => set("goal", e.target.value)} placeholder="Bajar de peso, ganar masa muscular…" /></div>

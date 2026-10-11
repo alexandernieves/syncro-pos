@@ -23,6 +23,7 @@ import {
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DateField, FUTURE_PRESETS } from "@/components/forms/date-field";
 import { STAFF_ROLES, accountCountry, gymApi, money, staffRoleLabel } from "@/lib/gym";
 import { Optional, PhoneField } from "@/components/forms/contact-fields";
 import { countryFromAccount, formatWhatsAppNumber, toWhatsAppNumber } from "@/lib/phone-countries";
@@ -216,7 +217,7 @@ function ShiftDialog({ draft, staff, onClose, onSaved }: { draft: ShiftDraft | n
               {staff.filter((p) => p.isActive || p.id === form.staffId).map((p) => <option key={p.id} value={p.id}>{p.name} · {staffRoleLabel(p.role)}</option>)}
             </select>
           </div>
-          <div className="space-y-1.5 sm:col-span-2"><Label>Día</Label><Input type="date" value={form.day} onChange={(e) => set("day", e.target.value)} /></div>
+          <div className="space-y-1.5 sm:col-span-2"><Label>Día</Label><DateField value={form.day} onChange={(v) => set("day", v)} presets={FUTURE_PRESETS} /></div>
           <div className="space-y-1.5"><Label>Entrada</Label><Input type="time" value={form.start} onChange={(e) => set("start", e.target.value)} /></div>
           <div className="space-y-1.5"><Label>Salida</Label><Input type="time" value={form.end} onChange={(e) => set("end", e.target.value)} /></div>
           <div className="space-y-1.5 sm:col-span-2">
