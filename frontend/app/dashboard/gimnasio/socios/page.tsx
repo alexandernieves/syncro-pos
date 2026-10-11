@@ -56,6 +56,7 @@ import { StatCard, StatGrid } from "@/components/stat-card";
 import { FilterChips, GymPage, GymPageHeader, MemberAvatar, PersonCell, StatusBadge } from "@/components/gym/gym-ui";
 import { membershipReceiptParts, printMembershipReceipt, sendMembershipReceipt } from "@/lib/gym-receipt";
 import { ReceiptPrinter } from "@/components/pos/receipt-printer";
+import { ConfirmDialog } from "@/components/gym/confirm-dialog";
 import { SignDocumentDialog, SignedDocumentDialog } from "@/components/gym/sign-document-dialog";
 import { DocumentField, EmailField, Optional, PhoneField } from "@/components/forms/contact-fields";
 import { type Routine, RoutineBuilder, levelLabel, routineText } from "@/components/gym/routine-builder";
@@ -436,6 +437,7 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
   const [settings, setSettings] = useState<any>(null);
   const [justSold, setJustSold] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
+  const [cancelMs, setCancelMs] = useState<GymMembership | null>(null);
   const [sendingReceipt, setSendingReceipt] = useState<string | null>(null);
   const [freezing, setFreezing] = useState(false);
   const [freezePolicy, setFreezePolicy] = useState<FreezePolicy | null>(null);
@@ -678,6 +680,16 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
                 ))}
               </div>
             )}
+            <ConfirmDialog
+              open={!!cancelMs}
+              danger
+              title={`¿Cancelar la membresía ${cancelMs?.planName ?? ""}?`}
+              description="El socio pierde el acceso que le daba esta membresía. Lo cobrado no se devuelve desde aquí."
+              details={cancelMs ? `Del ${shortDate(cancelMs.startDate)} al ${shortDate(cancelMs.endDate)} · pagado ${money(paidOf(cancelMs))}` : null}
+              confirmLabel="Cancelar membresía"
+              onConfirm={async () => { if (cancelMs) await run(() => gymApi(`/memberships/${cancelMs.id}/cancel`, { method: "PATCH" }), "Membresía cancelada"); }}
+              onClose={() => setCancelMs(null)}
+            />
             <SignDocumentDialog memberId={member.id} templateId={signing} onClose={() => setSigning(null)} onSigned={() => { load(); onChanged(); }} />
             <SignedDocumentDialog signatureId={viewing} onClose={() => setViewing(null)} />
 
@@ -720,7 +732,7 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
                           </Button>
                         )}
                         {m.state !== "CANCELLED" && m.state !== "EXPIRED" && (
-                          <Button size="sm" variant="ghost" className="h-7 text-xs text-rose-600" disabled={busy} onClick={() => confirm(`¿Cancelar la membresía ${m.planName}? El socio pierde el acceso de esa membresía.`) && run(() => gymApi(`/memberships/${m.id}/cancel`, { method: "PATCH" }), "Membresía cancelada")}>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-rose-600" disabled={busy} onClick={() => setCancelMs(m)}>
                             Cancelar
                           </Button>
                         )}

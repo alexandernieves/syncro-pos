@@ -34,6 +34,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ConfirmDialog } from "@/components/gym/confirm-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { ColumnDef } from "@tanstack/react-table";
 import { PosTable } from "@/components/pos-table";
@@ -281,6 +282,9 @@ function SessionSheet({ sessionId, timeZone, onClose, onChanged }: { sessionId: 
     return () => clearTimeout(t);
   }, [q]);
 
+  const [cancelling, setCancelling] = useState(false);
+  const [noticeOn, setNoticeOn] = useState(true);
+  useEffect(() => { gymApi<{ notices: { CLASS_CANCELLED: boolean } }>("/settings").then((x) => setNoticeOn(x.notices.CLASS_CANCELLED)).catch(() => {}); }, []);
   const run = async (fn: () => Promise<unknown>, ok?: string) => {
     setBusy(true);
     try { await fn(); if (ok) toast.success(ok); load(); onChanged(); } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
@@ -291,6 +295,40 @@ function SessionSheet({ sessionId, timeZone, onClose, onChanged }: { sessionId: 
   const started = session ? new Date(session.startsAt) <= new Date() : false;
 
   return (
+    <>
+    {session && (() => {
+      const affected = session.bookings.filter((b) => b.status === "BOOKED" || b.status === "WAITLIST");
+      const withPhone = affected.filter((b) => b.member.client.phone).length;
+      return (
+        <ConfirmDialog
+          open={cancelling}
+          danger
+          title={`¿Cancelar ${session.class.name}?`}
+          description={`${new Date(session.startsAt).toLocaleString("es-VE", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })} · solo se cancela esta fecha; el resto del horario sigue igual.`}
+          details={
+            !affected.length ? "No hay socios anotados en esta clase."
+            : noticeOn ? (affected.length === 1
+                ? (withPhone ? "Hay 1 socio anotado y recibirá un WhatsApp con el motivo." : "Hay 1 socio anotado, pero no tiene WhatsApp registrado.")
+                : <>Hay {affected.length} socios anotados o en espera. {withPhone === affected.length ? "Todos recibirán un WhatsApp con el motivo." : withPhone ? `${withPhone} recibirán un WhatsApp con el motivo; los demás no tienen WhatsApp.` : "Ninguno tiene WhatsApp registrado."}</>)
+            : <>Hay {affected.length} {affected.length === 1 ? "socio anotado" : "socios anotados"}. El aviso por WhatsApp está apagado en Ajustes: avísales tú.</>
+          }
+          reason={{ label: "Motivo (lo verán los socios)", placeholder: "Escribe el motivo", suggestions: ["Mantenimiento del salón", "El entrenador no puede asistir", "Feriado", "Falla eléctrica"], required: true }}
+          confirmLabel="Cancelar clase"
+          onConfirm={async (reason) => {
+            try {
+              const r = await gymApi<{ notified: number }>(`/sessions/${session.id}/cancel`, { method: "PATCH", json: { reason } });
+              toast.success("Clase cancelada", { description: r.notified ? `Avisaremos a ${r.notified} ${r.notified === 1 ? "socio" : "socios"} por WhatsApp.` : undefined });
+              load();
+              onChanged();
+            } catch (e) {
+              toast.error((e as Error).message);
+              throw e;
+            }
+          }}
+          onClose={() => setCancelling(false)}
+        />
+      );
+    })()}
     <Sheet open={!!sessionId} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader><SheetTitle>Detalle de la clase</SheetTitle></SheetHeader>
@@ -436,14 +474,7 @@ function SessionSheet({ sessionId, timeZone, onClose, onChanged }: { sessionId: 
                   variant="outline"
                   className="w-full gap-2 text-rose-600"
                   disabled={busy}
-                  onClick={() => {
-                    const reason = prompt("¿Por qué se cancela la clase? (el motivo lo verán los socios)");
-                    if (reason !== null)
-                      run(async () => {
-                        const r = await gymApi<{ notified: number }>(`/sessions/${session.id}/cancel`, { method: "PATCH", json: { reason } });
-                        toast.success("Clase cancelada", { description: r.notified ? `Avisaremos a ${r.notified} ${r.notified === 1 ? "socio" : "socios"} por WhatsApp.` : undefined });
-                      });
-                  }}
+                  onClick={() => setCancelling(true)}
                 >
                   <IconBan size={16} /> Cancelar esta clase
                 </Button>
@@ -457,6 +488,7 @@ function SessionSheet({ sessionId, timeZone, onClose, onChanged }: { sessionId: 
         )}
       </SheetContent>
     </Sheet>
+    </>
   );
 }
 

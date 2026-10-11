@@ -18,6 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PosTable } from "@/components/pos-table";
 import { StatCard, StatGrid } from "@/components/stat-card";
 import { GymPage, GymPageHeader, PersonCell } from "@/components/gym/gym-ui";
+import { ConfirmDialog } from "@/components/gym/confirm-dialog";
 
 type Device = {
   id: string;
@@ -160,15 +161,8 @@ export default function GymAccessPage() {
       setBusy(null);
     }
   };
-  const rotate = async (d: Device) => {
-    if (!confirm(`¿Generar una clave nueva para ${d.name}? El puente dejará de funcionar hasta que pongas la nueva clave en su .env.`)) return;
-    try {
-      const r = await gymApi<{ key: string }>(`/devices/${d.id}/key`, { method: "POST" });
-      setKeyInfo({ name: d.name, key: r.key });
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
+  const [rotating, setRotating] = useState<Device | null>(null);
+  const rotate = (d: Device) => setRotating(d);
 
   const eventColumns = useMemo<ColumnDef<DeviceEvent>[]>(
     () => [
@@ -303,6 +297,24 @@ export default function GymAccessPage() {
 
       <DeviceDialog device={dialog.device} open={dialog.open} onClose={() => setDialog({ open: false, device: null })} onSaved={(k) => { load(); if (k) setKeyInfo(k); }} />
       <KeyDialog data={keyInfo} onClose={() => setKeyInfo(null)} />
+      <ConfirmDialog
+        open={!!rotating}
+        danger
+        title={`¿Generar una clave nueva para ${rotating?.name ?? ""}?`}
+        description="La clave actual deja de funcionar al instante. El lector se desconecta hasta que pongas la nueva en el archivo de configuración del puente."
+        confirmLabel="Generar clave nueva"
+        onConfirm={async () => {
+          if (!rotating) return;
+          try {
+            const r = await gymApi<{ key: string }>(`/devices/${rotating.id}/key`, { method: "POST" });
+            setKeyInfo({ name: rotating.name, key: r.key });
+          } catch (e) {
+            toast.error((e as Error).message);
+            throw e;
+          }
+        }}
+        onClose={() => setRotating(null)}
+      />
     </GymPage>
   );
 }
