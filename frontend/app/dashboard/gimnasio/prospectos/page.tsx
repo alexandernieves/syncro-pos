@@ -247,79 +247,163 @@ function LostDialog({ lead, onClose, onDone }: { lead: GymLead | null; onClose: 
   );
 }
 
-/** Upcoming classes with free spots, to book the prospect's trial. */
+/** Upcoming classes with free spots, to book the prospect's trial: pick a day, a class, then confirm. */
 function TrialPicker({ lead, onClose, onDone }: { lead: GymLead | null; onClose: () => void; onDone: () => void }) {
   const [slots, setSlots] = useState<Slot[] | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [day, setDay] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Slot | null>(null);
+  const [busy, setBusy] = useState(false);
+  const dayKey = (d: string | Date) => new Date(d).toLocaleDateString("en-CA");
   useEffect(() => {
     if (!lead) return;
     setSlots(null);
+    setPicked(null);
+    setDay(null);
     const today = new Date();
     const from = today.toLocaleDateString("en-CA");
     const to = new Date(today.getTime() + 14 * 86400000).toLocaleDateString("en-CA");
-    gymApi<{ sessions: Slot[] }>(`/schedule?from=${from}&to=${to}`).then((r) => setSlots(r.sessions.filter((s) => s.status === "SCHEDULED" && new Date(s.startsAt) > new Date()))).catch(() => setSlots([]));
+    gymApi<{ sessions: Slot[] }>(`/schedule?from=${from}&to=${to}`)
+      .then((r) => setSlots(r.sessions.filter((s) => s.status === "SCHEDULED" && new Date(s.startsAt) > new Date())))
+      .catch(() => setSlots([]));
   }, [lead]);
-  const pick = async (s: Slot) => {
-    if (!lead) return;
-    setBusy(s.id);
+
+  const days = useMemo(() => {
+    const map = new Map<string, { key: string; date: Date; total: number; free: number }>();
+    for (const s of slots ?? []) {
+      const k = dayKey(s.startsAt);
+      const d = map.get(k) ?? { key: k, date: new Date(s.startsAt), total: 0, free: 0 };
+      d.total++;
+      if (s.capacity - s.booked > 0) d.free++;
+      map.set(k, d);
+    }
+    return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
+  }, [slots]);
+  const selectedDay = day ?? days.find((d) => d.free > 0)?.key ?? days[0]?.key ?? null;
+  const list = (slots ?? []).filter((s) => dayKey(s.startsAt) === selectedDay);
+
+  const timeParts = (d: string) => {
+    const t = new Date(d).toLocaleTimeString("es-VE", { hour: "numeric", minute: "2-digit" });
+    const [hm, ...rest] = t.split(/\s/);
+    return { hm, ampm: rest.join(" ") };
+  };
+  const minutes = (s: Slot) => Math.round((new Date(s.endsAt).getTime() - new Date(s.startsAt).getTime()) / 60000);
+
+  const confirm = async () => {
+    if (!lead || !picked) return;
+    setBusy(true);
     try {
-      const r = await gymApi<{ notified: boolean }>(`/leads/${lead.id}/trial`, { method: "POST", json: { sessionId: s.id } });
-      toast.success(`Clase de prueba agendada: ${s.class.name}, ${dayTime(s.startsAt)}`, { description: r.notified ? "Le enviamos la confirmación por WhatsApp." : lead.phone ? "No se pudo enviar el WhatsApp de confirmación." : undefined });
+      const r = await gymApi<{ notified: boolean }>(`/leads/${lead.id}/trial`, { method: "POST", json: { sessionId: picked.id } });
+      toast.success(`Clase de prueba agendada: ${picked.class.name}, ${dayTime(picked.startsAt)}`, { description: r.notified ? "Le enviamos la confirmación por WhatsApp." : lead.phone ? "No se pudo enviar el WhatsApp de confirmación." : undefined });
       onDone();
       onClose();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   };
-  const byDay = useMemo(() => {
-    const map = new Map<string, Slot[]>();
-    for (const s of slots ?? []) {
-      const k = new Date(s.startsAt).toLocaleDateString("es-VE", { weekday: "long", day: "numeric", month: "long" });
-      map.set(k, [...(map.get(k) ?? []), s]);
-    }
-    return [...map.entries()];
-  }, [slots]);
+
   return (
     <Dialog open={!!lead} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-xl">
+        <DialogHeader className="space-y-1 px-6 pb-4 pt-6">
           <DialogTitle>Clase de prueba para {lead?.name}</DialogTitle>
-          <DialogDescription>Ocupa un cupo de la clase. {lead?.phone ? "Le llegará la confirmación por WhatsApp." : "Sin WhatsApp no recibirá confirmación."}</DialogDescription>
+          <DialogDescription>Elige el día y la clase. Ocupa un cupo{lead?.phone ? " y le llega la confirmación por WhatsApp." : ". Sin WhatsApp no recibirá confirmación."}</DialogDescription>
         </DialogHeader>
-        <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-1">
-          {!slots && <IconLoader2 className="mx-auto animate-spin text-muted-foreground" />}
-          {slots && !slots.length && <p className="py-6 text-center text-sm text-muted-foreground">No hay clases en las próximas dos semanas.</p>}
-          {byDay.map(([day, list]) => (
-            <div key={day} className="space-y-1.5">
-              <p className="text-xs font-semibold text-muted-foreground first-letter:uppercase">{day}</p>
-              {list.map((s) => {
-                const left = s.capacity - s.booked;
-                const color = s.class.color || "#F97316";
+
+        {!slots ? (
+          <div className="flex justify-center py-16"><IconLoader2 className="animate-spin text-muted-foreground" /></div>
+        ) : !slots.length ? (
+          <p className="px-6 pb-10 pt-4 text-center text-sm text-muted-foreground">No hay clases en las próximas dos semanas.</p>
+        ) : (
+          <>
+            {/* Days */}
+            <div className="flex gap-2 overflow-x-auto px-6 pb-4 scrollbar-none">
+              {days.map((d) => {
+                const active = d.key === selectedDay;
                 return (
                   <button
-                    key={s.id}
+                    key={d.key}
                     type="button"
-                    disabled={left <= 0 || !!busy}
-                    onClick={() => pick(s)}
-                    className="flex w-full items-center gap-3 rounded-xl bg-muted/40 p-2.5 text-left transition hover:bg-muted disabled:opacity-50"
+                    onClick={() => { setDay(d.key); setPicked(null); }}
+                    className={cn(
+                      "flex w-[68px] shrink-0 flex-col items-center rounded-2xl py-2.5 outline-none transition",
+                      active ? "bg-foreground text-background shadow-md" : "bg-muted/60 text-foreground hover:bg-muted",
+                      !d.free && !active && "opacity-50",
+                    )}
                   >
-                    <span className="flex h-10 w-14 shrink-0 items-center justify-center rounded-lg text-xs font-bold" style={{ background: `color-mix(in oklab, ${color} 26%, var(--card))`, color: `color-mix(in oklab, ${color} 42%, black)` }}>
-                      {new Date(s.startsAt).toLocaleTimeString("es-VE", { hour: "numeric", minute: "2-digit" })}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{s.class.name}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{s.trainer?.name ?? "Sin entrenador"}</span>
-                    </span>
-                    <span className={cn("text-xs font-semibold", left <= 0 ? "text-rose-600" : "text-emerald-700")}>{left <= 0 ? "Llena" : `${left} libres`}</span>
-                    {busy === s.id && <IconLoader2 size={16} className="animate-spin" />}
+                    <span className={cn("text-[11px] font-medium", active ? "text-background/70" : "text-muted-foreground")}>{d.date.toLocaleDateString("es-VE", { weekday: "short" }).replace(".", "")}</span>
+                    <span className="text-xl font-bold leading-tight tabular-nums">{d.date.getDate()}</span>
+                    <span className={cn("text-[10px]", active ? "text-background/70" : "text-muted-foreground")}>{d.free ? `${d.free} ${d.free === 1 ? "clase" : "clases"}` : "Llenas"}</span>
                   </button>
                 );
               })}
             </div>
-          ))}
-        </div>
+
+            {/* Classes of the day */}
+            <div className="max-h-[46vh] space-y-2 overflow-y-auto border-t bg-muted/20 px-6 py-4">
+              {list.map((s) => {
+                const left = Math.max(0, s.capacity - s.booked);
+                const full = left === 0;
+                const color = s.class.color || "#F97316";
+                const { hm, ampm } = timeParts(s.startsAt);
+                const isPicked = picked?.id === s.id;
+                const pct = Math.min(100, Math.round((s.booked / Math.max(1, s.capacity)) * 100));
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    disabled={full || busy}
+                    onClick={() => setPicked(s)}
+                    className={cn(
+                      "flex w-full items-center gap-4 rounded-2xl bg-card p-3 text-left shadow-sm outline-none ring-1 transition",
+                      isPicked ? "ring-2 ring-primary" : "ring-border/60 hover:ring-border",
+                      full && "cursor-not-allowed opacity-55",
+                    )}
+                  >
+                    <span className="flex w-16 shrink-0 flex-col items-center justify-center rounded-xl py-2" style={{ background: `color-mix(in oklab, ${color} 24%, var(--card))`, color: `color-mix(in oklab, ${color} 45%, black)` }}>
+                      <span className="text-base font-bold leading-none tabular-nums">{hm}</span>
+                      <span className="mt-0.5 text-[10px] font-semibold">{ampm}</span>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold">{s.class.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{s.trainer?.name ?? "Sin entrenador"} · {minutes(s)} min</span>
+                      <span className="mt-2 flex items-center gap-2">
+                        <span className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+                          <span className="block h-full rounded-full" style={{ width: `${pct}%`, background: full ? "#E11D48" : color }} />
+                        </span>
+                        <span className={cn("text-[11px] font-medium", full ? "text-rose-600" : left <= 2 ? "text-amber-700" : "text-muted-foreground")}>
+                          {full ? "Llena" : `${left} ${left === 1 ? "cupo libre" : "cupos libres"} de ${s.capacity}`}
+                        </span>
+                      </span>
+                    </span>
+                    <span className={cn("flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition", isPicked ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
+                      {isPicked && <IconCheck size={14} />}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Confirm */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t px-6 py-4">
+              <p className="min-w-0 text-sm">
+                {picked ? (
+                  <>
+                    <span className="font-semibold">{picked.class.name}</span>
+                    <span className="text-muted-foreground"> · {new Date(picked.startsAt).toLocaleString("es-VE", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })}</span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">Elige una clase</span>
+                )}
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                <Button onClick={confirm} disabled={!picked || busy} className="gap-2">{busy && <IconLoader2 size={16} className="animate-spin" />} Agendar prueba</Button>
+              </div>
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
