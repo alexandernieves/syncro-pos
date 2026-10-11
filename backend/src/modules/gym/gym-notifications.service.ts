@@ -91,7 +91,8 @@ export class GymNotificationsService {
         .replace(/\{fecha\}/g, GymNotificationsService.when(session.startsAt, settings.timeZone))
         .replace(/\{antes\}/g, notice.extra?.antes ?? '')
         .replace(/\{motivo\}/g, notice.extra?.motivo ? ` Motivo: ${notice.extra.motivo}.` : '')
-        .replace(/\{gimnasio\}/g, businessName);
+        .replace(/\{gimnasio\}/g, businessName)
+        .replace(/\.\*\./g, '.*'); // "7:00 p. m.*." → "7:00 p. m.*"
       const base = { businessId, memberId: member.id, sessionId, kind, phone: member.client.phone, text };
 
       if (!member.client.phone || !connected) {
@@ -119,7 +120,8 @@ export class GymNotificationsService {
       .replace(/\{nombre\}/g, lead.name.trim().split(/\s+/)[0] || lead.name)
       .replace(/\{clase\}/g, session.class.name)
       .replace(/\{fecha\}/g, GymNotificationsService.when(session.startsAt, settings.timeZone))
-      .replace(/\{gimnasio\}/g, businessName);
+      .replace(/\{gimnasio\}/g, businessName)
+      .replace(/\.\*\./g, '.*');
     const base = { businessId, leadId: lead.id, sessionId, kind: 'TRIAL_BOOKED', phone: lead.phone, text };
     const connected = (await this.whatsapp.getStatus(businessId).catch(() => ({ connected: false }))).connected;
     if (!lead.phone || !connected) {
