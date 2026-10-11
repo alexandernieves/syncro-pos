@@ -23,7 +23,8 @@ import {
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { STAFF_ROLES, gymApi, money, staffRoleLabel } from "@/lib/gym";
+import { STAFF_ROLES, accountCountry, gymApi, money, staffRoleLabel } from "@/lib/gym";
+import { Optional, PhoneField } from "@/components/forms/contact-fields";
 import { countryFromAccount, formatWhatsAppNumber, toWhatsAppNumber } from "@/lib/phone-countries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -68,9 +69,11 @@ function StaffDialog({ staff, open, onClose, onSaved }: { staff: Staff | null; o
   const [form, setForm] = useState({ name: "", phone: "", role: "TRAINER", specialty: "", hourlyRate: "", color: COLORS[1], isActive: true });
   const [avail, setAvail] = useState<Record<number, { on: boolean; start: string; end: string }>>({});
   const [saving, setSaving] = useState(false);
+  const [phoneOk, setPhoneOk] = useState(true);
   useEffect(() => {
     if (!open) return;
-    setForm(staff ? { name: staff.name, phone: staff.phone ? formatWhatsAppNumber(staff.phone) : "", role: staff.role, specialty: staff.specialty ?? "", hourlyRate: staff.hourlyRate ? String(staff.hourlyRate) : "", color: staff.color || COLORS[1], isActive: staff.isActive } : { name: "", phone: "", role: "TRAINER", specialty: "", hourlyRate: "", color: COLORS[Math.floor(Math.random() * COLORS.length)], isActive: true });
+    setPhoneOk(true);
+    setForm(staff ? { name: staff.name, phone: staff.phone ?? "", role: staff.role, specialty: staff.specialty ?? "", hourlyRate: staff.hourlyRate ? String(staff.hourlyRate) : "", color: staff.color || COLORS[1], isActive: staff.isActive } : { name: "", phone: "", role: "TRAINER", specialty: "", hourlyRate: "", color: COLORS[Math.floor(Math.random() * COLORS.length)], isActive: true });
     const next: Record<number, { on: boolean; start: string; end: string }> = {};
     for (const [d] of DAYS) {
       const row = staff?.availability.find((a) => a.dayOfWeek === d);
@@ -83,8 +86,7 @@ function StaffDialog({ staff, open, onClose, onSaved }: { staff: Staff | null; o
   const save = async () => {
     setSaving(true);
     try {
-      const phone = form.phone.trim() ? toWhatsAppNumber(form.phone, VE) || form.phone.trim() : "";
-      const body = { ...form, phone, hourlyRate: form.hourlyRate ? Number(form.hourlyRate) : null };
+      const body = { ...form, phone: form.phone, hourlyRate: form.hourlyRate ? Number(form.hourlyRate) : null };
       const saved = await gymApi<{ id: string }>(staff ? `/trainers/${staff.id}` : "/trainers", { method: staff ? "PUT" : "POST", json: body });
       const rows = DAYS.filter(([d]) => avail[d]?.on).map(([d]) => ({ dayOfWeek: d, startTime: avail[d].start, endTime: avail[d].end }));
       await gymApi(`/trainers/${saved.id}/availability`, { method: "PUT", json: { rows } });
@@ -113,7 +115,7 @@ function StaffDialog({ staff, open, onClose, onSaved }: { staff: Staff | null; o
               {STAFF_ROLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </select>
           </div>
-          <div className="space-y-1.5"><Label>WhatsApp</Label><Input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="0412 123 4567" inputMode="tel" /></div>
+          <div className="space-y-1.5"><Label>WhatsApp <Optional /></Label><PhoneField value={form.phone} onChange={(st) => { set("phone", st.value); setPhoneOk(st.valid); }} accountCountry={accountCountry()} /></div>
           <div className="space-y-1.5"><Label>{form.role === "TRAINER" ? "Especialidad" : "Descripción"}</Label><Input value={form.specialty} onChange={(e) => set("specialty", e.target.value)} placeholder={form.role === "TRAINER" ? "Ej.: funcional, yoga" : "Opcional"} /></div>
           <div className="space-y-1.5"><Label>Pago por hora</Label><Input value={form.hourlyRate} onChange={(e) => set("hourlyRate", e.target.value.replace(/[^\d.]/g, ""))} placeholder="Opcional, en $" inputMode="decimal" /></div>
           <div className="space-y-1.5 sm:col-span-2">
@@ -156,7 +158,7 @@ function StaffDialog({ staff, open, onClose, onSaved }: { staff: Staff | null; o
         )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={save} disabled={saving || !form.name.trim()} className="gap-2">{saving && <IconLoader2 size={16} className="animate-spin" />} Guardar</Button>
+          <Button onClick={save} disabled={saving || !form.name.trim() || !phoneOk} className="gap-2">{saving && <IconLoader2 size={16} className="animate-spin" />} Guardar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

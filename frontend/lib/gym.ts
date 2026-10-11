@@ -144,7 +144,7 @@ export type GymLead = {
   phone: string | null;
   email: string | null;
   documentId: string | null;
-  source: string;
+  source: string | null;
   interest: string | null;
   stage: LeadStage;
   lostReason: string | null;
@@ -191,7 +191,7 @@ export const LEAD_SOURCES: [string, string][] = [
   ["GUEST", "Invitado de un socio"],
   ["OTHER", "Otro"],
 ];
-export const leadSourceLabel = (s: string) => LEAD_SOURCES.find(([k]) => k === s)?.[1] ?? s;
+export const leadSourceLabel = (s: string | null | undefined) => (!s || s === "UNKNOWN" ? "Sin indicar" : LEAD_SOURCES.find(([k]) => k === s)?.[1] ?? s);
 
 // ── Staff ────────────────────────────────────────────────────────────────────
 
@@ -203,3 +203,8 @@ export const STAFF_ROLES: [string, string][] = [
   ["OTHER", "Otro"],
 ];
 export const staffRoleLabel = (r: string) => STAFF_ROLES.find(([k]) => k === r)?.[1] ?? r;
+
+/** Country of the Syncro account (default dial code for WhatsApp fields). */
+export const accountCountry = () => {
+  try { return JSON.parse(localStorage.getItem("user") || "{}").country as string | undefined; } catch { return undefined; }
+};

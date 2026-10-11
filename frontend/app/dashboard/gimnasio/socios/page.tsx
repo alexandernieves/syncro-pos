@@ -34,6 +34,7 @@ import {
   STATUS_CLASS,
   STATUS_LABEL,
   durationLabel,
+  accountCountry,
   gymApi,
   membershipTotal,
   methodLabel,
@@ -55,6 +56,7 @@ import { StatCard, StatGrid } from "@/components/stat-card";
 import { FilterChips, GymPage, GymPageHeader, MemberAvatar, PersonCell, StatusBadge } from "@/components/gym/gym-ui";
 import { printMembershipReceipt, sendMembershipReceipt } from "@/lib/gym-receipt";
 import { SignDocumentDialog, SignedDocumentDialog } from "@/components/gym/sign-document-dialog";
+import { DocumentField, EmailField, Optional, PhoneField } from "@/components/forms/contact-fields";
 import { type Routine, RoutineBuilder, levelLabel, routineText } from "@/components/gym/routine-builder";
 import { AssessmentDialog, type Progress, ProgressSummary } from "@/components/gym/progress";
 
@@ -223,8 +225,11 @@ function NewMemberDialog({ open, onOpenChange, onCreated, member }: { open: bool
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [valid, setValid] = useState({ phone: true, email: true, documentId: true, emergencyPhone: true });
   const fileRef = useRef<HTMLInputElement>(null);
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const field = (k: "phone" | "email" | "documentId" | "emergencyPhone") => (st: { value: string; valid: boolean }) => { set(k, st.value); setValid((v) => ({ ...v, [k]: st.valid })); };
+  const allValid = Object.values(valid).every(Boolean);
 
   useEffect(() => {
     if (!open) return;
@@ -240,16 +245,16 @@ function NewMemberDialog({ open, onOpenChange, onCreated, member }: { open: bool
       medicalNotes: member?.medicalNotes ?? "",
     });
     setPhotoUrl(member?.photoUrl ?? null);
+    setValid({ phone: true, email: true, documentId: true, emergencyPhone: true });
   }, [open, member]);
 
   const save = async () => {
     if (!form.name.trim()) return toast.error("Escribe el nombre del socio");
     setSaving(true);
     try {
-      const phone = form.phone.trim() ? toWhatsAppNumber(form.phone, VE) || form.phone.trim() : "";
       const saved = await gymApi<GymMemberRow>(member ? `/members/${member.id}` : "/members", {
         method: member ? "PUT" : "POST",
-        json: { ...form, phone, birthDate: form.birthDate || null, photoUrl },
+        json: { ...form, birthDate: form.birthDate || null, photoUrl },
       });
       toast.success(member ? "Datos del socio actualizados" : `${saved.client.name} es el socio n.º ${saved.memberNumber}`);
       onOpenChange(false);
@@ -287,12 +292,12 @@ function NewMemberDialog({ open, onOpenChange, onCreated, member }: { open: bool
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2"><Label>Nombre completo</Label><Input autoFocus value={form.name} onChange={(e) => set("name", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Cédula</Label><Input value={form.documentId} onChange={(e) => set("documentId", e.target.value.toUpperCase())} placeholder="V-12345678" /></div>
-            <div className="space-y-1.5"><Label>WhatsApp</Label><Input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="0412 123 4567" inputMode="tel" /></div>
-            <div className="space-y-1.5"><Label>Correo</Label><Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></div>
+            <div className="space-y-1.5"><Label>Cédula</Label><DocumentField value={form.documentId} onChange={field("documentId")} /></div>
+            <div className="space-y-1.5"><Label>WhatsApp</Label><PhoneField value={form.phone} onChange={field("phone")} accountCountry={accountCountry()} /></div>
+            <div className="space-y-1.5 sm:col-span-2"><Label>Correo <Optional /></Label><EmailField value={form.email} onChange={field("email")} /></div>
             <div className="space-y-1.5"><Label>Fecha de nacimiento</Label><Input type="date" value={form.birthDate} onChange={(e) => set("birthDate", e.target.value)} /></div>
             <div className="space-y-1.5"><Label>Contacto de emergencia</Label><Input value={form.emergencyContact} onChange={(e) => set("emergencyContact", e.target.value)} placeholder="Nombre" /></div>
-            <div className="space-y-1.5"><Label>Teléfono de emergencia</Label><Input value={form.emergencyPhone} onChange={(e) => set("emergencyPhone", e.target.value)} inputMode="tel" /></div>
+            <div className="space-y-1.5"><Label>Teléfono de emergencia</Label><PhoneField value={form.emergencyPhone} onChange={field("emergencyPhone")} accountCountry={accountCountry()} /></div>
             <div className="space-y-1.5 sm:col-span-2"><Label>Objetivo</Label><Input value={form.goal} onChange={(e) => set("goal", e.target.value)} placeholder="Bajar de peso, ganar masa muscular…" /></div>
             <div className="space-y-1.5 sm:col-span-2"><Label>Notas médicas</Label><Input value={form.medicalNotes} onChange={(e) => set("medicalNotes", e.target.value)} placeholder="Lesiones, condiciones o alergias" /></div>
           </div>
@@ -300,7 +305,7 @@ function NewMemberDialog({ open, onOpenChange, onCreated, member }: { open: bool
         {!member && <p className="text-xs text-muted-foreground">Si la cédula ya es de un cliente de tu negocio, se usa ese cliente. Después de crearlo puedes venderle su plan.</p>}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={save} disabled={saving || uploading} className="gap-2">{saving && <IconLoader2 size={16} className="animate-spin" />} {member ? "Guardar cambios" : "Crear socio"}</Button>
+          <Button onClick={save} disabled={saving || uploading || !allValid} className="gap-2">{saving && <IconLoader2 size={16} className="animate-spin" />} {member ? "Guardar cambios" : "Crear socio"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

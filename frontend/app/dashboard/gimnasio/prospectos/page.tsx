@@ -25,8 +25,9 @@ import {
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { type GymLead, type LeadActivity, type LeadStage, LEAD_SOURCES, LEAD_STAGES, LEAD_STAGE_CLASS, gymApi, leadSourceLabel, leadStageLabel } from "@/lib/gym";
-import { countryFromAccount, formatWhatsAppNumber, toWhatsAppNumber } from "@/lib/phone-countries";
+import { type GymLead, type LeadActivity, type LeadStage, LEAD_SOURCES, LEAD_STAGES, LEAD_STAGE_CLASS, accountCountry, gymApi, leadSourceLabel, leadStageLabel } from "@/lib/gym";
+import { formatWhatsAppNumber } from "@/lib/phone-countries";
+import { DocumentField, EmailField, Optional, PhoneField } from "@/components/forms/contact-fields";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -38,7 +39,6 @@ import { PosTable } from "@/components/pos-table";
 import { StatCard, StatGrid } from "@/components/stat-card";
 import { GymPage, GymPageHeader, MemberAvatar, PersonCell } from "@/components/gym/gym-ui";
 
-const VE = countryFromAccount("Venezuela");
 type Stats = { byStage: Record<LeadStage, number>; newThisMonth: number; wonThisMonth: number; conversion: number | null; overdueFollowUps: number; trialsAhead: number; bySource: { source: string; count: number }[] };
 type LeadDetail = GymLead & { activities: LeadActivity[]; visits: { id: string; kind: string; checkedInAt: string; price: number }[] };
 type Slot = { id: string; startsAt: string; endsAt: string; capacity: number; booked: number; status: string; class: { name: string; color: string | null }; trainer: { name: string } | null };
@@ -118,34 +118,44 @@ function StageColumn({ stage, label, leads, onOpen }: { stage: LeadStage; label:
 // ── New / edit ───────────────────────────────────────────────────────────────
 
 function LeadDialog({ lead, open, onClose, onSaved }: { lead: GymLead | null; open: boolean; onClose: () => void; onSaved: (l: GymLead) => void }) {
-  const empty = { name: "", phone: "", email: "", documentId: "", source: "WALK_IN", interest: "", notes: "" };
+  const empty = { name: "", phone: "", email: "", documentId: "", source: "", interest: "", notes: "" };
   const [form, setForm] = useState(empty);
+  const [valid, setValid] = useState({ phone: true, email: true, documentId: true });
   const [saving, setSaving] = useState(false);
   const [dup, setDup] = useState<{ type: "lead" | "member"; name: string } | null>(null);
+  const [country, setCountry] = useState<string | undefined>();
   useEffect(() => {
     if (!open) return;
     setDup(null);
-    setForm(lead ? { name: lead.name, phone: lead.phone ? formatWhatsAppNumber(lead.phone) : "", email: lead.email ?? "", documentId: lead.documentId ?? "", source: lead.source, interest: lead.interest ?? "", notes: lead.notes ?? "" } : empty);
+    setCountry(accountCountry());
+    setValid({ phone: true, email: true, documentId: true });
+    setForm(lead ? { name: lead.name, phone: lead.phone ?? "", email: lead.email ?? "", documentId: lead.documentId ?? "", source: lead.source ?? "", interest: lead.interest ?? "", notes: lead.notes ?? "" } : empty);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, lead]);
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const field = (k: "phone" | "email" | "documentId") => (st: { value: string; valid: boolean }) => { set(k, st.value); setValid((v) => ({ ...v, [k]: st.valid })); };
 
   // Warn while typing if the person is already a prospect or a member
   useEffect(() => {
     if (!open) return;
-    const phone = form.phone.trim() ? toWhatsAppNumber(form.phone, VE) || form.phone.trim() : "";
-    if (phone.replace(/\D/g, "").length < 7 && !form.documentId.trim()) { setDup(null); return; }
+    if (form.phone.replace(/\D/g, "").length < 7 && !form.documentId) { setDup(null); return; }
     const t = setTimeout(() => {
-      gymApi<{ type: "lead" | "member"; name: string } | null>(`/leads/duplicate?${new URLSearchParams({ phone, documentId: form.documentId.trim(), except: lead?.id ?? "" })}`).then(setDup).catch(() => {});
+      gymApi<{ duplicate: { type: "lead" | "member"; name: string } | null }>(`/leads/duplicate?${new URLSearchParams({ phone: form.phone, documentId: form.documentId, except: lead?.id ?? "" })}`)
+        .then((r) => setDup(r.duplicate ?? null))
+        .catch(() => setDup(null));
     }, 350);
     return () => clearTimeout(t);
   }, [form.phone, form.documentId, open, lead]);
 
+  const allValid = valid.phone && valid.email && valid.documentId;
+  const hasContact = !!form.phone || !!form.email;
   const save = async () => {
     setSaving(true);
     try {
-      const phone = form.phone.trim() ? toWhatsAppNumber(form.phone, VE) || form.phone.trim() : null;
-      const saved = await gymApi<GymLead>(lead ? `/leads/${lead.id}` : "/leads", { method: lead ? "PUT" : "POST", json: { ...form, phone } });
+      const saved = await gymApi<GymLead>(lead ? `/leads/${lead.id}` : "/leads", {
+        method: lead ? "PUT" : "POST",
+        json: { ...form, phone: form.phone || null, email: form.email || null, documentId: form.documentId || null, source: form.source || null },
+      });
       toast.success(lead ? "Prospecto actualizado" : `${saved.name} quedó en tus prospectos`);
       onSaved(saved);
       onClose();
@@ -161,22 +171,23 @@ function LeadDialog({ lead, open, onClose, onSaved }: { lead: GymLead | null; op
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{lead ? "Editar prospecto" : "Nuevo prospecto"}</DialogTitle>
-          <DialogDescription>Alguien interesado en inscribirse. Con su WhatsApp le confirmas la clase de prueba.</DialogDescription>
+          <DialogDescription>Alguien interesado en inscribirse. Anota su WhatsApp o su correo para poder contactarlo.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2"><Label>Nombre</Label><Input autoFocus value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Nombre y apellido" /></div>
-          <div className="space-y-1.5"><Label>WhatsApp</Label><Input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="0412 123 4567" inputMode="tel" /></div>
-          <div className="space-y-1.5"><Label>Cédula</Label><Input value={form.documentId} onChange={(e) => set("documentId", e.target.value)} placeholder="Opcional" /></div>
-          <div className="space-y-1.5 sm:col-span-2"><Label>Correo</Label><Input value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="Opcional" type="email" /></div>
+          <div className="space-y-1.5 sm:col-span-2"><Label>WhatsApp</Label><PhoneField value={form.phone} onChange={field("phone")} accountCountry={country} /></div>
+          <div className="space-y-1.5"><Label>Cédula <Optional /></Label><DocumentField value={form.documentId} onChange={field("documentId")} /></div>
           <div className="space-y-1.5">
-            <Label>¿Cómo nos conoció?</Label>
+            <Label>¿Cómo nos conoció? <Optional /></Label>
             <select value={form.source} onChange={(e) => set("source", e.target.value)} className="h-9 w-full rounded-md border bg-background px-2 text-sm">
+              <option value="">Sin indicar</option>
               {LEAD_SOURCES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </select>
           </div>
-          <div className="space-y-1.5"><Label>Le interesa</Label><Input value={form.interest} onChange={(e) => set("interest", e.target.value)} placeholder="Ej.: bajar de peso, crossfit" /></div>
+          <div className="space-y-1.5 sm:col-span-2"><Label>Correo <Optional /></Label><EmailField value={form.email} onChange={field("email")} /></div>
+          <div className="space-y-1.5 sm:col-span-2"><Label>Le interesa <Optional /></Label><Input value={form.interest} onChange={(e) => set("interest", e.target.value)} placeholder="Ej.: bajar de peso, crossfit" /></div>
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>Notas</Label>
+            <Label>Notas <Optional /></Label>
             <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={2} className="w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Horario que prefiere, lesiones, presupuesto…" />
           </div>
         </div>
@@ -185,9 +196,10 @@ function LeadDialog({ lead, open, onClose, onSaved }: { lead: GymLead | null; op
             {dup.type === "member" ? `${dup.name} ya es socio del gimnasio.` : `Ya tienes a ${dup.name} en tus prospectos.`}
           </p>
         )}
+        {!hasContact && form.name.trim() && <p className="text-xs text-muted-foreground">Falta un WhatsApp o un correo.</p>}
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={save} disabled={saving || !form.name.trim() || (!lead && dup !== null)} className="gap-2">{saving && <IconLoader2 size={16} className="animate-spin" />} {lead ? "Guardar" : "Agregar prospecto"}</Button>
+          <Button onClick={save} disabled={saving || !form.name.trim() || !hasContact || !allValid || (!lead && dup !== null)} className="gap-2">{saving && <IconLoader2 size={16} className="animate-spin" />} {lead ? "Guardar" : "Agregar prospecto"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

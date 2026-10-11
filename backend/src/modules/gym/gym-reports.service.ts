@@ -155,10 +155,11 @@ export class GymReportsService {
     const wonTimes = leads.filter((l) => l.wonAt).map((l) => (l.wonAt!.getTime() - l.createdAt.getTime()) / DAY);
     const sources = new Map<string, { source: string; created: number; won: number }>();
     for (const l of leads) {
-      const s = sources.get(l.source) ?? { source: l.source, created: 0, won: 0 };
+      const key = l.source ?? 'UNKNOWN';
+      const s = sources.get(key) ?? { source: key, created: 0, won: 0 };
       s.created++;
       if (l.stage === 'WON') s.won++;
-      sources.set(l.source, s);
+      sources.set(key, s);
     }
 
     return {

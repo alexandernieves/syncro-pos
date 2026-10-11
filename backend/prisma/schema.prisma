@@ -1587,7 +1587,7 @@ model GymLead {
   email          String?
   documentId     String?
   /// WALK_IN, INSTAGRAM, FACEBOOK, REFERRAL, WHATSAPP, WEB, GUEST or OTHER
-  source         String            @default("WALK_IN")
+  source         String?           @default("WALK_IN")
   interest       String?
   /// NEW, CONTACTED, TRIAL_SCHEDULED, TRIAL_DONE, WON or LOST
   stage          String            @default("NEW")

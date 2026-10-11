@@ -251,7 +251,8 @@ export class GymController {
 
   @Get('leads/duplicate')
   leadDuplicate(@Query('phone') phone: string, @Query('documentId') documentId: string, @Query('except') except: string, @Request() req: any) {
-    return this.crm.findDuplicate(req.user.businessId, { phone, documentId }, except || undefined);
+    // Always an object: an empty body would read as a duplicate on the screen
+    return this.crm.findDuplicate(req.user.businessId, { phone, documentId }, except || undefined).then((duplicate) => ({ duplicate }));
   }
 
   @Get('leads')

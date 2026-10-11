@@ -25,7 +25,7 @@ type LeadInput = {
   phone?: string | null;
   email?: string | null;
   documentId?: string | null;
-  source?: string;
+  source?: string | null;
   interest?: string | null;
   notes?: string | null;
   ownerName?: string | null;
@@ -121,7 +121,7 @@ export class GymCrmService {
   }
 
   private clean(data: LeadInput) {
-    if (data.source !== undefined && !LEAD_SOURCES.includes(data.source as any)) throw new BadRequestException('Origen inválido');
+    if (data.source && !LEAD_SOURCES.includes(data.source as any)) throw new BadRequestException('Origen inválido');
     const follow = data.nextFollowUpAt === undefined ? undefined : data.nextFollowUpAt ? new Date(data.nextFollowUpAt) : null;
     if (follow && Number.isNaN(follow.getTime())) throw new BadRequestException('Fecha de seguimiento inválida');
     return {
@@ -129,7 +129,7 @@ export class GymCrmService {
       ...(data.phone !== undefined && { phone: data.phone?.trim() || null }),
       ...(data.email !== undefined && { email: data.email?.trim() || null }),
       ...(data.documentId !== undefined && { documentId: data.documentId?.trim() || null }),
-      ...(data.source !== undefined && { source: data.source }),
+      ...(data.source !== undefined && { source: data.source || null }),
       ...(data.interest !== undefined && { interest: data.interest?.trim() || null }),
       ...(data.notes !== undefined && { notes: data.notes?.trim() || null }),
       ...(data.ownerName !== undefined && { ownerName: data.ownerName?.trim() || null }),

@@ -4,15 +4,14 @@ import { useEffect, useState } from "react";
 import { IconLoader2, IconSearch, IconTicket, IconUserShare, IconWalk } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { type GymMemberRow, PAYMENT_METHODS, gymApi, money } from "@/lib/gym";
-import { countryFromAccount, toWhatsAppNumber } from "@/lib/phone-countries";
+import { type GymMemberRow, PAYMENT_METHODS, accountCountry, gymApi, money } from "@/lib/gym";
+import { DocumentField, Optional, PhoneField } from "@/components/forms/contact-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MemberAvatar } from "@/components/gym/gym-ui";
 
-const VE = countryFromAccount("Venezuela");
 type Kind = "GUEST" | "DAY_PASS" | "VISITOR";
 type Quota = { memberId: string; name: string; planName: string | null; allowed: number; used: number; left: number };
 const KINDS: { kind: Kind; title: string; hint: string; icon: React.ReactNode }[] = [
@@ -32,6 +31,7 @@ export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: bo
   const [host, setHost] = useState<GymMemberRow | null>(null);
   const [quota, setQuota] = useState<Quota | null>(null);
   const [saving, setSaving] = useState(false);
+  const [valid, setValid] = useState({ phone: true, documentId: true });
 
   useEffect(() => {
     if (!open) return;
@@ -42,6 +42,7 @@ export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: bo
     setHost(null);
     setHostQuery("");
     setQuota(null);
+    setValid({ phone: true, documentId: true });
   }, [open]);
 
   useEffect(() => {
@@ -63,7 +64,7 @@ export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: bo
   const save = async () => {
     setSaving(true);
     try {
-      const phone = form.phone.trim() ? toWhatsAppNumber(form.phone, VE) || form.phone.trim() : null;
+      const phone = form.phone || null;
       const res = await gymApi<{ price: number; previousVisits: number; visit: { leadId: string | null } }>("/visits", {
         method: "POST",
         json: {
@@ -88,7 +89,7 @@ export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: bo
     }
   };
 
-  const ready = form.name.trim() && (kind !== "GUEST" || host);
+  const ready = form.name.trim() && (kind !== "GUEST" || host) && valid.phone && valid.documentId;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -144,8 +145,8 @@ export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: bo
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2"><Label>Nombre</Label><Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Nombre y apellido" /></div>
-          <div className="space-y-1.5"><Label>Cédula</Label><Input value={form.documentId} onChange={(e) => set("documentId", e.target.value)} placeholder="Opcional" /></div>
-          <div className="space-y-1.5"><Label>WhatsApp</Label><Input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="Para invitarlo a inscribirse" inputMode="tel" /></div>
+          <div className="space-y-1.5"><Label>Cédula <Optional /></Label><DocumentField value={form.documentId} onChange={(st) => { set("documentId", st.value); setValid((v) => ({ ...v, documentId: st.valid })); }} /></div>
+          <div className="space-y-1.5"><Label>WhatsApp <Optional /></Label><PhoneField value={form.phone} onChange={(st) => { set("phone", st.value); setValid((v) => ({ ...v, phone: st.valid })); }} accountCountry={accountCountry()} /></div>
           <div className="space-y-1.5 sm:col-span-2"><Label>Notas</Label><Input value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Opcional" /></div>
         </div>
 
