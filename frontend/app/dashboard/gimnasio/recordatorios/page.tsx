@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { StatCard, StatGrid } from "@/components/stat-card";
 import { GymPage, GymPageHeader } from "@/components/gym/gym-ui";
 import { WhatsAppPreview } from "@/components/gym/whatsapp-preview";
+import { OptionSelect } from "@/components/forms/option-select";
 
 type Kind = "BEFORE" | "EXPIRY" | "AFTER";
 type Settings = {
@@ -111,8 +112,7 @@ export default function GymRemindersPage() {
       days: r.daysBefore || 3,
       control: (
         <div className="flex items-center gap-2 text-sm">
-          Días antes
-          <Input type="number" min={0} max={30} value={r.daysBefore} onChange={(e) => setR({ daysBefore: Number(e.target.value) })} className="h-8 w-16 text-center" />
+          <OptionSelect value={r.daysBefore} onChange={(v) => setR({ daysBefore: v })} options={[0, 1, 2, 3, 5, 7]} unit={{ one: "día antes", many: "días antes" }} min={0} max={30} zeroLabel="No enviar" className="h-8 min-w-32" />
         </div>
       ),
     },
@@ -124,8 +124,7 @@ export default function GymRemindersPage() {
       days: r.afterDays || 3,
       control: (
         <div className="flex items-center gap-2 text-sm">
-          Días después
-          <Input type="number" min={0} max={60} value={r.afterDays} onChange={(e) => setR({ afterDays: Number(e.target.value) })} className="h-8 w-16 text-center" />
+          <OptionSelect value={r.afterDays} onChange={(v) => setR({ afterDays: v })} options={[0, 1, 2, 3, 5, 7, 15, 30]} unit={{ one: "día después", many: "días después" }} min={0} max={60} zeroLabel="No enviar" className="h-8 min-w-36" />
         </div>
       ),
     },
@@ -196,7 +195,7 @@ export default function GymRemindersPage() {
           </Card>
         ))}
       </div>
-      <p className="-mt-2 text-xs text-muted-foreground">Pon un número en 0 para no enviar ese aviso. El texto entre *asteriscos* se ve en negrita en WhatsApp. Los mensajes salen de a uno y espaciados para cuidar tu número.</p>
+      <p className="-mt-2 text-xs text-muted-foreground">Para apagar un aviso, elige que no se envíe. El texto entre *asteriscos* se ve en negrita en WhatsApp. Los mensajes salen de a uno y espaciados para cuidar tu número.</p>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="gap-0 py-0">

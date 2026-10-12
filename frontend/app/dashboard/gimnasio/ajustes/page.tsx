@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { PosTable } from "@/components/pos-table";
 import { GymPage, GymPageHeader, PersonCell } from "@/components/gym/gym-ui";
 import { WhatsAppPreview } from "@/components/gym/whatsapp-preview";
+import { DAYS, MINUTES, OptionSelect, TIMES, type Unit } from "@/components/forms/option-select";
 
 type NoticeKind = "CLASS_CANCELLED" | "CLASS_MOVED" | "WAITLIST_PROMOTED" | "TRIAL_BOOKED";
 type Settings = {
@@ -90,30 +91,19 @@ const STATUS_BADGE: Record<NoticeRow["status"], { label: string; cls: string }> 
   SKIPPED: { label: "No enviado", cls: "text-muted-foreground" },
 };
 
-function NumberField({ label, hint, value, min, max, suffix, onChange }: { label: string; hint: string; value: number; min: number; max: number; suffix: string; onChange: (v: number) => void }) {
+/** A setting picked from sensible options (or a custom value inside its range): no free typing. */
+function NumberField({ label, hint, value, onChange, options, unit, min, max, zeroLabel }: { label: string; hint: string; value: number; onChange: (v: number) => void; options: number[]; unit: Unit; min: number; max: number; zeroLabel?: string }) {
   return (
     <div className="space-y-1.5">
       <p className="text-sm font-medium">{label}</p>
-      <div className="flex items-center gap-2">
-        <Input type="number" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} className="h-9 w-20 text-center tabular-nums" />
-        <span className="text-sm text-muted-foreground">{suffix}</span>
-      </div>
+      <OptionSelect value={value} onChange={onChange} options={options} unit={unit} min={min} max={max} zeroLabel={zeroLabel} className="max-w-56" />
       <p className="text-xs text-muted-foreground">{hint}</p>
     </div>
   );
 }
 
-function MoneyField({ label, hint, value, onChange }: { label: string; hint: string; value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="space-y-1.5">
-      <p className="text-sm font-medium">{label}</p>
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">$</span>
-        <Input value={value} onChange={(e) => onChange(Number(e.target.value.replace(/[^\d.]/g, "")) || 0)} className="h-9 w-24 text-right tabular-nums" inputMode="decimal" />
-      </div>
-      <p className="text-xs text-muted-foreground">{hint}</p>
-    </div>
-  );
+function MoneyField({ label, hint, value, onChange, options, max = 500, zeroLabel = "Gratis" }: { label: string; hint: string; value: number; onChange: (v: number) => void; options: number[]; max?: number; zeroLabel?: string }) {
+  return <NumberField label={label} hint={hint} value={value} onChange={onChange} options={options} unit="money" min={0} max={max} zeroLabel={zeroLabel} />;
 }
 
 function SwitchField({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
@@ -315,10 +305,10 @@ export default function GymSettingsPage() {
           <CardDescription>Reglas para todos los planes. Los horarios y límites de entradas se configuran en cada plan.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
-          <NumberField label="Días de gracia" suffix={settings.access.graceDays === 1 ? "día" : "días"} min={0} max={30} value={settings.access.graceDays} onChange={(v) => setSection("access", { graceDays: v })} hint="Después de vencer puede seguir entrando estos días, con aviso de renovar." />
-          <NumberField label="Tiempo entre entradas" suffix="minutos" min={0} max={600} value={settings.access.reentryMinutes} onChange={(v) => setSection("access", { reentryMinutes: v })} hint="Evita que dos personas usen la misma membresía. Con 0 no se revisa." />
+          <NumberField label="Días de gracia" value={settings.access.graceDays} onChange={(v) => setSection("access", { graceDays: v })} hint="Después de vencer puede seguir entrando estos días, con aviso de renovar." options={[0, 1, 2, 3, 5, 7, 10, 15]} unit={DAYS} min={0} max={30} zeroLabel="Sin días de gracia" />
+          <NumberField label="Tiempo entre entradas" value={settings.access.reentryMinutes} onChange={(v) => setSection("access", { reentryMinutes: v })} hint="Evita que dos personas usen la misma membresía: tras entrar, debe pasar este tiempo para volver a entrar." options={[0, 15, 30, 45, 60, 90, 120, 180]} unit={MINUTES} min={0} max={600} zeroLabel="Sin revisar" />
           <SwitchField label="Bloquear si debe dinero" hint="Si está apagado, recepción solo ve un aviso de la deuda." checked={settings.access.blockIfOwed} onChange={(v) => setSection("access", { blockIfOwed: v })} />
-          {settings.access.blockIfOwed ? <MoneyField label="Deuda tolerada" hint="Puede entrar si debe hasta este monto." value={settings.access.owedTolerance} onChange={(v) => setSection("access", { owedTolerance: v })} /> : <span />}
+          {settings.access.blockIfOwed ? <MoneyField label="Deuda tolerada" hint="Puede entrar si debe hasta este monto." value={settings.access.owedTolerance} onChange={(v) => setSection("access", { owedTolerance: v })} options={[0, 1, 2, 5, 10, 20]} max={1000} zeroLabel="Nada ($0.00)" /> : <span />}
           <SwitchField label="Exigir documentos firmados" hint="No entra hasta firmar los documentos obligatorios. Si está apagado, solo se avisa." checked={settings.access.requireSignatures} onChange={(v) => setSection("access", { requireSignatures: v })} />
         </CardContent>
       </Card>
@@ -329,9 +319,9 @@ export default function GymSettingsPage() {
           <CardDescription>Los días que se pueden congelar se definen en cada plan. Se puede programar con fecha de regreso y se reactiva solo.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
-          <NumberField label="Mínimo por congelamiento" suffix="días" min={1} max={90} value={settings.freeze.minDays} onChange={(v) => setSection("freeze", { minDays: v })} hint="Congelamientos más cortos no se aceptan." />
-          <NumberField label="Veces por membresía" suffix="veces" min={0} max={12} value={settings.freeze.maxTimes} onChange={(v) => setSection("freeze", { maxTimes: v })} hint="Con 0 no hay límite de veces (sí de días)." />
-          <MoneyField label="Costo por congelar" hint="Se suma a lo que debe el socio. Con 0 es gratis." value={settings.freeze.fee} onChange={(v) => setSection("freeze", { fee: v })} />
+          <NumberField label="Mínimo por congelamiento" value={settings.freeze.minDays} onChange={(v) => setSection("freeze", { minDays: v })} hint="Congelamientos más cortos no se aceptan." options={[1, 3, 5, 7, 10, 14, 15, 30]} unit={DAYS} min={1} max={90} />
+          <NumberField label="Veces por membresía" value={settings.freeze.maxTimes} onChange={(v) => setSection("freeze", { maxTimes: v })} hint="El máximo de días lo pone cada plan." options={[0, 1, 2, 3, 4, 6]} unit={TIMES} min={0} max={12} zeroLabel="Sin límite" />
+          <MoneyField label="Costo por congelar" hint="Se suma a lo que debe el socio." value={settings.freeze.fee} onChange={(v) => setSection("freeze", { fee: v })} options={[0, 1, 2, 3, 5, 10]} />
           <SwitchField label="Pedir motivo" hint="Viaje, lesión, trabajo… queda en la ficha del socio." checked={settings.freeze.requireReason} onChange={(v) => setSection("freeze", { requireReason: v })} />
         </CardContent>
       </Card>
@@ -351,12 +341,12 @@ export default function GymSettingsPage() {
             </div>
             <p className="text-xs text-muted-foreground">Quien renueva antes de vencer nunca pierde días: el plan nuevo empieza cuando termina el actual.</p>
           </div>
-          {settings.renewal.startFrom === "END_IF_GRACE" && <NumberField label="Volver a tiempo" suffix="días después" min={0} max={60} value={settings.renewal.graceDays} onChange={(v) => setSection("renewal", { graceDays: v })} hint="Hasta cuántos días después de vencer se mantiene la fecha." />}
-          <NumberField label="Descuento por renovar antes" suffix="%" min={0} max={50} value={settings.renewal.earlyDiscountPct} onChange={(v) => setSection("renewal", { earlyDiscountPct: v })} hint="Con 0 no hay descuento." />
-          <NumberField label="Para el descuento, renovar con" suffix="días de anticipación" min={0} max={60} value={settings.renewal.earlyDays} onChange={(v) => setSection("renewal", { earlyDays: v })} hint="Cuántos días antes de vencer debe renovar como mínimo." />
-          <MoneyField label="Inscripción" hint="Cobro único la primera vez que alguien compra un plan." value={settings.renewal.enrollmentFee} onChange={(v) => setSection("renewal", { enrollmentFee: v })} />
-          <MoneyField label="Reinscripción" hint="Para quien vuelve después de mucho tiempo vencido." value={settings.renewal.reactivationFee} onChange={(v) => setSection("renewal", { reactivationFee: v })} />
-          <NumberField label="Se cobra la reinscripción después de" suffix="días vencido" min={1} max={365} value={settings.renewal.reactivationAfterDays} onChange={(v) => setSection("renewal", { reactivationAfterDays: v })} hint="Antes de eso solo paga el plan." />
+          {settings.renewal.startFrom === "END_IF_GRACE" && <NumberField label="Volver a tiempo" value={settings.renewal.graceDays} onChange={(v) => setSection("renewal", { graceDays: v })} hint="Hasta cuántos días después de vencer se mantiene la fecha." options={[0, 1, 2, 3, 5, 7, 10, 15, 30]} unit={DAYS} min={0} max={60} zeroLabel="Solo el mismo día" />}
+          <NumberField label="Descuento por renovar antes" value={settings.renewal.earlyDiscountPct} onChange={(v) => setSection("renewal", { earlyDiscountPct: v })} hint="Se aplica solo si renueva con la anticipación indicada." options={[0, 5, 10, 15, 20, 25, 30]} unit="percent" min={0} max={50} zeroLabel="Sin descuento" />
+          <NumberField label="Para el descuento, renovar con" value={settings.renewal.earlyDays} onChange={(v) => setSection("renewal", { earlyDays: v })} hint="Cuántos días antes de vencer debe renovar como mínimo." options={[1, 3, 5, 7, 10, 15, 30]} unit={DAYS} min={1} max={60} />
+          <MoneyField label="Inscripción" hint="Cobro único la primera vez que alguien compra un plan." value={settings.renewal.enrollmentFee} onChange={(v) => setSection("renewal", { enrollmentFee: v })} options={[0, 5, 10, 15, 20, 25, 30]} max={1000} zeroLabel="Sin inscripción" />
+          <MoneyField label="Reinscripción" hint="Para quien vuelve después de mucho tiempo vencido." value={settings.renewal.reactivationFee} onChange={(v) => setSection("renewal", { reactivationFee: v })} options={[0, 5, 8, 10, 15, 20, 25]} max={1000} zeroLabel="Sin reinscripción" />
+          <NumberField label="Se cobra la reinscripción después de" value={settings.renewal.reactivationAfterDays} onChange={(v) => setSection("renewal", { reactivationAfterDays: v })} hint="Antes de eso solo paga el plan." options={[15, 30, 45, 60, 90, 180, 365]} unit={DAYS} min={1} max={365} />
         </CardContent>
       </Card>
 
@@ -368,14 +358,7 @@ export default function GymSettingsPage() {
           <CardDescription>Para quien entra sin membresía: invitados de socios, pases de día y visitas.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <p className="text-sm font-medium">Precio del pase de día</p>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">$</span>
-              <Input value={settings.visits.dayPassPrice} onChange={(e) => setVisits({ dayPassPrice: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} className="h-9 w-24 text-right tabular-nums" inputMode="decimal" />
-            </div>
-            <p className="text-xs text-muted-foreground">También se cobra a un invitado cuando el socio ya usó sus pases gratis del mes (se configuran en cada plan).</p>
-          </div>
+          <MoneyField label="Precio del pase de día" hint="También se cobra a un invitado cuando el socio ya usó sus pases gratis del mes (se configuran en cada plan)." value={settings.visits.dayPassPrice} onChange={(v) => setVisits({ dayPassPrice: v })} options={[1, 2, 3, 5, 7, 10, 15]} zeroLabel="Gratis" />
           <label className="flex items-start justify-between gap-4">
             <span className="space-y-1">
               <span className="block text-sm font-medium">Guardar como prospecto</span>
