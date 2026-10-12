@@ -17,6 +17,7 @@ import { PosTable } from "@/components/pos-table";
 import { GymPage, GymPageHeader, PersonCell } from "@/components/gym/gym-ui";
 import { WhatsAppPreview } from "@/components/gym/whatsapp-preview";
 import { DAYS, MINUTES, OptionSelect, TIMES, type Unit } from "@/components/forms/option-select";
+import { UnsavedChangesBar, useUnsavedGuard } from "@/components/forms/unsaved-changes";
 
 type NoticeKind = "CLASS_CANCELLED" | "CLASS_MOVED" | "WAITLIST_PROMOTED" | "TRIAL_BOOKED";
 type Settings = {
@@ -227,19 +228,23 @@ export default function GymSettingsPage() {
   const setTemplate = (kind: NoticeKind, text: string) => setSettings((s) => (s ? { ...s, notices: { ...s.notices, templates: { ...s.notices.templates, [kind]: text } } } : s));
 
   const save = async () => {
-    if (!settings) return;
+    if (!settings) return false;
     setSaving(true);
     try {
       const next = await gymApi<Settings>("/settings", { method: "PUT", json: pick(settings) });
       setSettings(next);
       setSaved(JSON.stringify(pick(next)));
       toast.success("Ajustes guardados");
+      return true;
     } catch (e) {
       toast.error((e as Error).message);
+      return false;
     } finally {
       setSaving(false);
     }
   };
+  const discard = () => setSettings((s) => (s && saved ? { ...s, ...JSON.parse(saved) } : s));
+  const leaveGuard = useUnsavedGuard(dirty, save);
 
   const columns = useMemo<ColumnDef<NoticeRow>[]>(
     () => [
@@ -416,6 +421,8 @@ export default function GymSettingsPage() {
           <PosTable columns={columns} data={log ?? []} loading={!log} searchPlaceholder="Buscar socio…" getRowId={(r) => r.id} emptyMessage="Todavía no se ha enviado ningún aviso." skeletonRows={3} />
         </CardContent>
       </Card>
+      <UnsavedChangesBar dirty={dirty} saving={saving} onSave={save} onDiscard={discard} />
+      {leaveGuard}
     </GymPage>
   );
 }

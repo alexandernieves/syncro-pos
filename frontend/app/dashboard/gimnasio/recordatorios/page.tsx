@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { IconBrandWhatsapp, IconCircleCheckFilled, IconCircleXFilled, IconDeviceFloppy, IconLoader2, IconSend } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ import { StatCard, StatGrid } from "@/components/stat-card";
 import { GymPage, GymPageHeader } from "@/components/gym/gym-ui";
 import { WhatsAppPreview } from "@/components/gym/whatsapp-preview";
 import { OptionSelect } from "@/components/forms/option-select";
+import { UnsavedChangesBar, useUnsavedGuard } from "@/components/forms/unsaved-changes";
 
 type Kind = "BEFORE" | "EXPIRY" | "AFTER";
 type Settings = {
@@ -66,7 +67,10 @@ export default function GymRemindersPage() {
       .catch(() => {});
   }, []);
 
-  const dirty = useMemo(() => settings && JSON.stringify(settings) !== saved, [settings, saved]);
+  const dirty = useMemo(() => !!settings && JSON.stringify(settings) !== saved, [settings, saved]);
+  // save() is defined after the loading return; the guard reaches it through this ref
+  const saveRef = useRef<() => Promise<boolean>>(async () => false);
+  const leaveGuard = useUnsavedGuard(dirty, () => saveRef.current());
 
   if (!settings) {
     return <div className="space-y-3 p-6"><Skeleton className="h-10 w-64" /><Skeleton className="h-64" /></div>;
@@ -83,12 +87,15 @@ export default function GymRemindersPage() {
       setSaved(JSON.stringify(next));
       toast.success(next.reminders.enabled ? "Recordatorios automáticos activados" : "Configuración guardada");
       loadLists();
+      return true;
     } catch (e) {
       toast.error((e as Error).message);
+      return false;
     } finally {
       setSaving(false);
     }
   };
+  saveRef.current = save;
 
   const runNow = async () => {
     setRunning(true);
@@ -258,6 +265,8 @@ export default function GymRemindersPage() {
           </CardContent>
         </Card>
       </div>
+      <UnsavedChangesBar dirty={dirty} saving={saving} onSave={save} onDiscard={() => saved && setSettings(JSON.parse(saved))} />
+      {leaveGuard}
     </GymPage>
   );
 }
