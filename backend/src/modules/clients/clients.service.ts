@@ -959,11 +959,14 @@ export class ClientsService {
     };
   }
 
+  /** What the customer portal may know about a business: never the supervisor PIN or the bot's phones. */
   async getSettings(businessId: string) {
     const settings = await this.prisma.setting.findFirst({
       where: { businessId }
     });
-    return settings ?? {};
+    if (!settings) return {};
+    const { discountPin, pinPermissions, whatsappAuthorizedPhones, whatsappBotEnabled, financeSettings, ...safe } = settings as any;
+    return safe;
   }
 
   /**

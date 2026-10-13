@@ -1,6 +1,7 @@
 "use client";
 
 import { ClientPicker, type DirectoryClient } from "@/components/pos/client-picker";
+import { verifySupervisorPin } from "@/lib/supervisor-pin";
 import { ClientDataPrompt, clientIsMissingData } from "@/components/pos/client-data-prompt";
 import { CreditLimitOverride } from "@/components/pos/credit-limit-override";
 import { ReceiptPrinter, type ReceiptData } from "@/components/pos/receipt-printer";
@@ -789,7 +790,7 @@ export default function POSPage() {
   const pinInputRef = React.useRef<HTMLInputElement>(null);
 
   const openPinVerification = (onSuccess: (pinUsed?: string) => void) => {
-    if (!settings?.discountPin) {
+    if (!settings?.hasDiscountPin) {
       // No PIN configured, allow directly
       onSuccess();
       return;
@@ -801,8 +802,11 @@ export default function POSPage() {
     setTimeout(() => pinInputRef.current?.focus(), 100);
   };
 
-  const handlePinConfirm = () => {
-    if (pinInput === settings?.discountPin) {
+  const handlePinConfirm = async () => {
+    // Checked on the server: the PIN never reaches the browser
+    let valid = false;
+    try { valid = await verifySupervisorPin(pinInput); } catch (e) { setPinError((e as Error).message); return; }
+    if (valid) {
       const pinUsed = pinInput;
       setIsPinModalOpen(false);
       setPinInput("");

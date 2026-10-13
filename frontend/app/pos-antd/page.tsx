@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { verifySupervisorPin } from "@/lib/supervisor-pin";
 import { API_URL } from "@/lib/constants"
 import { useRouter } from "next/navigation";
 import {
@@ -756,7 +757,7 @@ export default function POSPage() {
   const pinInputRef = React.useRef<HTMLInputElement>(null);
 
   const openPinVerification = (onSuccess: (pinUsed?: string) => void) => {
-    if (!settings?.discountPin) {
+    if (!settings?.hasDiscountPin) {
       // No PIN configured, allow directly
       onSuccess();
       return;
@@ -768,8 +769,11 @@ export default function POSPage() {
     setTimeout(() => pinInputRef.current?.focus(), 100);
   };
 
-  const handlePinConfirm = () => {
-    if (pinInput === settings?.discountPin) {
+  const handlePinConfirm = async () => {
+    // Checked on the server: the PIN never reaches the browser
+    let valid = false;
+    try { valid = await verifySupervisorPin(pinInput); } catch (e) { setPinError((e as Error).message); return; }
+    if (valid) {
       const pinUsed = pinInput;
       setIsPinModalOpen(false);
       setPinInput("");

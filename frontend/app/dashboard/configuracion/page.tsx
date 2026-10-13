@@ -303,6 +303,8 @@ export default function ConfiguracionPage() {
   // PIN de autorización de descuentos
   const [discountPin, setDiscountPin] = useState("");
   const [discountPinConfirm, setDiscountPinConfirm] = useState("");
+  // The PIN itself never comes from the server: only whether there is one
+  const [hasDiscountPin, setHasDiscountPin] = useState(false);
   const [showPin, setShowPin] = useState(false);
   const [savingPin, setSavingPin] = useState(false);
   const [pinPermissions, setPinPermissions] = useState<any>({
@@ -862,7 +864,7 @@ export default function ConfiguracionPage() {
               email: data.paypalEmail || "",
               enabled: data.paypalEnabled || false,
             });
-            setDiscountPin(data.discountPin || "");
+            setHasDiscountPin(!!data.hasDiscountPin);
             if (data.pinPermissions) {
               setPinPermissions(typeof data.pinPermissions === 'string' ? JSON.parse(data.pinPermissions) : data.pinPermissions);
             }
@@ -1072,7 +1074,6 @@ export default function ConfiguracionPage() {
           zinliEnabled: zinli.enabled,
           paypalEmail: paypal.email,
           paypalEnabled: paypal.enabled,
-          discountPin: discountPin || null,
           pinPermissions: pinPermissions, 
           syncroCreditMaxInstallments: Number(syncroCreditMaxInstallments) || 3,
           syncroCreditFrequencyDays: Number(syncroCreditFrequencyDays) || 15,
@@ -2146,7 +2147,7 @@ export default function ConfiguracionPage() {
                     <CardTitle className="text-sm">PIN de autorización</CardTitle>
                     <CardDescription className="text-xs">PIN de 4 dígitos para autorizar acciones sensibles en el POS (descuentos, etc.)</CardDescription>
                   </div>
-                  {discountPin && <Badge className="ml-auto bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border text-[10px]">Configurado</Badge>}
+                  {hasDiscountPin && <Badge className="ml-auto bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border text-[10px]">Configurado</Badge>}
                 </div>
               </CardHeader>
               <CardContent className="p-6 flex flex-col gap-4">
@@ -2211,10 +2212,12 @@ export default function ConfiguracionPage() {
                         });
                         if (res.ok) {
                           toast.success("PIN de seguridad guardado");
+                          setDiscountPin("");
                           setDiscountPinConfirm("");
-                        } else throw new Error();
-                      } catch {
-                        toast.error("Error al guardar el PIN");
+                          setHasDiscountPin(true);
+                        } else throw new Error((await res.json().catch(() => ({}))).message || "Error al guardar el PIN");
+                      } catch (e) {
+                        toast.error((e as Error).message || "Error al guardar el PIN");
                       } finally {
                         setSavingPin(false);
                       }
