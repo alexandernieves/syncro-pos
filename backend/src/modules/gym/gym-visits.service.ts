@@ -138,7 +138,8 @@ export class GymVisitsService {
         await this.crm.addActivity(businessId, leadId, { type: 'VISIT', text: `${KIND_LABEL[kind]}${host ? ` de ${host.name}` : ''}${price > 0 ? ` · pagó $${price.toFixed(2)}` : ' · sin costo'}` }, userName);
       }
     }
-    return { visit: { ...visit, leadId }, price, host, previousVisits: before };
+    const [payment] = await this.gym.withCash(await this.prisma.gymPayment.findMany({ where: { visitId: visit.id }, take: 1 }));
+    return { visit: { ...visit, leadId }, price, host, previousVisits: before, payment: payment ?? null };
   }
 
   async checkout(businessId: string, id: string) {

@@ -3,7 +3,7 @@ import { normalizeInvoiceDesign } from "@/lib/invoice/design";
 import { printInvoice, resolveInvoiceBusiness } from "@/lib/invoice/render";
 import type { InvoiceData } from "@/lib/invoice/types";
 import { invoiceCaption, renderInvoiceImage } from "@/lib/invoice/whatsapp";
-import { type GymMemberDetail, type GymMembership, shortDate } from "@/lib/gym";
+import { type GymMemberDetail, type GymMembership, type GymPayment, receiptPayment, shortDate } from "@/lib/gym";
 
 /** Membership receipt built with the business's invoice design. */
 export function membershipReceiptParts(member: GymMemberDetail, membership: GymMembership, settings: any) {
@@ -11,7 +11,8 @@ export function membershipReceiptParts(member: GymMemberDetail, membership: GymM
   // Memberships don't carry IVA here: hide the tax lines
   const design = { ...base, documentTitle: "Recibo de membresía", show: { ...base.show, taxBreakdown: false, itemCode: false } };
   const business = resolveInvoiceBusiness(settings, design);
-  const payments = (membership.payments || []).map((p) => ({ method: p.method, amount: p.amount, reference: p.reference || undefined }));
+  const payments = (membership.payments || []).map(receiptPayment);
+  const changed = (membership.payments || []).find((p) => (p.changeUsd ?? 0) > 0);
   // Plan line plus one line per extra charge (enrollment, reactivation, freeze fee)
   const fees = (membership.feeItems ?? []).filter((f) => f && f.amount > 0);
   const feesTotal = Math.round(fees.reduce((t, f) => t + f.amount, 0) * 100) / 100;
@@ -42,7 +43,9 @@ export function membershipReceiptParts(member: GymMemberDetail, membership: GymM
     total,
     exchangeRate: Number(settings?.exchangeRate) > 1 ? Number(settings.exchangeRate) : 1,
     payments,
-    change: 0,
+    change: changed?.changeUsd ?? 0,
+    changeCurrency: changed?.changeCurrency ?? null,
+    changeAmount: changed?.changeAmount ?? null,
   };
   return { data, design, business };
 }
@@ -66,7 +69,7 @@ export async function sendMembershipReceipt(member: GymMemberDetail, membership:
 }
 
 /** Receipt of a day pass or a guest pass charged at reception. */
-export function visitReceiptParts(visit: { id: string; name: string; documentId?: string | null; phone?: string | null; kind: string; checkedInAt?: string }, price: number, method: string, settings: any) {
+export function visitReceiptParts(visit: { id: string; name: string; documentId?: string | null; phone?: string | null; kind: string; checkedInAt?: string }, price: number, method: string, settings: any, payment?: GymPayment | null) {
   const base = normalizeInvoiceDesign(settings?.invoiceDesign, settings ?? undefined);
   const design = { ...base, documentTitle: "Recibo de pase", show: { ...base.show, taxBreakdown: false, itemCode: false } };
   const business = resolveInvoiceBusiness(settings, design);
@@ -87,8 +90,10 @@ export function visitReceiptParts(visit: { id: string; name: string; documentId?
     igtf: 0,
     total: price,
     exchangeRate: Number(settings?.exchangeRate) > 1 ? Number(settings.exchangeRate) : 1,
-    payments: [{ method, amount: price }],
-    change: 0,
+    payments: [payment ? receiptPayment(payment) : { method, amount: price }],
+    change: payment?.changeUsd ?? 0,
+    changeCurrency: payment?.changeCurrency ?? null,
+    changeAmount: payment?.changeAmount ?? null,
   };
   return { data, design, business };
 }

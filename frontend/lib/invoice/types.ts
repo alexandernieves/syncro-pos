@@ -1,3 +1,5 @@
+import { type Currency, formatMoney } from "@/lib/currency";
+
 /** Snapshot of a sale used to render its invoice. */
 export type InvoiceData = {
   saleId: string;
@@ -21,8 +23,12 @@ export type InvoiceData = {
   igtf: number;
   total: number;
   exchangeRate: number;
-  payments: { method: string; amount: number; reference?: string }[];
+  /** `amount` in dollars; `currency` and `amountCurrency` say what the customer handed over. */
+  payments: { method: string; amount: number; reference?: string; currency?: string | null; amountCurrency?: number | null }[];
+  /** Change in dollars, and the currency and amount it was handed back in. */
   change: number;
+  changeCurrency?: string | null;
+  changeAmount?: number | null;
   /** Saved offline, waiting to sync. */
   pending?: boolean;
 };
@@ -51,6 +57,13 @@ export const PAYMENT_LABELS: Record<string, string> = {
   ZINLI: "Zinli",
   PAYPAL: "PayPal",
 };
+
+/** "Bs 4.383,99 ($5.00)" for cash in another currency, "$5.00" otherwise. */
+export function paymentAmountLabel(usd: number, currency?: string | null, amount?: number | null) {
+  const dollars = `$${usd.toFixed(2)}`;
+  if (!currency || currency === "USD" || amount == null) return dollars;
+  return `${formatMoney(amount, currency as Currency)} (${dollars})`;
+}
 
 export function invoiceNumber(data: InvoiceData) {
   return data.saleNumber || data.saleId.replace(/-/g, "").slice(-8).toUpperCase();

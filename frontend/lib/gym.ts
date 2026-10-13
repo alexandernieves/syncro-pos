@@ -26,7 +26,29 @@ export type GymPlan = {
 export type MembershipState = "ACTIVE" | "SCHEDULED" | "FROZEN" | "EXPIRED" | "CANCELLED";
 export type MemberStatus = MembershipState | "NONE" | "BLOCKED";
 
-export type GymPayment = { id: string; amount: number; method: string; reference: string | null; createdAt: string };
+export type GymPayment = {
+  id: string;
+  amount: number;
+  method: string;
+  reference: string | null;
+  createdAt: string;
+  /** Cash: what the customer handed over (currency, amount, dollars) and the change given back. */
+  paidCurrency?: string | null;
+  paidAmount?: number | null;
+  paidUsd?: number | null;
+  changeCurrency?: string | null;
+  changeAmount?: number | null;
+  changeUsd?: number | null;
+};
+
+/** Receipt lines of a gym charge: what was handed over and the change, from the payment. */
+export const receiptPayment = (p: GymPayment) => ({
+  method: p.method,
+  amount: p.paidUsd ?? p.amount,
+  reference: p.reference || undefined,
+  currency: p.paidCurrency ?? null,
+  amountCurrency: p.paidAmount ?? null,
+});
 
 export type GymMembership = {
   id: string;

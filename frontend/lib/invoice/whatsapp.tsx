@@ -4,7 +4,7 @@ import { toPng } from "html-to-image";
 import { API_URL } from "@/lib/constants";
 import { InvoiceDocument } from "@/components/invoice/invoice-document";
 import type { InvoiceDesign } from "./design";
-import { type InvoiceBusiness, type InvoiceData, PAYMENT_LABELS, invoiceNumber } from "./types";
+import { type InvoiceBusiness, type InvoiceData, PAYMENT_LABELS, invoiceNumber, paymentAmountLabel } from "./types";
 
 const IMAGE_LAYOUT: Record<InvoiceDesign["paper"], { width: number; padding: number }> = {
   "80": { width: 380, padding: 20 },
@@ -56,7 +56,8 @@ export function invoiceCaption(data: InvoiceData, design: InvoiceDesign, busines
   ];
   if (withDetail) {
     lines.push("", ...data.items.map((i) => `• ${i.quantity} x ${i.name}: ${money(i.subtotal)}`));
-    if (data.payments.length) lines.push("", ...data.payments.map((p) => `${PAYMENT_LABELS[p.method] ?? p.method}: ${money(p.amount)}`));
+    if (data.payments.length) lines.push("", ...data.payments.map((p) => `${PAYMENT_LABELS[p.method] ?? p.method}: ${paymentAmountLabel(p.amount, p.currency, p.amountCurrency)}`));
+    if (data.change > 0) lines.push(`Vuelto: ${paymentAmountLabel(data.change, data.changeCurrency, data.changeAmount)}`);
   }
   lines.push(`Total: *${money(data.total)}*${data.exchangeRate > 1 ? ` (${bs(data.total * data.exchangeRate)})` : ""}`);
   if (design.footerText) lines.push("", design.footerText);
@@ -107,7 +108,7 @@ export async function sendInvoiceWhatsApp(saleId: string, phone: string, data: I
 
 /** Invoice data rebuilt from a sale saved on the server (for resending from the history). */
 export function saleToInvoiceData(sale: any, settings: any): InvoiceData {
-  const payments = (sale.payments || []).map((p: any) => ({ method: p.method, amount: Number(p.amount) || 0, reference: p.reference || undefined }));
+  const payments = (sale.payments || []).map((p: any) => ({ method: p.method, amount: Number(p.amount) || 0, reference: p.reference || undefined, currency: p.currency ?? null, amountCurrency: p.amountCurrency ?? null }));
   const paid = payments.reduce((s: number, p: { amount: number }) => s + p.amount, 0);
   const rate = Number(payments.find((p: any) => p.exchangeRate)?.exchangeRate) || Number(settings?.exchangeRate) || 1;
   return {
@@ -135,6 +136,8 @@ export function saleToInvoiceData(sale: any, settings: any): InvoiceData {
     total: Number(sale.total) || 0,
     exchangeRate: rate,
     payments,
-    change: Math.max(0, Math.round((paid - (Number(sale.total) || 0)) * 100) / 100),
+    change: sale.changeUsd != null ? Number(sale.changeUsd) : Math.max(0, Math.round((paid - (Number(sale.total) || 0)) * 100) / 100),
+    changeCurrency: sale.changeCurrency ?? null,
+    changeAmount: sale.changeAmount ?? null,
   };
 }

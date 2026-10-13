@@ -307,7 +307,7 @@ export class GymService {
       medicalNotes: member.medicalNotes,
       goal: member.goal,
       notes: member.notes,
-      memberships: member.memberships.map((m) => ({ ...m, state: membershipState(m, now) })),
+      memberships: await Promise.all(member.memberships.map(async (m) => ({ ...m, payments: await this.withCash(m.payments), state: membershipState(m, now) }))),
       checkIns: member.checkIns,
     };
   }
@@ -473,6 +473,25 @@ export class GymService {
         await this.recordPayment(tx, businessId, { membershipId: membership.id, clientId: member?.clientId, itemName: `Membresía ${plan.name}${extra}`, description: `Membresía ${plan.name}${extra}${memberName ? ` · ${memberName}` : ''}` }, { ...data.payment, amount: paid }, userId);
       }
       return tx.gymMembership.findUnique({ where: { id: membership.id }, include: { payments: true } });
+    }).then(async (m) => (m ? { ...m, payments: await this.withCash(m.payments) } : m));
+  }
+
+  /**
+   * Adds to each payment how the cash came in and the change handed back (kept on its sale),
+   * so receipts can say "paid Bs X, change $Y".
+   */
+  async withCash<T extends { saleId: string | null }>(payments: T[]) {
+    const ids = payments.map((p) => p.saleId).filter(Boolean) as string[];
+    if (!ids.length) return payments;
+    const sales = await this.prisma.sale.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, changeCurrency: true, changeAmount: true, changeUsd: true, payments: { select: { currency: true, amountCurrency: true, amount: true } } },
+    });
+    return payments.map((p) => {
+      const sale = sales.find((x) => x.id === p.saleId);
+      if (!sale) return p;
+      const paid = sale.payments[0];
+      return { ...p, paidCurrency: paid?.currency ?? null, paidAmount: paid?.amountCurrency ?? null, paidUsd: paid?.amount ?? null, changeCurrency: sale.changeCurrency, changeAmount: sale.changeAmount, changeUsd: sale.changeUsd };
     });
   }
 

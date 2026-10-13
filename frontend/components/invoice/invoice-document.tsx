@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import JsBarcode from "jsbarcode";
 import type { InvoiceDesign, InvoiceSectionId } from "@/lib/invoice/design";
-import { type InvoiceBusiness, type InvoiceData, PAYMENT_LABELS, invoiceNumber } from "@/lib/invoice/types";
+import { type InvoiceBusiness, type InvoiceData, PAYMENT_LABELS, invoiceNumber, paymentAmountLabel } from "@/lib/invoice/types";
 
 /**
  * The invoice itself. Plain markup with its own scoped CSS (no Tailwind), so the same
@@ -291,9 +291,9 @@ export function InvoiceDocument({ data, design, business, ink = "color" }: Invoi
       const rows = (
         <>
           {data.payments.map((p, i) => (
-            <div key={i} className="row"><span>{PAYMENT_LABELS[p.method] ?? p.method}{p.reference ? <span className="muted small"> · Ref. {p.reference}</span> : null}</span><span>{money(p.amount)}</span></div>
+            <div key={i} className="row"><span>{PAYMENT_LABELS[p.method] ?? p.method}{p.reference ? <span className="muted small"> · Ref. {p.reference}</span> : null}</span><span>{paymentAmountLabel(p.amount, p.currency, p.amountCurrency)}</span></div>
           ))}
-          {show.change && data.change > 0 && <div className="row b"><span>Cambio</span><span>{money(data.change)}</span></div>}
+          {show.change && data.change > 0 && <div className="row b"><span>Cambio</span><span>{paymentAmountLabel(data.change, data.changeCurrency, data.changeAmount)}</span></div>}
         </>
       );
       if (tpl === "letter") return <div className="totals"><p className="label">Pagos</p>{rows}</div>;

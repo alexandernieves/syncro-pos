@@ -1342,19 +1342,21 @@ export default function POSPage() {
   const taxAmount = roundCents(subtotalAfterGlobalDiscount * (taxRate / 100));
   const updatedTotal = roundCents(subtotalAfterGlobalDiscount + taxAmount);
 
-  // Calculate IGTF based on CASH payments added
-  const cashPaymentsTotal = addedPayments
-    .filter(p => p.method === "CASH")
-    .reduce((acc, p) => acc + p.amount, 0);
-
+  // IGTF: only on foreign currency cash (dollars, euros, pesos), never on bolívares, and only
+  // on the part that pays the sale, not on the change. Same rule as the server.
+  const isForeignCash = (p: any) => p.method === "CASH" && (!p.currency || ["USD", "EUR", "COP"].includes(p.currency));
   const igtfRateVal = settings?.igtfRate !== undefined && settings?.igtfRate !== null ? Number(settings.igtfRate) : 3;
-  const igtfAmount = roundCents(cashPaymentsTotal * (igtfRateVal / 100));
-  const totalBeforeWallet = roundCents(updatedTotal + igtfAmount);
 
   // Calculate Wallet Deduction
   const availableWallet = selectedClient?.walletBalance || 0;
   const availableCredit = (selectedClient?.creditLimit || 0) - (selectedClient?.currentDebt || 0);
-  const walletDeduction = useWalletBalance ? roundCents(Math.min(availableWallet, totalBeforeWallet)) : 0;
+  const walletDeduction = useWalletBalance ? roundCents(Math.min(availableWallet, updatedTotal)) : 0;
+
+  const foreignCashPaid = addedPayments.filter(isForeignCash).reduce((acc, p) => acc + p.amount, 0);
+  const otherPaid = addedPayments.filter((p) => !isForeignCash(p)).reduce((acc, p) => acc + p.amount, 0) + walletDeduction;
+  const igtfBase = Math.min(foreignCashPaid, Math.max(0, updatedTotal - otherPaid));
+  const igtfAmount = roundCents(igtfBase * (igtfRateVal / 100));
+  const totalBeforeWallet = roundCents(updatedTotal + igtfAmount);
 
   const finalTotalWithIgtf = roundCents(totalBeforeWallet - walletDeduction);
   const totalPaid = roundCents(addedPayments.reduce((acc, p) => acc + p.amount, 0));
@@ -1987,14 +1989,19 @@ export default function POSPage() {
     discount: totalDiscountAmt,
     taxRate,
     tax: taxAmount,
-    igtf: payments.filter((p: any) => p.method === "CASH").reduce((acc: number, p: any) => acc + p.amount, 0) * (igtfRateVal / 100),
+    igtf: igtfAmount,
     total: finalTotalWithIgtf,
     exchangeRate: currentExchangeRate,
     payments: [
-      ...payments.map((p: any) => ({ method: p.method, amount: p.amount, reference: p.reference })),
+      ...payments.map((p: any) => ({ method: p.method, amount: p.amount, reference: p.reference, currency: p.currency ?? null, amountCurrency: p.amountCurrency ?? null })),
       ...(useWalletBalance && walletDeduction > 0 ? [{ method: "WALLET", amount: walletDeduction }] : []),
     ],
-    change: changeDue,
+    change: saveChangeToWallet ? 0 : changeDue,
+    ...(() => {
+      // Same default as the server: the currency of the last cash payment
+      const cur = (changeCurrency ?? ([...payments].reverse().find((p: any) => p.method === "CASH") as any)?.currency ?? "USD") as CashCurrency;
+      return { changeCurrency: cur, changeAmount: fromUsd(changeDue, cur, cashRates) };
+    })(),
     pending,
   });
 

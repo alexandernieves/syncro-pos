@@ -388,7 +388,7 @@ export default function GymReceptionPage() {
       {m && <SignDocumentDialog memberId={m.id} templateId={signing} onClose={() => setSigning(null)} onSigned={() => { setResult((r) => (r ? { ...r, pendingDocuments: r.pendingDocuments?.filter((d) => d.id !== signing), warnings: r.warnings.filter((w) => !w.startsWith("Falta firmar")) } : r)); }} />}
       <VisitDialog open={visitOpen} onClose={() => setVisitOpen(false)} onSaved={(v) => { loadFeed(); setFeedTab("visits"); if (v.price > 0) setPassReceipt(v); }} dayPassPrice={dayPassPrice} />
       {passReceipt && (() => {
-        const { data, design, business } = visitReceiptParts(passReceipt.visit, passReceipt.price, passReceipt.method, bizSettings);
+        const { data, design, business } = visitReceiptParts(passReceipt.visit, passReceipt.price, passReceipt.method, bizSettings, passReceipt.payment);
         return <ReceiptPrinter receipt={data} design={design} business={business} doneLabel="Listo" onDone={() => setPassReceipt(null)} />;
       })()}
     </GymPage>

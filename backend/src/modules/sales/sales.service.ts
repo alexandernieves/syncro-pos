@@ -184,12 +184,14 @@ export class SalesService {
       // 4. Calculate Taxes
       const taxAmount = netSubtotal * (taxRate / 100);
       
-      // Calculate IGTF (3% for Cash payments in USD)
-      const cashAmount = payments
-        .filter((p: any) => p.method === 'CASH')
-        .reduce((acc: number, curr: any) => acc + curr.amount, 0);
-      
-      const igtfAmount = cashAmount * (igtfRate / 100);
+      // IGTF: only on what is paid in foreign currency cash (dollars, euros, pesos), never on
+      // bolívares, and only on the part that pays the sale (not the change handed back)
+      const isForeignCash = (p: any) => p.method === 'CASH' && (!p.currency || ['USD', 'EUR', 'COP'].includes(p.currency));
+      const baseTotal = netSubtotal + taxAmount;
+      const foreignPaid = payments.filter(isForeignCash).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
+      const otherPaid = payments.filter((p: any) => !isForeignCash(p)).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
+      const igtfBase = Math.min(foreignPaid, Math.max(0, baseTotal - otherPaid));
+      const igtfAmount = round2(igtfBase * (igtfRate / 100));
       const total = netSubtotal + taxAmount + igtfAmount;
 
       // Change handed back in cash leaves the drawer: in the currency the cashier chose

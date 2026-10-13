@@ -22,3 +22,5 @@ This project does not use Prisma migrations. Schema changes ship as SQL files he
 2026-10-10: a fresh database with the schema of commit `c685216`, then every `2026-10-*` file applied twice. The result matches `schema.prisma` with no differences.
 
 2026-10-10 (after the gym phases 2–7): same rehearsal with every file up to `2026-10-12-05-gym-face-devices.sql`, applied twice. No differences.
+
+2026-10-12 (cash per currency and gym per branch): same rehearsal with every file up to `2026-10-12-08-currencies-and-gym-branches.sql`, applied twice. No differences. File `08` also assigns existing gym data to each business's main branch. Production was not reachable (port 5432 timed out), so it is still pending there.

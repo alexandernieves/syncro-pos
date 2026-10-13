@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { IconLoader2, IconSearch, IconTicket, IconUserShare, IconWalk } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { type GymMemberRow, accountCountry, gymApi, money } from "@/lib/gym";
+import { type GymMemberRow, type GymPayment, accountCountry, gymApi, money } from "@/lib/gym";
 import { PaymentFields, emptyPayment, paymentBody, paymentReady } from "@/components/gym/payment-fields";
 import { useCurrency } from "@/context/CurrencyContext";
 import { DocumentField, Optional, PhoneField } from "@/components/forms/contact-fields";
@@ -23,7 +23,7 @@ const KINDS: { kind: Kind; title: string; hint: string; icon: React.ReactNode }[
 ];
 
 /** Registers someone without a membership at reception, charging the pass in the cash shift. */
-export type SavedVisit = { visit: { id: string; name: string; documentId: string | null; phone: string | null; kind: string; checkedInAt: string }; price: number; method: string };
+export type SavedVisit = { visit: { id: string; name: string; documentId: string | null; phone: string | null; kind: string; checkedInAt: string }; price: number; method: string; payment?: GymPayment | null };
 
 export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: boolean; onClose: () => void; onSaved: (v: SavedVisit) => void; dayPassPrice: number }) {
   const [kind, setKind] = useState<Kind>("DAY_PASS");
@@ -69,7 +69,7 @@ export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: bo
     setSaving(true);
     try {
       const phone = form.phone || null;
-      const res = await gymApi<{ price: number; previousVisits: number; visit: SavedVisit["visit"] & { leadId: string | null } }>("/visits", {
+      const res = await gymApi<{ price: number; previousVisits: number; visit: SavedVisit["visit"] & { leadId: string | null }; payment: GymPayment | null }>("/visits", {
         method: "POST",
         json: {
           kind,
@@ -84,7 +84,7 @@ export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: bo
       });
       const extra = [res.price > 0 ? `Cobrado ${money(res.price)} en tu turno de caja.` : null, res.previousVisits >= 2 ? `Es su visita n.º ${res.previousVisits + 1}: ofrécele un plan.` : null, res.visit.leadId ? "Quedó en tus prospectos para darle seguimiento." : null].filter(Boolean).join(" ");
       toast.success(`Entrada registrada: ${form.name}`, { description: extra || undefined });
-      onSaved({ visit: res.visit, price: res.price, method });
+      onSaved({ visit: res.visit, price: res.price, method, payment: res.payment });
       onClose();
     } catch (e) {
       toast.error((e as Error).message);
