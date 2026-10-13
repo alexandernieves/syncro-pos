@@ -18,6 +18,7 @@ import { GymPage, GymPageHeader, PersonCell } from "@/components/gym/gym-ui";
 import { WhatsAppPreview } from "@/components/gym/whatsapp-preview";
 import { DAYS, MINUTES, OptionSelect, TIMES, type Unit } from "@/components/forms/option-select";
 import { UnsavedChangesBar, useUnsavedGuard } from "@/components/forms/unsaved-changes";
+import { ConfirmDialog } from "@/components/gym/confirm-dialog";
 
 type NoticeKind = "CLASS_CANCELLED" | "CLASS_MOVED" | "WAITLIST_PROMOTED" | "TRIAL_BOOKED";
 type Settings = {
@@ -120,6 +121,85 @@ function SwitchField({ label, hint, checked, onChange }: { label: string; hint: 
 }
 
 /** Contracts and consents: versioned texts the members sign at reception or in their app. */
+type AgentKey = { id: string; name: string; keyPrefix: string; lastUsedAt: string | null; revokedAt: string | null; createdAt: string };
+
+/** Key for the WhatsApp agent (Koenyx) to see classes and book on behalf of the gym. */
+function AgentKeysCard() {
+  const [keys, setKeys] = useState<AgentKey[] | null>(null);
+  const [created, setCreated] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState<AgentKey | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => gymApi<AgentKey[]>("/agent-keys").then(setKeys).catch(() => setKeys([]));
+  useEffect(() => { load(); }, []);
+  const when = (d: string) => new Date(d).toLocaleString("es-VE", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const create = async () => {
+    setBusy(true);
+    try {
+      const r = await gymApi<{ key: string }>("/agent-keys", { method: "POST", json: { name: "Agente de WhatsApp (Koenyx)" } });
+      setCreated(r.key);
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const copy = async (text: string) => {
+    try { await navigator.clipboard.writeText(text); toast.success("Clave copiada"); } catch { toast.error("No se pudo copiar: selecciónala y cópiala a mano"); }
+  };
+  const active = (keys ?? []).filter((k) => !k.revokedAt);
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2"><IconBrandWhatsapp size={18} /> Agente de WhatsApp</CardTitle>
+            <CardDescription>La clave con la que el agente de Koenyx consulta clases, planes y socios, y agenda reservas y clases de prueba. Dásela solo a Koenyx.</CardDescription>
+          </div>
+          <Button size="sm" className="gap-1.5" disabled={busy} onClick={create}>{busy ? <IconLoader2 size={15} className="animate-spin" /> : <IconPlus size={15} />} Crear clave</Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {!keys ? <Skeleton className="h-12 w-full" /> : active.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Todavía no hay ninguna clave. Crea una cuando Koenyx te la pida.</p>
+        ) : active.map((k) => (
+          <div key={k.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{k.name}</p>
+              <p className="font-mono text-xs text-muted-foreground">syk_{k.keyPrefix}_••••</p>
+              <p className="text-xs text-muted-foreground">Creada: {when(k.createdAt)}</p>
+              <p className="text-xs text-muted-foreground">Último uso: {k.lastUsedAt ? when(k.lastUsedAt) : "todavía no"}</p>
+            </div>
+            <Button size="sm" variant="ghost" className="text-rose-600" onClick={() => setRevoking(k)}>Revocar</Button>
+          </div>
+        ))}
+      </CardContent>
+      <Dialog open={!!created} onOpenChange={(o) => !o && setCreated(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Clave creada</DialogTitle>
+            <DialogDescription>Cópiala ahora y pásasela a Koenyx: por seguridad no se vuelve a mostrar. Si la pierdes, crea otra y revoca esta.</DialogDescription>
+          </DialogHeader>
+          <div className="break-all rounded-lg bg-muted px-3 py-2.5 font-mono text-sm select-all">{created}</div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreated(null)}>Cerrar</Button>
+            <Button onClick={() => created && copy(created)}>Copiar clave</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <ConfirmDialog
+        open={!!revoking}
+        danger
+        title="¿Revocar esta clave?"
+        description="El agente de WhatsApp deja de poder consultar y agendar con ella al instante. Para volver a conectarlo, crea una clave nueva."
+        confirmLabel="Revocar clave"
+        onConfirm={async () => { if (revoking) { await gymApi(`/agent-keys/${revoking.id}/revoke`, { method: "POST" }); toast.success("Clave revocada"); load(); } }}
+        onClose={() => setRevoking(null)}
+      />
+    </Card>
+  );
+}
+
 function DocumentsCard() {
   const [docs, setDocs] = useState<DocTemplate[] | null>(null);
   const [starters, setStarters] = useState<{ kind: string; title: string; body: string }[]>([]);
@@ -421,6 +501,7 @@ export default function GymSettingsPage() {
           <PosTable columns={columns} data={log ?? []} loading={!log} searchPlaceholder="Buscar socio…" getRowId={(r) => r.id} emptyMessage="Todavía no se ha enviado ningún aviso." skeletonRows={3} />
         </CardContent>
       </Card>
+      <AgentKeysCard />
       <UnsavedChangesBar dirty={dirty} saving={saving} onSave={save} onDiscard={discard} />
       {leaveGuard}
     </GymPage>

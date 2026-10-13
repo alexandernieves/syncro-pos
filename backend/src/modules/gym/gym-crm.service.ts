@@ -235,7 +235,7 @@ export class GymCrmService {
     return booked + trials;
   }
 
-  async scheduleTrial(businessId: string, id: string, sessionId: string, userName?: string) {
+  async scheduleTrial(businessId: string, id: string, sessionId: string, userName?: string, notify = true) {
     const lead = await this.prisma.gymLead.findFirst({ where: { id, businessId } });
     if (!lead) throw new NotFoundException('Prospecto no encontrado');
     if (lead.stage === 'WON') throw new BadRequestException('Este prospecto ya es socio');
@@ -253,7 +253,8 @@ export class GymCrmService {
     });
     const { timeZone } = await this.settings.getSettings(businessId);
     await this.log(businessId, id, 'TRIAL', `Clase de prueba: ${session.class.name}, ${GymNotificationsService.when(session.startsAt, timeZone)}`, userName);
-    const notified = await this.notices.notifyTrial(businessId, lead, sessionId);
+    // The WhatsApp agent confirms in its own conversation, so it asks not to send the notice
+    const notified = notify ? await this.notices.notifyTrial(businessId, lead, sessionId) : 0;
     return { ...updated, notified };
   }
 

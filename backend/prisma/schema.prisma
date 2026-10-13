@@ -66,6 +66,7 @@ model Business {
   gymAssessments        GymAssessment[]
   gymDevices            GymDevice[]
   gymDeviceEvents       GymDeviceEvent[]
+  gymApiKeys            GymApiKey[]
 }
 
 model Conversation {
@@ -1970,4 +1971,19 @@ model GymDeviceEvent {
 
   @@unique([deviceId, serialNo], map: "GymDeviceEvent_device_serial_key")
   @@index([businessId, occurredAt], map: "GymDeviceEvent_business_time_idx")
+}
+
+/// Keys for outside tools (the WhatsApp agent) to call the gym API on behalf of a business.
+model GymApiKey {
+  id         String    @id @default(uuid())
+  businessId String
+  name       String
+  keyPrefix  String    @unique
+  keyHash    String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId], map: "GymApiKey_business_idx")
 }

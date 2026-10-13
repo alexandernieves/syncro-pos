@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { GymAgentService } from './gym-agent.service';
+import { AgentKeyGuard, GymAgentController } from './gym-agent.controller';
 import { GymBranchInterceptor } from './gym-branch';
 import { PrismaModule } from '../prisma/prisma.module';
 import { WhatsAppModule } from '../whatsapp/whatsapp.module';
@@ -24,8 +26,8 @@ import { GymService } from './gym.service';
 
 @Module({
   imports: [PrismaModule, WhatsAppModule, UploadsModule],
-  controllers: [GymPortalController, GymBridgeController, GymController],
-  providers: [GymService, GymRemindersService, GymClassesService, GymNotificationsService, GymPortalService, GymCrmService, GymStaffService, GymVisitsService, GymAutomationService, GymDocumentsService, GymEquipmentService, GymTrainingService, GymReportsService, GymDevicesService, DeviceKeyGuard, GymStaffGuard, GymMemberGuard, GymBranchInterceptor],
+  controllers: [GymPortalController, GymBridgeController, GymAgentController, GymController],
+  providers: [GymService, GymRemindersService, GymClassesService, GymNotificationsService, GymPortalService, GymCrmService, GymStaffService, GymVisitsService, GymAutomationService, GymDocumentsService, GymEquipmentService, GymTrainingService, GymReportsService, GymDevicesService, DeviceKeyGuard, GymStaffGuard, GymMemberGuard, GymBranchInterceptor, GymAgentService, AgentKeyGuard],
   exports: [GymService],
 })
 export class GymModule {}

@@ -14,6 +14,7 @@ import { GymEquipmentService } from './gym-equipment.service';
 import { GymTrainingService } from './gym-training.service';
 import { GymReportsService } from './gym-reports.service';
 import { GymDevicesService } from './gym-devices.service';
+import { GymAgentService } from './gym-agent.service';
 
 @UseGuards(JwtAuthGuard, GymStaffGuard)
 @UseInterceptors(GymBranchInterceptor)
@@ -32,7 +33,24 @@ export class GymController {
     private readonly training: GymTrainingService,
     private readonly reports: GymReportsService,
     private readonly devices: GymDevicesService,
+    private readonly agent: GymAgentService,
   ) {}
+
+  // Keys for the WhatsApp agent (Koenyx)
+  @Get('agent-keys')
+  agentKeys(@Request() req: any) {
+    return this.agent.listKeys(req.user.businessId);
+  }
+
+  @Post('agent-keys')
+  createAgentKey(@Body('name') name: string, @Request() req: any) {
+    return this.agent.createKey(req.user.businessId, name);
+  }
+
+  @Post('agent-keys/:id/revoke')
+  revokeAgentKey(@Param('id') id: string, @Request() req: any) {
+    return this.agent.revokeKey(req.user.businessId, id);
+  }
 
   // Face readers (Hikvision) and their local bridge
   @Get('devices')

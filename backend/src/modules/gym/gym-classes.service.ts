@@ -313,7 +313,7 @@ export class GymClassesService {
   }
 
   /** Books a member into a session: needs a membership valid on the class day and a free spot. */
-  async book(businessId: string, sessionId: string, memberId: string, source: 'STAFF' | 'PORTAL' = 'STAFF') {
+  async book(businessId: string, sessionId: string, memberId: string, source: 'STAFF' | 'PORTAL' | 'AGENT' = 'STAFF') {
     return this.prisma.$transaction(async (tx) => {
       const session = await tx.gymClassSession.findFirst({ where: { id: sessionId, businessId }, include: { class: { select: { name: true } } } });
       if (!session) throw new NotFoundException('Clase no encontrada');

@@ -29,7 +29,7 @@ const ACRONYMS = [
   "COD", "OTP", "IN", "OUT", "FIFO", "LIFO", "IMEI", "NFC", "HTML", "CSS", "UI", "UX", "AM", "PM", "IGV", "S.A.", "C.A.", "2FA", "TV", "LED", "USB", "IMC", "ISAPI", "NTP", "README", "COP", "TRM",
 ];
 const PROPER = [
-  "Hikvision", "Ubuntu", "Colombia", "Cúcuta",
+  "Hikvision", "Ubuntu", "Colombia", "Cúcuta", "Koenyx",
   "Syncro", "SyncroCredit", "Syncro Credit", "Syncro Shop", "Syncro POS", "Syncro Score", "Syncro IA", "WhatsApp Web", "WhatsApp", "Binance", "Zinli", "PayPal", "Zelle", "Google",
   "Gemini", "Claude", "Mike", "Venezuela", "Caracas", "Táchira", "Mérida", "Excel", "Instagram", "Facebook", "TikTok", "YouTube",
   "Telegram", "Chrome", "Android", "iOS", "iPhone", "Apple", "Visa", "Mastercard", "Cashea", "Kardex", "Evolution", "Mac OS", "macOS", "Windows", "Linux",
