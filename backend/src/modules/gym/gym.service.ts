@@ -1,4 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { gymBranch, inBranch, memberInBranch } from './gym-branch';
+import { Currency, branchCurrencies, fromUsd, isCurrency, ratesFrom, round2, toUsd } from '../../common/currency';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { GymRemindersService } from './gym-reminders.service';
@@ -66,10 +68,12 @@ type PlanInput = {
   totalEntries?: number;
   includesClasses?: boolean;
   allowedClassIds?: string[];
+  allBranches?: boolean;
   isActive?: boolean;
 };
 type MemberInput = {
   clientId?: string;
+  branchId?: string;
   name?: string;
   documentId?: string;
   phone?: string;
@@ -84,7 +88,11 @@ type MemberInput = {
   notes?: string | null;
   accessEnabled?: boolean;
 };
-type PaymentInput = { amount: number; method: string; reference?: string; exchangeRate?: number; branchId?: string };
+/**
+ * `amount` is in dollars. Cash says which currency it came in and, optionally, how much the
+ * customer handed over in it (`received`); the change goes back in `changeCurrency`.
+ */
+type PaymentInput = { amount: number; method: string; reference?: string; exchangeRate?: number; branchId?: string; currency?: string; received?: number; changeCurrency?: string };
 type MembershipInput = {
   planId: string;
   startDate?: string;
@@ -111,8 +119,8 @@ export class GymService {
     const since = new Date(now.getTime() - 30 * DAY);
     const [plans, active, revenue] = await Promise.all([
       this.prisma.gymPlan.findMany({ where: { businessId }, orderBy: [{ isActive: 'desc' }, { durationDays: 'asc' }], include: { _count: { select: { memberships: true } } } }),
-      this.prisma.gymMembership.groupBy({ by: ['planId'], where: { businessId, status: { in: ['ACTIVE', 'FROZEN'] }, startDate: { lte: now }, endDate: { gte: now } }, _count: { _all: true } }),
-      this.prisma.gymPayment.findMany({ where: { businessId, createdAt: { gte: since }, membershipId: { not: null } }, select: { amount: true, membership: { select: { planId: true } } } }),
+      this.prisma.gymMembership.groupBy({ by: ['planId'], where: { businessId, ...memberInBranch(), status: { in: ['ACTIVE', 'FROZEN'] }, startDate: { lte: now }, endDate: { gte: now } }, _count: { _all: true } }),
+      this.prisma.gymPayment.findMany({ where: { businessId, ...inBranch(), createdAt: { gte: since }, membershipId: { not: null } }, select: { amount: true, membership: { select: { planId: true } } } }),
     ]);
     return plans.map((p) => ({
       ...p,
@@ -148,6 +156,7 @@ export class GymService {
       ...(data.maxEntriesPerWeek !== undefined && { maxEntriesPerWeek: int(data.maxEntriesPerWeek) }),
       ...(data.totalEntries !== undefined && { totalEntries: int(data.totalEntries) }),
       ...(data.includesClasses !== undefined && { includesClasses: !!data.includesClasses }),
+      ...(data.allBranches !== undefined && { allBranches: !!data.allBranches }),
       ...(data.allowedClassIds !== undefined && { allowedClassIds: (data.allowedClassIds || []).filter((x) => typeof x === 'string') }),
     };
   }
@@ -198,7 +207,8 @@ export class GymService {
 
   private memberInclude = {
     client: { select: { id: true, name: true, documentId: true, phone: true, email: true } },
-    memberships: { orderBy: { endDate: 'desc' as const }, take: 3 },
+    memberships: { orderBy: { endDate: 'desc' as const }, take: 3, include: { plan: { select: { allBranches: true } } } },
+    branch: { select: { id: true, name: true } },
   };
 
   /** The membership that decides access: the active one, else the scheduled or frozen, else the last one. */
@@ -226,6 +236,10 @@ export class GymService {
       faceSyncedAt: member.faceSyncedAt,
       faceError: member.faceError,
       createdAt: member.createdAt,
+      branchId: member.branchId ?? null,
+      branchName: member.branch?.name ?? null,
+      // Can train in every branch (their current plan is multi-branch)
+      allBranches: !!current?.plan?.allBranches,
       client: member.client,
       status,
       daysLeft,
@@ -233,11 +247,18 @@ export class GymService {
     };
   }
 
-  async listMembers(businessId: string, params: { q?: string; status?: string; page?: string; pageSize?: string }) {
+  async listMembers(businessId: string, params: { q?: string; status?: string; page?: string; pageSize?: string; visiting?: string }) {
     const page = Math.max(1, Number(params.page) || 1);
     const pageSize = Math.min(5000, Math.max(5, Number(params.pageSize) || 25));
     const q = (params.q || '').trim();
-    const where: Prisma.GymMemberWhereInput = { businessId };
+    const branchId = gymBranch();
+    // Members of this branch; at reception also members of other branches whose plan is valid everywhere
+    const now = new Date();
+    const visiting: Prisma.GymMemberWhereInput = { memberships: { some: { status: { in: ['ACTIVE'] }, startDate: { lte: now }, endDate: { gte: now }, plan: { allBranches: true } } } };
+    const where: Prisma.GymMemberWhereInput = {
+      businessId,
+      ...(branchId && (params.visiting === 'true' ? { AND: [{ OR: [{ branchId }, visiting] }] } : { branchId })),
+    };
     if (q) {
       const digits = q.replace(/\D/g, '');
       where.OR = [
@@ -267,7 +288,8 @@ export class GymService {
       where: { id, businessId },
       include: {
         client: { select: { id: true, name: true, documentId: true, phone: true, email: true, password: true } },
-        memberships: { orderBy: { startDate: 'desc' }, include: { payments: { orderBy: { createdAt: 'desc' } } } },
+        memberships: { orderBy: { startDate: 'desc' }, include: { payments: { orderBy: { createdAt: 'desc' } }, plan: { select: { allBranches: true } } } },
+        branch: { select: { id: true, name: true } },
         checkIns: { orderBy: { createdAt: 'desc' }, take: 20 },
       },
     });
@@ -330,7 +352,7 @@ export class GymService {
 
       const last = await tx.gymMember.findFirst({ where: { businessId }, orderBy: { memberNumber: 'desc' }, select: { memberNumber: true } });
       const member = await tx.gymMember.create({
-        data: { businessId, clientId, memberNumber: (last?.memberNumber ?? 0) + 1, ...this.memberData(data) },
+        data: { businessId, branchId: gymBranch(), clientId, memberNumber: (last?.memberNumber ?? 0) + 1, ...this.memberData(data) },
         include: this.memberInclude,
       });
       return this.presentMember(member);
@@ -340,8 +362,15 @@ export class GymService {
   async updateMember(businessId: string, id: string, data: MemberInput) {
     const member = await this.prisma.gymMember.findFirst({ where: { id, businessId } });
     if (!member) throw new NotFoundException('Socio no encontrado');
+    // Moving the member to another branch (sede)
+    let branchId: string | undefined;
+    if (data.branchId !== undefined && data.branchId !== member.branchId) {
+      const branch = await this.prisma.branch.findFirst({ where: { id: data.branchId, businessId }, select: { id: true } });
+      if (!branch) throw new BadRequestException('Sucursal no encontrada');
+      branchId = branch.id;
+    }
     await this.prisma.$transaction([
-      this.prisma.gymMember.update({ where: { id }, data: this.memberData(data) }),
+      this.prisma.gymMember.update({ where: { id }, data: { ...this.memberData(data), ...(branchId && { branchId, faceSyncedAt: null }) } }),
       ...(data.name !== undefined || data.phone !== undefined || data.email !== undefined || data.documentId !== undefined
         ? [this.prisma.client.update({
             where: { id: member.clientId },
@@ -461,14 +490,45 @@ export class GymService {
     const method = String(payment.method || 'CASH').toUpperCase();
     if (!GYM_PAYMENT_METHODS.includes(method)) throw new BadRequestException('Método de pago no válido');
 
-    const shift = userId ? await tx.shift.findFirst({ where: { userId, status: 'OPEN' as any, branch: { businessId } }, select: { id: true, branchId: true } }) : null;
+    // The charge goes to the cashier's open shift in the branch they're working in
+    const asked = payment.branchId || gymBranch();
+    const requested = asked ? (await tx.branch.findFirst({ where: { id: asked, businessId }, select: { id: true } }))?.id ?? null : null;
+    const open = userId ? await tx.shift.findMany({ where: { userId, status: 'OPEN' as any, branch: { businessId } }, select: { id: true, branchId: true, branch: { select: { name: true } } } }) : [];
+    const shift = (requested ? open.find((s) => s.branchId === requested) : open[0]) ?? null;
     // Every charge belongs to a cash shift; without one it would never be counted at the close
-    if (userId && !shift && Number(payment.amount) > 0) throw new BadRequestException({ code: 'SHIFT_CLOSED', message: 'Abre la caja para poder cobrar' });
-    let branchId = shift?.branchId ?? null;
-    if (!branchId && payment.branchId) {
-      branchId = (await tx.branch.findFirst({ where: { id: payment.branchId, businessId }, select: { id: true } }))?.id ?? null;
+    if (userId && !shift && Number(payment.amount) > 0) {
+      if (requested && open.length) throw new BadRequestException({ code: 'SHIFT_OTHER_BRANCH', message: `Tu caja está abierta en ${open[0].branch.name}. Cámbiate a esa sucursal o ciérrala para cobrar aquí.` });
+      throw new BadRequestException({ code: 'SHIFT_CLOSED', message: 'Abre la caja para poder cobrar' });
     }
+    let branchId = shift?.branchId ?? requested;
     if (!branchId) branchId = (await tx.branch.findFirst({ where: { businessId }, orderBy: { isMain: 'desc' }, select: { id: true } }))?.id ?? null;
+
+    // Cash in the currency it came in, and the change handed back (out of the drawer)
+    const branch = branchId ? await tx.branch.findUnique({ where: { id: branchId }, select: { state: true } }) : null;
+    const rates = ratesFrom(await tx.setting.findFirst({ where: { businessId } }));
+    const currencies = branchCurrencies(branch?.state);
+    let currency: Currency | null = null;
+    let paidUsd = payment.amount;
+    let paidInCurrency: number | null = null;
+    let change: { changeCurrency: Currency; changeAmount: number; changeUsd: number } | null = null;
+    if (method === 'CASH') {
+      currency = isCurrency(payment.currency) ? payment.currency : 'USD';
+      if (!currencies.includes(currency)) throw new BadRequestException(`Esta sucursal no recibe ${currency}`);
+      if (!(rates[currency] > 0)) throw new BadRequestException('Falta la tasa del peso colombiano');
+      const due = fromUsd(payment.amount, currency, rates);
+      const received = Number(payment.received);
+      paidInCurrency = due;
+      if (Number.isFinite(received) && received > 0) {
+        if (received < due - 0.004) throw new BadRequestException(`Faltan ${round2(due - received)} ${currency} para completar el pago`);
+        paidInCurrency = round2(received);
+        paidUsd = round2(toUsd(received, currency, rates));
+        const changeUsd = round2(paidUsd - payment.amount);
+        if (changeUsd >= 0.01) {
+          const changeCurrency: Currency = isCurrency(payment.changeCurrency) && currencies.includes(payment.changeCurrency) ? payment.changeCurrency : currency;
+          change = { changeCurrency, changeUsd, changeAmount: fromUsd(changeUsd, changeCurrency, rates) };
+        } else paidUsd = payment.amount;
+      }
+    }
 
     // The charge is a sale like any other: it shows in sales of the day, history, reports and the shift
     const sale = userId && branchId
@@ -483,8 +543,9 @@ export class GymService {
             total: payment.amount,
             channel: 'GYM',
             shiftId: shift?.id ?? null,
+            ...change,
             items: { create: [{ description: target.itemName || target.description, quantity: 1, price: payment.amount, subtotal: payment.amount }] },
-            payments: { create: [{ method: method as any, amount: payment.amount, reference: payment.reference?.trim() || null, exchangeRate: payment.exchangeRate ? Number(payment.exchangeRate) : null }] },
+            payments: { create: [{ method: method as any, amount: paidUsd, reference: payment.reference?.trim() || null, exchangeRate: payment.exchangeRate ? Number(payment.exchangeRate) : null, ...(currency && { currency, amountCurrency: paidInCurrency }) }] },
           },
         })
       : null;
@@ -512,6 +573,7 @@ export class GymService {
         method,
         reference: payment.reference?.trim() || null,
         exchangeRate: payment.exchangeRate ? Number(payment.exchangeRate) : null,
+        ...(currency && { currency, amountCurrency: fromUsd(payment.amount, currency, rates) }),
         createdById: userId || null,
         branchId,
         shiftId: shift?.id ?? null,
@@ -655,7 +717,7 @@ export class GymService {
     const warnings: string[] = [];
 
     let granted = false;
-    let reason: string;
+    let reason = 'Sin membresía vigente';
     if (!member.accessEnabled) reason = 'Acceso bloqueado por el gimnasio';
     else if (!m) reason = 'No tiene membresía';
     else if (m.state === 'ACTIVE') { granted = true; reason = row.daysLeft === 0 ? 'Su membresía vence hoy' : `Membresía activa · ${row.daysLeft} días restantes`; }
@@ -669,6 +731,13 @@ export class GymService {
     }
     else if (m.state === 'FROZEN') reason = m.freezeUntil ? `Membresía congelada hasta el ${fmt(m.freezeUntil)}` : 'Membresía congelada';
     else if (m.state === 'SCHEDULED') reason = `Su membresía empieza el ${fmt(m.startDate)}`;
+
+    // A member of another branch only comes in when their plan is valid in every branch
+    const here = gymBranch();
+    if (granted && here && member.branchId && member.branchId !== here) {
+      if (!m?.plan?.allBranches) { granted = false; reason = `Es socio de ${member.branch?.name ?? 'otra sede'}: su plan solo vale allá`; }
+      else warnings.push(`Socio de ${member.branch?.name ?? 'otra sede'} · plan válido en todas las sedes`);
+    }
     else reason = 'Membresía cancelada';
 
     // Plan rules: hours, entries per day and week, packs of visits
@@ -748,6 +817,7 @@ export class GymService {
     const checkIn = await this.prisma.gymCheckIn.create({
       data: {
         businessId,
+        branchId: gymBranch(),
         memberId: data.memberId,
         granted: access.granted || override,
         reason: override ? `Autorizado manualmente: ${data.note!.trim()} (${access.reason})` : access.reason,
@@ -763,7 +833,7 @@ export class GymService {
     const day = params.date ? new Date(`${params.date}T00:00:00`) : new Date();
     const from = startOfDay(day);
     const to = addDays(from, 1);
-    const where = { businessId, createdAt: { gte: from, lt: to } };
+    const where = { businessId, ...inBranch(), createdAt: { gte: from, lt: to } };
     const [items, granted, denied, unique] = await Promise.all([
       this.prisma.gymCheckIn.findMany({
         where,
@@ -784,10 +854,10 @@ export class GymService {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const [members, monthPayments, newMembers, todayCheckIns] = await Promise.all([
-      this.prisma.gymMember.findMany({ where: { businessId }, include: this.memberInclude }),
-      this.prisma.gymPayment.aggregate({ where: { businessId, createdAt: { gte: monthStart } }, _sum: { amount: true } }),
-      this.prisma.gymMember.count({ where: { businessId, createdAt: { gte: monthStart } } }),
-      this.prisma.gymCheckIn.count({ where: { businessId, granted: true, createdAt: { gte: startOfDay(now) } } }),
+      this.prisma.gymMember.findMany({ where: { businessId, ...inBranch() }, include: this.memberInclude }),
+      this.prisma.gymPayment.aggregate({ where: { businessId, ...inBranch(), createdAt: { gte: monthStart } }, _sum: { amount: true } }),
+      this.prisma.gymMember.count({ where: { businessId, ...inBranch(), createdAt: { gte: monthStart } } }),
+      this.prisma.gymCheckIn.count({ where: { businessId, ...inBranch(), granted: true, createdAt: { gte: startOfDay(now) } } }),
     ]);
     const rows = members.map((m) => this.presentMember(m));
     const expiring = rows.filter((r) => r.status === 'ACTIVE' && (r.daysLeft ?? 99) <= 7).sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));

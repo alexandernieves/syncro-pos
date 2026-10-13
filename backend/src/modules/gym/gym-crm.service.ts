@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { gymBranch, inBranch } from './gym-branch';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { GymService } from './gym.service';
@@ -65,7 +66,7 @@ export class GymCrmService {
   } satisfies Prisma.GymLeadInclude;
 
   async list(businessId: string, params: { q?: string; stage?: string; source?: string }) {
-    const where: Prisma.GymLeadWhereInput = { businessId };
+    const where: Prisma.GymLeadWhereInput = { businessId, ...inBranch() };
     if (params.stage) where.stage = params.stage;
     if (params.source) where.source = params.source;
     const q = (params.q || '').trim();
@@ -86,13 +87,13 @@ export class GymCrmService {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const since = new Date(now.getTime() - 90 * DAY);
     const [byStage, newThisMonth, wonThisMonth, closed90, overdue, trialsAhead, bySource] = await Promise.all([
-      this.prisma.gymLead.groupBy({ by: ['stage'], where: { businessId }, _count: { _all: true } }),
-      this.prisma.gymLead.count({ where: { businessId, createdAt: { gte: monthStart } } }),
-      this.prisma.gymLead.count({ where: { businessId, stage: 'WON', wonAt: { gte: monthStart } } }),
-      this.prisma.gymLead.groupBy({ by: ['stage'], where: { businessId, stage: { in: ['WON', 'LOST'] }, updatedAt: { gte: since } }, _count: { _all: true } }),
-      this.prisma.gymLead.count({ where: { businessId, stage: { in: OPEN_STAGES }, nextFollowUpAt: { lt: now } } }),
-      this.prisma.gymLead.count({ where: { businessId, stage: 'TRIAL_SCHEDULED', trialAt: { gte: now } } }),
-      this.prisma.gymLead.groupBy({ by: ['source'], where: { businessId, createdAt: { gte: since } }, _count: { _all: true } }),
+      this.prisma.gymLead.groupBy({ by: ['stage'], where: { businessId, ...inBranch(), ...inBranch() }, _count: { _all: true } }),
+      this.prisma.gymLead.count({ where: { businessId, ...inBranch(), createdAt: { gte: monthStart } } }),
+      this.prisma.gymLead.count({ where: { businessId, ...inBranch(), stage: 'WON', wonAt: { gte: monthStart } } }),
+      this.prisma.gymLead.groupBy({ by: ['stage'], where: { businessId, ...inBranch(), stage: { in: ['WON', 'LOST'] }, updatedAt: { gte: since } }, _count: { _all: true } }),
+      this.prisma.gymLead.count({ where: { businessId, ...inBranch(), stage: { in: OPEN_STAGES }, nextFollowUpAt: { lt: now } } }),
+      this.prisma.gymLead.count({ where: { businessId, ...inBranch(), stage: 'TRIAL_SCHEDULED', trialAt: { gte: now } } }),
+      this.prisma.gymLead.groupBy({ by: ['source'], where: { businessId, ...inBranch(), createdAt: { gte: since } }, _count: { _all: true } }),
     ]);
     const won = closed90.find((r) => r.stage === 'WON')?._count._all ?? 0;
     const lost = closed90.find((r) => r.stage === 'LOST')?._count._all ?? 0;
@@ -162,7 +163,7 @@ export class GymCrmService {
     if (dup?.type === 'member') throw new BadRequestException(`${dup.name} ya es socio del gimnasio`);
     if (dup?.type === 'lead') throw new BadRequestException(`Ya tienes a ${dup.name} como prospecto`);
     const lead = await this.prisma.gymLead.create({
-      data: { businessId, name: data.name.trim(), ...this.clean({ ...data, name: undefined }), stage: 'NEW', nextFollowUpAt: data.nextFollowUpAt ? new Date(data.nextFollowUpAt) : new Date(Date.now() + DAY) },
+      data: { businessId, branchId: gymBranch(), name: data.name.trim(), ...this.clean({ ...data, name: undefined }), stage: 'NEW', nextFollowUpAt: data.nextFollowUpAt ? new Date(data.nextFollowUpAt) : new Date(Date.now() + DAY) },
       include: this.include,
     });
     await this.log(businessId, lead.id, 'STAGE', 'Prospecto creado', userName);

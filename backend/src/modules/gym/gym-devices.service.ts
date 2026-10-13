@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { gymBranch, inBranch, runInBranch } from './gym-branch';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,7 +10,7 @@ const DAY = 24 * 60 * 60 * 1000;
 const ONLINE_MS = 90_000;
 const MODES = ['VALIDITY', 'STRICT'];
 
-type Device = { id: string; businessId: string; mode: string; doorNo: number; name: string };
+type Device = { id: string; businessId: string; branchId?: string | null; mode: string; doorNo: number; name: string };
 type BridgeEvent = { serialNo: string | number; employeeNo?: string | null; time: string; minor?: number; granted: boolean };
 
 /** Local wall-clock time "AAAA-MM-DDTHH:mm:ss" in the gym's time zone, the format the reader expects. */
@@ -46,11 +47,11 @@ export class GymDevicesService {
 
   async list(businessId: string) {
     const [devices, members, synced, failed, noPhoto] = await Promise.all([
-      this.prisma.gymDevice.findMany({ where: { businessId }, orderBy: { createdAt: 'asc' } }),
-      this.prisma.gymMember.count({ where: { businessId } }),
-      this.prisma.gymMember.count({ where: { businessId, faceSyncedAt: { not: null }, faceError: null } }),
-      this.prisma.gymMember.count({ where: { businessId, faceError: { not: null } } }),
-      this.prisma.gymMember.count({ where: { businessId, photoUrl: null } }),
+      this.prisma.gymDevice.findMany({ where: { businessId, ...inBranch() }, orderBy: { createdAt: 'asc' } }),
+      this.prisma.gymMember.count({ where: { businessId, ...inBranch() } }),
+      this.prisma.gymMember.count({ where: { businessId, ...inBranch(), faceSyncedAt: { not: null }, faceError: null } }),
+      this.prisma.gymMember.count({ where: { businessId, ...inBranch(), faceError: { not: null } } }),
+      this.prisma.gymMember.count({ where: { businessId, ...inBranch(), photoUrl: null } }),
     ]);
     return { devices: devices.map((d) => this.present(d)), faces: { members, synced, failed, noPhoto, pending: Math.max(0, members - synced - failed - noPhoto) } };
   }
@@ -60,7 +61,7 @@ export class GymDevicesService {
     if (data.mode && !MODES.includes(data.mode)) throw new BadRequestException('Modo inválido');
     const { prefix, key } = this.newKey();
     const device = await this.prisma.gymDevice.create({
-      data: { businessId, name: data.name.trim(), location: data.location?.trim() || null, mode: data.mode || 'VALIDITY', doorNo: Math.max(1, Math.round(Number(data.doorNo) || 1)), keyPrefix: prefix, keyHash: await bcrypt.hash(key, 10) },
+      data: { businessId, branchId: gymBranch(), name: data.name.trim(), location: data.location?.trim() || null, mode: data.mode || 'VALIDITY', doorNo: Math.max(1, Math.round(Number(data.doorNo) || 1)), keyPrefix: prefix, keyHash: await bcrypt.hash(key, 10) },
     });
     return { device: this.present(device), key };
   }
@@ -105,7 +106,7 @@ export class GymDevicesService {
   }
 
   async events(businessId: string, deviceId?: string) {
-    return this.prisma.gymDeviceEvent.findMany({ where: { businessId, ...(deviceId && { deviceId }) }, orderBy: { occurredAt: 'desc' }, take: 100, include: { device: { select: { name: true } } } }).then(async (rows) => {
+    return this.prisma.gymDeviceEvent.findMany({ where: { businessId, device: inBranch(), ...(deviceId && { deviceId }) }, orderBy: { occurredAt: 'desc' }, take: 100, include: { device: { select: { name: true } } } }).then(async (rows) => {
       const members = await this.prisma.gymMember.findMany({ where: { id: { in: rows.map((r) => r.memberId).filter(Boolean) as string[] } }, select: { id: true, memberNumber: true, photoUrl: true, client: { select: { name: true } } } });
       return rows.map((r) => ({ ...r, member: members.find((m) => m.id === r.memberId) ?? null }));
     });
@@ -114,7 +115,7 @@ export class GymDevicesService {
   /** Members whose face isn't on the reader yet, or failed to load. */
   faceIssues(businessId: string) {
     return this.prisma.gymMember.findMany({
-      where: { businessId, OR: [{ faceError: { not: null } }, { photoUrl: null }, { faceSyncedAt: null }] },
+      where: { businessId, ...inBranch(), OR: [{ faceError: { not: null } }, { photoUrl: null }, { faceSyncedAt: null }] },
       orderBy: { memberNumber: 'asc' },
       take: 200,
       select: { id: true, memberNumber: true, photoUrl: true, faceError: true, faceSyncedAt: true, client: { select: { name: true } } },
@@ -156,10 +157,11 @@ export class GymDevicesService {
     const now = new Date();
     const [members, templates] = await Promise.all([
       this.prisma.gymMember.findMany({
-        where: { businessId: device.businessId },
+        // The branch's members, plus members of other branches with a plan valid everywhere
+        where: { businessId: device.businessId, ...(device.branchId && { OR: [{ branchId: device.branchId }, { memberships: { some: { status: { not: 'CANCELLED' }, plan: { allBranches: true } } } }] }) },
         include: {
           client: { select: { name: true } },
-          memberships: { where: { status: { not: 'CANCELLED' } }, include: { payments: { select: { amount: true } } } },
+          memberships: { where: { status: { not: 'CANCELLED' } }, include: { payments: { select: { amount: true } }, plan: { select: { allBranches: true } } } },
           signatures: { select: { templateId: true, version: true } },
         },
       }),
@@ -173,6 +175,8 @@ export class GymDevicesService {
       }
       let enabled = false;
       let reason = 'Sin membresía vigente';
+      // Visiting from another branch: only plans valid everywhere open this door
+      if (device.branchId && m.branchId && m.branchId !== device.branchId) m.memberships = m.memberships.filter((x) => x.plan?.allBranches);
       let begin: Date | null = null;
       let end: Date | null = null;
       const usable = m.memberships.filter((x) => membershipState(x, now) !== 'FROZEN' && x.status !== 'FROZEN' && x.endDate.getTime() + settings.access.graceDays * DAY >= now.getTime());
@@ -235,14 +239,14 @@ export class GymDevicesService {
         results.push({ serialNo, granted: false, reason: 'No reconocido' });
         continue;
       }
-      const access = await this.gym.evaluateAccess(device.businessId, member.id, at);
+      const access = device.branchId ? await runInBranch(device.branchId, () => this.gym.evaluateAccess(device.businessId, member.id, at)) : await this.gym.evaluateAccess(device.businessId, member.id, at);
       const strict = device.mode === 'STRICT';
       const granted = strict ? access.granted && fresh : !!e.granted;
       let reason = access.reason;
       if (!strict && e.granted !== access.granted) reason = e.granted ? `Entró por el lector · Syncro: ${access.reason}` : `El lector negó la entrada · Syncro: ${access.reason}`;
       if (strict && access.granted && !fresh) reason = `Evento atrasado, no se abrió · ${access.reason}`;
       await this.prisma.gymDeviceEvent.update({ where: { id: created.id }, data: { syncroGranted: access.granted, reason } });
-      await this.prisma.gymCheckIn.create({ data: { businessId: device.businessId, memberId: member.id, granted, reason, method: 'FACE', deviceId: `device:${device.id}`, createdAt: at } });
+      await this.prisma.gymCheckIn.create({ data: { businessId: device.businessId, branchId: device.branchId, memberId: member.id, granted, reason, method: 'FACE', deviceId: `device:${device.id}`, createdAt: at } });
       if (strict && granted && !e.granted) open.push(serialNo);
       results.push({ serialNo, granted, reason });
     }

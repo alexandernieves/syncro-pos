@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { IconLoader2, IconSearch, IconTicket, IconUserShare, IconWalk } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { type GymMemberRow, PAYMENT_METHODS, accountCountry, gymApi, money } from "@/lib/gym";
+import { type GymMemberRow, accountCountry, gymApi, money } from "@/lib/gym";
+import { PaymentFields, emptyPayment, paymentBody, paymentReady } from "@/components/gym/payment-fields";
+import { useCurrency } from "@/context/CurrencyContext";
 import { DocumentField, Optional, PhoneField } from "@/components/forms/contact-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,8 +28,9 @@ export type SavedVisit = { visit: { id: string; name: string; documentId: string
 export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: boolean; onClose: () => void; onSaved: (v: SavedVisit) => void; dayPassPrice: number }) {
   const [kind, setKind] = useState<Kind>("DAY_PASS");
   const [form, setForm] = useState({ name: "", documentId: "", phone: "", notes: "", price: "" });
-  const [method, setMethod] = useState("CASH");
-  const [reference, setReference] = useState("");
+  const [pay, setPay] = useState(emptyPayment());
+  const { cashRates } = useCurrency();
+  const method = pay.method;
   const [hostQuery, setHostQuery] = useState("");
   const [hostMatches, setHostMatches] = useState<GymMemberRow[]>([]);
   const [host, setHost] = useState<GymMemberRow | null>(null);
@@ -39,8 +42,7 @@ export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: bo
     if (!open) return;
     setKind("DAY_PASS");
     setForm({ name: "", documentId: "", phone: "", notes: "", price: "" });
-    setMethod("CASH");
-    setReference("");
+    setPay(emptyPayment());
     setHost(null);
     setHostQuery("");
     setQuota(null);
@@ -50,7 +52,7 @@ export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: bo
   useEffect(() => {
     const term = hostQuery.trim();
     if (kind !== "GUEST" || host || term.length < 2) { setHostMatches([]); return; }
-    const t = setTimeout(() => gymApi<{ items: GymMemberRow[] }>(`/members?${new URLSearchParams({ q: term, pageSize: "6" })}`).then((r) => setHostMatches(r.items)).catch(() => {}), 200);
+    const t = setTimeout(() => gymApi<{ items: GymMemberRow[] }>(`/members?${new URLSearchParams({ q: term, pageSize: "6", visiting: "true" })}`).then((r) => setHostMatches(r.items)).catch(() => {}), 200);
     return () => clearTimeout(t);
   }, [hostQuery, kind, host]);
 
@@ -77,7 +79,7 @@ export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: bo
           notes: form.notes,
           hostMemberId: host?.id,
           ...(form.price !== "" && { price: Number(form.price) || 0 }),
-          ...(price > 0 && { payment: { method, reference } }),
+          ...(price > 0 && { payment: paymentBody(pay, price) }),
         },
       });
       const extra = [res.price > 0 ? `Cobrado ${money(res.price)} en tu turno de caja.` : null, res.previousVisits >= 2 ? `Es su visita n.º ${res.previousVisits + 1}: ofrécele un plan.` : null, res.visit.leadId ? "Quedó en tus prospectos para darle seguimiento." : null].filter(Boolean).join(" ");
@@ -91,7 +93,7 @@ export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: bo
     }
   };
 
-  const ready = form.name.trim() && (kind !== "GUEST" || host) && valid.phone && valid.documentId;
+  const ready = form.name.trim() && (kind !== "GUEST" || host) && valid.phone && valid.documentId && (price <= 0 || paymentReady(pay, price, cashRates));
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -166,14 +168,7 @@ export function VisitDialog({ open, onClose, onSaved, dayPassPrice }: { open: bo
                 </div>
               )}
             </div>
-            {price > 0 && (
-              <div className="grid gap-2 sm:grid-cols-2">
-                <select value={method} onChange={(e) => setMethod(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm">
-                  {PAYMENT_METHODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                </select>
-                {method !== "CASH" && <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Referencia" />}
-              </div>
-            )}
+            {price > 0 && <PaymentFields value={pay} onChange={setPay} amountUsd={price} />}
           </div>
         )}
 

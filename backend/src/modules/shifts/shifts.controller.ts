@@ -8,7 +8,7 @@ export class ShiftsController {
 
   @Post('open')
   @UseGuards(AuthGuard('jwt'))
-  async open(@Req() req: any, @Body() body: { openingBalance: number; branchId: string }) {
+  async open(@Req() req: any, @Body() body: { openingBalance: number; branchId: string; openingCash?: Record<string, number> }) {
     if (!req.user || !req.user.id) {
       throw new BadRequestException('Usuario no autenticado');
     }
@@ -17,14 +17,15 @@ export class ShiftsController {
       throw new BadRequestException('ID de sucursal es requerido');
     }
     
-    if (body.openingBalance === undefined || body.openingBalance === null || Number(body.openingBalance) < 0) {
+    if (!body.openingCash && (body.openingBalance === undefined || body.openingBalance === null || Number(body.openingBalance) < 0)) {
       throw new BadRequestException('Monto de apertura inválido');
     }
     
     return this.shiftsService.open({
       userId: req.user.id,
       branchId: body.branchId,
-      openingBalance: body.openingBalance
+      openingBalance: body.openingBalance,
+      openingCash: body.openingCash,
     });
   }
 
@@ -32,13 +33,13 @@ export class ShiftsController {
   @UseGuards(AuthGuard('jwt'))
   async close(
     @Param('id') id: string,
-    @Body() body: { closingBalance: number; cashBreakdown?: any; declaredDetails?: any; notes?: string }
+    @Body() body: { closingBalance: number; cashBreakdown?: any; declaredDetails?: any; notes?: string; countedCash?: Record<string, number> }
   ) {
     if (!id) {
       throw new BadRequestException('ID de turno es requerido');
     }
     
-    if (body.closingBalance === undefined || body.closingBalance === null || Number(body.closingBalance) < 0) {
+    if (!body.countedCash && (body.closingBalance === undefined || body.closingBalance === null || Number(body.closingBalance) < 0)) {
       throw new BadRequestException('Monto de cierre inválido');
     }
     
@@ -47,7 +48,8 @@ export class ShiftsController {
       body.closingBalance,
       body.cashBreakdown,
       body.declaredDetails,
-      body.notes
+      body.notes,
+      body.countedCash
     );
   }
 

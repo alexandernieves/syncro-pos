@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { gymBranch, inBranch } from './gym-branch';
 import { PrismaService } from '../prisma/prisma.service';
 import { GymRemindersService } from './gym-reminders.service';
 
@@ -80,12 +81,12 @@ export class GymStaffService {
     const { timeZone } = await this.settings.getSettings(businessId);
     const [shifts, sessions] = await Promise.all([
       this.prisma.gymStaffShift.findMany({
-        where: { businessId, startsAt: { lt: end }, endsAt: { gt: start } },
+        where: { businessId, ...inBranch(), startsAt: { lt: end }, endsAt: { gt: start } },
         orderBy: { startsAt: 'asc' },
         include: { staff: { select: { id: true, name: true, color: true, role: true, hourlyRate: true } } },
       }),
       this.prisma.gymClassSession.findMany({
-        where: { businessId, status: 'SCHEDULED', startsAt: { gte: start, lt: end }, trainerId: { not: null } },
+        where: { businessId, ...inBranch(), status: 'SCHEDULED', startsAt: { gte: start, lt: end }, trainerId: { not: null } },
         orderBy: { startsAt: 'asc' },
         select: { id: true, startsAt: true, endsAt: true, trainerId: true, class: { select: { name: true } }, trainer: { select: { name: true } } },
       }),
@@ -117,7 +118,7 @@ export class GymStaffService {
     if (!data.staffId || !data.startsAt || !data.endsAt) throw new BadRequestException('Elige la persona y el horario');
     const { startsAt, endsAt, warning } = await this.validate(businessId, data as any);
     const shift = await this.prisma.gymStaffShift.create({
-      data: { businessId, staffId: data.staffId, startsAt, endsAt, area: data.area?.trim() || null, notes: data.notes?.trim() || null },
+      data: { businessId, branchId: gymBranch(), staffId: data.staffId, startsAt, endsAt, area: data.area?.trim() || null, notes: data.notes?.trim() || null },
       include: { staff: { select: { id: true, name: true, color: true, role: true, hourlyRate: true } } },
     });
     return { shift, warning };
@@ -179,7 +180,7 @@ export class GymStaffService {
     if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) throw new BadRequestException('Fechas inválidas');
     const offset = to.getTime() - from.getTime();
     if (offset <= 0 || offset % DAY > HOUR) throw new BadRequestException('La semana de destino debe ser posterior');
-    const source = await this.prisma.gymStaffShift.findMany({ where: { businessId, startsAt: { gte: from, lt: new Date(from.getTime() + 7 * DAY) } } });
+    const source = await this.prisma.gymStaffShift.findMany({ where: { businessId, ...inBranch(), startsAt: { gte: from, lt: new Date(from.getTime() + 7 * DAY) } } });
     let created = 0;
     let skipped = 0;
     for (const s of source) {
@@ -187,7 +188,7 @@ export class GymStaffService {
       const endsAt = new Date(s.endsAt.getTime() + offset);
       const clash = await this.prisma.gymStaffShift.findFirst({ where: { businessId, staffId: s.staffId, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } } });
       if (clash) { skipped++; continue; }
-      await this.prisma.gymStaffShift.create({ data: { businessId, staffId: s.staffId, startsAt, endsAt, area: s.area, notes: s.notes } });
+      await this.prisma.gymStaffShift.create({ data: { businessId, branchId: s.branchId, staffId: s.staffId, startsAt, endsAt, area: s.area, notes: s.notes } });
       created++;
     }
     return { created, skipped };
@@ -197,7 +198,7 @@ export class GymStaffService {
   async onDuty(businessId: string) {
     const now = new Date();
     return this.prisma.gymStaffShift.findMany({
-      where: { businessId, status: { not: 'ABSENT' }, startsAt: { lte: new Date(now.getTime() + HOUR) }, endsAt: { gt: now } },
+      where: { businessId, ...inBranch(), status: { not: 'ABSENT' }, startsAt: { lte: new Date(now.getTime() + HOUR) }, endsAt: { gt: now } },
       orderBy: { startsAt: 'asc' },
       include: { staff: { select: { id: true, name: true, color: true, role: true } } },
     });

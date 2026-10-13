@@ -950,7 +950,7 @@ export default function WhatsAppChatPage() {
     if (paymentCurrency === "USD") {
       setPaymentAmount(paidAmountRaw);
     } else {
-      const rate = parseFloat(customRate) || (paymentCurrency === "VES" ? (settings?.exchangeRate || 40) : 4000);
+      const rate = parseFloat(customRate) || (paymentCurrency === "VES" ? (settings?.exchangeRate || 40) : (Number(settings?.copRateManual) || Number(settings?.exchangeRateCop) || 4000));
       setPaymentAmount(rate > 0 && paidAmountRaw ? (parseFloat(paidAmountRaw) / rate).toFixed(2) : "");
     }
   }, [paymentCurrency, paidAmountRaw, customRate, paymentOpen, settings]);
@@ -1170,7 +1170,7 @@ export default function WhatsAppChatPage() {
     try {
       const token = localStorage.getItem("token");
       const calculatedRate = paymentCurrency !== "USD"
-        ? (parseFloat(customRate) || (paymentCurrency === "VES" ? settings?.exchangeRate : 4000))
+        ? (parseFloat(customRate) || (paymentCurrency === "VES" ? settings?.exchangeRate : (Number(settings?.copRateManual) || Number(settings?.exchangeRateCop) || 4000)))
         : undefined;
       const res = await fetch(`${API}/clients/${activeChat.client.id}/payment`, {
         method: "POST",
@@ -1929,7 +1929,7 @@ export default function WhatsAppChatPage() {
               >
                 <option value="USD">Dólares (USD)</option>
                 <option value="VES">Bolívares (VES)</option>
-                <option value="COP">Pesos colombianos (cop)</option>
+                <option value="COP">Pesos colombianos (COP)</option>
               </select>
             </div>
             {paymentCurrency !== "USD" && (
@@ -1938,7 +1938,7 @@ export default function WhatsAppChatPage() {
                 <Input
                   type="number"
                   className="rounded-xl h-10 bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-xs"
-                  placeholder={paymentCurrency === "VES" ? `BCV: ${settings?.exchangeRate || 40}` : "Aprox. 4000"}
+                  placeholder={paymentCurrency === "VES" ? `BCV: ${settings?.exchangeRate || 40}` : `COP: ${Number(settings?.copRateManual) || Number(settings?.exchangeRateCop) || 4000}`}
                   value={customRate}
                   onChange={(e) => setCustomRate(e.target.value)}
                 />

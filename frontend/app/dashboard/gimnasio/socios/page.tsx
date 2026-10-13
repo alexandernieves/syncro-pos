@@ -4,6 +4,8 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   IconBan,
+  IconChevronDown,
+  IconMapPin,
   IconDeviceMobile,
   IconBrandWhatsapp,
   IconPrinter,
@@ -23,6 +25,8 @@ import {
 import { toast } from "sonner";
 import { API_URL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { PaymentFields, emptyPayment, paymentBody, paymentReady } from "@/components/gym/payment-fields";
+import { useCurrency } from "@/context/CurrencyContext";
 import { DateField, FUTURE_PRESETS } from "@/components/forms/date-field";
 import { countryFromAccount, formatWhatsAppNumber, toWhatsAppNumber } from "@/lib/phone-countries";
 import {
@@ -58,6 +62,7 @@ import { FilterChips, GymPage, GymPageHeader, MemberAvatar, PersonCell, StatusBa
 import { membershipReceiptParts, printMembershipReceipt, sendMembershipReceipt } from "@/lib/gym-receipt";
 import { ReceiptPrinter } from "@/components/pos/receipt-printer";
 import { ConfirmDialog } from "@/components/gym/confirm-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SignDocumentDialog, SignedDocumentDialog } from "@/components/gym/sign-document-dialog";
 import { DocumentField, EmailField, Optional, PhoneField } from "@/components/forms/contact-fields";
 import { type Routine, RoutineBuilder, levelLabel, routineText } from "@/components/gym/routine-builder";
@@ -96,8 +101,8 @@ function SellPlanForm({ memberId, plans, onSubmit, saving }: { memberId: string;
   const [planId, setPlanId] = useState(active[0]?.id || "");
   const [discount, setDiscount] = useState("");
   const [paid, setPaid] = useState("");
-  const [method, setMethod] = useState("CASH");
-  const [reference, setReference] = useState("");
+  const [pay, setPay] = useState(emptyPayment());
+  const { cashRates } = useCurrency();
   const [startDate, setStartDate] = useState("");
   const [quote, setQuote] = useState<Quote | null>(null);
   const plan = active.find((p) => p.id === planId);
@@ -149,25 +154,17 @@ function SellPlanForm({ memberId, plans, onSubmit, saving }: { memberId: string;
           <Label className="text-xs">Pagado ahora ($)</Label>
           <Input type="number" min={0} step="0.01" value={paid} onChange={(e) => setPaid(e.target.value)} />
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Método</Label>
-          <select value={method} onChange={(e) => setMethod(e.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
-            {PAYMENT_METHODS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-          </select>
-        </div>
       </div>
-      {method !== "CASH" && (
-        <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Referencia del pago" />
-      )}
+      {Number(paid) > 0 && <PaymentFields value={pay} onChange={setPay} amountUsd={Number(paid)} />}
       <Button
-        disabled={saving || !planId}
+        disabled={saving || !planId || (Number(paid) > 0 && !paymentReady(pay, Number(paid), cashRates))}
         className="gap-2"
         onClick={() =>
           onSubmit({
             planId,
             discount: manual,
             ...(startDate && { startDate }),
-            ...(Number(paid) > 0 && { payment: { amount: Number(paid), method, reference, branchId: localStorage.getItem("currentBranchId") || undefined } }),
+            ...(Number(paid) > 0 && { payment: paymentBody(pay, Number(paid)) }),
           })
         }
       >
@@ -186,7 +183,8 @@ function FreezeForm({ membership, maxDays, policy, saving, onSubmit, onCancel }:
   const [from, setFrom] = useState(today);
   const [until, setUntil] = useState(plus(today, Math.min(maxDays, Math.max(policy?.minDays ?? 7, 7))));
   const [reason, setReason] = useState("");
-  const [method, setMethod] = useState("CASH");
+  const [pay, setPay] = useState(emptyPayment());
+  const { cashRates } = useCurrency();
   const days = Math.round((new Date(`${until}T12:00:00`).getTime() - new Date(`${from}T12:00:00`).getTime()) / 86400000);
   const left = maxDays - membership.frozenDaysUsed;
   const fee = policy?.fee ?? 0;
@@ -201,16 +199,13 @@ function FreezeForm({ membership, maxDays, policy, saving, onSubmit, onCancel }:
         {days} {days === 1 ? "día" : "días"} · le quedan {left} de {maxDays} en su plan{policy?.minDays ? ` · mínimo ${policy.minDays}` : ""}. Esos días se suman al final.
       </p>
       {fee > 0 && (
-        <div className="flex items-center justify-between gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-sm">
-          <span>Congelar cuesta {money(fee)}</span>
-          <select value={method} onChange={(e) => setMethod(e.target.value)} className="h-8 rounded-md border bg-background px-2 text-sm">
-            <option value="">Cobrar después</option>
-            {PAYMENT_METHODS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-          </select>
+        <div className="space-y-2 rounded-lg bg-amber-500/10 px-3 py-2.5 text-sm">
+          <span className="font-medium">Congelar cuesta {money(fee)}</span>
+          <PaymentFields value={pay} onChange={setPay} amountUsd={pay.method ? fee : 0} allowLater compact />
         </div>
       )}
       <div className="flex gap-2">
-        <Button size="sm" disabled={saving || days < 1 || days > left || (policy?.requireReason && !reason.trim())} onClick={() => onSubmit({ from, until, reason, ...(fee > 0 && method && { payment: { method, branchId: localStorage.getItem("currentBranchId") || undefined } }) })}>
+        <Button size="sm" disabled={saving || days < 1 || days > left || (policy?.requireReason && !reason.trim()) || (fee > 0 && !!pay.method && !paymentReady(pay, fee, cashRates))} onClick={() => onSubmit({ from, until, reason, ...(fee > 0 && pay.method && { payment: paymentBody(pay, fee) }) })}>
           {from === today ? "Congelar ahora" : "Programar congelamiento"}
         </Button>
         <Button size="sm" variant="ghost" onClick={onCancel}>Cancelar</Button>
@@ -433,7 +428,8 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
   const [selling, setSelling] = useState(false);
   const [payFor, setPayFor] = useState<GymMembership | null>(null);
   const [payAmount, setPayAmount] = useState("");
-  const [payMethod, setPayMethod] = useState("CASH");
+  const [abono, setAbono] = useState(emptyPayment());
+  const { cashRates } = useCurrency();
   const [editing, setEditing] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const [justSold, setJustSold] = useState<string | null>(null);
@@ -445,8 +441,14 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
   const [docs, setDocs] = useState<MemberDocs | null>(null);
   const [signing, setSigning] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [moveTo, setMoveTo] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
+    fetch(`${API_URL}/branches`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) => setBranches(Array.isArray(list) ? list.map((b: any) => ({ id: b.id, name: b.name })) : []))
+      .catch(() => {});
     gymApi<{ freeze: FreezePolicy }>("/settings").then((x) => setFreezePolicy(x.freeze)).catch(() => {});
     fetch(`${API_URL}/settings`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } })
       .then((r) => (r.ok ? r.json() : null))
@@ -513,6 +515,20 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
               <div className="min-w-0 flex-1">
                 <p className="truncate text-lg font-bold">{member.client.name}</p>
                 <p className="text-sm text-muted-foreground">Socio n.º {member.memberNumber}{member.client.documentId ? ` · ${member.client.documentId}` : ""}</p>
+                {branches.length > 1 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button type="button" className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                        <IconMapPin size={13} /> {member.branchName ?? "Sin sede"}{member.allBranches ? " · plan válido en todas las sedes" : ""} <IconChevronDown size={12} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      {branches.filter((b) => b.id !== member.branchId).map((b) => (
+                        <DropdownMenuItem key={b.id} onClick={() => setMoveTo(b)}>Pasar a {b.name}</DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <StatusBadge status={member.status} />
                   <span className={cn("text-xs", member.faceError ? "text-rose-600" : member.faceSyncedAt ? "text-emerald-700" : "text-muted-foreground")} title={member.faceError ?? undefined}>
@@ -691,6 +707,14 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
               onConfirm={async () => { if (cancelMs) await run(() => gymApi(`/memberships/${cancelMs.id}/cancel`, { method: "PATCH" }), "Membresía cancelada"); }}
               onClose={() => setCancelMs(null)}
             />
+            <ConfirmDialog
+              open={!!moveTo}
+              title={`¿Pasar a ${member.client.name} a ${moveTo?.name ?? ""}?`}
+              description="Desde ahora es socio de esa sucursal: aparece en su lista, entra por su lector y sus reportes cuentan allá. Su historial y sus pagos se mantienen."
+              confirmLabel="Cambiar de sede"
+              onConfirm={async () => { if (moveTo) await run(() => gymApi(`/members/${member.id}`, { method: "PUT", json: { branchId: moveTo.id } }), `Ahora es socio de ${moveTo.name}`); }}
+              onClose={() => setMoveTo(null)}
+            />
             <SignDocumentDialog memberId={member.id} templateId={signing} onClose={() => setSigning(null)} onSigned={() => { load(); onChanged(); }} />
             <SignedDocumentDialog signatureId={viewing} onClose={() => setViewing(null)} />
 
@@ -740,13 +764,17 @@ function MemberSheet({ memberId, plans, onClose, onChanged }: { memberId: string
                       </span>
                     </div>
                     {payFor?.id === m.id && (
-                      <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
-                        <Input type="number" min={0} step="0.01" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} className="h-8 w-28" />
-                        <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} className="h-8 rounded-md border bg-background px-2 text-sm">
-                          {PAYMENT_METHODS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-                        </select>
-                        <Button size="sm" className="h-8" disabled={busy} onClick={() => run(async () => { await gymApi(`/memberships/${m.id}/payments`, { method: "POST", json: { amount: Number(payAmount), method: payMethod, branchId: localStorage.getItem("currentBranchId") || undefined } }); setPayFor(null); }, "Pago registrado")}>Registrar pago</Button>
-                        <Button size="sm" variant="ghost" className="h-8" onClick={() => setPayFor(null)}><IconX size={14} /></Button>
+                      <div className="mt-3 space-y-2 border-t pt-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Abona $</span>
+                          <Input inputMode="decimal" value={payAmount} onChange={(e) => setPayAmount(e.target.value.replace(/[^\d.]/g, "").slice(0, 9))} className="h-8 w-28 tabular-nums" />
+                          <span className="text-xs text-muted-foreground">de {money(balance)}</span>
+                        </div>
+                        <PaymentFields value={abono} onChange={setAbono} amountUsd={Number(payAmount) || 0} compact />
+                        <div className="flex gap-2">
+                          <Button size="sm" className="h-8" disabled={busy || !(Number(payAmount) > 0) || Number(payAmount) > balance + 0.004 || !paymentReady(abono, Number(payAmount), cashRates)} onClick={() => run(async () => { await gymApi(`/memberships/${m.id}/payments`, { method: "POST", json: paymentBody(abono, Number(payAmount)) }); setPayFor(null); setAbono(emptyPayment()); }, "Pago registrado")}>Registrar pago</Button>
+                          <Button size="sm" variant="ghost" className="h-8" onClick={() => setPayFor(null)}><IconX size={14} /></Button>
+                        </div>
                       </div>
                     )}
                   </div>

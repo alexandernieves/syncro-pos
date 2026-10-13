@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
@@ -83,6 +83,12 @@ export class BcvService {
       }
 
       const updateData: any = {};
+      // Colombian TRM (pesos per dollar), for branches in Táchira. Not fatal if it fails.
+      const trm = await this.fetchTrm();
+      if (trm) {
+        updateData.exchangeRateCop = trm.rate;
+        updateData.copUpdateDate = trm.date;
+      }
       if (target === 'dashboard') {
         updateData.exchangeRateDashboard = rateUsd;
         updateData.exchangeRateDashboardEur = rateEur || 1;
@@ -98,5 +104,43 @@ export class BcvService {
       this.logger.error(`Error sincronizando tasa BCV: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * TRM certified by the Superintendencia Financiera de Colombia (datos.gov.co open data),
+   * with dolarapi.com as a fallback. Pesos per dollar.
+   */
+  async fetchTrm(): Promise<{ rate: number; date: string } | null> {
+    try {
+      const res = await fetch('https://www.datos.gov.co/resource/32sa-8pi3.json?$order=vigenciadesde%20DESC&$limit=1', { signal: AbortSignal.timeout(10000) });
+      if (res.ok) {
+        const [row] = (await res.json()) as { valor: string; vigenciadesde: string }[];
+        const rate = Number(row?.valor);
+        if (rate > 0) return { rate, date: String(row.vigenciadesde).slice(0, 10) };
+      }
+    } catch (e) {
+      this.logger.warn(`TRM datos.gov.co falló: ${e.message}`);
+    }
+    try {
+      const res = await fetch('https://co.dolarapi.com/v1/trm', { signal: AbortSignal.timeout(8000) });
+      if (res.ok) {
+        const data = (await res.json()) as { valor: number; fechaActualizacion: string };
+        if (Number(data?.valor) > 0) return { rate: Number(data.valor), date: String(data.fechaActualizacion).slice(0, 10) };
+      }
+    } catch (e) {
+      this.logger.warn(`TRM dolarapi falló: ${e.message}`);
+    }
+    return null;
+  }
+
+  /** The business's own peso rate (Cúcuta border); null goes back to the TRM. */
+  async setCopRate(businessId: string, manual: number | null) {
+    if (manual !== null && !(manual >= 100 && manual <= 100000)) throw new BadRequestException('La tasa del peso debe estar entre 100 y 100.000 pesos por dólar');
+    const update: any = { copRateManual: manual };
+    if (manual === null) {
+      const trm = await this.fetchTrm();
+      if (trm) { update.exchangeRateCop = trm.rate; update.copUpdateDate = trm.date; }
+    }
+    return this.settingsService.updateSettings(update, businessId);
   }
 }

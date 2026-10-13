@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { gymBranch, inBranch } from './gym-branch';
 import { PrismaService } from '../prisma/prisma.service';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -39,7 +40,7 @@ export class GymEquipmentService {
 
   async list(businessId: string) {
     const items = await this.prisma.gymEquipment.findMany({
-      where: { businessId },
+      where: { businessId, ...inBranch() },
       orderBy: [{ status: 'asc' }, { name: 'asc' }],
       include: { maintenance: { where: { status: { not: 'DONE' } }, orderBy: { createdAt: 'desc' }, select: { id: true, kind: true, status: true, title: true, createdAt: true } } },
     });
@@ -51,10 +52,10 @@ export class GymEquipmentService {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const [byStatus, due, open, cost] = await Promise.all([
-      this.prisma.gymEquipment.groupBy({ by: ['status'], where: { businessId }, _count: { _all: true } }),
-      this.prisma.gymEquipment.count({ where: { businessId, status: { not: 'RETIRED' }, nextServiceAt: { lte: new Date(now.getTime() + 3 * DAY) } } }),
-      this.prisma.gymMaintenance.count({ where: { businessId, status: { not: 'DONE' } } }),
-      this.prisma.gymMaintenance.aggregate({ where: { businessId, status: 'DONE', doneAt: { gte: monthStart } }, _sum: { cost: true } }),
+      this.prisma.gymEquipment.groupBy({ by: ['status'], where: { businessId, ...inBranch() }, _count: { _all: true } }),
+      this.prisma.gymEquipment.count({ where: { businessId, ...inBranch(), status: { not: 'RETIRED' }, nextServiceAt: { lte: new Date(now.getTime() + 3 * DAY) } } }),
+      this.prisma.gymMaintenance.count({ where: { businessId, equipment: inBranch(), status: { not: 'DONE' } } }),
+      this.prisma.gymMaintenance.aggregate({ where: { businessId, equipment: inBranch(), status: 'DONE', doneAt: { gte: monthStart } }, _sum: { cost: true } }),
     ]);
     const count = (s: string) => byStatus.find((r) => r.status === s)?._count._all ?? 0;
     return {
@@ -105,7 +106,7 @@ export class GymEquipmentService {
     if (!d.name?.trim()) throw new BadRequestException('Escribe el nombre del equipo');
     const data = this.data(d);
     return this.prisma.gymEquipment.create({
-      data: { businessId, name: d.name.trim(), ...data, nextServiceAt: this.nextService(data.serviceEveryDays ?? 0, (data.lastServiceAt as Date | null) ?? null) },
+      data: { businessId, branchId: gymBranch(), name: d.name.trim(), ...data, nextServiceAt: this.nextService(data.serviceEveryDays ?? 0, (data.lastServiceAt as Date | null) ?? null) },
     });
   }
 
@@ -155,7 +156,7 @@ export class GymEquipmentService {
     return this.prisma.$transaction(async (tx) => {
       let entryId: string | null = null;
       if (cost && userId) {
-        const branchId = (d.branchId && (await tx.branch.findFirst({ where: { id: d.branchId, businessId }, select: { id: true } }))?.id) || (await tx.branch.findFirst({ where: { businessId }, orderBy: { isMain: 'desc' }, select: { id: true } }))?.id || null;
+        const branchId = t.equipment.branchId || (d.branchId && (await tx.branch.findFirst({ where: { id: d.branchId, businessId }, select: { id: true } }))?.id) || (await tx.branch.findFirst({ where: { businessId }, orderBy: { isMain: 'desc' }, select: { id: true } }))?.id || null;
         const entry = await tx.accountingEntry.create({
           data: { description: `Mantenimiento: ${t.equipment.name} · ${t.title}${d.vendor?.trim() ? ` (${d.vendor.trim()})` : ''}`, amount: cost, type: 'EXPENSE', category: 'MANTENIMIENTO_GYM', branchId, userId },
         });
@@ -191,6 +192,6 @@ export class GymEquipmentService {
 
   /** For the member app: machines they can report, without internal data. */
   listForMembers(businessId: string) {
-    return this.prisma.gymEquipment.findMany({ where: { businessId, status: { not: 'RETIRED' } }, orderBy: { name: 'asc' }, select: { id: true, name: true, area: true, category: true } });
+    return this.prisma.gymEquipment.findMany({ where: { businessId, ...inBranch(), status: { not: 'RETIRED' } }, orderBy: { name: 'asc' }, select: { id: true, name: true, area: true, category: true } });
   }
 }

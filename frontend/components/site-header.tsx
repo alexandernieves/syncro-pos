@@ -2,6 +2,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { BranchSwitcher } from "./branch-switcher";
 import { NotificationBell } from "./notification-bell";
+import { CopRateButton } from "./cop-rate-button";
 import { useCurrency } from "@/context/CurrencyContext";
 import { cn } from "@/lib/utils";
 import { IconRefresh, IconChevronDown } from "@tabler/icons-react";
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function SiteHeader() {
-  const { currency, setCurrency, exchangeRate, eurExchangeRate, bcvDate, syncBcvDashboard } = useCurrency();
+  const { currency, setCurrency, exchangeRate, eurExchangeRate, bcvDate, syncBcvDashboard, currencies } = useCurrency();
   const [isSyncing, setIsSyncing] = useState(false);
 
   const userStr = typeof window !== 'undefined' ? localStorage.getItem("user") : null;
@@ -76,7 +77,7 @@ export function SiteHeader() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-24 border-none shadow-2xl rounded-xl p-1">
-                {(["USD", "VES", "EUR"] as const).map((c) => (
+                {currencies.map((c) => (
                   <DropdownMenuItem 
                     key={c} 
                     onClick={() => setCurrency(c)}
@@ -97,6 +98,7 @@ export function SiteHeader() {
               <IconRefresh size={14} className={cn("text-primary", isSyncing && "animate-spin")} />
               <span>BCV: {(currency === 'EUR' ? eurExchangeRate : exchangeRate).toFixed(2)}</span>
             </Button>
+            {currencies.includes("COP") && <CopRateButton />}
           </div>
         )}
         

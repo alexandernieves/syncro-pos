@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { gymBranch, inBranch } from './gym-branch';
 import { PrismaService } from '../prisma/prisma.service';
 import { GymRemindersService } from './gym-reminders.service';
 import { GymNotificationsService } from './gym-notifications.service';
@@ -58,7 +59,7 @@ export class GymClassesService {
 
   listTrainers(businessId: string) {
     return this.prisma.gymTrainer.findMany({
-      where: { businessId },
+      where: { businessId, ...inBranch() },
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
       include: { _count: { select: { classes: true } }, availability: { orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }] } },
     });
@@ -70,6 +71,7 @@ export class GymClassesService {
     return this.prisma.gymTrainer.create({
       data: {
         businessId,
+        branchId: gymBranch(),
         name: data.name.trim(),
         phone: data.phone?.trim() || null,
         specialty: data.specialty?.trim() || null,
@@ -103,7 +105,7 @@ export class GymClassesService {
   // ── Weekly classes ─────────────────────────────────────────────────────────
 
   listClasses(businessId: string) {
-    return this.prisma.gymClass.findMany({ where: { businessId }, orderBy: [{ isActive: 'desc' }, { startTime: 'asc' }], include: { trainer: { select: { id: true, name: true } } } });
+    return this.prisma.gymClass.findMany({ where: { businessId, ...inBranch() }, orderBy: [{ isActive: 'desc' }, { startTime: 'asc' }], include: { trainer: { select: { id: true, name: true } } } });
   }
 
   private async validateClass(businessId: string, data: Partial<ClassInput>, partial = false) {
@@ -125,6 +127,7 @@ export class GymClassesService {
     return this.prisma.gymClass.create({
       data: {
         businessId,
+        branchId: gymBranch(),
         name: data.name.trim(),
         description: data.description?.trim() || null,
         color: data.color || null,
@@ -184,7 +187,7 @@ export class GymClassesService {
         if (!c.daysOfWeek.includes(dow)) continue;
         const [hh, mm] = c.startTime.split(':').map(Number);
         const startsAt = zoned(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate(), hh, mm, timeZone);
-        rows.push({ businessId, classId: c.id, trainerId: c.trainerId, startsAt, endsAt: new Date(startsAt.getTime() + c.durationMin * 60000), capacity: c.capacity });
+        rows.push({ businessId, branchId: c.branchId, classId: c.id, trainerId: c.trainerId, startsAt, endsAt: new Date(startsAt.getTime() + c.durationMin * 60000), capacity: c.capacity });
       }
     }
     if (!rows.length) return;
@@ -209,7 +212,7 @@ export class GymClassesService {
     const start = zoned(from.y, from.m, from.d, 0, 0, timeZone);
     const end = new Date(start.getTime() + days * DAY);
     const sessions = await this.prisma.gymClassSession.findMany({
-      where: { businessId, startsAt: { gte: start, lt: end }, OR: [{ class: { isActive: true } }, { bookings: { some: {} } }, { isExtra: true }] },
+      where: { businessId, ...inBranch(), startsAt: { gte: start, lt: end }, OR: [{ class: { isActive: true } }, { bookings: { some: {} } }, { isExtra: true }] },
       orderBy: { startsAt: 'asc' },
       include: {
         class: { select: { id: true, name: true, color: true, room: true } },
@@ -283,7 +286,7 @@ export class GymClassesService {
     const endsAt = new Date(startsAt.getTime() + duration * 60000);
     if (await this.prisma.gymClassSession.findFirst({ where: { classId: gymClass.id, startsAt } })) throw new BadRequestException('Ya hay una sesión de esta clase a esa hora');
     const session = await this.prisma.gymClassSession.create({
-      data: { businessId, classId: gymClass.id, trainerId, startsAt, endsAt, capacity, isExtra: true },
+      data: { businessId, branchId: gymClass.branchId, classId: gymClass.id, trainerId, startsAt, endsAt, capacity, isExtra: true },
     });
     const { timeZone } = await this.settings.getSettings(businessId);
     return { session, warning: this.conflictWarning(await this.trainerConflicts(businessId, trainerId, startsAt, endsAt, session.id), timeZone) };
@@ -326,6 +329,10 @@ export class GymClassesService {
       if (covered && !covering.some((m) => m.plan.includesClasses && (!m.plan.allowedClassIds.length || m.plan.allowedClassIds.includes(session.classId)))) {
         const p = covering[0].plan;
         throw new BadRequestException(p.includesClasses ? `El plan ${p.name} no incluye ${session.class.name}` : `El plan ${p.name} no incluye clases grupales`);
+      }
+      // A class in another branch needs a plan valid in every branch
+      if (covered && session.branchId && member.branchId && session.branchId !== member.branchId && !covering.some((m) => m.plan.allBranches)) {
+        throw new BadRequestException(`${member.client.name} es socio de otra sede: su plan no vale en esta`);
       }
       if (!covered) {
         const current = member.memberships.map((m) => membershipState(m)).includes('FROZEN') ? 'tiene la membresía congelada' : 'no tiene una membresía vigente para ese día';

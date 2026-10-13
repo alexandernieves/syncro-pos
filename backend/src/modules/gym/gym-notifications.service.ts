@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { gymBranch } from './gym-branch';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { ClassNoticeKind, GymRemindersService } from './gym-reminders.service';
@@ -157,7 +158,7 @@ export class GymNotificationsService {
 
   list(businessId: string, sessionId?: string) {
     return this.prisma.gymNotification.findMany({
-      where: { businessId, ...(sessionId && { sessionId }) },
+      where: { businessId, ...(sessionId && { sessionId }), ...(gymBranch() && { OR: [{ member: { branchId: gymBranch()! } }, { memberId: null }] }) },
       orderBy: { createdAt: 'desc' },
       take: 100,
       include: { member: { select: { id: true, memberNumber: true, client: { select: { name: true } } } } },

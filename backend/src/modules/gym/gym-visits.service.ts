@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { gymBranch, inBranch, memberInBranch } from './gym-branch';
 import { PrismaService } from '../prisma/prisma.service';
 import { GymService } from './gym.service';
 import { GymCrmService } from './gym-crm.service';
@@ -60,7 +61,7 @@ export class GymVisitsService {
     const from = new Date(guess.getTime() - offset);
     const to = new Date(from.getTime() + DAY);
     const items = await this.prisma.gymVisit.findMany({
-      where: { businessId, checkedInAt: { gte: from, lt: to } },
+      where: { businessId, ...inBranch(), checkedInAt: { gte: from, lt: to } },
       orderBy: { checkedInAt: 'desc' },
       include: {
         hostMember: { select: { id: true, memberNumber: true, client: { select: { name: true } } } },
@@ -105,6 +106,7 @@ export class GymVisitsService {
       const v = await tx.gymVisit.create({
         data: {
           businessId,
+          branchId: gymBranch(),
           kind,
           name: data.name!.trim(),
           documentId: data.documentId?.trim() || null,

@@ -70,6 +70,7 @@ import { cn } from "@/lib/utils";
 import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
 import { useCurrency } from "@/context/CurrencyContext";
+import { type Currency as CashCurrency, CURRENCY_META, formatMoney, fromUsd, toUsd } from "@/lib/currency";
 
 const API = API_URL;
 
@@ -551,46 +552,34 @@ export default function POSPage() {
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [openingBalance, setOpeningBalance] = useState<string>("0");
-  const [initialCashRows, setInitialCashRows] = useState<Array<{ id: string; amount: string; currency: "USD" | "BS" | "EUR" }>>([
+  const [initialCashRows, setInitialCashRows] = useState<Array<{ id: string; amount: string; currency: CashCurrency }>>([
     { id: "1", amount: "", currency: "USD" },
   ]);
 
-  const ALL_CURRENCIES = [
-    { code: "USD" as const, label: "USD ($)" },
-    { code: "BS" as const, label: "VES (Bs)" },
-    { code: "EUR" as const, label: "EUR (€)" },
-  ];
+  // The branch's currencies (Táchira adds COP); read at render time, after the currency context
+  const CURRENCY_LABELS: Record<CashCurrency, string> = { USD: "USD ($)", VES: "VES (Bs)", EUR: "EUR (€)", COP: "COP (pesos)" };
+  const allCurrencies = () => branchCurrencyList.map((code) => ({ code, label: CURRENCY_LABELS[code] }));
 
   const getAvailableCurrenciesForRow = (rowId: string) => {
     const selectedInOtherRows = new Set(
       initialCashRows.filter((r) => r.id !== rowId).map((r) => r.currency)
     );
-    return ALL_CURRENCIES.filter((c) => !selectedInOtherRows.has(c.code));
+    return allCurrencies().filter((c) => !selectedInOtherRows.has(c.code));
   };
 
-  const calculateTotalOpeningBalance = (rows: Array<{ id: string; amount: string; currency: "USD" | "BS" | "EUR" }>) => {
+  const calculateTotalOpeningBalance = (rows: Array<{ id: string; amount: string; currency: CashCurrency }>) => {
     let totalUSD = 0;
-    const rateBs = currentExchangeRate || 1;
-    const rateEur = bcvEurRate && bcvRate ? bcvEurRate / bcvRate : 1.08;
-
     rows.forEach((row) => {
       const val = parseFloat(row.amount) || 0;
       if (val <= 0) return;
-      if (row.currency === "USD") {
-        totalUSD += val;
-      } else if (row.currency === "BS") {
-        totalUSD += val / rateBs;
-      } else if (row.currency === "EUR") {
-        totalUSD += val * rateEur;
-      }
+      totalUSD += toUsd(val, row.currency, cashRates);
     });
-
     return totalUSD;
   };
 
   const handleAddCashRow = () => {
     const usedCurrencies = new Set(initialCashRows.map((r) => r.currency));
-    const nextAvailable = ALL_CURRENCIES.find((c) => !usedCurrencies.has(c.code));
+    const nextAvailable = allCurrencies().find((c) => !usedCurrencies.has(c.code));
     if (!nextAvailable) return;
 
     const newRow = {
@@ -623,12 +612,15 @@ export default function POSPage() {
   };
   const [isClosingShift, setIsClosingShift] = useState(false);
   const [closingBalance, setClosingBalance] = useState<string>("0");
-  const [closeSummary, setCloseSummary] = useState<{ expected: number; reported: number; difference: number; isBlind?: boolean } | null>(null);
+  const [closeSummary, setCloseSummary] = useState<{ expected: number; reported: number; difference: number; isBlind?: boolean; rows?: { currency: CashCurrency; expected: number; counted: number }[] } | null>(null);
   const [isCloseSummaryOpen, setIsCloseSummaryOpen] = useState(false);
   const [cashBreakdown, setCashBreakdown] = useState({ b1: 0, b5: 0, b10: 0, b20: 0, b50: 0, b100: 0 });
   const [posBatch, setPosBatch] = useState<string>("0");
   const [pagoMovilBatch, setPagoMovilBatch] = useState<string>("0");
   const [cashBs, setCashBs] = useState<string>("0");
+  // Cash counted per currency at the close ("" = not counted yet)
+  const [countedCash, setCountedCash] = useState<Record<string, string>>({});
+  const [countBills, setCountBills] = useState(false);
 
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -696,10 +688,12 @@ export default function POSPage() {
   const [tempReference, setTempReference] = useState<string>("");
   const [syncingBcv, setSyncingBcv] = useState(false);
   const [settings, setSettings] = useState<any>(null);
-  const { currency, setCurrency, exchangeRate: bcvRate, eurExchangeRate: bcvEurRate, bcvDate, refreshRates, formatPrice } = useCurrency();
+  const { currency, setCurrency, exchangeRate: bcvRate, eurExchangeRate: bcvEurRate, bcvDate, refreshRates, formatPrice, currencies: branchCurrencyList, cashRates } = useCurrency();
   const [baseCurrency, setBaseCurrency] = useState<"USD" | "EUR">("USD");
   const [useWalletBalance, setUseWalletBalance] = useState(false);
-  const [tempCurrency, setTempCurrency] = useState<"USD" | "VES">("USD");
+  const [tempCurrency, setTempCurrency] = useState<CashCurrency>("USD");
+  // Currency the change is handed back in (null = the one of the last cash payment)
+  const [changeCurrency, setChangeCurrency] = useState<CashCurrency | null>(null);
 
   // Sync global currency with POS base currency
   useEffect(() => {
@@ -1558,6 +1552,8 @@ export default function POSPage() {
         },
         body: JSON.stringify({
           openingBalance: Number(openingBalance),
+          // What's in the drawer, per currency
+          openingCash: Object.fromEntries(initialCashRows.filter((r) => (parseFloat(r.amount) || 0) > 0).map((r) => [r.currency, parseFloat(r.amount)])),
           branchId: currentBranchId
         }),
       });
@@ -1585,6 +1581,14 @@ export default function POSPage() {
     }
   };
 
+  // USD counted by bills when the cashier uses the bill counter
+  const billsUsd = cashBreakdown.b1 + (cashBreakdown.b5 * 5) + (cashBreakdown.b10 * 10) + (cashBreakdown.b20 * 20) + (cashBreakdown.b50 * 50) + (cashBreakdown.b100 * 100);
+  const shiftCurrencies: CashCurrency[] = ((activeShift as any)?.currencies as CashCurrency[]) || branchCurrencyList;
+  const shiftRates = ((activeShift as any)?.rates as Record<CashCurrency, number>) || cashRates;
+  const countedValue = (c: CashCurrency) => (c === "USD" && countBills ? billsUsd : Number((countedCash[c] || "").replace(",", ".")) || 0);
+  const countedOk = shiftCurrencies.every((c) => (c === "USD" && countBills) || (countedCash[c] ?? "").trim() === "" || /^\d+([.,]\d{1,2})?$/.test((countedCash[c] ?? "").trim()));
+  const countedUsd = shiftCurrencies.reduce((t, c) => t + toUsd(countedValue(c), c, shiftRates), 0);
+
   const handleCloseShift = async () => {
     if (!activeShift) return;
     try {
@@ -1592,13 +1596,10 @@ export default function POSPage() {
         toast.error("ID de turno no encontrado");
         return;
       }
+      if (!countedOk) return toast.error("Revisa los montos contados: solo números, con hasta 2 decimales");
 
-      const totalPhysicalUsd = cashBreakdown.b1 + (cashBreakdown.b5 * 5) + (cashBreakdown.b10 * 10) + (cashBreakdown.b20 * 20) + (cashBreakdown.b50 * 50) + (cashBreakdown.b100 * 100);
-      const totalPhysicalBsToUsd = (Number(cashBs) || 0) / currentExchangeRate;
-      const finalClosingBalance = totalPhysicalUsd + totalPhysicalBsToUsd;
-
-      const expectedCash = activeShift.expectedTotals?.CASH || 0;
-      const differenceVal = finalClosingBalance - expectedCash;
+      const counted = Object.fromEntries(shiftCurrencies.map((c) => [c, countedValue(c)]));
+      const expectedCash = ((activeShift as any).expectedCash || {}) as Partial<Record<CashCurrency, number>>;
 
       const isCashier = user?.role === "pos";
       const isBlindClose = isCashier && (settings?.blindShiftClose !== false);
@@ -1607,11 +1608,12 @@ export default function POSPage() {
         method: "POST",
         headers,
         body: JSON.stringify({ 
-          closingBalance: finalClosingBalance,
-          cashBreakdown,
+          closingBalance: countedUsd,
+          countedCash: counted,
+          cashBreakdown: countBills ? cashBreakdown : undefined,
           declaredDetails: {
-            cashUsd: totalPhysicalUsd,
-            cashBs: Number(cashBs) || 0,
+            cashUsd: countedValue("USD"),
+            cashBs: countedValue("VES"),
             posBatch: Number(posBatch) || 0,
             pagoMovilBatch: Number(pagoMovilBatch) || 0,
             isBlindClose,
@@ -1619,14 +1621,18 @@ export default function POSPage() {
         }),
       });
       if (res.ok) {
+        const closed = await res.json();
         setCloseSummary({
-          expected: expectedCash,
-          reported: finalClosingBalance,
-          difference: differenceVal,
+          expected: closed.expectedBalance,
+          reported: closed.closingBalance,
+          difference: closed.difference,
           isBlind: isBlindClose,
+          rows: shiftCurrencies.map((c) => ({ currency: c, expected: Number(closed.expectedCash?.[c] ?? expectedCash[c] ?? 0), counted: countedValue(c) })),
         });
         setIsCloseSummaryOpen(true);
         setIsClosingShift(false);
+        setCountedCash({});
+        setCountBills(false);
         toast.success("Caja cerrada correctamente");
       } else {
         const err = await res.json();
@@ -1699,7 +1705,7 @@ export default function POSPage() {
   const openPaymentModal = (method: "CASH" | "CARD") => {
     if (clientMissingData) return toast.error("Completa los datos del cliente para procesar el pago");
     setPaymentMethod(method);
-    setAddedPayments([]); // Start fresh for mixed payment logic if needed, or just keep it
+    setAddedPayments([]); setChangeCurrency(null); // Start fresh for mixed payment logic if needed, or just keep it
     setShowSplitPaymentForm(false);
     setTempPaymentMethod(method);
     setTempAmount(finalTotalWithIgtf.toFixed(2));
@@ -1859,6 +1865,7 @@ export default function POSPage() {
           : paymentsToEvaluate,
         clientId: selectedClientId === "consumidor-final" ? null : selectedClientId,
         saveChangeToWallet: saveChangeToWallet ? changeDue : 0,
+        ...(changeCurrency && { changeCurrency }),
       };
 
       const token = localStorage.getItem("token");
@@ -1915,7 +1922,7 @@ export default function POSPage() {
 
             // Clean up cart and finalize POS side
             setCart([]);
-            setAddedPayments([]);
+            setAddedPayments([]); setChangeCurrency(null);
             setSaveChangeToWallet(false);
             setUseWalletBalance(false);
             setSelectedClientId("consumidor-final");
@@ -2098,6 +2105,7 @@ export default function POSPage() {
           : paymentsToEvaluate,
         clientId: selectedClientId === "consumidor-final" ? null : selectedClientId,
         saveChangeToWallet: saveChangeToWallet ? changeDue : 0,
+        ...(changeCurrency && { changeCurrency }),
       };
 
       // OFFLINE MODE: If offline, queue the sale
@@ -2138,7 +2146,7 @@ export default function POSPage() {
           setShowPwaCodeModal(true);
         }
         setCart([]);
-        setAddedPayments([]);
+        setAddedPayments([]); setChangeCurrency(null);
         setSaveChangeToWallet(false);
         setUseWalletBalance(false);
         setSelectedClientId("consumidor-final");
@@ -2574,7 +2582,7 @@ export default function POSPage() {
                         <div className="relative flex items-center h-10 border-l border-[#E5E1D9] bg-[#FAF7F2] hover:bg-[#F5F1E8] transition-colors group">
                           <select
                             value={row.currency}
-                            onChange={(e) => handleCashRowChange(row.id, "currency", e.target.value as "USD" | "BS" | "EUR")}
+                            onChange={(e) => handleCashRowChange(row.id, "currency", e.target.value as CashCurrency)}
                             className="h-full pl-3 pr-7 bg-transparent text-xs font-bold text-[#16140F] focus:outline-none cursor-pointer appearance-none z-10"
                             style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                           >
@@ -2603,7 +2611,7 @@ export default function POSPage() {
                   ))}
                 </div>
 
-                {initialCashRows.length < ALL_CURRENCIES.length && (
+                {initialCashRows.length < allCurrencies().length && (
                   <button
                     type="button"
                     onClick={handleAddCashRow}
@@ -3645,13 +3653,14 @@ export default function POSPage() {
                           <div className={cn(tempPaymentMethod === "CASH" ? "col-span-6" : "col-span-4", "relative group")}>
                             <button
                               type="button"
-                              onClick={() => setTempCurrency(tempCurrency === "USD" ? "VES" : "USD")}
+                              onClick={() => setTempCurrency(branchCurrencyList[(branchCurrencyList.indexOf(tempCurrency) + 1) % branchCurrencyList.length])}
+                              title="Cambiar moneda"
                               className={cn(
                                 "absolute left-1.5 top-1.5 size-7 rounded flex items-center justify-center text-[11px] font-bold transition-all z-10 shadow-sm",
-                                tempCurrency === "USD" ? "bg-primary text-primary-foreground" : "bg-emerald-500 text-white"
+                                tempCurrency === "USD" ? "bg-primary text-primary-foreground" : tempCurrency === "VES" ? "bg-emerald-500 text-white" : tempCurrency === "EUR" ? "bg-sky-600 text-white" : "bg-amber-600 text-white"
                               )}
                             >
-                              {tempCurrency === "USD" ? "$" : "Bs"}
+                              {tempCurrency === "USD" ? "$" : tempCurrency === "VES" ? "Bs" : tempCurrency === "EUR" ? "€" : "COP"}
                             </button>
                             <Input
                               type="number"
@@ -3684,19 +3693,18 @@ export default function POSPage() {
                               onClick={() => {
                                 const amountNum = Number(tempAmount);
                                 if (isNaN(amountNum) || amountNum <= 0) return;
-                                let usdAmount = amountNum;
-                                let vesAmount = amountNum * currentExchangeRate;
-                                if (tempCurrency === "VES") {
-                                  usdAmount = amountNum / currentExchangeRate;
-                                  vesAmount = amountNum;
-                                }
+                                if (!(cashRates[tempCurrency] > 0)) return toast.error("Falta la tasa del peso colombiano: configúrala en el panel, botón COP");
+                                // Amounts are kept in dollars; the currency and its amount say what came in
+                                const usdAmount = Math.round(toUsd(amountNum, tempCurrency, cashRates) * 10000) / 10000;
                                 setAddedPayments([...addedPayments, {
                                   method: tempPaymentMethod,
                                   amount: usdAmount,
-                                  amountLocal: vesAmount,
-                                  exchangeRate: currentExchangeRate,
-                                  reference: tempReference
-                                }]);
+                                  amountLocal: Math.round(usdAmount * cashRates.VES * 100) / 100,
+                                  exchangeRate: cashRates.VES,
+                                  reference: tempReference,
+                                  currency: tempCurrency,
+                                  amountCurrency: amountNum,
+                                } as any]);
                                 setTempAmount("0");
                                 setTempReference("");
                                 setShowSplitPaymentForm(false);
@@ -3834,12 +3842,21 @@ export default function POSPage() {
                             {/* Amount Input (Locked/Disabled) */}
                             {!isCredit && (
                               <div className={cn(isCash ? "col-span-6" : "col-span-4", "relative")}>
-                                <span className="absolute left-3 top-2.5 text-[11px] font-bold text-muted-foreground/80">$</span>
-                                <Input
-                                  className="pl-6 h-10 rounded-md text-[13px] font-semibold border-border/60 bg-muted/30 text-foreground/80 opacity-95 cursor-not-allowed tracking-tight"
-                                  value={p.amount.toFixed(2)}
-                                  disabled
-                                />
+                                {(p as any).currency && (p as any).currency !== "USD" ? (
+                                  <div className="flex h-10 items-center justify-between rounded-md border border-border/60 bg-muted/30 px-3 text-[13px] font-semibold tabular-nums text-foreground/80">
+                                    <span>{formatMoney((p as any).amountCurrency ?? 0, (p as any).currency)}</span>
+                                    <span className="text-[11px] font-medium text-muted-foreground">${p.amount.toFixed(2)}</span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <span className="absolute left-3 top-2.5 text-[11px] font-bold text-muted-foreground/80">$</span>
+                                    <Input
+                                      className="pl-6 h-10 rounded-md text-[13px] font-semibold border-border/60 bg-muted/30 text-foreground/80 opacity-95 cursor-not-allowed tracking-tight"
+                                      value={p.amount.toFixed(2)}
+                                      disabled
+                                    />
+                                  </>
+                                )}
                               </div>
                             )}
 
@@ -3910,6 +3927,24 @@ export default function POSPage() {
                             </span>
                           </div>
                         </div>
+                        {!saveChangeToWallet && (
+                          <div className="space-y-2 rounded-lg border p-4">
+                            <span className="text-xs font-semibold text-foreground/80">¿En qué moneda das el vuelto?</span>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                              {branchCurrencyList.filter((c) => cashRates[c] > 0).map((c) => {
+                                const lastCash = [...addedPayments].reverse().find((x: any) => x.method === "CASH") as any;
+                                const selected = (changeCurrency ?? lastCash?.currency ?? "USD") === c;
+                                return (
+                                  <button key={c} type="button" onClick={() => setChangeCurrency(c)} className={cn("rounded-lg border px-3 py-2 text-left transition", selected ? "border-blue-600 bg-blue-500/10" : "hover:bg-muted")}>
+                                    <span className="block text-[11px] text-muted-foreground">{CURRENCY_META[c].label}</span>
+                                    <span className="block text-sm font-bold tabular-nums">{formatMoney(fromUsd(changeDue, c, cashRates), c)}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <span className="block text-[11px] text-muted-foreground">El vuelto sale de la gaveta: el cierre de caja lo descuenta en esa moneda.</span>
+                          </div>
+                        )}
                         {selectedClientId !== "consumidor-final" && (
                           <div className="flex items-center justify-between p-4 rounded-lg bg-muted/40 border">
                             <div className="flex flex-col">
@@ -4646,63 +4681,80 @@ export default function POSPage() {
 
           <div className="space-y-6 py-4">
 
-            {/* Expected Totals Summary */}
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="p-3 rounded-lg bg-muted/30 border space-y-1">
-                <p className="text-muted-foreground text-xs font-medium">Efectivo USD esperado</p>
-                <p className="font-semibold text-base">${activeShift?.expectedTotals?.CASH?.toFixed(2) || '0.00'}</p>
+            {/* Cash in the drawer, per currency */}
+            <div className="space-y-3">
+              <div>
+                <h4 className="text-sm font-semibold">Efectivo en la gaveta</h4>
+                <p className="text-xs text-muted-foreground">Cuenta los billetes de cada moneda. Lo digital no va en la gaveta: está abajo.</p>
               </div>
-              <div className="p-3 rounded-lg bg-muted/30 border space-y-1">
-                <p className="text-muted-foreground text-xs font-medium">Punto y pago móvil</p>
-                <p className="font-semibold text-base">Bs {((activeShift?.expectedTotals?.CARD || 0) + (activeShift?.expectedTotals?.PAGO_MOVIL || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-              </div>
+              {shiftCurrencies.map((c) => {
+                const expected = Number(((activeShift as any)?.expectedCash || {})[c] ?? 0);
+                const showExpected = !(user?.role === "pos" && settings?.blindShiftClose !== false);
+                const v = countedCash[c] ?? "";
+                const bad = !(c === "USD" && countBills) && v.trim() !== "" && !/^\d+([.,]\d{1,2})?$/.test(v.trim());
+                return (
+                  <div key={c} className="rounded-xl border p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold">{CURRENCY_META[c].label}</span>
+                      {showExpected && <span className="text-xs text-muted-foreground">Esperado: <span className="font-semibold text-foreground tabular-nums">{formatMoney(expected, c)}</span></span>}
+                    </div>
+                    {c === "USD" && countBills ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        {([1, 5, 10, 20, 50, 100] as const).map(bill => (
+                          <div key={bill} className="space-y-1">
+                            <Label className="text-[11px] text-muted-foreground">Billetes de ${bill}</Label>
+                            <Input inputMode="numeric" className="h-8 tabular-nums" value={cashBreakdown[`b${bill}` as keyof typeof cashBreakdown] || ''} onChange={e => setCashBreakdown({ ...cashBreakdown, [`b${bill}`]: Number(e.target.value.replace(/\D/g, "").slice(0, 5)) || 0 })} placeholder="0" />
+                          </div>
+                        ))}
+                        <p className="col-span-3 text-xs font-semibold tabular-nums">Contado: {formatMoney(billsUsd, "USD")}</p>
+                      </div>
+                    ) : (
+                      <div className={cn("flex h-9 items-center overflow-hidden rounded-md border bg-background focus-within:border-ring", bad && "border-destructive")}>
+                        <span className="pl-3 text-xs text-muted-foreground">Contado</span>
+                        <input inputMode="decimal" value={v} onChange={(e) => setCountedCash((x) => ({ ...x, [c]: e.target.value.replace(/[^\d.,]/g, "").slice(0, 14) }))} placeholder="0" className="min-w-0 flex-1 bg-transparent px-2 text-right text-sm font-semibold tabular-nums outline-none" />
+                        <span className="pr-3 text-xs text-muted-foreground">{CURRENCY_META[c].short}</span>
+                      </div>
+                    )}
+                    {c === "USD" && (
+                      <button type="button" onClick={() => setCountBills(!countBills)} className="text-[11px] font-semibold text-primary hover:underline">
+                        {countBills ? "Escribir el total en vez de contar billetes" : "Contar por billetes"}
+                      </button>
+                    )}
+                    {bad && <p className="text-[11px] text-destructive">Solo números, con hasta 2 decimales</p>}
+                  </div>
+                );
+              })}
             </div>
 
-            <Separator />
-
-            {/* USD Bills Breakdown */}
+            {/* Digital: not in the drawer */}
             <div className="space-y-3">
-              <h4 className="text-sm font-semibold">Billetes (USD)</h4>
-              <div className="grid grid-cols-3 gap-3">
-                {([1, 5, 10, 20, 50, 100] as const).map(bill => (
-                  <div key={bill} className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">${bill}</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      className="h-8"
-                      value={cashBreakdown[`b${bill}` as keyof typeof cashBreakdown] || ''}
-                      onChange={e => setCashBreakdown({ ...cashBreakdown, [`b${bill}`]: Number(e.target.value) })}
-                      placeholder="Cant."
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Bs Cash and Digital */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold">Bolívares y digital</h4>
-              <div className="grid grid-cols-1 gap-3">
-                <div className="flex items-center gap-3">
-                  <Label className="w-1/3 text-xs text-muted-foreground">Efectivo Bs</Label>
-                  <div className="relative flex-1">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-medium">Bs</span>
-                    <Input type="number" className="pl-8 h-9" value={cashBs} onChange={e => setCashBs(e.target.value)} />
-                  </div>
+              <h4 className="text-sm font-semibold">Digital (no va en la gaveta)</h4>
+              {!(user?.role === "pos" && settings?.blindShiftClose !== false) && (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {([["CARD", "Punto de venta"], ["PAGO_MOVIL", "Pago móvil"], ["TRANSFER", "Transferencia"], ["BINANCE", "Binance"], ["ZINLI", "Zinli"], ["PAYPAL", "PayPal"]] as const).filter(([k]) => (activeShift?.expectedTotals?.[k] || 0) > 0).map(([k, label]) => {
+                    const usd = activeShift?.expectedTotals?.[k] || 0;
+                    return (
+                      <div key={k} className="rounded-lg bg-muted/40 px-3 py-2">
+                        <p className="text-muted-foreground">{label}</p>
+                        <p className="font-semibold tabular-nums">{formatMoney(usd, "USD")} <span className="font-normal text-muted-foreground">· {formatMoney(usd * shiftRates.VES, "VES")}</span></p>
+                      </div>
+                    );
+                  })}
                 </div>
+              )}
+              <div className="grid grid-cols-1 gap-3">
                 <div className="flex items-center gap-3">
                   <Label className="w-1/3 text-xs text-muted-foreground">Lote punto venta</Label>
                   <div className="relative flex-1">
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-medium">Bs</span>
-                    <Input type="number" className="pl-8 h-9" value={posBatch} onChange={e => setPosBatch(e.target.value)} />
+                    <Input inputMode="decimal" className="pl-8 h-9" value={posBatch} onChange={e => setPosBatch(e.target.value.replace(/[^\d.]/g, ""))} />
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Label className="w-1/3 text-xs text-muted-foreground">Total pago móvil</Label>
                   <div className="relative flex-1">
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-medium">Bs</span>
-                    <Input type="number" className="pl-8 h-9" value={pagoMovilBatch} onChange={e => setPagoMovilBatch(e.target.value)} />
+                    <Input inputMode="decimal" className="pl-8 h-9" value={pagoMovilBatch} onChange={e => setPagoMovilBatch(e.target.value.replace(/[^\d.]/g, ""))} />
                   </div>
                 </div>
               </div>
@@ -4711,19 +4763,10 @@ export default function POSPage() {
             {/* Validation Panel */}
             <div className="p-4 rounded-xl bg-muted/50 border space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Efectivo contado (USD eq):</span>
-                <span className="text-base font-bold tabular-nums">
-                  ${(
-                    cashBreakdown.b1 + (cashBreakdown.b5 * 5) + (cashBreakdown.b10 * 10) +
-                    (cashBreakdown.b20 * 20) + (cashBreakdown.b50 * 50) + (cashBreakdown.b100 * 100) +
-                    ((Number(cashBs) || 0) / currentExchangeRate)
-                  ).toFixed(2)}
-                </span>
+                <span className="text-sm font-medium">Efectivo contado (en dólares):</span>
+                <span className="text-base font-bold tabular-nums">{formatMoney(countedUsd, "USD")}</span>
               </div>
-              <div className="flex justify-between items-center text-xs text-muted-foreground">
-                <span>Total digital contado (Bs):</span>
-                <span className="tabular-nums">Bs {((Number(posBatch) || 0) + (Number(pagoMovilBatch) || 0)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              </div>
+              <p className="text-[11px] text-muted-foreground">Cada moneda se cuadra por separado; el total en dólares es a la tasa de hoy.</p>
             </div>
 
           </div>
@@ -4798,6 +4841,20 @@ export default function POSPage() {
                   <span className="text-muted-foreground font-medium">Efectivo contado (declarado):</span>
                   <span className="font-bold text-foreground tabular-nums">${closeSummary?.reported?.toFixed(2)}</span>
                 </div>
+
+                {!!closeSummary?.rows?.length && (
+                  <div className="space-y-1.5 rounded-lg bg-background/60 p-2.5">
+                    {closeSummary.rows.map((r) => {
+                      const diff = Math.round((r.counted - r.expected) * 100) / 100;
+                      return (
+                        <div key={r.currency} className="grid grid-cols-[1fr_auto] items-center gap-2 text-xs">
+                          <span className="text-muted-foreground">{CURRENCY_META[r.currency].label}: esperado {formatMoney(r.expected, r.currency)} · contado {formatMoney(r.counted, r.currency)}</span>
+                          <span className={cn("font-bold tabular-nums", diff < -0.004 ? "text-rose-500" : diff > 0.004 ? "text-emerald-600" : "text-foreground")}>{diff === 0 ? "Cuadra" : `${diff > 0 ? "+" : "−"}${formatMoney(Math.abs(diff), r.currency)}`}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
                 <Separator />
 

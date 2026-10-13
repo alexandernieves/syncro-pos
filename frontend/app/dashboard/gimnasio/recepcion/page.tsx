@@ -211,7 +211,7 @@ export default function GymReceptionPage() {
     setSearching(true);
     const timer = setTimeout(async () => {
       try {
-        const data = await gymApi<{ items: GymMemberRow[] }>(`/members?${new URLSearchParams({ q: term, pageSize: "8" })}`);
+        const data = await gymApi<{ items: GymMemberRow[] }>(`/members?${new URLSearchParams({ q: term, pageSize: "8", visiting: "true" })}`);
         if (id === requestRef.current) { setMatches(data.items); setActive(0); }
       } catch {
         if (id === requestRef.current) setMatches([]);
@@ -291,7 +291,7 @@ export default function GymReceptionPage() {
                   <Avatar src={row.photoUrl} name={row.client.name} size={40} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{row.client.name}</span>
-                    <span className="block text-xs text-muted-foreground">N.º {row.memberNumber}{row.client.documentId ? ` · ${row.client.documentId}` : ""}</span>
+                    <span className="block text-xs text-muted-foreground">N.º {row.memberNumber}{row.client.documentId ? ` · ${row.client.documentId}` : ""}{row.branchId && row.branchId !== localStorage.getItem("currentBranchId") ? ` · socio de ${row.branchName}` : ""}</span>
                   </span>
                   <span className={cn("text-xs font-semibold", row.status === "ACTIVE" ? "text-emerald-600" : "text-rose-600")}>{STATUS_LABEL[row.status]}</span>
                 </button>

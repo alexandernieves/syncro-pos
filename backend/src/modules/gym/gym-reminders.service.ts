@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { memberInBranch } from './gym-branch';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
@@ -272,7 +273,7 @@ export class GymRemindersService {
     const from = new Date(now.getTime() - (r.afterDays + 3) * DAY);
     const to = new Date(now.getTime() + (r.daysBefore + 2) * DAY);
     const memberships = await this.prisma.gymMembership.findMany({
-      where: { businessId, status: 'ACTIVE', endDate: { gte: from, lte: to }, startDate: { lte: now } },
+      where: { businessId, ...memberInBranch(), status: 'ACTIVE', endDate: { gte: from, lte: to }, startDate: { lte: now } },
       include: {
         member: { include: { client: { select: { name: true, phone: true } }, memberships: { where: { status: { not: 'CANCELLED' } }, select: { id: true, endDate: true } } } },
         reminders: { select: { kind: true, status: true } },
@@ -364,7 +365,7 @@ export class GymRemindersService {
 
   async listLog(businessId: string) {
     return this.prisma.gymReminder.findMany({
-      where: { businessId },
+      where: { businessId, ...memberInBranch() },
       orderBy: { createdAt: 'desc' },
       take: 100,
       include: { member: { select: { id: true, memberNumber: true, client: { select: { name: true } } } }, membership: { select: { planName: true, endDate: true } } },

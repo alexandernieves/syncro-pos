@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { inBranch, memberInBranch } from './gym-branch';
 import { PrismaService } from '../prisma/prisma.service';
 import { GymRemindersService } from './gym-reminders.service';
 import { membershipState, zonedParts } from './gym.service';
@@ -27,9 +28,9 @@ export class GymReportsService {
     const { timeZone } = await this.settings.getSettings(businessId);
     const since = new Date(Date.now() - days * DAY);
     const [checkIns, visits, activeMembers] = await Promise.all([
-      this.prisma.gymCheckIn.findMany({ where: { businessId, createdAt: { gte: since } }, select: { memberId: true, granted: true, reason: true, createdAt: true } }),
-      this.prisma.gymVisit.findMany({ where: { businessId, checkedInAt: { gte: since }, kind: { not: 'VISITOR' } }, select: { checkedInAt: true } }),
-      this.prisma.gymMembership.findMany({ where: { businessId, status: 'ACTIVE', startDate: { lte: new Date() }, endDate: { gte: new Date() } }, select: { memberId: true } }),
+      this.prisma.gymCheckIn.findMany({ where: { businessId, ...inBranch(), createdAt: { gte: since } }, select: { memberId: true, granted: true, reason: true, createdAt: true } }),
+      this.prisma.gymVisit.findMany({ where: { businessId, ...inBranch(), checkedInAt: { gte: since }, kind: { not: 'VISITOR' } }, select: { checkedInAt: true } }),
+      this.prisma.gymMembership.findMany({ where: { businessId, ...memberInBranch(), status: 'ACTIVE', startDate: { lte: new Date() }, endDate: { gte: new Date() } }, select: { memberId: true } }),
     ]);
     const granted = checkIns.filter((c) => c.granted);
 
@@ -97,11 +98,11 @@ export class GymReportsService {
     const now = new Date();
     const since = new Date(now.getTime() - days * DAY);
     const [memberships, members, lastCheckIns, leads, payments] = await Promise.all([
-      this.prisma.gymMembership.findMany({ where: { businessId, status: { not: 'CANCELLED' } }, select: { id: true, memberId: true, planName: true, startDate: true, endDate: true, status: true, price: true, discount: true, fees: true } }),
-      this.prisma.gymMember.findMany({ where: { businessId }, select: { id: true, memberNumber: true, createdAt: true, photoUrl: true, client: { select: { name: true, phone: true } } } }),
-      this.prisma.gymCheckIn.groupBy({ by: ['memberId'], where: { businessId, granted: true }, _max: { createdAt: true } }),
-      this.prisma.gymLead.findMany({ where: { businessId, createdAt: { gte: since } }, select: { stage: true, source: true, createdAt: true, wonAt: true, trialSessionId: true } }),
-      this.prisma.gymPayment.findMany({ where: { businessId, createdAt: { gte: since } }, select: { amount: true, membershipId: true, visitId: true, membership: { select: { planName: true } } } }),
+      this.prisma.gymMembership.findMany({ where: { businessId, ...memberInBranch(), status: { not: 'CANCELLED' } }, select: { id: true, memberId: true, planName: true, startDate: true, endDate: true, status: true, price: true, discount: true, fees: true } }),
+      this.prisma.gymMember.findMany({ where: { businessId, ...inBranch() }, select: { id: true, memberNumber: true, createdAt: true, photoUrl: true, client: { select: { name: true, phone: true } } } }),
+      this.prisma.gymCheckIn.groupBy({ by: ['memberId'], where: { businessId, ...memberInBranch(), granted: true }, _max: { createdAt: true } }),
+      this.prisma.gymLead.findMany({ where: { businessId, ...inBranch(), createdAt: { gte: since } }, select: { stage: true, source: true, createdAt: true, wonAt: true, trialSessionId: true } }),
+      this.prisma.gymPayment.findMany({ where: { businessId, ...inBranch(), createdAt: { gte: since } }, select: { amount: true, membershipId: true, visitId: true, membership: { select: { planName: true } } } }),
     ]);
 
     // Renewals: memberships that ended in the period, renewed within 15 days of the end or not
@@ -182,7 +183,7 @@ export class GymReportsService {
     const since = new Date(now.getTime() - days * DAY);
     const [sessions, shifts] = await Promise.all([
       this.prisma.gymClassSession.findMany({
-        where: { businessId, startsAt: { gte: since, lte: now } },
+        where: { businessId, ...inBranch(), startsAt: { gte: since, lte: now } },
         include: {
           class: { select: { id: true, name: true, color: true } },
           trainer: { select: { id: true, name: true } },
@@ -190,7 +191,7 @@ export class GymReportsService {
           _count: { select: { trialLeads: true } },
         },
       }),
-      this.prisma.gymStaffShift.findMany({ where: { businessId, startsAt: { gte: since, lte: now }, status: { not: 'ABSENT' } }, select: { staffId: true, startsAt: true, endsAt: true, clockInAt: true, clockOutAt: true, status: true } }),
+      this.prisma.gymStaffShift.findMany({ where: { businessId, ...inBranch(), startsAt: { gte: since, lte: now }, status: { not: 'ABSENT' } }, select: { staffId: true, startsAt: true, endsAt: true, clockInAt: true, clockOutAt: true, status: true } }),
     ]);
     type Acc = { id: string; name: string; color?: string | null; sessions: number; cancelled: number; capacity: number; booked: number; attended: number; noShow: number; waitlist: number; trials: number };
     const blank = (id: string, name: string, color?: string | null): Acc => ({ id, name, color, sessions: 0, cancelled: 0, capacity: 0, booked: 0, attended: 0, noShow: 0, waitlist: 0, trials: 0 });

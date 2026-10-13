@@ -38,6 +38,7 @@ type Draft = {
   maxEntriesPerWeek: string;
   totalEntries: string;
   includesClasses: boolean;
+  allBranches: boolean;
   allowedClassIds: string[];
 };
 /** "HH:MM" plus some minutes, capped at 23:30. */
@@ -59,9 +60,10 @@ const toDraft = (p: GymPlan): Draft => ({
   maxEntriesPerWeek: String(p.maxEntriesPerWeek ?? 0),
   totalEntries: String(p.totalEntries ?? 0),
   includesClasses: p.includesClasses ?? true,
+  allBranches: !!p.allBranches,
   allowedClassIds: p.allowedClassIds ?? [],
 });
-const emptyDraft: Draft = { name: "", description: "", durationDays: 30, price: "", color: COLORS[0], maxFreezeDays: "0", guestPassesPerMonth: "0", isActive: true, windows: [], maxEntriesPerDay: "0", maxEntriesPerWeek: "0", totalEntries: "0", includesClasses: true, allowedClassIds: [] };
+const emptyDraft: Draft = { name: "", description: "", durationDays: 30, price: "", color: COLORS[0], maxFreezeDays: "0", guestPassesPerMonth: "0", isActive: true, windows: [], maxEntriesPerDay: "0", maxEntriesPerWeek: "0", totalEntries: "0", includesClasses: true, allowedClassIds: [], allBranches: false };
 
 export default function GymPlansPage() {
   const [plans, setPlans] = useState<GymPlan[] | null>(null);
@@ -91,6 +93,7 @@ export default function GymPlansPage() {
         maxEntriesPerWeek: Number(draft.maxEntriesPerWeek) || 0,
         totalEntries: Number(draft.totalEntries) || 0,
         includesClasses: draft.includesClasses,
+        allBranches: draft.allBranches,
         allowedClassIds: draft.includesClasses ? draft.allowedClassIds : [],
       };
       await gymApi(draft.id ? `/plans/${draft.id}` : "/plans", { method: draft.id ? "PUT" : "POST", json: body });
@@ -250,6 +253,13 @@ export default function GymPlansPage() {
                     </>
                   )}
                 </div>
+                <div className="space-y-1 rounded-xl bg-muted/40 p-3">
+                  <label className="flex items-center justify-between gap-3 text-sm font-medium">
+                    Válido en todas las sedes
+                    <Switch checked={draft.allBranches} onCheckedChange={(v) => set({ allBranches: v })} />
+                  </label>
+                  <p className="text-xs text-muted-foreground">{draft.allBranches ? "El socio entra y reserva clases en cualquier sucursal." : "El socio solo entra en la sucursal donde se inscribió."}</p>
+                </div>
               </section>
 
               <section className="grid gap-4 px-6 py-5 sm:grid-cols-2">
@@ -301,6 +311,7 @@ function PlanCard({ plan: p, classes, popular, onEdit }: { plan: GymPlan; classe
   };
   const features: { ok: boolean; text: string }[] = [
     windows.length ? { ok: true, text: windows.map((w) => `${dayNames(w.days)} · ${hm(w.start)} a ${hm(w.end)}`).join(" / ") } : { ok: true, text: "Acceso en todo el horario del gimnasio" },
+    p.allBranches ? { ok: true, text: "Válido en todas las sedes" } : { ok: true, text: "Solo en la sede del socio" },
     p.includesClasses === false ? { ok: false, text: "Sin clases grupales" } : { ok: true, text: allowed.length ? `Clases: ${allowed.join(", ")}` : "Todas las clases grupales" },
     ...((p.maxEntriesPerDay ?? 0) > 0 || (p.maxEntriesPerWeek ?? 0) > 0
       ? [{ ok: true, text: [p.maxEntriesPerDay ? `${p.maxEntriesPerDay} ${p.maxEntriesPerDay === 1 ? "entrada" : "entradas"} al día` : null, p.maxEntriesPerWeek ? `${p.maxEntriesPerWeek} por semana` : null].filter(Boolean).join(" · ") }]

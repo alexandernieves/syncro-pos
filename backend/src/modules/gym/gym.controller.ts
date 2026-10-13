@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Request, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Request, UseGuards, UseInterceptors } from '@nestjs/common';
+import { GymBranchInterceptor } from './gym-branch';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GymService } from './gym.service';
 import { GymRemindersService } from './gym-reminders.service';
@@ -15,6 +16,7 @@ import { GymReportsService } from './gym-reports.service';
 import { GymDevicesService } from './gym-devices.service';
 
 @UseGuards(JwtAuthGuard, GymStaffGuard)
+@UseInterceptors(GymBranchInterceptor)
 @Controller('gym')
 export class GymController {
   constructor(

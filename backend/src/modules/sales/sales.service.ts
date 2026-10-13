@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Currency, fromUsd, isCurrency, ratesFrom, round2 } from '../../common/currency';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentMethod, MovementType } from '@prisma/client';
 import { HistoryService } from '../history/history.service';
@@ -191,6 +192,20 @@ export class SalesService {
       const igtfAmount = cashAmount * (igtfRate / 100);
       const total = netSubtotal + taxAmount + igtfAmount;
 
+      // Change handed back in cash leaves the drawer: in the currency the cashier chose
+      // (by default the one of the last cash payment). Change saved to the wallet stays.
+      const rates = ratesFrom(settings);
+      for (const p of payments) {
+        if (p.currency !== undefined && p.currency !== null && !isCurrency(p.currency)) throw new BadRequestException('Moneda no válida');
+        if (p.currency === 'COP' && !(rates.COP > 0)) throw new BadRequestException('Falta la tasa del peso colombiano');
+      }
+      const paidUsd = payments.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
+      const changeUsd = round2(Math.max(0, paidUsd - total - (Number(saveChangeToWallet) || 0)));
+      const lastCash = [...payments].reverse().find((p: any) => p.method === 'CASH');
+      const changeCurrency: Currency = isCurrency(data.changeCurrency) ? data.changeCurrency : isCurrency(lastCash?.currency) ? lastCash.currency : 'USD';
+      if (changeCurrency === 'COP' && !(rates.COP > 0)) throw new BadRequestException('Falta la tasa del peso colombiano');
+      const change = changeUsd >= 0.01 ? { changeCurrency, changeUsd, changeAmount: fromUsd(changeUsd, changeCurrency, rates) } : {};
+
       // 5. Handle Payments, Wallet and Credit
       for (const p of payments) {
         if (p.method === 'WALLET') {
@@ -257,6 +272,7 @@ export class SalesService {
           discountAmt: globalDiscountAmt,
           discountPct: globalDiscountPct,
           total,
+          ...change,
           items: {
             create: saleItemsData
           },
@@ -266,7 +282,8 @@ export class SalesService {
               amount: p.amount,
               amountLocal: p.amountLocal,
               exchangeRate: p.exchangeRate,
-              reference: p.reference
+              reference: p.reference,
+              ...(isCurrency(p.currency) && { currency: p.currency, amountCurrency: Number.isFinite(Number(p.amountCurrency)) ? round2(Number(p.amountCurrency)) : fromUsd(Number(p.amount), p.currency, rates) }),
             }))
           }
         },

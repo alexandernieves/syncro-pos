@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { memberInBranch } from './gym-branch';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -252,7 +253,7 @@ export class GymTrainingService {
   /** Recent assessments across the gym (for the training page). */
   recentAssessments(businessId: string) {
     return this.prisma.gymAssessment.findMany({
-      where: { businessId },
+      where: { businessId, ...memberInBranch() },
       orderBy: { date: 'desc' },
       take: 100,
       include: { member: { select: { id: true, memberNumber: true, photoUrl: true, client: { select: { name: true } } } }, trainer: { select: { name: true } } },

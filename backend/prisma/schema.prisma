@@ -231,6 +231,16 @@ model Branch {
   purchaseOrders        PurchaseOrder[]
   sales                 Sale[]
   shifts                Shift[]
+  gymMembers            GymMember[]
+  gymClasses            GymClass[]
+  gymSessions           GymClassSession[]
+  gymTrainers           GymTrainer[]
+  gymStaffShifts        GymStaffShift[]
+  gymVisits             GymVisit[]
+  gymLeads              GymLead[]
+  gymEquipment          GymEquipment[]
+  gymDevices            GymDevice[]
+  gymCheckIns           GymCheckIn[]
   landingPages          LandingPage[]
   landingLeads          LandingLead[]
   landingVisits         LandingVisit[]
@@ -299,6 +309,10 @@ model Setting {
   exchangeRateDashboard       Float     @default(1)
   exchangeRateDashboardEur    Float     @default(1)
   bcvUpdateDateDashboard      String?
+  /// Colombian pesos per dollar: official TRM (automatic) and the business's own rate, which wins when set
+  exchangeRateCop             Float     @default(0)
+  copRateManual               Float?
+  copUpdateDate               String?
   taxRate                     Float     @default(16)
   taxEnabled                  Boolean   @default(true)
   igtfRate                    Float     @default(3)
@@ -363,6 +377,10 @@ model Sale {
   discountAmt           Float            @default(0)
   discountPct           Float            @default(0)
   total                 Float
+  /// Change handed back in cash: currency, amount in it and its USD value (out of the drawer)
+  changeCurrency        String?
+  changeAmount          Float?
+  changeUsd             Float?
   status                String           @default("COMPLETED")
   channel               String           @default("POS")
   shiftId               String?
@@ -410,14 +428,17 @@ model SaleReturnItem {
 }
 
 model SalePayment {
-  id           String        @id @default(uuid())
-  saleId       String
-  method       PaymentMethod
-  amount       Float
-  amountLocal  Float?
-  exchangeRate Float?
-  reference    String?
-  sale         Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  id             String        @id @default(uuid())
+  saleId         String
+  method         PaymentMethod
+  amount         Float
+  amountLocal    Float?
+  exchangeRate   Float?
+  reference      String?
+  /// Currency the customer paid in (USD, VES, EUR, COP) and the amount in it; `amount` stays in USD
+  currency       String?
+  amountCurrency Float?
+  sale           Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
 }
 
 model ProductWaitlist {
@@ -535,6 +556,10 @@ model Shift {
   notes           String?
   cashBreakdown   Json?
   declaredDetails Json?
+  /// Cash per currency in the drawer: {"USD": 20, "VES": 500, "EUR": 0, "COP": 0}
+  openingCash     Json?
+  expectedCash    Json?
+  countedCash     Json?
   sales           Sale[]
   branch          Branch      @relation(fields: [branchId], references: [id])
   user            User        @relation(fields: [userId], references: [id])
@@ -1260,6 +1285,8 @@ model GymPlan {
   name                String
   description         String?
   durationDays        Int
+  /// Valid in every branch (members of any branch can enter); otherwise only in the member's branch
+  allBranches         Boolean         @default(false)
   price               Float
   color               String?
   /// Days a membership of this plan can be frozen (0 = not allowed)
@@ -1288,6 +1315,8 @@ model GymPlan {
 model GymMember {
   id               String            @id @default(uuid())
   businessId       String
+  /// Sede (sucursal) where it lives; the main branch sees every branch by switching
+  branchId         String?
   clientId         String            @unique
   memberNumber     Int
   photoUrl         String?
@@ -1308,6 +1337,7 @@ model GymMember {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @default(now()) @updatedAt
   business         Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch           Branch?           @relation(fields: [branchId], references: [id])
   client           Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
   memberships      GymMembership[]
   checkIns         GymCheckIn[]
@@ -1322,6 +1352,7 @@ model GymMember {
   assessments      GymAssessment[]
 
   @@unique([businessId, memberNumber])
+  @@index([branchId], map: "GymMember_branch_idx")
 }
 
 model GymMembership {
@@ -1371,6 +1402,8 @@ model GymPayment {
   method            String
   reference         String?
   exchangeRate      Float?
+  currency          String?
+  amountCurrency    Float?
   createdById       String?
   /// Branch and open cash shift where it was charged; its income entry in accounting
   branchId          String?
@@ -1390,6 +1423,8 @@ model GymPayment {
 model GymCheckIn {
   id         String     @id @default(uuid())
   businessId String
+  /// Sede (sucursal) where it lives; the main branch sees every branch by switching
+  branchId   String?
   memberId   String?
   granted    Boolean
   reason     String?
@@ -1398,9 +1433,11 @@ model GymCheckIn {
   deviceId   String?
   createdAt  DateTime   @default(now())
   business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch     Branch?    @relation(fields: [branchId], references: [id])
   member     GymMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
 
   @@index([businessId, createdAt], map: "GymCheckIn_business_created_idx")
+  @@index([branchId], map: "GymCheckIn_branch_idx")
 }
 
 model GymReminder {
@@ -1428,6 +1465,8 @@ model GymReminder {
 model GymTrainer {
   id           String                 @id @default(uuid())
   businessId   String
+  /// Sede (sucursal) where it lives; the main branch sees every branch by switching
+  branchId     String?
   name         String
   phone        String?
   specialty    String?
@@ -1441,6 +1480,7 @@ model GymTrainer {
   createdAt    DateTime               @default(now())
   updatedAt    DateTime               @default(now()) @updatedAt
   business     Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch       Branch?                @relation(fields: [branchId], references: [id])
   classes      GymClass[]
   sessions     GymClassSession[]
   availability GymStaffAvailability[]
@@ -1449,12 +1489,15 @@ model GymTrainer {
   assessments  GymAssessment[]
 
   @@index([businessId])
+  @@index([branchId], map: "GymTrainer_branch_idx")
 }
 
 /// A class on the weekly schedule (e.g. Spinning, Monday and Wednesday at 7:00)
 model GymClass {
   id          String            @id @default(uuid())
   businessId  String
+  /// Sede (sucursal) where it lives; the main branch sees every branch by switching
+  branchId    String?
   name        String
   description String?
   color       String?
@@ -1470,16 +1513,20 @@ model GymClass {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @default(now()) @updatedAt
   business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch      Branch?           @relation(fields: [branchId], references: [id])
   trainer     GymTrainer?       @relation(fields: [trainerId], references: [id], onDelete: SetNull)
   sessions    GymClassSession[]
 
   @@index([businessId])
+  @@index([branchId], map: "GymClass_branch_idx")
 }
 
 /// One dated occurrence of a class; bookings belong to it
 model GymClassSession {
   id               String       @id @default(uuid())
   businessId       String
+  /// Sede (sucursal) where it lives; the main branch sees every branch by switching
+  branchId         String?
   classId          String
   trainerId        String?
   startsAt         DateTime
@@ -1494,6 +1541,7 @@ model GymClassSession {
   isExtra          Boolean      @default(false)
   createdAt        DateTime     @default(now())
   business         Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch           Branch?      @relation(fields: [branchId], references: [id])
   class            GymClass     @relation(fields: [classId], references: [id], onDelete: Cascade)
   trainer          GymTrainer?  @relation(fields: [trainerId], references: [id], onDelete: SetNull)
   trialLeads       GymLead[]
@@ -1502,6 +1550,7 @@ model GymClassSession {
   @@unique([classId, startsAt])
   @@index([businessId, startsAt], map: "GymClassSession_business_starts_idx")
   @@index([classId, originalStartsAt], map: "GymClassSession_class_original_idx")
+  @@index([branchId], map: "GymClassSession_branch_idx")
 }
 
 model GymBooking {
@@ -1564,6 +1613,8 @@ model GymStaffAvailability {
 model GymStaffShift {
   id         String     @id @default(uuid())
   businessId String
+  /// Sede (sucursal) where it lives; the main branch sees every branch by switching
+  branchId   String?
   staffId    String
   startsAt   DateTime
   endsAt     DateTime
@@ -1576,16 +1627,20 @@ model GymStaffShift {
   clockOutAt DateTime?
   createdAt  DateTime   @default(now())
   business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch     Branch?    @relation(fields: [branchId], references: [id])
   staff      GymTrainer @relation(fields: [staffId], references: [id], onDelete: Cascade)
 
   @@index([businessId, startsAt], map: "GymStaffShift_business_starts_idx")
   @@index([staffId, startsAt], map: "GymStaffShift_staff_starts_idx")
+  @@index([branchId], map: "GymStaffShift_branch_idx")
 }
 
 /// A prospect: someone interested who isn't a member yet
 model GymLead {
   id             String            @id @default(uuid())
   businessId     String
+  /// Sede (sucursal) where it lives; the main branch sees every branch by switching
+  branchId       String?
   name           String
   phone          String?
   email          String?
@@ -1607,6 +1662,7 @@ model GymLead {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @default(now()) @updatedAt
   business       Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch         Branch?           @relation(fields: [branchId], references: [id])
   trialSession   GymClassSession?  @relation(fields: [trialSessionId], references: [id], onDelete: SetNull)
   member         GymMember?        @relation(fields: [memberId], references: [id], onDelete: SetNull)
   activities     GymLeadActivity[]
@@ -1614,6 +1670,7 @@ model GymLead {
 
   @@index([businessId, stage], map: "GymLead_business_stage_idx")
   @@index([trialSessionId], map: "GymLead_trial_session_idx")
+  @@index([branchId], map: "GymLead_branch_idx")
 }
 
 /// Timeline of a prospect: notes, calls, messages, stage changes
@@ -1636,6 +1693,8 @@ model GymLeadActivity {
 model GymVisit {
   id           String       @id @default(uuid())
   businessId   String
+  /// Sede (sucursal) where it lives; the main branch sees every branch by switching
+  branchId     String?
   /// GUEST (invited by a member), DAY_PASS (paid) or VISITOR (doesn't train)
   kind         String
   name         String
@@ -1649,12 +1708,14 @@ model GymVisit {
   checkedOutAt DateTime?
   createdById  String?
   business     Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch       Branch?      @relation(fields: [branchId], references: [id])
   hostMember   GymMember?   @relation("VisitHost", fields: [hostMemberId], references: [id], onDelete: SetNull)
   lead         GymLead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
   payments     GymPayment[]
 
   @@index([businessId, checkedInAt], map: "GymVisit_business_checkin_idx")
   @@index([hostMemberId, checkedInAt], map: "GymVisit_host_checkin_idx")
+  @@index([branchId], map: "GymVisit_branch_idx")
 }
 
 /// Contract, waiver or consent the members sign (versioned: editing the text asks for a new signature)
@@ -1707,6 +1768,8 @@ model GymSignature {
 model GymEquipment {
   id               String           @id @default(uuid())
   businessId       String
+  /// Sede (sucursal) where it lives; the main branch sees every branch by switching
+  branchId         String?
   name             String
   /// CARDIO, STRENGTH, FREE_WEIGHTS, FUNCTIONAL or OTHER
   category         String           @default("STRENGTH")
@@ -1728,9 +1791,11 @@ model GymEquipment {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @default(now()) @updatedAt
   business         Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch           Branch?          @relation(fields: [branchId], references: [id])
   maintenance      GymMaintenance[]
 
   @@index([businessId], map: "GymEquipment_business_idx")
+  @@index([branchId], map: "GymEquipment_branch_idx")
 }
 
 /// A repair, a preventive service or an inspection of a machine
@@ -1857,6 +1922,8 @@ model GymAssessment {
 model GymDevice {
   id         String           @id @default(uuid())
   businessId String
+  /// Sede (sucursal) where it lives; the main branch sees every branch by switching
+  branchId   String?
   name       String
   model      String           @default("DS-K1T341CMFW")
   location   String?
@@ -1876,9 +1943,11 @@ model GymDevice {
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @default(now()) @updatedAt
   business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch     Branch?          @relation(fields: [branchId], references: [id])
   events     GymDeviceEvent[]
 
   @@index([businessId], map: "GymDevice_business_idx")
+  @@index([branchId], map: "GymDevice_branch_idx")
 }
 
 /// Each recognition sent by the reader (kept once, by its serial number on the device)

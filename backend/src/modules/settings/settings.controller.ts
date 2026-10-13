@@ -32,6 +32,12 @@ export class SettingsController {
     return this.bcvService.syncRate(businessId, target || 'pos');
   }
 
+  @Post('cop-rate')
+  async setCopRate(@Body('manual') manual: number | null, @Request() req: any) {
+    if (!req.user) throw new UnauthorizedException('No user context');
+    return this.bcvService.setCopRate(req.user.businessId, manual === null || manual === undefined ? null : Number(manual));
+  }
+
   @Post('apply-preset')
   async applyPreset(@Body('preset') preset: string, @Request() req: any) {
     if (!req.user) throw new UnauthorizedException('No user context');

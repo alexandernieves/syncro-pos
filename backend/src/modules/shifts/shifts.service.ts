@@ -1,13 +1,20 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CashByCurrency, Currency, Rates, branchCurrencies, cashToUsd, cleanCash, isCurrency, ratesFrom, round2 } from '../../common/currency';
 
 @Injectable()
 export class ShiftsService {
   constructor(private prisma: PrismaService) {}
 
+  private async branchContext(branchId: string) {
+    const branch = await this.prisma.branch.findUnique({ where: { id: branchId }, select: { id: true, state: true, businessId: true } });
+    const settings = branch?.businessId ? await this.prisma.setting.findFirst({ where: { businessId: branch.businessId } }) : null;
+    return { branch, rates: ratesFrom(settings), currencies: branchCurrencies(branch?.state) };
+  }
+
   async open(data: any) {
-    const { userId, branchId, openingBalance } = data;
-    
+    const { userId, branchId } = data;
+
     // Check if there is already an open shift for this user/branch
     const activeShift = await this.prisma.shift.findFirst({
       where: { userId, branchId, status: 'OPEN' as any }
@@ -17,11 +24,20 @@ export class ShiftsService {
       throw new BadRequestException('Ya existe un turno abierto para esta sucursal.');
     }
 
+    // Cash per currency in the drawer; the old single amount counts as dollars
+    const { rates, currencies } = await this.branchContext(branchId);
+    let openingCash = cleanCash(data.openingCash);
+    if (!Object.keys(openingCash).length) openingCash = { USD: round2(Number(data.openingBalance) || 0) };
+    const outside = Object.keys(openingCash).find((c) => !currencies.includes(c as Currency));
+    if (outside) throw new BadRequestException(`Esta sucursal no maneja ${outside}`);
+    if (openingCash.COP && !(rates.COP > 0)) throw new BadRequestException('Falta la tasa del peso colombiano para abrir con COP');
+
     await this.prisma.shift.create({
       data: {
         userId,
         branchId,
-        openingBalance: Number(openingBalance),
+        openingCash: openingCash as any,
+        openingBalance: cashToUsd(openingCash, rates),
         status: 'OPEN' as any,
         openedAt: new Date(),
       }
@@ -30,40 +46,75 @@ export class ShiftsService {
     return this.getActive(userId);
   }
 
-  async close(id: string, closingBalance: number, cashBreakdown?: any, declaredDetails?: any, notes?: string) {
-    const shift = await this.prisma.shift.findUnique({ 
-      where: { id },
-      include: { 
-        sales: { 
-          include: { 
-            payments: { where: { method: 'CASH' } } 
-          } 
-        } 
-      }
+  /**
+   * What should be in the drawer, per currency: opening cash, plus cash received in each
+   * currency, minus change handed back. Cancelled sales don't count.
+   */
+  private async drawer(shiftId: string) {
+    const shift = await this.prisma.shift.findUnique({
+      where: { id: shiftId },
+      include: { sales: { include: { payments: true } } },
     });
-
     if (!shift) throw new BadRequestException('Turno no encontrado');
 
-    // Calculate expected cash: Opening + All CASH payments from all sales in this shift
-    // Cancelled sales don't count, same as the open shift view
-    const totalCashPayments = shift.sales.reduce((total: number, sale: any) => {
-      if (sale.status === 'CANCELLED') return total;
-      const saleCash = sale.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
-      return total + saleCash;
-    }, 0);
-    
-    // Gym memberships charged in cash during this shift
+    const cash: Record<string, number> = { ...((shift.openingCash as CashByCurrency) || { USD: shift.openingBalance }) };
+    const add = (c: string, n: number) => { cash[c] = round2((cash[c] || 0) + n); };
+    let cashUsd = shift.openingBalance;
+    const expectedTotals: Record<string, number> = { CASH: shift.openingBalance, CARD: 0, TRANSFER: 0, PAGO_MOVIL: 0, BINANCE: 0, ZINLI: 0, PAYPAL: 0 };
+
+    for (const sale of shift.sales) {
+      if (sale.status === 'CANCELLED') continue;
+      for (const p of sale.payments) {
+        if (expectedTotals[p.method] !== undefined) expectedTotals[p.method] += p.amount;
+        if (p.method !== 'CASH') continue;
+        cashUsd += p.amount;
+        // Older payments without a currency were taken as dollars
+        if (p.currency && isCurrency(p.currency)) add(p.currency, p.amountCurrency ?? p.amount);
+        else add('USD', p.amount);
+      }
+      if (sale.changeCurrency && sale.changeAmount) {
+        add(sale.changeCurrency, -sale.changeAmount);
+        cashUsd -= sale.changeUsd || 0;
+        expectedTotals.CASH -= sale.changeUsd || 0;
+      }
+    }
+
     // Older gym charges without their own sale (new ones are already among the shift's sales)
-    const gymCash = await this.prisma.gymPayment.aggregate({ where: { shiftId: id, method: 'CASH', saleId: null }, _sum: { amount: true } });
-    const expectedBalance = shift.openingBalance + totalCashPayments + (gymCash._sum.amount ?? 0);
-    const difference = Number(closingBalance) - expectedBalance;
+    const gymPayments = await this.prisma.gymPayment.findMany({ where: { shiftId }, select: { method: true, amount: true, saleId: true, currency: true, amountCurrency: true } });
+    let gymTotal = 0;
+    for (const p of gymPayments) {
+      gymTotal += p.amount;
+      if (p.saleId) continue;
+      if (expectedTotals[p.method] !== undefined) expectedTotals[p.method] += p.amount;
+      if (p.method === 'CASH') {
+        cashUsd += p.amount;
+        add(p.currency && isCurrency(p.currency) ? p.currency : 'USD', p.currency ? (p.amountCurrency ?? p.amount) : p.amount);
+      }
+    }
+
+    for (const k of Object.keys(expectedTotals)) expectedTotals[k] = round2(expectedTotals[k]);
+    return { shift, expectedCash: cash as CashByCurrency, expectedCashUsd: round2(cashUsd), expectedTotals, gymTotal: round2(gymTotal), gymPaymentsCount: gymPayments.length };
+  }
+
+  async close(id: string, closingBalance: number, cashBreakdown?: any, declaredDetails?: any, notes?: string, countedCashInput?: unknown) {
+    const { shift, expectedCash, expectedCashUsd } = await this.drawer(id);
+    if (shift.status !== ('OPEN' as any)) throw new BadRequestException('Este turno ya está cerrado');
+    const { rates } = await this.branchContext(shift.branchId);
+
+    // Counted per currency when the drawer was counted that way; otherwise the single total in dollars
+    const countedCash = cleanCash(countedCashInput);
+    const perCurrency = Object.keys(countedCash).length > 0;
+    const counted = perCurrency ? cashToUsd(countedCash, rates) : Number(closingBalance);
+    const difference = round2(counted - expectedCashUsd);
 
     return this.prisma.shift.update({
       where: { id },
       data: {
-        closingBalance: Number(closingBalance),
-        expectedBalance,
+        closingBalance: counted,
+        expectedBalance: expectedCashUsd,
         difference,
+        expectedCash: expectedCash as any,
+        ...(perCurrency && { countedCash: countedCash as any }),
         cashBreakdown: cashBreakdown ? (cashBreakdown as any) : undefined,
         declaredDetails: declaredDetails ? (declaredDetails as any) : undefined,
         notes: notes !== undefined ? notes : shift.notes,
@@ -74,59 +125,26 @@ export class ShiftsService {
   }
 
   async getActive(userId: string) {
-    const shift = await (this.prisma.shift as any).findFirst({
-      where: { userId, status: 'OPEN' },
-      include: { 
-        branch: true,
-        sales: {
-          include: { payments: true }
-        }
-      }
-    });
+    const open = await this.prisma.shift.findFirst({ where: { userId, status: 'OPEN' as any }, select: { id: true } });
+    if (!open) return null;
 
-    if (!shift) return null;
-
-    // Calculate expected totals by payment method
-    const expectedTotals = {
-      CASH: shift.openingBalance, // Base cash includes opening balance
-      CARD: 0,
-      TRANSFER: 0,
-      PAGO_MOVIL: 0,
-      BINANCE: 0,
-      ZINLI: 0,
-      PAYPAL: 0
-    };
-
-    shift.sales.forEach((sale: any) => {
-      // Only count completed sales
-      if (sale.status !== 'CANCELLED') {
-        sale.payments.forEach((p: any) => {
-          if (expectedTotals[p.method as keyof typeof expectedTotals] !== undefined) {
-            expectedTotals[p.method as keyof typeof expectedTotals] += p.amount;
-          }
-        });
-      }
-    });
-
-    // Gym memberships charged during this shift count like sales
-    const gymPayments = await this.prisma.gymPayment.findMany({ where: { shiftId: shift.id }, select: { method: true, amount: true, saleId: true } });
-    let gymTotal = 0;
-    gymPayments.forEach((p) => {
-      gymTotal += p.amount;
-      // Charges with their own sale were already added with the shift's sales
-      if (!p.saleId && expectedTotals[p.method as keyof typeof expectedTotals] !== undefined) {
-        expectedTotals[p.method as keyof typeof expectedTotals] += p.amount;
-      }
-    });
+    const { shift, expectedCash, expectedCashUsd, expectedTotals, gymTotal, gymPaymentsCount } = await this.drawer(open.id);
+    const branch = await this.prisma.branch.findUnique({ where: { id: shift.branchId } });
+    const { rates, currencies } = await this.branchContext(shift.branchId);
 
     // Return the shift without the huge sales array to save bandwidth, but with the calculated totals
     const { sales, ...shiftData } = shift;
-    
+
     return {
       ...shiftData,
+      branch,
       expectedTotals,
+      expectedCash,
+      expectedCashUsd,
+      currencies,
+      rates: rates as Rates,
       gymTotal,
-      gymPaymentsCount: gymPayments.length,
+      gymPaymentsCount,
     };
   }
 

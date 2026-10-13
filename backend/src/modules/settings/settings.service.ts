@@ -85,6 +85,7 @@ export class SettingsService {
       'salesGoal', 'showSalesGoal', 'showNetMargin',
       'exchangeRate', 'exchangeRateEur', 'bcvUpdateDate',
       'exchangeRateDashboard', 'exchangeRateDashboardEur', 'bcvUpdateDateDashboard',
+      'exchangeRateCop', 'copRateManual', 'copUpdateDate',
       'whatsappBotEnabled', 'whatsappAuthorizedPhones',
       'businessType', 'enabledModules', 'sidebarOrder',
       'blindShiftClose',

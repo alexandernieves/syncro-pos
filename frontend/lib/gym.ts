@@ -14,6 +14,8 @@ export type GymPlan = {
   maxEntriesPerWeek?: number;
   totalEntries?: number;
   includesClasses?: boolean;
+  /** Valid in every branch (sede); otherwise only in the member's branch. */
+  allBranches?: boolean;
   allowedClassIds?: string[];
   isActive: boolean;
   _count?: { memberships: number };
@@ -56,6 +58,10 @@ export type GymMemberRow = {
   faceSyncedAt: string | null;
   faceError?: string | null;
   createdAt: string;
+  /** Branch (sede) the member belongs to, and whether their plan is valid everywhere. */
+  branchId?: string | null;
+  branchName?: string | null;
+  allBranches?: boolean;
   client: { id: string; name: string; documentId: string | null; phone: string | null; email: string | null };
   status: MemberStatus;
   daysLeft: number | null;
@@ -134,6 +140,8 @@ export async function gymApi<T = any>(path: string, init: RequestInit & { json?:
     ...rest,
     headers: {
       Authorization: `Bearer ${localStorage.getItem("token")}`,
+      // The gym works per branch (sede): the one picked in the header
+      ...(localStorage.getItem("currentBranchId") && { "x-branch-id": localStorage.getItem("currentBranchId")! }),
       ...(json !== undefined && { "Content-Type": "application/json" }),
       ...headers,
     },
