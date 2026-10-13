@@ -28,6 +28,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { HistoryModule } from './modules/history/history.module';
 import { TransfersModule } from './modules/transfers/transfers.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
+import { MovementsModule } from './modules/movements/movements.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { StorefrontModule } from './modules/storefront/storefront.module';
 import { SyncroAdminModule } from './modules/syncro-admin/syncro-admin.module';
@@ -73,6 +74,7 @@ import { GymModule } from './modules/gym/gym.module';
     HistoryModule,
     TransfersModule,
     ExpensesModule,
+    MovementsModule,
     NotificationsModule,
     StorefrontModule,
     SyncroAdminModule,

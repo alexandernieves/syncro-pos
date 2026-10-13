@@ -68,6 +68,7 @@ model Business {
   gymDeviceEvents       GymDeviceEvent[]
   gymApiKeys            GymApiKey[]
   gymReportedPayments   GymReportedPayment[]
+  financeMovements      FinanceMovement[]
 }
 
 model Conversation {
@@ -253,6 +254,7 @@ model Branch {
   landingVisits         LandingVisit[]
   syncroShopProducts    Product[]              @relation("SyncroShopBranch")
   shopOrderItems        ShopOrderItem[]
+  financeMovements      FinanceMovement[]
 
   @@unique([businessId, name])
 }
@@ -284,6 +286,7 @@ model User {
   shifts            Shift[]
   business          Business?           @relation(fields: [businessId], references: [id])
   whatsAppChats     WhatsAppChat[]
+  financeMovements  FinanceMovement[]
 }
 
 model PushSubscription {
@@ -320,6 +323,8 @@ model Setting {
   exchangeRateCop             Float     @default(0)
   copRateManual               Float?
   copUpdateDate               String?
+  /// Rules for income and expenses registered by the staff (limit, receipt, PIN categories, undo time)
+  financeSettings             Json?
   taxRate                     Float     @default(16)
   taxEnabled                  Boolean   @default(true)
   igtfRate                    Float     @default(3)
@@ -2028,4 +2033,46 @@ model GymReportedPayment {
   member     GymMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@index([businessId, status], map: "GymReportedPayment_business_status_idx")
+}
+
+/// Money in or out that isn't a sale: rent, services, payroll, an owner's contribution…
+/// Never deleted: a wrong one is voided with a reason. Cash from the drawer moves the shift.
+model FinanceMovement {
+  id                String    @id @default(uuid())
+  businessId        String
+  branchId          String
+  userId            String
+  userName          String?
+  /// IN or OUT
+  type              String
+  category          String
+  /// In dollars; `currency` and `amountCurrency` say what was handed over
+  amount            Float
+  currency          String    @default("USD")
+  amountCurrency    Float
+  /// CASH_DRAWER (out of / into the open cash shift), CASH_OTHER, PAGO_MOVIL, TRANSFER, CARD, ZELLE, BINANCE, OTHER
+  method            String
+  description       String?
+  receiptUrl        String?
+  occurredAt        DateTime  @default(now())
+  /// Where it was registered from: GYM, DASHBOARD or POS
+  source            String    @default("DASHBOARD")
+  shiftId           String?
+  accountingEntryId String?
+  /// Supervisor who authorized it with the PIN (over the staff limit or a protected category)
+  authorizedBy      String?
+  /// ACTIVE or VOIDED
+  status            String    @default("ACTIVE")
+  voidReason        String?
+  voidedAt          DateTime?
+  voidedBy          String?
+  reviewedAt        DateTime?
+  reviewedBy        String?
+  createdAt         DateTime  @default(now())
+  business          Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch            Branch    @relation(fields: [branchId], references: [id])
+  user              User      @relation(fields: [userId], references: [id])
+
+  @@index([businessId, branchId, occurredAt], map: "FinanceMovement_branch_day_idx")
+  @@index([shiftId], map: "FinanceMovement_shift_idx")
 }

@@ -92,8 +92,21 @@ export class ShiftsService {
       }
     }
 
+    // Cash taken from or put in the drawer outside sales (the income and expenses widget)
+    const movements = await this.prisma.financeMovement.findMany({
+      where: { shiftId, status: 'ACTIVE', method: 'CASH_DRAWER' },
+      orderBy: { occurredAt: 'asc' },
+      select: { id: true, type: true, category: true, amount: true, currency: true, amountCurrency: true, description: true, userName: true, occurredAt: true },
+    });
+    for (const m of movements) {
+      const sign = m.type === 'IN' ? 1 : -1;
+      add(isCurrency(m.currency) ? m.currency : 'USD', sign * m.amountCurrency);
+      cashUsd += sign * m.amount;
+      expectedTotals.CASH += sign * m.amount;
+    }
+
     for (const k of Object.keys(expectedTotals)) expectedTotals[k] = round2(expectedTotals[k]);
-    return { shift, expectedCash: cash as CashByCurrency, expectedCashUsd: round2(cashUsd), expectedTotals, gymTotal: round2(gymTotal), gymPaymentsCount: gymPayments.length };
+    return { shift, expectedCash: cash as CashByCurrency, expectedCashUsd: round2(cashUsd), expectedTotals, gymTotal: round2(gymTotal), gymPaymentsCount: gymPayments.length, movements };
   }
 
   async close(id: string, closingBalance: number, cashBreakdown?: any, declaredDetails?: any, notes?: string, countedCashInput?: unknown) {
@@ -128,7 +141,7 @@ export class ShiftsService {
     const open = await this.prisma.shift.findFirst({ where: { userId, status: 'OPEN' as any }, select: { id: true } });
     if (!open) return null;
 
-    const { shift, expectedCash, expectedCashUsd, expectedTotals, gymTotal, gymPaymentsCount } = await this.drawer(open.id);
+    const { shift, expectedCash, expectedCashUsd, expectedTotals, gymTotal, gymPaymentsCount, movements } = await this.drawer(open.id);
     const branch = await this.prisma.branch.findUnique({ where: { id: shift.branchId } });
     const { rates, currencies } = await this.branchContext(shift.branchId);
 
@@ -145,6 +158,7 @@ export class ShiftsService {
       rates: rates as Rates,
       gymTotal,
       gymPaymentsCount,
+      movements,
     };
   }
 

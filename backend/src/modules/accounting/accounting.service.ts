@@ -259,11 +259,13 @@ export class AccountingService {
     });
 
     const byCategory: Record<string, number> = {};
-    expenseEntries.forEach(e => {
+    // Each Expense row was also written to the ledger as GASTO_OPERATIVO: count it once, with its own category below
+    const ledgerOnly = expenseEntries.filter((e) => e.category !== 'GASTO_OPERATIVO');
+    ledgerOnly.forEach(e => {
       byCategory[e.category || 'OTROS'] = (byCategory[e.category || 'OTROS'] || 0) + e.amount;
     });
 
-    const totalOpex = expenseEntries.reduce((s, e) => s + e.amount, 0);
+    const totalOpex = ledgerOnly.reduce((s, e) => s + e.amount, 0);
 
     // Also include Expense model records (branch-level expenses)
     const branchExpenseWhere: any = {

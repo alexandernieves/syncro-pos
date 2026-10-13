@@ -70,6 +70,7 @@ import { cn } from "@/lib/utils";
 import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
 import { useCurrency } from "@/context/CurrencyContext";
+import { FinanceWidget, MOVEMENT_LABELS } from "@/components/finance-widget";
 import { type Currency as CashCurrency, CURRENCY_META, cashChange, cashDue, formatMoney, fromUsd, toUsd } from "@/lib/currency";
 
 const API = API_URL;
@@ -4819,6 +4820,20 @@ export default function POSPage() {
               </div>
             </div>
 
+            {/* Cash taken from or put in the drawer with the income and expenses button */}
+            {!!(activeShift as any)?.movements?.length && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold">Entradas y salidas de la gaveta</h4>
+                {((activeShift as any).movements as any[]).map((m) => (
+                  <div key={m.id} className="flex items-center justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2 text-xs">
+                    <span className="min-w-0 truncate">{m.type === "OUT" ? "Salida" : "Entrada"} · {MOVEMENT_LABELS[m.category] ?? m.category}{m.description ? ` · ${m.description}` : ""}<span className="block text-muted-foreground">{m.userName ?? ""}</span></span>
+                    <span className={cn("shrink-0 font-semibold tabular-nums", m.type === "OUT" ? "text-rose-600" : "text-emerald-700")}>{m.type === "OUT" ? "−" : "+"}{formatMoney(m.amountCurrency, m.currency)}</span>
+                  </div>
+                ))}
+                <p className="text-[11px] text-muted-foreground">Ya están descontadas o sumadas en lo esperado de cada moneda.</p>
+              </div>
+            )}
+
             {/* Validation Panel */}
             <div className="p-4 rounded-xl bg-muted/50 border space-y-2">
               <div className="flex justify-between items-center">
@@ -4961,6 +4976,9 @@ export default function POSPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Income and expenses that aren't sales (left, so it never covers the cart) */}
+      <FinanceWidget placement="left" />
 
       {/* DIALOG: ESCÁNER Y CÁMARA (ESTILO UNIFICADO) */}
       <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>

@@ -3,6 +3,7 @@
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { OpenShiftHost } from "@/components/gym/open-shift-dialog";
+import { FinanceWidget } from "@/components/finance-widget";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 import { useRouter, usePathname } from "next/navigation";
@@ -102,6 +103,7 @@ export default function DashboardLayout({
           {children}
         </main>
         <OpenShiftHost />
+        <FinanceWidget />
       </div>
     );
   }
@@ -116,6 +118,7 @@ export default function DashboardLayout({
       }
     >
       <OpenShiftHost />
+        <FinanceWidget />
       <AppSidebar variant="inset" />
       {/* La vista es la superficie que sobresale: blanca y elevada sobre el
           armazon gris del sidebar, con la esquina superior izquierda marcada. */}

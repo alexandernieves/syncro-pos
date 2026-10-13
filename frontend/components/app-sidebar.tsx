@@ -137,7 +137,7 @@ const data = {
       moduleId: "accounting",
       items: [
         { title: "Resumen", url: "/dashboard/contabilidad" },
-        { title: "Gastos (caja chica)", url: "/dashboard/contabilidad/gastos" },
+        { title: "Ingresos y egresos", url: "/dashboard/contabilidad/movimientos" },
         { title: "Cierres de caja (turnos)", url: "/dashboard/contabilidad/turnos" },
       ],
     },
