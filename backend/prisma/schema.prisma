@@ -67,6 +67,7 @@ model Business {
   gymDevices            GymDevice[]
   gymDeviceEvents       GymDeviceEvent[]
   gymApiKeys            GymApiKey[]
+  gymReportedPayments   GymReportedPayment[]
 }
 
 model Conversation {
@@ -218,6 +219,11 @@ model Branch {
   businessId            String?
   email                 String?
   phone                 String?
+  /// Opening hours as the agent tells them ("Lun a vie 6:00 a. m. a 9:00 p. m.") and the map pin
+  openingHours          String?
+  latitude              Float?
+  longitude             Float?
+  gymReportedPayments   GymReportedPayment[]
   accountingEntries     AccountingEntry[]
   adsKnowledgeDocuments AdsKnowledgeDocument[]
   aiChatSessions        AiChatSession[]
@@ -928,6 +934,10 @@ model WhatsAppChat {
   lists                    String[]          @default([])
   avatarUrl                String?
   whatsappBotSessionActive Boolean           @default(false)
+  /// The WhatsApp agent handed the chat to a person: why and when
+  needsAttention           Boolean           @default(false)
+  attentionReason          String?
+  attentionAt              DateTime?
   user                     User?             @relation(fields: [assignedTo], references: [id])
   business                 Business?         @relation(fields: [businessId], references: [id])
   client                   Client?           @relation(fields: [clientId], references: [id])
@@ -1352,6 +1362,8 @@ model GymMember {
   workoutLogs      GymWorkoutLog[]
   assessments      GymAssessment[]
 
+  reportedPayments GymReportedPayment[]
+
   @@unique([businessId, memberNumber])
   @@index([branchId], map: "GymMember_branch_idx")
 }
@@ -1511,6 +1523,8 @@ model GymClass {
   capacity    Int               @default(20)
   room        String?
   isActive    Boolean           @default(true)
+  /// Prospects can book their free trial in this class
+  allowTrial  Boolean           @default(true)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @default(now()) @updatedAt
   business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -1986,4 +2000,32 @@ model GymApiKey {
   business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId], map: "GymApiKey_business_idx")
+}
+
+/// A payment the member reported to the WhatsApp agent (pago móvil). Reception checks it and
+/// registers the renewal; the agent never confirms a payment.
+model GymReportedPayment {
+  id         String    @id @default(uuid())
+  businessId String
+  branchId   String?
+  memberId   String
+  planId     String?
+  planName   String?
+  /// As the member wrote it ("Bs 21.784,22") and as a number when it could be read
+  amountText String
+  amount     Float?
+  currency   String?
+  bank       String?
+  reference  String?
+  /// PENDING, CONFIRMED or REJECTED
+  status     String    @default("PENDING")
+  note       String?
+  reviewedAt DateTime?
+  reviewedBy String?
+  createdAt  DateTime  @default(now())
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch     Branch?   @relation(fields: [branchId], references: [id])
+  member     GymMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, status], map: "GymReportedPayment_business_status_idx")
 }

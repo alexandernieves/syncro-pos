@@ -1232,6 +1232,10 @@ export default function WhatsAppChatPage() {
     if (activeTab === "unread") {
       return c.isUnread;
     }
+    // Handed over by the WhatsApp agent
+    if (activeTab === "attention") {
+      return !!c.needsAttention;
+    }
     if (activeTab === "favorites") {
       return c.isFavorite;
     }
@@ -1440,6 +1444,11 @@ export default function WhatsAppChatPage() {
               )}
             </WaChip>
             <WaChip active={activeTab === "favorites"} onClick={() => setActiveTab("favorites")}>Favoritos</WaChip>
+            {chats.some((c) => c.needsAttention && !c.isArchived) && (
+              <WaChip active={activeTab === "attention"} onClick={() => setActiveTab("attention")}>
+                Necesitan atención <span className="text-[12px] opacity-80">{chats.filter((c) => c.needsAttention && !c.isArchived).length}</span>
+              </WaChip>
+            )}
             {activeTab.startsWith("list:") && (
               <WaChip active onClick={() => setActiveTab("all")}>
                 {activeTab.replace("list:", "")} <span className="text-[12px]">×</span>
@@ -1509,6 +1518,9 @@ export default function WhatsAppChatPage() {
               .sort((a, b) => {
                 if (a.isPinned && !b.isPinned) return -1;
                 if (!a.isPinned && b.isPinned) return 1;
+                // Chats the WhatsApp agent handed over go on top
+                if (a.needsAttention && !b.needsAttention) return -1;
+                if (!a.needsAttention && b.needsAttention) return 1;
                 const timeA = new Date(a.lastMessageTime || a.updatedAt).getTime();
                 const timeB = new Date(b.lastMessageTime || b.updatedAt).getTime();
                 return timeB - timeA;
@@ -1543,6 +1555,7 @@ export default function WhatsAppChatPage() {
                             : <WaPreview message={last} fallback={c.lastMessage} />}
                         </span>
                         <span className="flex shrink-0 items-center gap-1.5 text-[#8696A0]">
+                          {c.needsAttention && <span className="rounded-full bg-[#FFF1D6] px-1.5 text-[11px] font-medium text-[#9A5B00]" title={c.attentionReason || undefined}>Atención</span>}
                           {hasDebt && <span className="rounded-full bg-[#FFE5E9] px-1.5 text-[11px] font-medium text-[#C12A4B]">Fiado</span>}
                           {c.isMuted && <IconBellOff size={17} />}
                           {c.isUnread && <span className="size-[18px] rounded-full bg-[#25D366]" title="No leído" />}
@@ -1692,6 +1705,16 @@ export default function WhatsAppChatPage() {
                 </DropdownMenu>
               </div>
             </div>
+
+            {/* The WhatsApp agent handed this chat to a person */}
+            {activeChat.needsAttention && (
+              <div className="flex shrink-0 flex-wrap items-center gap-3 border-b bg-[#FFF8EA] px-4 py-2.5 text-[13.5px] text-[#5C4300] dark:bg-amber-950/40 dark:text-amber-200">
+                <span className="min-w-0 flex-1"><b>El agente pidió ayuda:</b> {activeChat.attentionReason || "necesita que una persona lo atienda"}</span>
+                <button type="button" onClick={() => toggleChatProperty(activeChat.id, "needsAttention", true)} className="shrink-0 rounded-full bg-white px-3 py-1 text-[13px] font-medium text-[#3B4A54] shadow-sm hover:bg-[#F5F6F6] dark:bg-zinc-800 dark:text-zinc-100">
+                  Ya lo atendí
+                </button>
+              </div>
+            )}
 
             {/* Mensajes */}
             <div className="flex-1 overflow-y-auto pb-3 dark:bg-zinc-950" style={WA_WALLPAPER}>

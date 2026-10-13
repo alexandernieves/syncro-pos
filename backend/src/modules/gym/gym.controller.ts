@@ -47,6 +47,28 @@ export class GymController {
     return this.agent.createKey(req.user.businessId, name);
   }
 
+  // Payments members reported to the WhatsApp agent, for reception to check
+  @Get('reported-payments')
+  reportedPayments(@Query('status') status: string, @Request() req: any) {
+    return this.agent.listReported(req.user.businessId, status || 'PENDING');
+  }
+
+  @Post('reported-payments/:id/review')
+  reviewReported(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.agent.reviewReported(req.user.businessId, id, body, req.user.name);
+  }
+
+  // Hours and map pin of each branch (the agent tells them)
+  @Get('branches-info')
+  branchesInfo(@Request() req: any) {
+    return this.agent.branchInfo(req.user.businessId);
+  }
+
+  @Put('branches/:id/info')
+  updateBranchInfo(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.agent.updateBranchInfo(req.user.businessId, id, body);
+  }
+
   @Post('agent-keys/:id/revoke')
   revokeAgentKey(@Param('id') id: string, @Request() req: any) {
     return this.agent.revokeKey(req.user.businessId, id);

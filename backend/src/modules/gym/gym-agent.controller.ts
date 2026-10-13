@@ -1,57 +1,92 @@
-import { Body, CanActivate, Controller, ExecutionContext, Get, Injectable, Post, Query, Request, UseGuards } from '@nestjs/common';
+import { ArgumentsHost, Body, CanActivate, Catch, Controller, ExceptionFilter, ExecutionContext, Get, HttpCode, HttpException, Injectable, Logger, Param, Post, Query, Request, UseFilters, UseGuards } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { GymAgentService } from './gym-agent.service';
 
-/** The agent sends the business key: Authorization: Bearer syk_… (or x-api-key). No user session. */
+/** Koenyx sends X-Api-Key (the gym's key) and X-Gimnasio-Id (the gym's id in Syncro). */
 @Injectable()
 export class AgentKeyGuard implements CanActivate {
   constructor(private agent: GymAgentService) {}
   async canActivate(context: ExecutionContext) {
     const req = context.switchToHttp().getRequest();
-    req.agentBusinessId = await this.agent.authenticate(req.headers['authorization'] || req.headers['x-api-key']);
+    req.agentBusinessId = await this.agent.authenticate(req.headers['x-api-key'] || req.headers['authorization'], req.headers['x-gimnasio-id']);
     return true;
   }
 }
 
-/** Tools for the WhatsApp agent (Koenyx): contact lookup, branches, plans, classes, bookings and trial classes. */
+const CODES: Record<number, string> = { 400: 'datos_invalidos', 401: 'no_autorizado', 403: 'no_autorizado', 404: 'no_encontrado', 409: 'conflicto', 429: 'demasiadas_peticiones' };
+
+/** Every error as {"error": "codigo", "mensaje": "texto en español"}, which the agent reads. */
+@Catch()
+export class AgentErrorFilter implements ExceptionFilter {
+  private logger = new Logger('KoenyxAgent');
+  catch(exception: unknown, host: ArgumentsHost) {
+    const res = host.switchToHttp().getResponse();
+    if (exception instanceof HttpException) {
+      const status = exception.getStatus();
+      const body = exception.getResponse() as any;
+      const mensaje = body?.mensaje ?? (Array.isArray(body?.message) ? body.message[0] : body?.message) ?? exception.message;
+      const { error, mensaje: _m, message: _x, statusCode: _s, ...extra } = typeof body === 'object' && body ? body : ({} as any);
+      return res.status(status).json({ error: typeof error === 'string' && /^[a-z_]+$/.test(error) ? error : CODES[status] ?? 'error', mensaje, ...extra });
+    }
+    this.logger.error((exception as Error)?.stack ?? String(exception));
+    return res.status(500).json({ error: 'error_interno', mensaje: 'Syncro tuvo un problema al responder. Intenta de nuevo en un momento' });
+  }
+}
+
+/** API for the Koenyx WhatsApp agent, following the contract Koenyx wrote. */
 @SkipThrottle()
 @UseGuards(AgentKeyGuard)
-@Controller('gym/agent')
+@UseFilters(AgentErrorFilter)
+@Controller('koenyx/v1')
 export class GymAgentController {
   constructor(private readonly agent: GymAgentService) {}
+
+  @Get('contacts/lookup')
+  lookup(@Query('phone') phone: string, @Request() req: any) {
+    return this.agent.lookup(req.agentBusinessId, phone);
+  }
+
+  @Get('members/:id/membership')
+  membership(@Param('id') id: string, @Request() req: any) {
+    return this.agent.membership(req.agentBusinessId, id);
+  }
+
+  @Get('plans')
+  plans(@Query('branch_id') branchId: string, @Request() req: any) {
+    return this.agent.plans(req.agentBusinessId, branchId || undefined);
+  }
 
   @Get('branches')
   branches(@Request() req: any) {
     return this.agent.branches(req.agentBusinessId);
   }
 
-  @Get('contact')
-  contact(@Query('phone') phone: string, @Request() req: any) {
-    return this.agent.contact(req.agentBusinessId, phone);
-  }
-
-  @Get('plans')
-  plans(@Query('branchId') branchId: string, @Request() req: any) {
-    return this.agent.plans(req.agentBusinessId, branchId || undefined);
-  }
-
   @Get('classes')
-  classes(@Query('branchId') branchId: string, @Query('from') from: string, @Query('days') days: string, @Request() req: any) {
-    return this.agent.classes(req.agentBusinessId, branchId || undefined, from, days);
+  classes(@Query('branch_id') branchId: string, @Query('from') from: string, @Query('trial_only') trialOnly: string, @Request() req: any) {
+    return this.agent.classes(req.agentBusinessId, branchId || undefined, from, trialOnly === 'true' || trialOnly === '1');
   }
 
-  @Post('bookings')
-  book(@Body() body: any, @Request() req: any) {
-    return this.agent.book(req.agentBusinessId, body);
+  @HttpCode(200)
+  @Post('classes/:id/bookings')
+  booking(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.agent.booking(req.agentBusinessId, id, body);
   }
 
-  @Post('bookings/cancel')
-  cancel(@Body() body: any, @Request() req: any) {
-    return this.agent.cancelBooking(req.agentBusinessId, body);
-  }
-
-  @Post('trials')
+  @HttpCode(200)
+  @Post('prospects/trial')
   trial(@Body() body: any, @Request() req: any) {
     return this.agent.trial(req.agentBusinessId, body);
+  }
+
+  @HttpCode(200)
+  @Post('payments/reported')
+  reportPayment(@Body() body: any, @Request() req: any) {
+    return this.agent.reportPayment(req.agentBusinessId, body);
+  }
+
+  @HttpCode(200)
+  @Post('conversations/handoff')
+  handoff(@Body() body: any, @Request() req: any) {
+    return this.agent.handoff(req.agentBusinessId, body);
   }
 }

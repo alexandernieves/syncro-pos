@@ -123,13 +123,83 @@ function SwitchField({ label, hint, checked, onChange }: { label: string; hint: 
 /** Contracts and consents: versioned texts the members sign at reception or in their app. */
 type AgentKey = { id: string; name: string; keyPrefix: string; lastUsedAt: string | null; revokedAt: string | null; createdAt: string };
 
+type BranchInfo = { id: string; name: string; location: string | null; state: string | null; openingHours: string | null; latitude: number | null; longitude: number | null };
+
+/** What the WhatsApp agent tells about each branch: opening hours and where it is on the map. */
+function BranchHoursCard() {
+  const [rows, setRows] = useState<BranchInfo[] | null>(null);
+  const [draft, setDraft] = useState<Record<string, { hours: string; pin: string }>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  useEffect(() => {
+    gymApi<BranchInfo[]>("/branches-info").then((r) => {
+      setRows(r);
+      setDraft(Object.fromEntries(r.map((b) => [b.id, { hours: b.openingHours ?? "", pin: b.latitude != null && b.longitude != null ? `${b.latitude}, ${b.longitude}` : "" }])));
+    }).catch(() => setRows([]));
+  }, []);
+  // "7.7669, -72.2250" (as Google Maps copies it)
+  const parsePin = (t: string) => {
+    if (!t.trim()) return { lat: null, lng: null, ok: true };
+    const m = /^\s*(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/.exec(t);
+    if (!m) return { lat: null, lng: null, ok: false };
+    const lat = Number(m[1]);
+    const lng = Number(m[2]);
+    return { lat, lng, ok: Math.abs(lat) <= 90 && Math.abs(lng) <= 180 };
+  };
+  const save = async (b: BranchInfo) => {
+    const d = draft[b.id];
+    const pin = parsePin(d.pin);
+    if (!pin.ok) return toast.error("Ubicación inválida: pega las coordenadas como las copia Google Maps (7.7669, -72.2250)");
+    setSaving(b.id);
+    try {
+      await gymApi(`/branches/${b.id}/info`, { method: "PUT", json: { openingHours: d.hours, latitude: pin.lat, longitude: pin.lng } });
+      toast.success(`${b.name} actualizada`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(null);
+    }
+  };
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Horario y ubicación de las sedes</CardTitle>
+        <CardDescription>Lo que responde el agente de WhatsApp cuando preguntan a qué hora abren o dónde quedan.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!rows ? <Skeleton className="h-24 w-full" /> : rows.map((b) => {
+          const d = draft[b.id] ?? { hours: "", pin: "" };
+          const pinOk = parsePin(d.pin).ok;
+          return (
+            <div key={b.id} className="space-y-3 rounded-xl border p-4">
+              <p className="text-sm font-semibold">{b.name}<span className="font-normal text-muted-foreground">{b.location || b.state ? ` · ${[b.location, b.state].filter(Boolean).join(", ")}` : ""}</span></p>
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,260px)_auto] md:items-end">
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium">Horario de atención</p>
+                  <Input value={d.hours} onChange={(e) => setDraft((x) => ({ ...x, [b.id]: { ...d, hours: e.target.value.slice(0, 200) } }))} placeholder="Lun a vie 6:00 a. m. a 9:00 p. m.; sáb 8:00 a. m. a 2:00 p. m." />
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium">Ubicación en el mapa <span className="font-normal text-muted-foreground">(opcional)</span></p>
+                  <Input value={d.pin} onChange={(e) => setDraft((x) => ({ ...x, [b.id]: { ...d, pin: e.target.value.replace(/[^\d.,\s-]/g, "").slice(0, 40) } }))} placeholder="7.7669, -72.2250" className={cn("font-mono", !pinOk && "border-destructive")} />
+                </div>
+                <Button size="sm" disabled={saving === b.id || !pinOk} onClick={() => save(b)}>{saving === b.id ? <IconLoader2 size={15} className="animate-spin" /> : "Guardar"}</Button>
+              </div>
+              {!pinOk && <p className="text-xs text-destructive">Pega las coordenadas como las copia Google Maps: latitud, longitud</p>}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
 /** Key for the WhatsApp agent (Koenyx) to see classes and book on behalf of the gym. */
 function AgentKeysCard() {
   const [keys, setKeys] = useState<AgentKey[] | null>(null);
+  const [gymId, setGymId] = useState("");
   const [created, setCreated] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<AgentKey | null>(null);
   const [busy, setBusy] = useState(false);
-  const load = () => gymApi<AgentKey[]>("/agent-keys").then(setKeys).catch(() => setKeys([]));
+  const load = () => gymApi<{ gymId: string; keys: AgentKey[] }>("/agent-keys").then((r) => { setKeys(r.keys); setGymId(r.gymId); }).catch(() => setKeys([]));
   useEffect(() => { load(); }, []);
   const when = (d: string) => new Date(d).toLocaleString("es-VE", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
   const create = async () => {
@@ -160,6 +230,15 @@ function AgentKeysCard() {
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
+        {gymId && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/50 px-4 py-2.5">
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">ID del gimnasio (Koenyx lo pide como X-Gimnasio-Id)</p>
+              <p className="break-all font-mono text-sm select-all">{gymId}</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => copy(gymId)}>Copiar ID</Button>
+          </div>
+        )}
         {!keys ? <Skeleton className="h-12 w-full" /> : active.length === 0 ? (
           <p className="text-sm text-muted-foreground">Todavía no hay ninguna clave. Crea una cuando Koenyx te la pida.</p>
         ) : active.map((k) => (
@@ -180,7 +259,12 @@ function AgentKeysCard() {
             <DialogTitle>Clave creada</DialogTitle>
             <DialogDescription>Cópiala ahora y pásasela a Koenyx: por seguridad no se vuelve a mostrar. Si la pierdes, crea otra y revoca esta.</DialogDescription>
           </DialogHeader>
-          <div className="break-all rounded-lg bg-muted px-3 py-2.5 font-mono text-sm select-all">{created}</div>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Clave (X-Api-Key)</p>
+            <div className="break-all rounded-lg bg-muted px-3 py-2.5 font-mono text-sm select-all">{created}</div>
+            <p className="text-xs text-muted-foreground">ID del gimnasio (X-Gimnasio-Id)</p>
+            <div className="break-all rounded-lg bg-muted px-3 py-2.5 font-mono text-sm select-all">{gymId}</div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreated(null)}>Cerrar</Button>
             <Button onClick={() => created && copy(created)}>Copiar clave</Button>
@@ -501,6 +585,7 @@ export default function GymSettingsPage() {
           <PosTable columns={columns} data={log ?? []} loading={!log} searchPlaceholder="Buscar socio…" getRowId={(r) => r.id} emptyMessage="Todavía no se ha enviado ningún aviso." skeletonRows={3} />
         </CardContent>
       </Card>
+      <BranchHoursCard />
       <AgentKeysCard />
       <UnsavedChangesBar dirty={dirty} saving={saving} onSave={save} onDiscard={discard} />
       {leaveGuard}

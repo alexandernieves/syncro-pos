@@ -1481,13 +1481,15 @@ export class WhatsAppService {
   // --- PREMIUM CHAT MANAGEMENT ACTIONS ---
 
   async updateChat(id: string, data: any, businessId: string) {
-    const allowedFields = ['isPinned', 'isArchived', 'isRestricted', 'isFavorite', 'isMuted', 'isUnread', 'isBlocked', 'lists', 'avatarUrl'];
+    const allowedFields = ['isPinned', 'isArchived', 'isRestricted', 'isFavorite', 'isMuted', 'isUnread', 'isBlocked', 'lists', 'avatarUrl', 'needsAttention'];
     const updateData: any = {};
     for (const key of allowedFields) {
       if (data[key] !== undefined) {
         updateData[key] = data[key];
       }
     }
+    // Someone took over the chat the WhatsApp agent handed off
+    if (updateData.needsAttention === false) Object.assign(updateData, { attentionReason: null, attentionAt: null });
 
     const resolvedChat = await this.findChatByIdOrPhone(id, businessId);
 

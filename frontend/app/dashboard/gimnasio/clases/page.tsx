@@ -56,6 +56,7 @@ type GymClass = {
   capacity: number;
   room: string | null;
   isActive: boolean;
+  allowTrial?: boolean;
 };
 type Session = {
   id: string;
@@ -142,8 +143,8 @@ function RowMenu({ items }: { items: { label: string; onClick: () => void }[] })
 
 // ── Class form ──────────────────────────────────────────────────────────────
 
-type ClassDraft = { id?: string; name: string; description: string; color: string; trainerId: string; daysOfWeek: number[]; startTime: string; durationMin: string; capacity: string; room: string; isActive: boolean };
-const emptyClass: ClassDraft = { name: "", description: "", color: COLORS[0], trainerId: "", daysOfWeek: [], startTime: "07:00", durationMin: "60", capacity: "20", room: "", isActive: true };
+type ClassDraft = { id?: string; name: string; description: string; color: string; trainerId: string; daysOfWeek: number[]; startTime: string; durationMin: string; capacity: string; room: string; isActive: boolean; allowTrial: boolean };
+const emptyClass: ClassDraft = { name: "", description: "", color: COLORS[0], trainerId: "", daysOfWeek: [], startTime: "07:00", durationMin: "60", capacity: "20", room: "", isActive: true, allowTrial: true };
 
 function ClassDialog({ draft, setDraft, trainers, onSaved }: { draft: ClassDraft | null; setDraft: (d: ClassDraft | null) => void; trainers: Trainer[]; onSaved: () => void }) {
   const [saving, setSaving] = useState(false);
@@ -206,6 +207,13 @@ function ClassDialog({ draft, setDraft, trainers, onSaved }: { draft: ClassDraft
             </div>
             {draft.id && <label className="flex items-center gap-2 text-sm"><Switch checked={draft.isActive} onCheckedChange={(v) => set({ isActive: v })} /> Activa</label>}
           </div>
+          <label className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 px-3 py-2.5 text-sm">
+            <span>
+              <span className="block font-medium">Abierta para clases de prueba</span>
+              <span className="block text-xs text-muted-foreground">Los prospectos pueden agendar aquí su clase gratis, también desde WhatsApp.</span>
+            </span>
+            <Switch checked={draft.allowTrial} onCheckedChange={(v) => set({ allowTrial: v })} />
+          </label>
           {draft.id && <p className="text-xs text-muted-foreground">Las clases futuras que ya tienen reservas mantienen su hora; las demás se ajustan al nuevo horario.</p>}
         </div>
         <DialogFooter>
@@ -620,7 +628,7 @@ export default function GymClassesPage() {
     gymApi(`/trainers/${t.id}`, { method: "PUT", json: { isActive: !t.isActive } })
       .then(() => { toast.success(t.isActive ? `${t.name} quedó inactivo` : `${t.name} está activo`); loadTrainers(); })
       .catch((e) => toast.error(e.message));
-  const editClass = (c: GymClass) => setClassDraft({ id: c.id, name: c.name, description: c.description || "", color: c.color || COLORS[0], trainerId: c.trainerId || "", daysOfWeek: c.daysOfWeek, startTime: c.startTime, durationMin: String(c.durationMin), capacity: String(c.capacity), room: c.room || "", isActive: c.isActive });
+  const editClass = (c: GymClass) => setClassDraft({ id: c.id, name: c.name, description: c.description || "", color: c.color || COLORS[0], trainerId: c.trainerId || "", daysOfWeek: c.daysOfWeek, startTime: c.startTime, durationMin: String(c.durationMin), capacity: String(c.capacity), room: c.room || "", isActive: c.isActive, allowTrial: c.allowTrial !== false });
   const editTrainer = (t: Trainer) => setTrainerDraft({ id: t.id, name: t.name, phone: t.phone || "", specialty: t.specialty || "", color: t.color || COLORS[1], isActive: t.isActive });
 
   const classColumns = useMemo<ColumnDef<GymClass>[]>(

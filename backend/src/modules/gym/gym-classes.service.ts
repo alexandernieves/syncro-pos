@@ -39,6 +39,8 @@ type ClassInput = {
   capacity: number;
   room?: string;
   isActive?: boolean;
+  /** Prospects can book their free trial in it */
+  allowTrial?: boolean;
 };
 
 @Injectable()
@@ -137,6 +139,7 @@ export class GymClassesService {
         durationMin: Math.round(Number(data.durationMin)),
         capacity: Math.round(Number(data.capacity)),
         room: data.room?.trim() || null,
+        allowTrial: data.allowTrial !== false,
       },
     });
   }
@@ -162,6 +165,7 @@ export class GymClassesService {
         ...(data.capacity !== undefined && { capacity: Math.round(Number(data.capacity)) }),
         ...(data.room !== undefined && { room: data.room?.trim() || null }),
         ...(data.isActive !== undefined && { isActive: !!data.isActive }),
+        ...(data.allowTrial !== undefined && { allowTrial: !!data.allowTrial }),
       },
     });
     // Moved and one-time sessions were set by hand: they stay as they are
@@ -215,7 +219,7 @@ export class GymClassesService {
       where: { businessId, ...inBranch(), startsAt: { gte: start, lt: end }, OR: [{ class: { isActive: true } }, { bookings: { some: {} } }, { isExtra: true }] },
       orderBy: { startsAt: 'asc' },
       include: {
-        class: { select: { id: true, name: true, color: true, room: true } },
+        class: { select: { id: true, name: true, color: true, room: true, allowTrial: true } },
         trainer: { select: { id: true, name: true } },
         bookings: { where: { status: { in: ['BOOKED', 'ATTENDED', 'WAITLIST'] } }, select: { status: true } },
         _count: { select: { trialLeads: { where: { stage: { in: ['TRIAL_SCHEDULED', 'TRIAL_DONE'] } } } } },

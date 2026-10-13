@@ -27,6 +27,7 @@ import { GymPage, GymPageHeader, MemberAvatar } from "@/components/gym/gym-ui";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VisitDialog } from "@/components/gym/visit-dialog";
+import { ReportedPayments } from "@/components/gym/reported-payments";
 import { SignDocumentDialog } from "@/components/gym/sign-document-dialog";
 import { ReceiptPrinter } from "@/components/pos/receipt-printer";
 import { visitReceiptParts } from "@/lib/gym-receipt";
@@ -262,6 +263,7 @@ export default function GymReceptionPage() {
         description="Busca al socio por nombre, cédula o número para registrar su entrada."
         actions={<Button variant="outline" className="gap-2" onClick={() => setVisitOpen(true)}><IconTicket size={16} /> Registrar visita <kbd className="ml-1 rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Enter</kbd></Button>}
       />
+      <ReportedPayments />
       <StatGrid>
         <StatCard label="Entradas hoy" value={feed?.granted ?? "—"} tone="good" icon={<IconDoorEnter size={20} />} title="Accesos permitidos" hint="Se actualiza cada 15 segundos" />
         <StatCard label="Socios distintos" value={feed?.uniqueMembers ?? "—"} icon={<IconUsers size={20} />} title="Personas que entraron hoy" hint="Cada socio cuenta una vez" />

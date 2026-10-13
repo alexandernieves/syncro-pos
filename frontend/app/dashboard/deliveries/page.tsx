@@ -614,7 +614,7 @@ export default function DeliveriesPage() {
                       className="w-full border-primary/20 text-primary bg-primary/5 hover:bg-primary hover:text-primary-foreground gap-2 font-bold text-xs mt-1"
                       onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${selectedOrder.lat},${selectedOrder.lng}`, "_blank")}
                     >
-                      <IconMapPin size={15} /> Ver en Google maps
+                      <IconMapPin size={15} /> Ver en Google Maps
                     </Button>
                   </CardContent>
                 </Card>
