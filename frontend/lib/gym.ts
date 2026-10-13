@@ -120,10 +120,17 @@ export function durationLabel(days: number) {
   return days === 1 ? "1 día" : `${days} días`;
 }
 
-/** Fetch against the gym API; throws with the backend message. */
+/**
+ * Asks the user to open the cash shift (the dialog lives in the dashboard layout).
+ * Resolves true once it's open, false if they gave up.
+ */
+let shiftOpener: (() => Promise<boolean>) | null = null;
+export const registerShiftOpener = (fn: (() => Promise<boolean>) | null) => { shiftOpener = fn; };
+
+/** Fetch against the gym API; throws with the backend message. A charge with the cash closed opens it first and retries. */
 export async function gymApi<T = any>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const { json, headers, ...rest } = init;
-  const res = await fetch(`${API_URL}/gym${path}`, {
+  const send = () => fetch(`${API_URL}/gym${path}`, {
     ...rest,
     headers: {
       Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -132,7 +139,13 @@ export async function gymApi<T = any>(path: string, init: RequestInit & { json?:
     },
     ...(json !== undefined && { body: JSON.stringify(json) }),
   });
-  const data = await res.json().catch(() => ({}));
+  let res = await send();
+  let data = await res.json().catch(() => ({}));
+  if (!res.ok && data.code === "SHIFT_CLOSED") {
+    if (!shiftOpener || !(await shiftOpener())) throw new Error("No se cobró: la caja está cerrada");
+    res = await send();
+    data = await res.json().catch(() => ({}));
+  }
   if (!res.ok) throw new Error(Array.isArray(data.message) ? data.message[0] : data.message || "No se pudo completar la operación");
   return data as T;
 }

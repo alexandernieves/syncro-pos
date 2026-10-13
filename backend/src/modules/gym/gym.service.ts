@@ -462,6 +462,8 @@ export class GymService {
     if (!GYM_PAYMENT_METHODS.includes(method)) throw new BadRequestException('Método de pago no válido');
 
     const shift = userId ? await tx.shift.findFirst({ where: { userId, status: 'OPEN' as any, branch: { businessId } }, select: { id: true, branchId: true } }) : null;
+    // Every charge belongs to a cash shift; without one it would never be counted at the close
+    if (userId && !shift && Number(payment.amount) > 0) throw new BadRequestException({ code: 'SHIFT_CLOSED', message: 'Abre la caja para poder cobrar' });
     let branchId = shift?.branchId ?? null;
     if (!branchId && payment.branchId) {
       branchId = (await tx.branch.findFirst({ where: { id: payment.branchId, businessId }, select: { id: true } }))?.id ?? null;

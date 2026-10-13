@@ -2,6 +2,7 @@
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
+import { OpenShiftHost } from "@/components/gym/open-shift-dialog";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 import { useRouter, usePathname } from "next/navigation";
@@ -100,6 +101,7 @@ export default function DashboardLayout({
         <main className="flex-1 flex flex-col overflow-hidden">
           {children}
         </main>
+        <OpenShiftHost />
       </div>
     );
   }
@@ -113,6 +115,7 @@ export default function DashboardLayout({
         } as React.CSSProperties
       }
     >
+      <OpenShiftHost />
       <AppSidebar variant="inset" />
       {/* La vista es la superficie que sobresale: blanca y elevada sobre el
           armazon gris del sidebar, con la esquina superior izquierda marcada. */}
