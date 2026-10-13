@@ -45,7 +45,9 @@ export class ShiftsService {
     if (!shift) throw new BadRequestException('Turno no encontrado');
 
     // Calculate expected cash: Opening + All CASH payments from all sales in this shift
+    // Cancelled sales don't count, same as the open shift view
     const totalCashPayments = shift.sales.reduce((total: number, sale: any) => {
+      if (sale.status === 'CANCELLED') return total;
       const saleCash = sale.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
       return total + saleCash;
     }, 0);

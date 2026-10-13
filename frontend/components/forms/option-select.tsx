@@ -29,12 +29,15 @@ export function OptionSelect({
   max,
   step = 1,
   zeroLabel,
+  placeholder = "Elegir",
   className,
 }: {
-  value: number;
+  /** null = nothing chosen yet (shows `placeholder`). */
+  value: number | null;
   onChange: (v: number) => void;
   options: number[];
   unit: Unit;
+  placeholder?: string;
   /** Range accepted in "Personalizado". */
   min: number;
   max: number;
@@ -47,7 +50,7 @@ export function OptionSelect({
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState(false);
   const [text, setText] = useState("");
-  useEffect(() => { if (open) { setCustom(!options.includes(value)); setText(String(value)); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) { setCustom(value !== null && !options.includes(value)); setText(value === null ? "" : String(value)); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const money = unit === "money";
   const parsed = Number(text.replace(",", "."));
@@ -65,8 +68,8 @@ export function OptionSelect({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button type="button" className={cn("flex h-9 w-full min-w-36 items-center gap-2 rounded-md border bg-background px-3 text-left text-sm shadow-xs outline-none transition hover:bg-muted/40 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50", className)}>
-          <span className="min-w-0 flex-1 truncate font-medium tabular-nums">{formatValue(value, unit, zeroLabel)}</span>
-          {!options.includes(value) && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">Personalizado</span>}
+          <span className={cn("min-w-0 flex-1 truncate font-medium tabular-nums", value === null && "font-normal text-muted-foreground")}>{value === null ? placeholder : formatValue(value, unit, zeroLabel)}</span>
+          {value !== null && !options.includes(value) && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">Personalizado</span>}
           <IconChevronDown size={14} className="shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
@@ -81,7 +84,7 @@ export function OptionSelect({
         </div>
         <div className="mt-1 border-t pt-1">
           {!custom ? (
-            <button type="button" onClick={() => { setCustom(true); setText(options.includes(value) ? "" : String(value)); }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-primary hover:bg-muted">
+            <button type="button" onClick={() => { setCustom(true); setText(value === null || options.includes(value) ? "" : String(value)); }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-primary hover:bg-muted">
               <IconPencil size={14} /> Personalizado
             </button>
           ) : (
@@ -112,3 +115,34 @@ export function OptionSelect({
 export const DAYS: Unit = { one: "día", many: "días" };
 export const MINUTES: Unit = { one: "minuto", many: "minutos" };
 export const TIMES: Unit = { one: "vez", many: "veces" };
+
+const hhmmLabel = (t: string) => {
+  const [h, m] = t.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "a. m." : "p. m."}`;
+};
+
+/** A time of day picked from 30-minute steps ("HH:MM"), instead of a free time input. */
+export function TimeSelect({ value, onChange, min, className }: { value: string; onChange: (v: string) => void; min?: string; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const times = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`).filter((t) => !min || t > min);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className={cn("flex h-8 min-w-28 items-center gap-1.5 rounded-md border bg-background px-2.5 text-left text-sm tabular-nums shadow-xs outline-none hover:bg-muted/40", className)}>
+          <span className="flex-1">{hhmmLabel(value)}</span>
+          <IconChevronDown size={13} className="text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-36 p-1">
+        <div className="max-h-60 overflow-y-auto" ref={(el) => { el?.querySelector<HTMLElement>("[data-selected=true]")?.scrollIntoView({ block: "center" }); }}>
+          {times.map((t) => (
+            <button key={t} type="button" data-selected={t === value} onClick={() => { onChange(t); setOpen(false); }} className={cn("flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-sm tabular-nums hover:bg-muted", t === value && "font-semibold")}>
+              {hhmmLabel(t)}
+              {t === value && <IconCheck size={13} className="text-emerald-600" />}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}

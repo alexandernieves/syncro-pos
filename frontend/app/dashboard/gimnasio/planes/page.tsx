@@ -10,6 +10,7 @@ import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader,
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StatCard, StatGrid } from "@/components/stat-card";
 import { Optional } from "@/components/forms/contact-fields";
+import { DAYS, OptionSelect, TimeSelect } from "@/components/forms/option-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,6 +40,8 @@ type Draft = {
   includesClasses: boolean;
   allowedClassIds: string[];
 };
+/** "HH:MM" plus some minutes, capped at 23:30. */
+const laterBy = (t: string, minutes: number) => { const m = Math.min(23 * 60 + 30, Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)) + minutes); return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
 const WEEK: [number, string][] = [[1, "L"], [2, "M"], [3, "M"], [4, "J"], [5, "V"], [6, "S"], [0, "D"]];
 const hm = (t: string) => { const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "a. m." : "p. m."}`; };
 const toDraft = (p: GymPlan): Draft => ({
@@ -191,11 +194,11 @@ export default function GymPlansPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label>Duración en días</Label>
-                    <Input type="number" min={1} value={draft.durationDays} onChange={(e) => set({ durationDays: Number(e.target.value) })} />
+                    <OptionSelect value={draft.durationDays} onChange={(v) => set({ durationDays: v })} options={[1, 7, 15, 30, 60, 90, 180, 365]} unit={DAYS} min={1} max={730} />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Precio ($)</Label>
-                    <Input type="number" min={0} step="0.01" value={draft.price} onChange={(e) => set({ price: e.target.value })} placeholder="25.00" />
+                    <OptionSelect value={draft.price === "" ? null : Number(draft.price)} onChange={(v) => set({ price: String(v) })} options={[3, 5, 10, 15, 20, 25, 30, 40, 50, 65, 100]} unit="money" min={0} max={2000} zeroLabel="Gratis" placeholder="Elegir precio" />
                     {Number(draft.price) > 0 && draft.durationDays >= 60 && <p className="text-xs text-muted-foreground">Equivale a {money(Number(draft.price) / (draft.durationDays / 30))} al mes</p>}
                   </div>
                 </div>
@@ -217,19 +220,19 @@ export default function GymPlansPage() {
                           return <button key={d} type="button" onClick={() => set({ windows: draft.windows.map((x, j) => (j === i ? { ...x, days: on ? x.days.filter((y) => y !== d) : [...x.days, d] } : x)) })} className={cn("size-7 rounded-md text-[11px] font-semibold", on ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground")}>{l}</button>;
                         })}
                       </div>
-                      <Input type="time" value={w.start} onChange={(e) => set({ windows: draft.windows.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)) })} className="h-8 w-28 bg-background" />
+                      <TimeSelect value={w.start} onChange={(v) => set({ windows: draft.windows.map((x, j) => (j === i ? { ...x, start: v, end: x.end > v ? x.end : laterBy(v, 60) } : x)) })} />
                       <span className="text-xs text-muted-foreground">a</span>
-                      <Input type="time" value={w.end} onChange={(e) => set({ windows: draft.windows.map((x, j) => (j === i ? { ...x, end: e.target.value } : x)) })} className="h-8 w-28 bg-background" />
+                      <TimeSelect value={w.end} min={w.start} onChange={(v) => set({ windows: draft.windows.map((x, j) => (j === i ? { ...x, end: v } : x)) })} />
                       <Button size="icon" variant="ghost" className="ml-auto size-8 text-rose-600" title="Quitar horario" onClick={() => set({ windows: draft.windows.filter((_, j) => j !== i) })}><IconX size={15} /></Button>
                     </div>
                   ))}
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="space-y-1.5"><Label>Entradas por día</Label><Input type="number" min={0} value={draft.maxEntriesPerDay} onChange={(e) => set({ maxEntriesPerDay: e.target.value })} /></div>
-                  <div className="space-y-1.5"><Label>Entradas por semana</Label><Input type="number" min={0} value={draft.maxEntriesPerWeek} onChange={(e) => set({ maxEntriesPerWeek: e.target.value })} /></div>
-                  <div className="space-y-1.5"><Label>Paquete de entradas</Label><Input type="number" min={0} value={draft.totalEntries} onChange={(e) => set({ totalEntries: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label>Entradas por día</Label><OptionSelect value={Number(draft.maxEntriesPerDay) || 0} onChange={(v) => set({ maxEntriesPerDay: String(v) })} options={[0, 1, 2, 3]} unit={{ one: "entrada", many: "entradas" }} min={0} max={10} zeroLabel="Sin límite" /></div>
+                  <div className="space-y-1.5"><Label>Entradas por semana</Label><OptionSelect value={Number(draft.maxEntriesPerWeek) || 0} onChange={(v) => set({ maxEntriesPerWeek: String(v) })} options={[0, 1, 2, 3, 4, 5, 6]} unit={{ one: "entrada", many: "entradas" }} min={0} max={21} zeroLabel="Sin límite" /></div>
+                  <div className="space-y-1.5"><Label>Paquete de entradas</Label><OptionSelect value={Number(draft.totalEntries) || 0} onChange={(v) => set({ totalEntries: String(v) })} options={[0, 4, 8, 10, 12, 15, 20, 30]} unit={{ one: "entrada", many: "entradas" }} min={0} max={100} zeroLabel="Sin paquete" /></div>
                 </div>
-                <p className="-mt-1 text-xs text-muted-foreground">Con 0 no hay límite. El paquete sirve para planes como "12 entradas en el mes".</p>
+                <p className="-mt-1 text-xs text-muted-foreground">El paquete sirve para planes como "12 entradas en el mes".</p>
                 <div className="space-y-2 rounded-xl bg-muted/40 p-3">
                   <label className="flex items-center justify-between gap-3 text-sm font-medium">
                     Incluye clases grupales
@@ -252,12 +255,12 @@ export default function GymPlansPage() {
               <section className="grid gap-4 px-6 py-5 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Días que se puede congelar</Label>
-                  <Input type="number" min={0} value={draft.maxFreezeDays} onChange={(e) => set({ maxFreezeDays: e.target.value })} />
-                  <p className="text-xs text-muted-foreground">Con 0 no se puede congelar.</p>
+                  <OptionSelect value={Number(draft.maxFreezeDays) || 0} onChange={(v) => set({ maxFreezeDays: String(v) })} options={[0, 3, 5, 7, 10, 15, 30]} unit={DAYS} min={0} max={90} zeroLabel="No se puede congelar" />
+                  <p className="text-xs text-muted-foreground">Días que el socio puede pausar su plan.</p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Invitados gratis al mes</Label>
-                  <Input type="number" min={0} value={draft.guestPassesPerMonth} onChange={(e) => set({ guestPassesPerMonth: e.target.value })} />
+                  <OptionSelect value={Number(draft.guestPassesPerMonth) || 0} onChange={(v) => set({ guestPassesPerMonth: String(v) })} options={[0, 1, 2, 3, 4, 5]} unit={{ one: "invitado", many: "invitados" }} min={0} max={10} zeroLabel="Ninguno" />
                   <p className="text-xs text-muted-foreground">Después se cobra el pase de día.</p>
                 </div>
                 {draft.id && (
@@ -274,7 +277,7 @@ export default function GymPlansPage() {
           )}
           <DialogFooter className="border-t px-6 py-4">
             <Button variant="outline" onClick={() => setDraft(null)}>Cancelar</Button>
-            <Button onClick={save} disabled={saving || !draft?.name.trim() || !(Number(draft?.price) >= 0)} className="gap-2">{saving && <IconLoader2 size={16} className="animate-spin" />} Guardar plan</Button>
+            <Button onClick={save} disabled={saving || !draft?.name.trim() || draft?.price === ""} className="gap-2">{saving && <IconLoader2 size={16} className="animate-spin" />} Guardar plan</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
