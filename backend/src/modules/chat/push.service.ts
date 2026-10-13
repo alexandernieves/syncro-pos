@@ -11,12 +11,19 @@ export class PushService {
     private prisma: PrismaService,
     private config: ConfigService,
   ) {
-    webpush.setVapidDetails(
-      this.config.get<string>('VAPID_EMAIL')!,
-      this.config.get<string>('VAPID_PUBLIC_KEY')!,
-      this.config.get<string>('VAPID_PRIVATE_KEY')!,
-    );
+    const email = this.config.get<string>('VAPID_EMAIL');
+    const publicKey = this.config.get<string>('VAPID_PUBLIC_KEY');
+    const privateKey = this.config.get<string>('VAPID_PRIVATE_KEY');
+    // Without the keys the server still starts; browser notifications just stay off
+    if (email && publicKey && privateKey) {
+      webpush.setVapidDetails(email.includes(':') ? email : `mailto:${email}`, publicKey, privateKey);
+      this.enabled = true;
+    } else {
+      this.logger.warn('VAPID_EMAIL, VAPID_PUBLIC_KEY or VAPID_PRIVATE_KEY missing: push notifications are off');
+    }
   }
+
+  private enabled = false;
 
   async subscribe(userId: string, subscription: { endpoint: string; keys: { p256dh: string; auth: string } }) {
     return this.prisma.pushSubscription.upsert({
@@ -36,6 +43,7 @@ export class PushService {
   }
 
   async sendToUser(userId: string, payload: { title: string; body: string; icon?: string; url?: string }) {
+    if (!this.enabled) return [];
     const subscriptions = await this.prisma.pushSubscription.findMany({ where: { userId } });
 
     const results = await Promise.allSettled(

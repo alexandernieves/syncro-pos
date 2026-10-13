@@ -1,6 +1,9 @@
 const getApiUrl = () => {
   if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
+    // "/api" means the same site the panel is served from (the server's nginx proxies it)
+    const configured = process.env.NEXT_PUBLIC_API_URL;
+    if (configured.startsWith('/')) return typeof window === 'undefined' ? `http://localhost${configured}` : `${window.location.origin}${configured}`;
+    return configured;
   }
   if (typeof window === 'undefined') {
     return 'http://localhost:9000';

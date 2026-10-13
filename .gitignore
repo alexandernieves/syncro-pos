@@ -51,3 +51,7 @@ frontend/.next.old/
 backend/uploads/
 storefront/
 backend/backups/
+
+# Server deploy secrets
+/.env
+/backend.env

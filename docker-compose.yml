@@ -1,0 +1,59 @@
+# Ebano Control (Syncro) on the server: database, backend and panel.
+# Only the panel is published, on 127.0.0.1:${EBANO_PORT}; the server's own web server
+# (the one serving the other projects) forwards ebanocontrol.total-net.net to it.
+#
+#   git pull origin ebanocontrol
+#   docker compose build backend frontend && docker compose up -d backend frontend
+name: ebanocontrol
+
+services:
+  db:
+    # pgvector: the schema uses the "vector" extension
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ebanocontrol
+      POSTGRES_USER: ebano
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Falta DB_PASSWORD en .env}
+      TZ: America/Caracas
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./backend/backups:/backups
+    # Only reachable from the server itself (DBeaver through the SSH tunnel)
+    ports:
+      - "127.0.0.1:${DB_PORT:-5442}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ebano -d ebanocontrol"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: ./backend.env
+    environment:
+      DATABASE_URL: postgresql://ebano:${DB_PASSWORD}@db:5432/ebanocontrol
+      PORT: "9000"
+      TZ: America/Caracas
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: /api
+    restart: unless-stopped
+    ports:
+      # 127.0.0.1 when the server's web server runs on the host; 172.17.0.1 when it runs in Docker
+      - "${EBANO_BIND:-127.0.0.1}:${EBANO_PORT:-8095}:80"
+    depends_on:
+      - backend
+
+volumes:
+  db-data:
+  uploads:
