@@ -2408,6 +2408,48 @@ export default function POSPage() {
     return matchesSearch;
   });
 
+  // Keyboard: arrows move through the product grid, Enter adds the selected one to the cart.
+  // From the search box, arrow down enters the grid.
+  const [gridIndex, setGridIndex] = useState(-1);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const gridState = useRef({ products: filteredProducts, index: gridIndex, add: (_p: any) => {} });
+  gridState.current = { products: filteredProducts, index: gridIndex, add: (p: any) => addToCart(p) };
+  useEffect(() => { setGridIndex(-1); }, [searchTerm]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (document.querySelector('[role=dialog][data-state=open], [role=alertdialog][data-state=open], [role=menu][data-state=open]')) return;
+      const grid = gridRef.current;
+      const { products: list, index, add } = gridState.current;
+      if (!grid || !list.length) return;
+      const el = document.activeElement as HTMLElement | null;
+      const inSearch = !!el?.matches('input[placeholder^="Buscar productos"]');
+      if (el && !inSearch && el.matches("input, textarea, select, [contenteditable=true]")) return;
+      const cols = Math.max(1, getComputedStyle(grid).gridTemplateColumns.split(" ").filter(Boolean).length);
+      const move = (to: number) => {
+        e.preventDefault();
+        const next = Math.max(0, Math.min(list.length - 1, to));
+        setGridIndex(next);
+        grid.children[next]?.scrollIntoView({ block: "nearest" });
+      };
+      if (inSearch) {
+        if (e.key === "ArrowDown") { el!.blur(); move(index < 0 ? 0 : index); }
+        return;
+      }
+      if (e.key === "ArrowRight") move(index + 1);
+      else if (e.key === "ArrowLeft") move(index < 0 ? 0 : index - 1);
+      else if (e.key === "ArrowDown") move(index < 0 ? 0 : index + cols);
+      else if (e.key === "ArrowUp") {
+        // From the first row, back to the search box
+        if (index >= 0 && index < cols) { e.preventDefault(); setGridIndex(-1); document.querySelector<HTMLInputElement>('input[placeholder^="Buscar productos"]')?.focus(); }
+        else move(index < 0 ? 0 : index - cols);
+      } else if (e.key === "Enter" && index >= 0 && list[index]) { e.preventDefault(); add(list[index]); }
+      else if (e.key === "Escape" && index >= 0) setGridIndex(-1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   if (!mounted || initialLoading) {
     return (
       <div className="h-screen w-full flex flex-col bg-background">
@@ -2935,14 +2977,16 @@ export default function POSPage() {
                   <p className="text-xl font-black text-center">Sin resultados</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-8">
-                  {filteredProducts.map(p => (
+                <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-8">
+                  {filteredProducts.map((p, i) => (
                     <Card
                       key={p.id}
                       className={cn(
                         "group overflow-hidden rounded-xl border-none bg-card hover:ring-2 hover:ring-primary/40 transition-all cursor-pointer shadow-sm relative",
-                        p.totalStock <= 0 && "opacity-60 grayscale-[0.5]"
+                        p.totalStock <= 0 && "opacity-60 grayscale-[0.5]",
+                        i === gridIndex && "ring-2 ring-primary"
                       )}
+                      onMouseEnter={() => gridIndex >= 0 && setGridIndex(-1)}
                       onClick={() => addToCart(p)}
                     >
                       {/* Badge de Agotado superpuesto */}

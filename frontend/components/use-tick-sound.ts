@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef } from "react"
+import { useCallback, useRef } from "react"
 
 /**
  * The detent click of an iOS picker, synthesised on the fly — a very short
@@ -12,33 +12,41 @@ import { useCallback, useEffect, useRef } from "react"
  * lazily and resumed on the first real gesture; until then, ticks are simply
  * skipped rather than queued up to fire in a burst later.
  */
+// One audio context for the whole app, so a menu that mounts later (switching between
+// Syncro and the gym, or any page change) can tick right away without another gesture.
+let sharedCtx: AudioContext | null = null
+let unlocked = false
+
+function getCtx() {
+  if (!sharedCtx && typeof window !== "undefined") {
+    const Ctor = window.AudioContext || (window as any).webkitAudioContext
+    if (Ctor) sharedCtx = new Ctor()
+  }
+  return sharedCtx
+}
+
+if (typeof window !== "undefined") {
+  const unlock = () => {
+    unlocked = true
+    getCtx()?.resume().catch(() => {})
+  }
+  // Any of these counts as user activation for the audio policy (a key press too,
+  // so moving through the menu with the arrows unlocks the sound on the first press).
+  for (const ev of ["pointerdown", "keydown", "touchstart"]) window.addEventListener(ev, unlock, { capture: true, passive: true })
+}
+
 export function useTickSound({ volume = 0.05 } = {}) {
-  const ctxRef = useRef<AudioContext | null>(null)
-  const ready = useRef(false)
   const lastAt = useRef(0)
 
-  useEffect(() => {
-    const unlock = () => {
-      if (!ctxRef.current) {
-        const Ctor = window.AudioContext || (window as any).webkitAudioContext
-        if (Ctor) ctxRef.current = new Ctor()
-      }
-      ctxRef.current?.resume()
-      ready.current = true
-    }
-    // Any of these counts as user activation for the audio policy.
-    const opts = { once: true, passive: true } as const
-    window.addEventListener("pointerdown", unlock, opts)
-    window.addEventListener("keydown", unlock, opts)
-    return () => {
-      window.removeEventListener("pointerdown", unlock)
-      window.removeEventListener("keydown", unlock)
-    }
-  }, [])
-
   const tick = useCallback(() => {
-    const ctx = ctxRef.current
-    if (!ready.current || !ctx || ctx.state !== "running") return
+    const ctx = getCtx()
+    if (!ctx) return
+    if (ctx.state !== "running") {
+      // Some browsers already allow audio on this site; otherwise it waits for the first gesture
+      if (unlocked) ctx.resume().then(() => tick()).catch(() => {})
+      else ctx.resume().catch(() => {})
+      return
+    }
 
     const now = ctx.currentTime
     // Never stack ticks on top of each other on a fast sweep.

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { ActiveThemeProvider } from "@/components/active-theme";
+import { KeyboardNav } from "@/components/keyboard-nav";
 import { Toaster } from "sonner";
 import { CurrencyProvider } from "@/context/CurrencyContext";
 
@@ -124,6 +125,7 @@ export default function RootLayout({
               <ActiveThemeProvider>
                 {children}
                 <SessionMonitor timeoutMinutes={15} />
+                <KeyboardNav />
                 <Toaster position="top-right" closeButton visibleToasts={4} />
                 <script
                   dangerouslySetInnerHTML={{

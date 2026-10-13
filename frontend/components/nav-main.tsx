@@ -234,6 +234,7 @@ export function NavMain({
                     <>
                       <CollapsibleTrigger asChild>
                         <SidebarMenuButton
+                          data-kbd-nav
                           tooltip={item.title}
                           isActive={pathname === item.url || normalizedPathname === item.url}
                         >
@@ -283,7 +284,7 @@ export function NavMain({
                                       : "text-muted-foreground hover:!text-primary hover:!bg-primary/5"
                                   )}
                                 >
-                                  <Link href={subItem.url} className="flex items-center">
+                                  <Link href={subItem.url} data-kbd-nav data-active={subActive ? "true" : undefined} className="flex items-center">
                                     <IconCornerDownRight 
                                       size={14} 
                                       stroke={2.5}
@@ -313,7 +314,7 @@ export function NavMain({
                           : pathname === item.url || pathname.startsWith(item.url + "/")
                       }
                     >
-                      <Link href={item.url}>
+                      <Link href={item.url} data-kbd-nav>
                         {item.icon && <item.icon />}
                         <span className="syncro-idx">{String(itemIndex + 1).padStart(2, "0")}</span>
                         <span>{item.title}</span>

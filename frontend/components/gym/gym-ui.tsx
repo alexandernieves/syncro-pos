@@ -15,7 +15,8 @@ export function GymPageHeader({ title, description, actions }: { title: string; 
         <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {/* Arrows left/right move through these; Enter runs the selected one, or the last (main) one */}
+      {actions && <div data-kbd-actions className="flex flex-wrap gap-2">{actions}</div>}
     </div>
   );
 }
