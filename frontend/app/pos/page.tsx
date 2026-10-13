@@ -4727,7 +4727,7 @@ export default function POSPage() {
 
       {/* DIALOG: CLOSE SHIFT (ARQUEO DE CAJA) */}
       <Dialog open={isClosingShift} onOpenChange={setIsClosingShift}>
-        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
               <IconCalculator className="text-primary" size={20} /> Arqueo de caja detallado
@@ -4737,13 +4737,13 @@ export default function POSPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-4">
+          <div className="grid gap-6 py-4 md:grid-cols-2 md:items-start">
 
             {/* Cash in the drawer, per currency */}
-            <div className="space-y-3">
+            <div className="min-w-0 space-y-3">
               <div>
                 <h4 className="text-sm font-semibold">Efectivo en la gaveta</h4>
-                <p className="text-xs text-muted-foreground">Cuenta los billetes de cada moneda. Lo digital no va en la gaveta: está abajo.</p>
+                <p className="text-xs text-muted-foreground">Cuenta los billetes de cada moneda. Lo digital va aparte, a la derecha.</p>
               </div>
               {shiftCurrencies.map((c) => {
                 const expected = Number(((activeShift as any)?.expectedCash || {})[c] ?? 0);
@@ -4784,6 +4784,7 @@ export default function POSPage() {
               })}
             </div>
 
+            <div className="min-w-0 space-y-6">
             {/* Digital: not in the drawer */}
             <div className="space-y-3">
               <h4 className="text-sm font-semibold">Digital (no va en la gaveta)</h4>
@@ -4825,6 +4826,7 @@ export default function POSPage() {
                 <span className="text-base font-bold tabular-nums">{formatMoney(countedUsd, "USD")}</span>
               </div>
               <p className="text-[11px] text-muted-foreground">Cada moneda se cuadra por separado; el total en dólares es a la tasa de hoy.</p>
+            </div>
             </div>
 
           </div>
