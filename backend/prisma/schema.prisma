@@ -2046,12 +2046,16 @@ model FinanceMovement {
   /// IN or OUT
   type              String
   category          String
+  /// Written by the person when the category is CUSTOM
+  categoryLabel     String?
   /// In dollars; `currency` and `amountCurrency` say what was handed over
   amount            Float
   currency          String    @default("USD")
   amountCurrency    Float
   /// CASH_DRAWER (out of / into the open cash shift), CASH_OTHER, PAGO_MOVIL, TRANSFER, CARD, ZELLE, BINANCE, OTHER
   method            String
+  /// Written by the person when the method is CUSTOM
+  methodLabel       String?
   description       String?
   receiptUrl        String?
   occurredAt        DateTime  @default(now())

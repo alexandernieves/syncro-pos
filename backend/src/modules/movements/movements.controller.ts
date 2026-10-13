@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, Post, Put, Query, Request, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query, Request, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { UploadsService } from '../uploads/uploads.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { IN_CATEGORIES, METHODS, MovementsService, OUT_CATEGORIES, isManager } from './movements.service';
 
@@ -6,7 +8,20 @@ import { IN_CATEGORIES, METHODS, MovementsService, OUT_CATEGORIES, isManager } f
 @UseGuards(JwtAuthGuard)
 @Controller('movements')
 export class MovementsController {
-  constructor(private readonly movements: MovementsService) {}
+  constructor(private readonly movements: MovementsService, private readonly uploads: UploadsService) {}
+
+  /** Photo of the receipt, straight to S3 (receipts/<business>/<month>/). */
+  @Post('receipt')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 12 * 1024 * 1024 } }))
+  async receipt(@UploadedFile() file: Express.Multer.File, @Request() req: any) {
+    if (!file) throw new BadRequestException('Falta la foto');
+    if (!/^image\/|^application\/pdf$/.test(file.mimetype)) throw new BadRequestException('Sube una foto o un PDF');
+    try {
+      return { url: await this.uploads.uploadReceipt(file.buffer, file.mimetype, req.user.businessId) };
+    } catch (e) {
+      throw new BadRequestException(`No se pudo guardar la foto en el almacenamiento: ${(e as Error).message}`);
+    }
+  }
 
   /** What the widget needs: categories, methods, the rules and whether this user is a manager. */
   @Get('meta')

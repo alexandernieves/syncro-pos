@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { IconArrowDownRight, IconArrowUpRight, IconArrowsExchange, IconChecks, IconClockHour4, IconLoader2, IconLock, IconPhoto } from "@tabler/icons-react";
+import { IconArrowDownRight, IconArrowUpRight, IconArrowsExchange, IconChecks, IconClockHour4, IconLoader2, IconLock } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { API_URL } from "@/lib/constants";
@@ -16,7 +16,8 @@ import { FilterChips, GymPage, GymPageHeader } from "@/components/gym/gym-ui";
 import { ConfirmDialog } from "@/components/gym/confirm-dialog";
 import { DateField } from "@/components/forms/date-field";
 import { MINUTES, OptionSelect } from "@/components/forms/option-select";
-import { METHOD_LABELS, MOVEMENT_LABELS, type Movement } from "@/components/finance-widget";
+import { MOVEMENT_LABELS, type Movement, categoryOf, methodOf } from "@/components/finance-widget";
+import { ReceiptPreview, ReceiptThumb } from "@/components/receipt-preview";
 
 type Meta = { outCategories: string[]; inCategories: string[]; rules: { staffLimitUsd: number; receiptOverUsd: number; undoMinutes: number; protectedCategories: string[] }; isManager: boolean; hasSupervisorPin: boolean };
 type Filter = "pending" | "all" | "voided";
@@ -89,6 +90,7 @@ export default function MovementsPage() {
   const [day, setDay] = useState("");
   const [voiding, setVoiding] = useState<Movement | null>(null);
   const [busy, setBusy] = useState(false);
+  const [viewing, setViewing] = useState<string | null>(null);
 
   const loadMeta = useCallback(() => api<Meta>("/movements/meta").then(setMeta).catch(() => {}), []);
   const load = useCallback(() => {
@@ -124,14 +126,17 @@ export default function MovementsPage() {
     {
       id: "what",
       header: "Movimiento",
-      accessorFn: (r) => `${MOVEMENT_LABELS[r.category] ?? r.category} ${r.description ?? ""}`,
+      accessorFn: (r) => `${categoryOf(r)} ${r.description ?? ""}`,
       cell: ({ row }) => {
         const r = row.original;
         return (
-          <div className="flex items-center gap-2.5">
-            <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-full", r.type === "OUT" ? "bg-rose-500/10 text-rose-600" : "bg-emerald-500/10 text-emerald-700")}>{r.type === "OUT" ? <IconArrowUpRight size={16} /> : <IconArrowDownRight size={16} />}</span>
+          <div className="flex items-center gap-3">
+            <ReceiptThumb url={r.receiptUrl} onOpen={setViewing} size={44} />
             <span className="min-w-0">
-              <span className={cn("block truncate text-sm font-medium", r.status === "VOIDED" && "line-through opacity-60")}>{MOVEMENT_LABELS[r.category] ?? r.category}</span>
+              <span className={cn("flex items-center gap-1.5 truncate text-sm font-medium", r.status === "VOIDED" && "line-through opacity-60")}>
+                <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full", r.type === "OUT" ? "bg-rose-500/10 text-rose-600" : "bg-emerald-500/10 text-emerald-700")}>{r.type === "OUT" ? <IconArrowUpRight size={12} /> : <IconArrowDownRight size={12} />}</span>
+                {categoryOf(r)}
+              </span>
               {r.description && <span className="block truncate text-xs text-muted-foreground">{r.description}</span>}
             </span>
           </div>
@@ -152,18 +157,12 @@ export default function MovementsPage() {
         );
       },
     },
-    { id: "method", header: "Con qué", accessorFn: (r) => METHOD_LABELS[r.method] ?? r.method, cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{getValue<string>()}</span> },
+    { id: "method", header: "Con qué", accessorFn: (r) => methodOf(r), cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{getValue<string>()}</span> },
     {
       id: "who",
       header: "Registró",
       accessorFn: (r) => r.userName ?? "",
       cell: ({ row }) => <span className="text-sm">{row.original.userName ?? "—"}{row.original.authorizedBy && <span className="block text-xs text-amber-700">Con PIN de supervisor</span>}</span>,
-    },
-    {
-      id: "receipt",
-      header: "Recibo",
-      enableSorting: false,
-      cell: ({ row }) => (row.original.receiptUrl ? <a href={row.original.receiptUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-primary hover:underline" onClick={(e) => e.stopPropagation()}><IconPhoto size={15} /> Ver</a> : <span className="text-sm text-muted-foreground">—</span>),
     },
     {
       id: "state",
@@ -221,12 +220,13 @@ export default function MovementsPage() {
 
       {meta?.isManager && <RulesCard meta={meta} onSaved={loadMeta} />}
 
+      <ReceiptPreview url={viewing} onClose={() => setViewing(null)} />
       <ConfirmDialog
         open={!!voiding}
         danger
         title="¿Anular este movimiento?"
         description="Deja de contar en contabilidad y, si fue efectivo de la gaveta, en esa caja. Queda en el historial, tachado, con tu nombre y el motivo."
-        details={voiding ? `${voiding.type === "OUT" ? "Egreso" : "Ingreso"} · ${MOVEMENT_LABELS[voiding.category] ?? voiding.category} · ${formatMoney(voiding.amountCurrency, voiding.currency)} · ${voiding.userName ?? ""}` : null}
+        details={voiding ? `${voiding.type === "OUT" ? "Egreso" : "Ingreso"} · ${categoryOf(voiding)} · ${formatMoney(voiding.amountCurrency, voiding.currency)} · ${voiding.userName ?? ""}` : null}
         confirmLabel="Anular"
         reason={{ label: "Motivo", suggestions: ["Monto equivocado", "Categoría equivocada", "Se registró dos veces", "No ocurrió"], required: true }}
         onConfirm={async (reason) => {

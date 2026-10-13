@@ -17,6 +17,8 @@ type User = { id: string; name?: string; role?: string; businessId: string };
 type MovementInput = {
   type?: string;
   category?: string;
+  categoryLabel?: string;
+  methodLabel?: string;
   amount?: number | string;
   currency?: string;
   method?: string;
@@ -85,10 +87,13 @@ export class MovementsService {
   async create(user: User, data: MovementInput) {
     const type = String(data.type || '').toUpperCase();
     if (!['IN', 'OUT'].includes(type)) throw new BadRequestException('Elige si es un ingreso o un egreso');
+    // A custom category or method is written by the person (CUSTOM + its label)
     const category = String(data.category || '');
-    if (!(type === 'OUT' ? OUT_CATEGORIES : IN_CATEGORIES).includes(category)) throw new BadRequestException('Elige una categoría');
+    const categoryLabel = category === 'CUSTOM' ? String(data.categoryLabel ?? '').trim().replace(/\s+/g, ' ').slice(0, 60) : null;
+    if (category === 'CUSTOM' ? !categoryLabel || categoryLabel.length < 2 : !(type === 'OUT' ? OUT_CATEGORIES : IN_CATEGORIES).includes(category)) throw new BadRequestException(category === 'CUSTOM' ? 'Escribe la categoría' : 'Elige una categoría');
     const method = String(data.method || '');
-    if (!METHODS.includes(method)) throw new BadRequestException('Elige con qué se pagó');
+    const methodLabel = method === 'CUSTOM' ? String(data.methodLabel ?? '').trim().replace(/\s+/g, ' ').slice(0, 60) : null;
+    if (method === 'CUSTOM' ? !methodLabel || methodLabel.length < 2 : !METHODS.includes(method)) throw new BadRequestException(method === 'CUSTOM' ? (type === 'OUT' ? 'Escribe con qué se pagó' : 'Escribe cómo entró') : type === 'OUT' ? 'Elige con qué se pagó' : 'Elige cómo entró');
     const amountCurrency = round2(Number(String(data.amount ?? '').replace(',', '.')));
     if (!(amountCurrency > 0) || amountCurrency > 100_000_000) throw new BadRequestException('Escribe un monto válido');
     const description = String(data.description ?? '').trim().slice(0, 300) || null;
@@ -124,7 +129,7 @@ export class MovementsService {
     return this.prisma.$transaction(async (tx) => {
       const entry = await tx.accountingEntry.create({
         data: {
-          description: `${type === 'OUT' ? 'Egreso' : 'Ingreso'}: ${label(category)}${description ? ` · ${description}` : ''}`,
+          description: `${type === 'OUT' ? 'Egreso' : 'Ingreso'}: ${categoryLabel ?? label(category)}${description ? ` · ${description}` : ''}`,
           type: type === 'OUT' ? 'EXPENSE' : 'INCOME',
           amount,
           category: `MOV_${category}`,
@@ -141,10 +146,12 @@ export class MovementsService {
           userName: user.name || null,
           type,
           category,
+          categoryLabel,
           amount,
           currency,
           amountCurrency,
           method,
+          methodLabel,
           description,
           receiptUrl: data.receiptUrl || null,
           occurredAt,

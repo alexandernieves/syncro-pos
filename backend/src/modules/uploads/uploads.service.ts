@@ -124,6 +124,35 @@ export class UploadsService {
     }
   }
 
+  /**
+   * Photo of an expense or income receipt. Always in S3 (no local fallback, so it never gets
+   * lost on the server's disk), under receipts/<business>/<year-month>/, big enough to read.
+   */
+  async uploadReceipt(buffer: Buffer, mimetype: string, businessId: string): Promise<string> {
+    const mime = (mimetype || '').split(';')[0].trim().toLowerCase();
+    let body = buffer;
+    let type = mime;
+    let ext = UploadsService.EXTENSIONS[mime] || 'bin';
+    if (mime.startsWith('image/') && mime !== 'image/gif') {
+      try {
+        const sharp = require('sharp');
+        body = await sharp(buffer).rotate().resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
+        type = 'image/webp';
+        ext = 'webp';
+      } catch (err: any) {
+        console.error('[UploadsService] Could not optimize the receipt, keeping the original:', err.message);
+      }
+    }
+    const month = new Date().toISOString().slice(0, 7);
+    const key = `receipts/${businessId}/${month}/${uuidv4()}.${ext}`;
+    if (!this.bucketName) throw new Error('El almacenamiento de archivos (AWS S3) no está configurado');
+    await this.s3Client.send(new PutObjectCommand({ Bucket: this.bucketName, Key: key, Body: body, ContentType: type }));
+    const cdnUrl = this.configService.get<string>('CDN_URL');
+    if (cdnUrl) return `${cdnUrl.replace(/\/$/, '')}/${key}`;
+    const region = this.configService.get<string>('AWS_REGION') || 'us-east-1';
+    return `https://${this.bucketName}.s3.${region}.amazonaws.com/${key}`;
+  }
+
   private static readonly EXTENSIONS: Record<string, string> = {
     'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
     'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/webm': 'webm',

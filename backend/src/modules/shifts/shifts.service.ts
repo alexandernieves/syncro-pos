@@ -96,7 +96,7 @@ export class ShiftsService {
     const movements = await this.prisma.financeMovement.findMany({
       where: { shiftId, status: 'ACTIVE', method: 'CASH_DRAWER' },
       orderBy: { occurredAt: 'asc' },
-      select: { id: true, type: true, category: true, amount: true, currency: true, amountCurrency: true, description: true, userName: true, occurredAt: true },
+      select: { id: true, type: true, category: true, categoryLabel: true, amount: true, currency: true, amountCurrency: true, description: true, userName: true, occurredAt: true },
     });
     for (const m of movements) {
       const sign = m.type === 'IN' ? 1 : -1;
