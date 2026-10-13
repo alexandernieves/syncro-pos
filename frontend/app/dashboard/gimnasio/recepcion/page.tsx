@@ -186,6 +186,19 @@ export default function GymReceptionPage() {
   const [feedTab, setFeedTab] = useState<"entries" | "visits">("entries");
   const [onDuty, setOnDuty] = useState<OnDuty[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Enter anywhere on the page (outside fields and windows) opens "Registrar visita"
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Enter" || e.defaultPrevented) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && el !== document.body && el.closest("input, textarea, select, button, a, [role=dialog], [contenteditable=true]")) return;
+      e.preventDefault();
+      setVisitOpen(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const requestRef = useRef(0);
 
   const loadFeed = useCallback(() => {
@@ -247,7 +260,7 @@ export default function GymReceptionPage() {
       <GymPageHeader
         title="Recepción"
         description="Busca al socio por nombre, cédula o número para registrar su entrada."
-        actions={<Button variant="outline" className="gap-2" onClick={() => setVisitOpen(true)}><IconTicket size={16} /> Registrar visita</Button>}
+        actions={<Button variant="outline" className="gap-2" onClick={() => setVisitOpen(true)}><IconTicket size={16} /> Registrar visita <kbd className="ml-1 rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Enter</kbd></Button>}
       />
       <StatGrid>
         <StatCard label="Entradas hoy" value={feed?.granted ?? "—"} tone="good" icon={<IconDoorEnter size={20} />} title="Accesos permitidos" hint="Se actualiza cada 15 segundos" />
@@ -271,6 +284,8 @@ export default function GymReceptionPage() {
                 if (e.key === "ArrowDown") { e.preventDefault(); setActive((i) => Math.min(i + 1, matches.length - 1)); }
                 if (e.key === "ArrowUp") { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); }
                 if (e.key === "Enter" && matches[active]) { e.preventDefault(); checkIn(matches[active]); }
+                // Empty search: Enter opens "Registrar visita"
+                else if (e.key === "Enter" && !q.trim()) { e.preventDefault(); setVisitOpen(true); }
                 if (e.key === "Escape") { setQ(""); setMatches([]); }
               }}
               placeholder="Nombre, cédula o n.º de socio"
@@ -386,7 +401,7 @@ export default function GymReceptionPage() {
       </Card>
     </div>
       {m && <SignDocumentDialog memberId={m.id} templateId={signing} onClose={() => setSigning(null)} onSigned={() => { setResult((r) => (r ? { ...r, pendingDocuments: r.pendingDocuments?.filter((d) => d.id !== signing), warnings: r.warnings.filter((w) => !w.startsWith("Falta firmar")) } : r)); }} />}
-      <VisitDialog open={visitOpen} onClose={() => setVisitOpen(false)} onSaved={(v) => { loadFeed(); setFeedTab("visits"); if (v.price > 0) setPassReceipt(v); }} dayPassPrice={dayPassPrice} />
+      <VisitDialog open={visitOpen} onClose={() => { setVisitOpen(false); setTimeout(() => inputRef.current?.focus(), 50); }} onSaved={(v) => { loadFeed(); setFeedTab("visits"); if (v.price > 0) setPassReceipt(v); }} dayPassPrice={dayPassPrice} />
       {passReceipt && (() => {
         const { data, design, business } = visitReceiptParts(passReceipt.visit, passReceipt.price, passReceipt.method, bizSettings, passReceipt.payment);
         return <ReceiptPrinter receipt={data} design={design} business={business} doneLabel="Listo" onDone={() => setPassReceipt(null)} />;

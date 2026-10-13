@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { gymBranch, inBranch, memberInBranch } from './gym-branch';
-import { Currency, branchCurrencies, fromUsd, isCurrency, ratesFrom, round2, toUsd } from '../../common/currency';
+import { Currency, branchCurrencies, cashChange, cashDue, fromUsd, isCurrency, ratesFrom, round2, toUsd } from '../../common/currency';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { GymRemindersService } from './gym-reminders.service';
@@ -529,23 +529,25 @@ export class GymService {
     let currency: Currency | null = null;
     let paidUsd = payment.amount;
     let paidInCurrency: number | null = null;
+    let dueInCurrency: number | null = null;
     let change: { changeCurrency: Currency; changeAmount: number; changeUsd: number } | null = null;
     if (method === 'CASH') {
       currency = isCurrency(payment.currency) ? payment.currency : 'USD';
       if (!currencies.includes(currency)) throw new BadRequestException(`Esta sucursal no recibe ${currency}`);
       if (!(rates[currency] > 0)) throw new BadRequestException('Falta la tasa del peso colombiano');
-      const due = fromUsd(payment.amount, currency, rates);
-      const received = Number(payment.received);
-      paidInCurrency = due;
-      if (Number.isFinite(received) && received > 0) {
-        if (received < due - 0.004) throw new BadRequestException(`Faltan ${round2(due - received)} ${currency} para completar el pago`);
-        paidInCurrency = round2(received);
-        paidUsd = round2(toUsd(received, currency, rates));
-        const changeUsd = round2(paidUsd - payment.amount);
-        if (changeUsd >= 0.01) {
-          const changeCurrency: Currency = isCurrency(payment.changeCurrency) && currencies.includes(payment.changeCurrency) ? payment.changeCurrency : currency;
-          change = { changeCurrency, changeUsd, changeAmount: fromUsd(changeUsd, changeCurrency, rates) };
-        } else paidUsd = payment.amount;
+      // Pesos in cash are asked rounded up to the next 100; the change in pesos goes rounded down
+      const due = cashDue(fromUsd(payment.amount, currency, rates), currency);
+      dueInCurrency = due;
+      const typed = Number(payment.received);
+      const received = Number.isFinite(typed) && typed > 0 ? round2(typed) : due;
+      if (received < due - 0.004) throw new BadRequestException(`Faltan ${round2(due - received)} ${currency} para completar el pago`);
+      paidInCurrency = received;
+      paidUsd = round2(toUsd(received, currency, rates));
+      const leftoverUsd = toUsd(received - due, currency, rates);
+      if (leftoverUsd >= 0.005) {
+        const changeCurrency: Currency = isCurrency(payment.changeCurrency) && currencies.includes(payment.changeCurrency) && rates[payment.changeCurrency] > 0 ? payment.changeCurrency : currency;
+        const changeAmount = cashChange(leftoverUsd * rates[changeCurrency], changeCurrency);
+        if (changeAmount > 0) change = { changeCurrency, changeAmount, changeUsd: round2(toUsd(changeAmount, changeCurrency, rates)) };
       }
     }
 
@@ -592,7 +594,7 @@ export class GymService {
         method,
         reference: payment.reference?.trim() || null,
         exchangeRate: payment.exchangeRate ? Number(payment.exchangeRate) : null,
-        ...(currency && { currency, amountCurrency: fromUsd(payment.amount, currency, rates) }),
+        ...(currency && { currency, amountCurrency: dueInCurrency }),
         createdById: userId || null,
         branchId,
         shiftId: shift?.id ?? null,

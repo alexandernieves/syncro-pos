@@ -29,6 +29,11 @@ export const round2 = (n: number) => Math.round(n * 100) / 100;
 export const toUsd = (amount: number, cur: Currency, r: Rates) => (r[cur] > 0 ? amount / r[cur] : 0);
 export const fromUsd = (usd: number, cur: Currency, r: Rates) => round2(usd * r[cur]);
 
+/** Cash in pesos goes in round amounts: up to the next 100 when paying, down when giving change. */
+export const COP_CASH_STEP = 100;
+export const cashDue = (amount: number, cur: Currency) => (cur === 'COP' ? Math.ceil(Math.round(amount) / COP_CASH_STEP) * COP_CASH_STEP : amount);
+export const cashChange = (amount: number, cur: Currency) => (cur === 'COP' ? Math.floor(amount / COP_CASH_STEP) * COP_CASH_STEP : round2(amount));
+
 export type CashByCurrency = Partial<Record<Currency, number>>;
 
 /** Only known currencies with finite, non-negative amounts. */

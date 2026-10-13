@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import { PAYMENT_METHODS } from "@/lib/gym";
 import { useCurrency } from "@/context/CurrencyContext";
-import { type Currency, CURRENCY_META, formatMoney, fromUsd, toUsd } from "@/lib/currency";
+import { type Currency, CURRENCY_META, cashChange, cashDue, formatMoney, fromUsd, toUsd } from "@/lib/currency";
 import { Input } from "@/components/ui/input";
 
 export type PaymentValue = { method: string; reference: string; currency: Currency; received: string; changeCurrency: Currency | null };
@@ -32,7 +32,7 @@ export function paymentReady(p: PaymentValue, amountUsd: number, rates: Record<C
     if (!(rates[p.currency] > 0)) return false;
     if (!p.received.trim()) return true;
     const received = Number(p.received.replace(",", "."));
-    return /^\d+([.,]\d{1,2})?$/.test(p.received.trim()) && received + 0.004 >= fromUsd(amountUsd, p.currency, rates);
+    return /^\d+([.,]\d{1,2})?$/.test(p.received.trim()) && received + 0.004 >= cashDue(fromUsd(amountUsd, p.currency, rates), p.currency);
   }
   return true;
 }
@@ -44,12 +44,13 @@ export function paymentReady(p: PaymentValue, amountUsd: number, rates: Record<C
 export function PaymentFields({ value, onChange, amountUsd, allowLater, compact }: { value: PaymentValue; onChange: (v: PaymentValue) => void; amountUsd: number; allowLater?: boolean; compact?: boolean }) {
   const { currencies, cashRates } = useCurrency();
   const set = (patch: Partial<PaymentValue>) => onChange({ ...value, ...patch });
-  const due = fromUsd(amountUsd, value.currency, cashRates);
+  // Pesos in cash: rounded up to the next 100 (the exact amount is hard to hand over)
+  const due = cashDue(fromUsd(amountUsd, value.currency, cashRates), value.currency);
   const received = Number(value.received.replace(",", "."));
   const typed = value.received.trim() !== "";
   const formatOk = /^\d+([.,]\d{1,2})?$/.test(value.received.trim());
   const short = typed && formatOk && received + 0.004 < due;
-  const changeUsd = typed && formatOk && !short ? Math.max(0, toUsd(received, value.currency, cashRates) - amountUsd) : 0;
+  const changeUsd = typed && formatOk && !short ? Math.max(0, toUsd(received - due, value.currency, cashRates)) : 0;
   const changeCur = value.changeCurrency ?? value.currency;
 
   return (
@@ -74,7 +75,7 @@ export function PaymentFields({ value, onChange, amountUsd, allowLater, compact 
         <div className="space-y-3 rounded-xl border p-3">
           <div className="space-y-1.5">
             <p className="text-xs font-medium">¿En qué moneda paga?</p>
-            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            <div className={cn("grid grid-cols-2 gap-1.5", !compact && "sm:grid-cols-4")}>
               {currencies.map((c) => {
                 const missing = !(cashRates[c] > 0);
                 return (
@@ -89,7 +90,8 @@ export function PaymentFields({ value, onChange, amountUsd, allowLater, compact 
                     )}
                   >
                     <span className="block text-[11px] text-muted-foreground">{CURRENCY_META[c].label}</span>
-                    <span className="block text-sm font-semibold tabular-nums">{missing ? "Sin tasa" : formatMoney(fromUsd(amountUsd, c, cashRates), c)}</span>
+                    <span className="block text-sm font-semibold tabular-nums">{missing ? "Sin tasa" : `${c === "COP" ? "~ " : ""}${formatMoney(cashDue(fromUsd(amountUsd, c, cashRates), c), c)}`}</span>
+                    {c === "COP" && !missing && <span className="block text-[10px] text-muted-foreground tabular-nums">Exacto {formatMoney(fromUsd(amountUsd, c, cashRates), c)}</span>}
                   </button>
                 );
               })}
@@ -102,6 +104,7 @@ export function PaymentFields({ value, onChange, amountUsd, allowLater, compact 
             <div className={cn("flex h-9 items-center overflow-hidden rounded-md border bg-background focus-within:border-ring", (short || (typed && !formatOk)) && "border-destructive")}>
               <span className="pl-3 text-xs text-muted-foreground">{CURRENCY_META[value.currency].symbol}</span>
               <input
+                data-received
                 inputMode="decimal"
                 value={value.received}
                 onChange={(e) => set({ received: e.target.value.replace(/[^\d.,]/g, "").slice(0, 12) })}
@@ -113,11 +116,11 @@ export function PaymentFields({ value, onChange, amountUsd, allowLater, compact 
             {short && <p className="text-[11px] text-destructive">Faltan {formatMoney(due - received, value.currency)}</p>}
           </div>
 
-          {changeUsd >= 0.01 && (
+          {changeUsd >= 0.005 && currencies.some((c) => cashRates[c] > 0 && cashChange(changeUsd * cashRates[c], c) > 0) && (
             <div className="space-y-1.5">
               <p className="text-xs font-medium">¿En qué moneda le das el vuelto?</p>
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-                {currencies.filter((c) => cashRates[c] > 0).map((c) => (
+              <div className={cn("grid grid-cols-2 gap-1.5", !compact && "sm:grid-cols-4")}>
+                {currencies.filter((c) => cashRates[c] > 0 && cashChange(changeUsd * cashRates[c], c) > 0).map((c) => (
                   <button
                     key={c}
                     type="button"
@@ -125,7 +128,7 @@ export function PaymentFields({ value, onChange, amountUsd, allowLater, compact 
                     className={cn("rounded-lg border px-2.5 py-2 text-left transition", changeCur === c ? "border-emerald-600 bg-emerald-500/10" : "hover:bg-muted")}
                   >
                     <span className="block text-[11px] text-muted-foreground">{CURRENCY_META[c].label}</span>
-                    <span className="block text-sm font-semibold tabular-nums">{formatMoney(fromUsd(changeUsd, c, cashRates), c)}</span>
+                    <span className="block text-sm font-semibold tabular-nums">{formatMoney(cashChange(changeUsd * cashRates[c], c), c)}</span>
                   </button>
                 ))}
               </div>

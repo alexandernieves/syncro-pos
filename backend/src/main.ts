@@ -1,3 +1,6 @@
+// Dates are worked out in Venezuelan time (memberships, "today", reports) even on a server set to UTC
+process.env.TZ = process.env.TZ || 'America/Caracas';
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { join } from 'path';

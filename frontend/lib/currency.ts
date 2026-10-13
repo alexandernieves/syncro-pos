@@ -37,5 +37,13 @@ export function formatMoney(amount: number, cur: Currency) {
   return cur === "USD" || cur === "EUR" ? `${m.symbol}${n}` : `${m.symbol} ${n}`;
 }
 
+/**
+ * Cash in Colombian pesos is handed over in round amounts: what the customer pays is rounded
+ * up to the next 100 pesos and the change is rounded down. Transfers keep the exact amount.
+ */
+export const COP_CASH_STEP = 100;
+export const cashDue = (amount: number, cur: Currency) => (cur === "COP" ? Math.ceil(Math.round(amount) / COP_CASH_STEP) * COP_CASH_STEP : amount);
+export const cashChange = (amount: number, cur: Currency) => (cur === "COP" ? Math.floor(amount / COP_CASH_STEP) * COP_CASH_STEP : Math.round(amount * 100) / 100);
+
 export type CashByCurrency = Partial<Record<Currency, number>>;
 export const cashToUsd = (cash: CashByCurrency, r: Rates) => round2(Object.entries(cash).reduce((t, [c, v]) => t + toUsd(Number(v) || 0, c as Currency, r), 0));

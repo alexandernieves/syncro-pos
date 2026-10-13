@@ -70,7 +70,7 @@ import { cn } from "@/lib/utils";
 import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
 import { useCurrency } from "@/context/CurrencyContext";
-import { type Currency as CashCurrency, CURRENCY_META, formatMoney, fromUsd, toUsd } from "@/lib/currency";
+import { type Currency as CashCurrency, CURRENCY_META, cashChange, cashDue, formatMoney, fromUsd, toUsd } from "@/lib/currency";
 
 const API = API_URL;
 
@@ -1371,8 +1371,10 @@ export default function POSPage() {
     const allMethods = ["CASH", "CARD", "TRANSFER", "PAGO_MOVIL", "BINANCE", "ZINLI", "PAYPAL", "WALLET", "CREDIT"];
     const addedMethods = addedPayments.map(p => p.method);
 
-    // Automatically set the tempAmount to remaining to pay
-    setTempAmount(remainingToPay.toFixed(2));
+    // Automatically set the tempAmount to remaining to pay, in the currency picked
+    // (pesos in cash rounded up to the next 100)
+    const inCurrency = fromUsd(remainingToPay, tempCurrency, cashRates);
+    setTempAmount(tempCurrency === "USD" ? remainingToPay.toFixed(2) : String(tempPaymentMethod === "CASH" ? cashDue(inCurrency, tempCurrency) : inCurrency));
 
     // Switch to first available method if current is already added
     if (addedMethods.includes(tempPaymentMethod)) {
@@ -1387,7 +1389,7 @@ export default function POSPage() {
         setTempPaymentMethod(available as any);
       }
     }
-  }, [addedPayments, remainingToPay, isPaymentModalOpen, settings]);
+  }, [addedPayments, remainingToPay, isPaymentModalOpen, settings, tempCurrency]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let html5QrCode: any = null;
@@ -2000,7 +2002,7 @@ export default function POSPage() {
     ...(() => {
       // Same default as the server: the currency of the last cash payment
       const cur = (changeCurrency ?? ([...payments].reverse().find((p: any) => p.method === "CASH") as any)?.currency ?? "USD") as CashCurrency;
-      return { changeCurrency: cur, changeAmount: fromUsd(changeDue, cur, cashRates) };
+      return { changeCurrency: cur, changeAmount: cashChange(changeDue * cashRates[cur], cur) };
     })(),
     pending,
   });
@@ -3921,6 +3923,11 @@ export default function POSPage() {
                           <span className="text-4xl font-bold text-amber-500/70 tabular-nums tracking-tighter leading-none">
                             Bs {(remainingToPay * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
+                          {branchCurrencyList.includes("COP") && cashRates.COP > 0 && (
+                            <span className="text-2xl font-bold text-amber-500/60 tabular-nums tracking-tighter leading-none">
+                              ~ {formatMoney(cashDue(fromUsd(remainingToPay, "COP", cashRates), "COP"), "COP")} <span className="text-xs font-semibold">en efectivo</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     ) : changeDue > 0.001 ? (
@@ -3938,13 +3945,13 @@ export default function POSPage() {
                           <div className="space-y-2 rounded-lg border p-4">
                             <span className="text-xs font-semibold text-foreground/80">¿En qué moneda das el vuelto?</span>
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                              {branchCurrencyList.filter((c) => cashRates[c] > 0).map((c) => {
+                              {branchCurrencyList.filter((c) => cashRates[c] > 0 && cashChange(changeDue * cashRates[c], c) > 0).map((c) => {
                                 const lastCash = [...addedPayments].reverse().find((x: any) => x.method === "CASH") as any;
                                 const selected = (changeCurrency ?? lastCash?.currency ?? "USD") === c;
                                 return (
                                   <button key={c} type="button" onClick={() => setChangeCurrency(c)} className={cn("rounded-lg border px-3 py-2 text-left transition", selected ? "border-blue-600 bg-blue-500/10" : "hover:bg-muted")}>
                                     <span className="block text-[11px] text-muted-foreground">{CURRENCY_META[c].label}</span>
-                                    <span className="block text-sm font-bold tabular-nums">{formatMoney(fromUsd(changeDue, c, cashRates), c)}</span>
+                                    <span className="block text-sm font-bold tabular-nums">{formatMoney(cashChange(changeDue * cashRates[c], c), c)}</span>
                                   </button>
                                 );
                               })}

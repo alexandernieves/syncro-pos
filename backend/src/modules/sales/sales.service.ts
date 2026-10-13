@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
-import { Currency, fromUsd, isCurrency, ratesFrom, round2 } from '../../common/currency';
+import { Currency, cashChange, fromUsd, isCurrency, ratesFrom, round2, toUsd } from '../../common/currency';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentMethod, MovementType } from '@prisma/client';
 import { HistoryService } from '../history/history.service';
@@ -206,7 +206,9 @@ export class SalesService {
       const lastCash = [...payments].reverse().find((p: any) => p.method === 'CASH');
       const changeCurrency: Currency = isCurrency(data.changeCurrency) ? data.changeCurrency : isCurrency(lastCash?.currency) ? lastCash.currency : 'USD';
       if (changeCurrency === 'COP' && !(rates.COP > 0)) throw new BadRequestException('Falta la tasa del peso colombiano');
-      const change = changeUsd >= 0.01 ? { changeCurrency, changeUsd, changeAmount: fromUsd(changeUsd, changeCurrency, rates) } : {};
+      // Change in pesos goes rounded down to the 100; leftovers of rounding a peso payment aren't change
+      const changeAmount = changeUsd >= 0.01 ? cashChange(changeUsd * rates[changeCurrency], changeCurrency) : 0;
+      const change = changeAmount > 0 ? { changeCurrency, changeAmount, changeUsd: round2(toUsd(changeAmount, changeCurrency, rates)) } : {};
 
       // 5. Handle Payments, Wallet and Credit
       for (const p of payments) {

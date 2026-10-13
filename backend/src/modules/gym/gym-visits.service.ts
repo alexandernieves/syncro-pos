@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { gymBranch, inBranch, memberInBranch } from './gym-branch';
 import { PrismaService } from '../prisma/prisma.service';
-import { GymService } from './gym.service';
+import { GymService, zonedMidnight } from './gym.service';
 import { GymCrmService } from './gym-crm.service';
 import { GymRemindersService } from './gym-reminders.service';
 
@@ -24,9 +24,7 @@ type VisitInput = {
 /** Start of the current month in the gym's time zone, as an instant. */
 function monthStart(timeZone: string) {
   const [y, m] = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit' }).format(new Date()).split('-').map(Number);
-  const guess = new Date(Date.UTC(y, m - 1, 1));
-  const local = new Date(guess.toLocaleString('en-US', { timeZone }));
-  return new Date(guess.getTime() - (local.getTime() - guess.getTime()));
+  return zonedMidnight(y, m, 1, timeZone);
 }
 
 /** People who come in without a membership: members' guests, day passes, visitors. */
@@ -56,9 +54,8 @@ export class GymVisitsService {
     const { timeZone } = await this.settings.getSettings(businessId);
     const local = day || new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date());
     const [y, m, d] = local.split('-').map(Number);
-    const guess = new Date(Date.UTC(y, m - 1, d));
-    const offset = new Date(guess.toLocaleString('en-US', { timeZone })).getTime() - guess.getTime();
-    const from = new Date(guess.getTime() - offset);
+    // Midnight in the gym's time zone, whatever the server's own zone is
+    const from = zonedMidnight(y, m, d, timeZone);
     const to = new Date(from.getTime() + DAY);
     const items = await this.prisma.gymVisit.findMany({
       where: { businessId, ...inBranch(), checkedInAt: { gte: from, lt: to } },
