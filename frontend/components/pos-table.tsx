@@ -119,6 +119,7 @@ export function PosTable<TData>({
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <IconSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
+            data-kbd-search
             placeholder={searchPlaceholder}
             value={globalFilter}
             onChange={e => setGlobalFilter(e.target.value)}
@@ -197,6 +198,7 @@ export function PosTable<TData>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  data-kbd-open={onRowClick ? "" : undefined}
                   className={cn("hover:bg-muted/50 transition-colors", onRowClick && "cursor-pointer")}
                   onClick={onRowClick ? () => onRowClick(row.original) : undefined}
                 >
@@ -249,10 +251,12 @@ export function PosTable<TData>({
               <IconChevronsLeft size={14} />
             </Button>
             <Button variant="outline" size="icon" className="size-8"
+              data-kbd-page="prev" aria-label="Página anterior"
               onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
               <IconChevronLeft size={14} />
             </Button>
             <Button variant="outline" size="icon" className="size-8"
+              data-kbd-page="next" aria-label="Página siguiente"
               onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
               <IconChevronRight size={14} />
             </Button>

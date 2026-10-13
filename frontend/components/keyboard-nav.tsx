@@ -64,6 +64,73 @@ function windowSubmit(win: HTMLElement): HTMLButtonElement | null {
   return last && !last.disabled ? last : null;
 }
 
+/** Rows of a table body that hold data (not the loading or "no results" rows). */
+function tableRows(body: HTMLElement): HTMLElement[] {
+  return [...body.querySelectorAll<HTMLTableRowElement>(":scope > tr")].filter((tr) => visible(tr) && !(tr.cells.length === 1 && tr.cells[0].colSpan > 1));
+}
+
+/** Previous/next page button next to a table (marked, or the usual "next page" labels). */
+function pageButton(body: HTMLElement, dir: "prev" | "next"): HTMLButtonElement | null {
+  let box: HTMLElement | null = body;
+  for (let i = 0; i < 6 && box; i++) {
+    box = box.parentElement;
+    const marked = box?.querySelector<HTMLButtonElement>(`[data-kbd-page="${dir}"]`);
+    if (marked) return marked.disabled ? null : marked;
+    const re = dir === "next" ? /next page|p[aá]gina siguiente/i : /previous page|p[aá]gina anterior/i;
+    const byLabel = [...(box?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) => re.test(b.getAttribute("aria-label") || b.textContent || ""));
+    if (byLabel) return byLabel.disabled ? null : byLabel;
+  }
+  return null;
+}
+
+/**
+ * Arrows inside a table: up/down through the rows, left/right through the pages, Home/End,
+ * Enter opens the row (its own click, or its first link), Esc leaves the table.
+ */
+function handleTable(e: KeyboardEvent, body: HTMLElement, tick: () => void): boolean {
+  const rows = tableRows(body);
+  const at = rows.findIndex((r) => r.hasAttribute("data-kbd-row"));
+  const focusRow = (i: number) => {
+    rows.forEach((r) => r.removeAttribute("data-kbd-row"));
+    const r = rows[i];
+    if (!r) return;
+    r.setAttribute("data-kbd-row", "");
+    r.scrollIntoView({ block: "nearest" });
+    tick();
+  };
+  // After changing page the rows are new: land on the first (or last) one
+  const afterPage = (first: boolean) => setTimeout(() => { const fresh = tableRows(body); if (fresh.length) { fresh.forEach((r) => r.removeAttribute("data-kbd-row")); const r = fresh[first ? 0 : fresh.length - 1]; r.setAttribute("data-kbd-row", ""); r.scrollIntoView({ block: "nearest" }); } }, 60);
+
+  switch (e.key) {
+    case "ArrowDown":
+      if (!rows.length) return false;
+      if (at === rows.length - 1) { const next = pageButton(body, "next"); if (next) { next.click(); afterPage(true); } return true; }
+      focusRow(at + 1);
+      return true;
+    case "ArrowUp":
+      if (!rows.length) return false;
+      if (at <= 0) { if (at === 0) { const prev = pageButton(body, "prev"); if (prev) { prev.click(); afterPage(false); } } else focusRow(0); return true; }
+      focusRow(at - 1);
+      return true;
+    case "ArrowRight": { const next = pageButton(body, "next"); if (next) { next.click(); afterPage(true); } return true; }
+    case "ArrowLeft": { const prev = pageButton(body, "prev"); if (prev) { prev.click(); afterPage(true); } return true; }
+    case "Home": focusRow(0); return true;
+    case "End": focusRow(rows.length - 1); return true;
+    case "Enter": {
+      const row = rows[at];
+      if (!row) return false;
+      if (row.hasAttribute("data-kbd-open") || row.classList.contains("cursor-pointer")) row.click();
+      else row.querySelector<HTMLElement>("a[href]")?.click();
+      return true;
+    }
+    case "Escape":
+      rows.forEach((r) => r.removeAttribute("data-kbd-row"));
+      body.blur();
+      return true;
+  }
+  return false;
+}
+
 export function KeyboardNav() {
   const tick = useTickSound();
   const pathname = usePathname();
@@ -120,8 +187,30 @@ export function KeyboardNav() {
         return;
       }
 
+      // From a table's search box, arrow down enters its rows
+      if (e.key === "ArrowDown" && target.matches("[data-kbd-search]")) {
+        let box: HTMLElement | null = target;
+        let body: HTMLElement | null = null;
+        for (let i = 0; i < 6 && box && !body; i++) { box = box.parentElement; body = box?.querySelector<HTMLElement>("[data-kbd-table]") ?? null; }
+        if (body) { e.preventDefault(); body.focus(); handleTable(new KeyboardEvent("keydown", { key: "ArrowDown" }), body, tick); }
+        return;
+      }
+      // Tab with nothing focused jumps straight to the page's table (instead of walking the whole menu)
+      if (e.key === "Tab" && !e.shiftKey && (!document.activeElement || document.activeElement === document.body)) {
+        const main = document.querySelector<HTMLElement>("main, [data-slot=sidebar-inset]");
+        const body = [...(main?.querySelectorAll<HTMLElement>("[data-kbd-table]") ?? [])].find((b) => visible(b) && tableRows(b).length);
+        if (body) { e.preventDefault(); clear(); body.focus(); handleTable(new KeyboardEvent("keydown", { key: "ArrowDown" }), body, tick); return; }
+      }
+
       if (isTyping(document.activeElement) || popoverOpen()) return;
       if (document.activeElement?.closest("[data-kbd-zone]")) return;
+
+      // Inside a table (reached with Tab): its rows and pages
+      const body = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>("[data-kbd-table]");
+      if (body) {
+        if (handleTable(e, body, tick)) { e.preventDefault(); clear(); }
+        return;
+      }
 
       // 2. Sidebar
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -169,15 +258,25 @@ export function KeyboardNav() {
       }
     };
 
-    const reset = () => clear();
+    // The mouse takes over: drop the keyboard selectors (sidebar, actions and table rows)
+    const reset = () => { clear(); document.querySelectorAll("[data-kbd-row]").forEach((r) => r.removeAttribute("data-kbd-row")); };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", reset, true);
-    window.addEventListener("pointermove", reset, { passive: true });
+    // Only a real mouse movement (not a nudge of the hand) takes over from the keyboard
+    let anchor: { x: number; y: number } | null = null;
+    const onMove = (e: PointerEvent) => {
+      if (!anchor) { anchor = { x: e.clientX, y: e.clientY }; return; }
+      if (Math.abs(e.clientX - anchor.x) + Math.abs(e.clientY - anchor.y) > 24) { anchor = null; reset(); }
+    };
+    const onKeyAnchor = () => { anchor = null; };
+    window.addEventListener("keydown", onKeyAnchor, true);
+    window.addEventListener("pointermove", onMove, { passive: true });
     return () => {
       clear();
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", reset, true);
-      window.removeEventListener("pointermove", reset);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("keydown", onKeyAnchor, true);
     };
   }, [pathname, tick]);
 
@@ -187,6 +286,8 @@ export function KeyboardNav() {
       [data-kbd-cursor="nav"] { color: var(--primary) !important; }
       [data-sidebar="menu-sub"] [data-kbd-cursor="nav"] { outline: 1.5px solid var(--primary); outline-offset: 1px; border-radius: 6px; }
       [data-kbd-zone] [data-kbd-cell][data-kbd-active="true"] { outline: 2px solid var(--primary); outline-offset: 2px; }
+      [data-kbd-table]:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent); }
+      [data-kbd-table]:focus tr[data-kbd-row] { background: color-mix(in srgb, var(--primary) 9%, transparent); outline: 2px solid var(--primary); outline-offset: -2px; }
       @media (prefers-reduced-motion: reduce) { [data-kbd-cursor] { scroll-behavior: auto; } }
     `}</style>
   );

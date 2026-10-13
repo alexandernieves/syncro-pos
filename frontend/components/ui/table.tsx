@@ -33,7 +33,11 @@ function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
   return (
     <tbody
       data-slot="table-body"
-      className={cn("[&_tr:last-child]:border-0", className)}
+      // Keyboard: Tab reaches the table, arrows move through the rows, Enter opens one
+      data-kbd-table=""
+      tabIndex={0}
+      aria-label="Tabla: usa las flechas para recorrer las filas y Enter para abrir"
+      className={cn("[&_tr:last-child]:border-0 outline-none", className)}
       {...props}
     />
   )
