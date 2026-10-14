@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { toast } from "sonner";
 import { InvoiceDocument } from "@/components/invoice/invoice-document";
 import type { InvoiceDesign } from "./design";
 import { type InvoiceBusiness, type InvoiceData, invoiceNumber } from "./types";
@@ -40,8 +41,17 @@ export function invoiceHtml(data: InvoiceData, design: InvoiceDesign, business: 
   </style></head><body>${body}</body></html>`;
 }
 
-/** Prints only the invoice through a hidden frame, not the whole screen. */
+type DesktopBridge = { printHtml?: (html: string, paper: string) => Promise<{ ok: boolean; reason?: string }> };
+
+/** Prints only the invoice: straight to the ticket printer in the desktop app, through a hidden frame in the browser. */
 export function printInvoice(data: InvoiceData, design: InvoiceDesign, business: InvoiceBusiness) {
+  const desktop = (window as unknown as { electron?: DesktopBridge }).electron;
+  if (desktop?.printHtml) {
+    desktop.printHtml(invoiceHtml(data, design, business), design.paper).then((r) => {
+      if (!r.ok && r.reason !== "cancelled") toast.error("No se pudo imprimir el ticket. Revisa la impresora en el menú Syncro → Impresora de tickets.");
+    });
+    return;
+  }
   const iframe = document.createElement("iframe");
   iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
   document.body.appendChild(iframe);

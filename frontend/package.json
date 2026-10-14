@@ -4,100 +4,14 @@
   "description": "Syncro POS - Sistema de Punto de Venta profesional",
   "author": "Syncro Technologies <soporte@syncropos.com>",
   "private": true,
-  "main": "main/index.js",
   "scripts": {
     "dev": "next dev -p 3001 --turbopack",
     "build": "next build",
     "postbuild": "mkdir -p /usr/local/var/www/syncro && rsync -a --delete out/ /usr/local/var/www/syncro/",
     "start": "next start -p 3001",
     "lint": "next lint",
-    "electron:dev": "NODE_ENV=development electron .",
-    "electron:build": "next build --webpack && electron-builder",
-    "dist:win": "next build --webpack && electron-builder --win --x64",
-    "dist:win:ia32": "next build --webpack && electron-builder --win --ia32",
-    "dist:mac": "next build --webpack && electron-builder --mac",
     "check:copy": "node scripts/sentence-case.mjs --check",
     "fix:copy": "node scripts/sentence-case.mjs --write"
-  },
-  "build": {
-    "appId": "com.syncro.pos",
-    "productName": "Syncro POS",
-    "asar": true,
-    "publish": {
-      "provider": "github",
-      "owner": "alexandernieves",
-      "repo": "syncro-pos-updates"
-    },
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "main/**/*",
-      "out/**/*",
-      "public/**/*",
-      "package.json"
-    ],
-    "mac": {
-      "icon": "public/syncro.png",
-      "category": "public.app-category.business",
-      "target": [
-        "dmg",
-        "zip"
-      ]
-    },
-    "dmg": {
-      "title": "Syncro POS Installer",
-      "icon": "public/syncro.png",
-      "background": "public/syncro.png",
-      "window": {
-        "width": 512,
-        "height": 512
-      },
-      "contents": [
-        {
-          "x": 130,
-          "y": 410
-        },
-        {
-          "x": 380,
-          "y": 410,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
-    },
-    "win": {
-      "icon": "public/syncro.ico",
-      "artifactName": "Syncro-POS-Setup-${version}.${ext}",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "forceCodeSigning": false,
-      "verifyUpdateCodeSignature": false,
-      "requestedExecutionLevel": "asInvoker"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "allowElevation": true,
-      "installerIcon": "public/syncro.ico",
-      "uninstallerIcon": "public/syncro.ico",
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Syncro POS",
-      "include": null
-    }
   },
   "dependencies": {
     "@ant-design/nextjs-registry": "^1.3.0",
@@ -142,7 +56,6 @@
     "date-fns": "^4.1.0",
     "dexie": "^4.4.2",
     "dexie-react-hooks": "^4.4.0",
-    "electron-updater": "^6.8.3",
     "framer-motion": "^12.38.0",
     "gsap": "^3.15.0",
     "html-to-image": "^1.11.13",
@@ -173,8 +86,6 @@
     "@types/node": "^25.0.3",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "electron": "^41.2.1",
-    "electron-builder": "^26.8.1",
     "eslint": "^9.39.2",
     "eslint-config-next": "16.1.1",
     "shadcn": "^4.21.0",
