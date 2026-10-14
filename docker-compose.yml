@@ -31,6 +31,10 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
+    # A name of its own: the panel also sits on other projects' networks, which have their own "backend"
+    networks:
+      default:
+        aliases: [ebanocontrol-backend]
     env_file: ./backend.env
     environment:
       DATABASE_URL: postgresql://ebano:${DB_PASSWORD}@db:5432/ebanocontrol
