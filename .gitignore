@@ -49,9 +49,12 @@ frontend/.next.old/
 # Local-only data
 **/.env.bak*
 backend/uploads/
-storefront/
+/storefront/
 backend/backups/
 
 # Server deploy secrets
 /.env
 /backend.env
+
+# Server-only compose override
+/docker-compose.override.yml
