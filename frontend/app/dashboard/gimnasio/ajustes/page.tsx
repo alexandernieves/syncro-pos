@@ -205,7 +205,7 @@ function AgentKeysCard() {
   const create = async () => {
     setBusy(true);
     try {
-      const r = await gymApi<{ key: string }>("/agent-keys", { method: "POST", json: { name: "Agente de WhatsApp (Koenyx)" } });
+      const r = await gymApi<{ key: string }>("/agent-keys", { method: "POST", json: { name: "Agente de WhatsApp" } });
       setCreated(r.key);
       load();
     } catch (e) {
@@ -224,7 +224,7 @@ function AgentKeysCard() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle className="flex items-center gap-2"><IconBrandWhatsapp size={18} /> Agente de WhatsApp</CardTitle>
-            <CardDescription>La clave con la que el agente de Koenyx consulta clases, planes y socios, y agenda reservas y clases de prueba. Dásela solo a Koenyx.</CardDescription>
+            <CardDescription>La clave con la que el agente de WhatsApp consulta clases, planes y socios, y agenda reservas y clases de prueba. Dásela solo al proveedor de WhatsApp.</CardDescription>
           </div>
           <Button size="sm" className="gap-1.5" disabled={busy} onClick={create}>{busy ? <IconLoader2 size={15} className="animate-spin" /> : <IconPlus size={15} />} Crear clave</Button>
         </div>
@@ -233,14 +233,14 @@ function AgentKeysCard() {
         {gymId && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/50 px-4 py-2.5">
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">ID del gimnasio (Koenyx lo pide como X-Gimnasio-Id)</p>
+              <p className="text-xs text-muted-foreground">ID del gimnasio (se pide como X-Gimnasio-Id)</p>
               <p className="break-all font-mono text-sm select-all">{gymId}</p>
             </div>
             <Button size="sm" variant="outline" onClick={() => copy(gymId)}>Copiar ID</Button>
           </div>
         )}
         {!keys ? <Skeleton className="h-12 w-full" /> : active.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Todavía no hay ninguna clave. Crea una cuando Koenyx te la pida.</p>
+          <p className="text-sm text-muted-foreground">Todavía no hay ninguna clave. Crea una cuando el proveedor de WhatsApp te la pida.</p>
         ) : active.map((k) => (
           <div key={k.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3">
             <div className="min-w-0">
@@ -257,7 +257,7 @@ function AgentKeysCard() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Clave creada</DialogTitle>
-            <DialogDescription>Cópiala ahora y pásasela a Koenyx: por seguridad no se vuelve a mostrar. Si la pierdes, crea otra y revoca esta.</DialogDescription>
+            <DialogDescription>Cópiala ahora y pásasela al proveedor de WhatsApp: por seguridad no se vuelve a mostrar. Si la pierdes, crea otra y revoca esta.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">Clave (X-Api-Key)</p>
