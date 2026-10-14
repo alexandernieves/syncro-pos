@@ -11,6 +11,13 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.on('update-downloaded', listener);
     return () => ipcRenderer.removeListener('update-downloaded', listener);
   },
+  // Update badge: { state: 'idle' | 'downloading' | 'ready' | 'error', version, percent }
+  updateStatus: () => ipcRenderer.invoke('update-status'),
+  onUpdateStatus: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('update-status', listener);
+    return () => ipcRenderer.removeListener('update-status', listener);
+  },
   installUpdate: () => ipcRenderer.send('install-update'),
   // Only for the server setup page
   saveServer: (url) => ipcRenderer.invoke('save-server', url),

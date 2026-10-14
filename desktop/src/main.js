@@ -1,4 +1,6 @@
-const { app, BrowserWindow, Menu, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog, net } = require('electron');
+const { spawn } = require('child_process');
+const crypto = require('crypto');
 const { autoUpdater } = require('electron-updater');
 const fs = require('fs');
 const path = require('path');
@@ -11,7 +13,7 @@ const pkg = require('../package.json');
 
 const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
 const SETUP_PAGE = path.join(__dirname, 'setup.html');
-const UPDATE_EVERY_MS = 6 * 60 * 60 * 1000;
+const UPDATE_EVERY_MS = 60 * 60 * 1000;
 
 function readConfig() {
   try {
@@ -56,10 +58,20 @@ function showSetup(mode) {
   win.loadFile(SETUP_PAGE, { query: { mode, server: serverUrl() || '' } });
 }
 
+// The desktop app goes straight to the login (or the panel when signed in), never the public landing page
+const LOGIN_PATH = '/login/';
+const isLanding = (url) => {
+  try {
+    return isServer(url) && new URL(url).pathname === '/';
+  } catch {
+    return false;
+  }
+};
+
 function openServer() {
   const url = serverUrl();
   if (!url) return showSetup('server');
-  win.loadURL(url);
+  win.loadURL(url + LOGIN_PATH);
 }
 
 function createWindow() {
@@ -87,6 +99,13 @@ function createWindow() {
     if (!isMainFrame || code === -3 || isSetup(url)) return; // -3: the load was replaced by another
     showSetup('offline');
   });
+
+  // Logging out or a link to the home page lands on the login instead
+  const skipLanding = (_e, url) => {
+    if (isLanding(url)) win.loadURL(serverUrl() + LOGIN_PATH);
+  };
+  win.webContents.on('did-navigate', skipLanding);
+  win.webContents.on('did-navigate-in-page', skipLanding);
 
   // Links outside the server open in the browser
   win.webContents.on('will-navigate', (e, url) => {
@@ -154,16 +173,128 @@ ipcMain.handle('retry', (e) => {
 });
 
 // ── Updates ─────────────────────────────────────────────────────────────────
+//
+// The panel shows a badge when a new version is ready; "Actualizar" restarts into it.
+// Windows uses the standard updater. The Mac app isn't signed with an Apple account, which
+// the standard Mac updater requires, so on Mac we download the new app and swap it ourselves.
 
-autoUpdater.on('update-downloaded', (info) => win?.webContents.send('update-downloaded', info));
-autoUpdater.on('error', () => {}); // No connection or no release yet: try again later
+const isMac = process.platform === 'darwin';
+let update = { state: 'idle' }; // idle | downloading | ready | error
+let macNewApp = null; // Mac: path of the downloaded app, ready to swap in
+
+function setUpdate(next) {
+  update = next;
+  win?.webContents.send('update-status', update);
+  if (next.state === 'ready') win?.webContents.send('update-downloaded', { version: next.version }); // older panels
+}
+
+autoUpdater.autoDownload = !isMac;
+autoUpdater.autoInstallOnAppQuit = !isMac;
+
+autoUpdater.on('update-available', (info) => {
+  if (isMac) downloadMac(info).catch((e) => setUpdate({ state: 'error', version: info.version, message: String(e.message || e) }));
+  else setUpdate({ state: 'downloading', version: info.version, percent: 0 });
+});
+autoUpdater.on('download-progress', (p) => {
+  if (update.state === 'downloading') setUpdate({ ...update, percent: Math.round(p.percent) });
+});
+autoUpdater.on('update-downloaded', (info) => setUpdate({ state: 'ready', version: info.version }));
+autoUpdater.on('error', () => {
+  // No connection or no release yet: try again on the next check
+  if (update.state === 'downloading') setUpdate({ state: 'idle' });
+});
+
+/** Mac: downloads this computer's zip from the release, checks it and unpacks the new app. */
+async function downloadMac(info) {
+  if (update.state === 'downloading' || (update.state === 'ready' && update.version === info.version)) return;
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  const file = (info.files || []).find((f) => f.url.endsWith(`-${arch}.zip`));
+  if (!file) throw new Error('El release no trae la app para esta Mac');
+  const { owner, repo } = pkg.build.publish;
+  const url = `https://github.com/${owner}/${repo}/releases/download/v${info.version}/${file.url}`;
+
+  setUpdate({ state: 'downloading', version: info.version, percent: 0 });
+  const dir = fs.mkdtempSync(path.join(app.getPath('temp'), 'syncro-update-'));
+  const zip = path.join(dir, 'update.zip');
+  const res = await net.fetch(url);
+  if (!res.ok) throw new Error(`No se pudo descargar (${res.status})`);
+  const total = Number(res.headers.get('content-length')) || file.size || 0;
+  const hash = crypto.createHash('sha512');
+  const out = fs.createWriteStream(zip);
+  const reader = res.body.getReader();
+  let got = 0;
+  let lastPercent = -1;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    hash.update(value);
+    if (!out.write(value)) await new Promise((r) => out.once('drain', r));
+    got += value.length;
+    const percent = total ? Math.floor((got / total) * 100) : 0;
+    if (percent !== lastPercent) {
+      lastPercent = percent;
+      setUpdate({ state: 'downloading', version: info.version, percent });
+    }
+  }
+  await new Promise((r, j) => out.end((e) => (e ? j(e) : r())));
+  if (file.sha512 && hash.digest('base64') !== file.sha512) throw new Error('La descarga llegó incompleta');
+
+  await run('/usr/bin/ditto', ['-x', '-k', zip, dir]);
+  const newApp = fs.readdirSync(dir).find((n) => n.endsWith('.app'));
+  if (!newApp) throw new Error('La descarga no trae la app');
+  macNewApp = path.join(dir, newApp);
+  setUpdate({ state: 'ready', version: info.version });
+}
+
+function run(cmd, args) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(cmd, args, { stdio: 'ignore' });
+    p.on('error', reject);
+    p.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`${path.basename(cmd)} terminó con ${code}`))));
+  });
+}
+
+/** Mac: once this app closes, a small script swaps in the new one and opens it. */
+function installMac() {
+  const current = path.resolve(app.getPath('exe'), '..', '..', '..');
+  try {
+    fs.accessSync(path.dirname(current), fs.constants.W_OK);
+  } catch {
+    dialog.showMessageBox(win, { type: 'warning', message: 'No se puede actualizar desde aquí', detail: 'Mueve Syncro POS a la carpeta Aplicaciones y ábrela desde ahí.' });
+    return;
+  }
+  const script = [
+    'while kill -0 "$OLD_PID" 2>/dev/null; do sleep 0.3; done',
+    'rm -rf "$APP.old"',
+    'if mv "$APP" "$APP.old" && /usr/bin/ditto "$NEW" "$APP"; then rm -rf "$APP.old"; else rm -rf "$APP"; mv "$APP.old" "$APP"; fi',
+    '/usr/bin/xattr -cr "$APP"',
+    '/usr/bin/open "$APP"',
+  ].join('\n');
+  spawn('/bin/sh', ['-c', script], {
+    detached: true,
+    stdio: 'ignore',
+    env: { ...process.env, OLD_PID: String(process.pid), APP: current, NEW: macNewApp },
+  }).unref();
+  app.quit();
+}
+
+function installUpdate() {
+  if (update.state !== 'ready') return;
+  if (isMac) installMac();
+  else autoUpdater.quitAndInstall(true, true); // silent, and open the app again afterwards
+}
 
 ipcMain.on('install-update', (e) => {
-  if (isServer(e.senderFrame.url)) autoUpdater.quitAndInstall();
+  if (isServer(e.senderFrame.url)) installUpdate();
 });
+ipcMain.handle('update-status', (e) => (isServer(e.senderFrame.url) ? { ...update, current: app.getVersion() } : null));
 
 function checkUpdates(manual) {
   if (!app.isPackaged) return;
+  if (manual && update.state === 'ready') {
+    dialog.showMessageBox(win, { message: `La versión ${update.version} está lista.`, buttons: ['Actualizar ahora', 'Después'], defaultId: 0 }).then((r) => r.response === 0 && installUpdate());
+    return;
+  }
   autoUpdater
     .checkForUpdates()
     .then((r) => {

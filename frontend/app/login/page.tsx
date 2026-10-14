@@ -6,6 +6,17 @@ import { useTheme } from "next-themes"
 import { LoginForm } from "@/components/login-form"
 import { DotField } from "@/components/reactbits/dot-field"
 
+/** The JWT hasn't expired and the saved user is readable. */
+function sessionStillValid(token: string) {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")))
+    JSON.parse(localStorage.getItem("user") || "")
+    return typeof payload.exp !== "number" || payload.exp * 1000 > Date.now() + 60_000
+  } catch {
+    return false
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const { resolvedTheme } = useTheme()
@@ -15,9 +26,9 @@ export default function LoginPage() {
     setMounted(true)
     const clientToken = localStorage.getItem("client_token")
     const adminToken = localStorage.getItem("token")
-    if (clientToken && !adminToken) {
-      router.push("/portal")
-    }
+    // Still signed in: straight to the panel. An expired session stays here to sign in again.
+    if (adminToken && sessionStillValid(adminToken)) router.replace("/dashboard")
+    else if (clientToken) router.push("/portal")
   }, [router])
 
   const isDark = mounted && resolvedTheme === "dark"

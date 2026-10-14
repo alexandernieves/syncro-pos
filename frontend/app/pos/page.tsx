@@ -7,6 +7,7 @@ import { CreditLimitOverride } from "@/components/pos/credit-limit-override";
 import { ReceiptPrinter, type ReceiptData } from "@/components/pos/receipt-printer";
 import { normalizeInvoiceDesign } from "@/lib/invoice/design";
 import { resolveInvoiceBusiness } from "@/lib/invoice/render";
+import { DesktopUpdateBadge } from "@/components/desktop-update-badge";
 import { WhatsAppInvoiceError, openInvoiceInWhatsApp, saleToInvoiceData, sendInvoiceWhatsApp } from "@/lib/invoice/whatsapp";
 import { SyncroShopBadges } from "@/components/syncro-shop/syncro-shop-badges";
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
@@ -2789,6 +2790,7 @@ export default function POSPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <DesktopUpdateBadge />
           {/* Base Currency Select Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

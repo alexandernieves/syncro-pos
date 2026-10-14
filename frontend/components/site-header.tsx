@@ -3,6 +3,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { BranchSwitcher } from "./branch-switcher";
 import { NotificationBell } from "./notification-bell";
 import { CopRateButton } from "./cop-rate-button";
+import { DesktopUpdateBadge } from "./desktop-update-badge";
 import { useCurrency } from "@/context/CurrencyContext";
 import { cn } from "@/lib/utils";
 import { IconRefresh, IconChevronDown } from "@tabler/icons-react";
@@ -60,6 +61,7 @@ export function SiteHeader() {
       </div>
 
       <div className="flex items-center gap-3">
+        <DesktopUpdateBadge />
         {/* FECHA VALOR STACKED (AS REQUESTED) */}
         {!isSyncro && (
           <div className="hidden lg:flex flex-col items-end mr-2">
