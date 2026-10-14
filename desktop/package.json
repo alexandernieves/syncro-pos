@@ -1,7 +1,7 @@
 {
   "name": "syncro-desktop",
   "productName": "Syncro POS",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Syncro desktop app: opens the business's Syncro server and prints tickets directly",
   "author": "Syncro",
   "private": true,
@@ -25,13 +25,32 @@
     "appId": "com.syncro.pos",
     "productName": "Syncro POS",
     "asar": true,
-    "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["src/**/*", "build/icon.png", "package.json"],
-    "publish": { "provider": "github", "owner": "alexandernieves", "repo": "syncro-pos", "releaseType": "release" },
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "alexandernieves",
+      "repo": "syncro-pos",
+      "releaseType": "release"
+    },
     "win": {
       "icon": "build/icon.ico",
       "artifactName": "Syncro-POS-Setup-${version}.${ext}",
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "verifyUpdateCodeSignature": false,
       "requestedExecutionLevel": "asInvoker"
     },
@@ -48,7 +67,24 @@
       "icon": "build/icon.png",
       "category": "public.app-category.business",
       "artifactName": "Syncro-POS-${version}-${arch}.${ext}",
-      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }, { "target": "zip", "arch": ["arm64", "x64"] }]
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "identity": "-",
+      "hardenedRuntime": false
     }
   }
 }
