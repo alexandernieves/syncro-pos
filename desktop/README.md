@@ -26,6 +26,6 @@ git tag v1.1.1
 git push git@github.com:alexandernieves/syncro-pos.git v1.1.1
 ```
 
-GitHub Actions construye el instalador de Windows y el de Mac y los publica en **Releases**. Las apps instaladas en Windows encuentran la versión nueva en unas horas, o al usar **Syncro → Buscar actualizaciones**.
+El runner de GitHub Actions que corre en nuestra Mac construye el instalador de Windows y el de Mac y los publica en **Releases**. La Mac tiene que estar encendida y con el runner activo. Las apps instaladas en Windows encuentran la versión nueva en unas horas, o al usar **Syncro → Buscar actualizaciones**.
 
 Los instaladores no están firmados: Windows muestra un aviso de SmartScreen ("Más información → Ejecutar de todas formas") y en Mac hay que abrirla con clic derecho → Abrir la primera vez.
