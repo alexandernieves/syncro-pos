@@ -134,7 +134,7 @@ export default function MovementsPage() {
             <ReceiptThumb url={r.receiptUrl} onOpen={setViewing} size={44} />
             <span className="min-w-0">
               <span className={cn("flex items-center gap-1.5 truncate text-sm font-medium", r.status === "VOIDED" && "line-through opacity-60")}>
-                <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full", r.type === "OUT" ? "bg-rose-500/10 text-rose-600" : "bg-emerald-500/10 text-emerald-700")}>{r.type === "OUT" ? <IconArrowUpRight size={12} /> : <IconArrowDownRight size={12} />}</span>
+                <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full", r.type === "OUT" ? "bg-primary/10 text-primary" : "bg-emerald-500/10 text-emerald-700")}>{r.type === "OUT" ? <IconArrowUpRight size={12} /> : <IconArrowDownRight size={12} />}</span>
                 {categoryOf(r)}
               </span>
               {r.description && <span className="block truncate text-xs text-muted-foreground">{r.description}</span>}
@@ -150,7 +150,7 @@ export default function MovementsPage() {
       cell: ({ row }) => {
         const r = row.original;
         return (
-          <span className={cn("whitespace-nowrap text-sm font-semibold tabular-nums", r.type === "OUT" ? "text-rose-600" : "text-emerald-700", r.status === "VOIDED" && "line-through opacity-60")}>
+          <span className={cn("whitespace-nowrap text-sm font-semibold tabular-nums", r.type === "OUT" ? "text-primary" : "text-emerald-700", r.status === "VOIDED" && "line-through opacity-60")}>
             {r.type === "OUT" ? "−" : "+"}{formatMoney(r.amountCurrency, r.currency)}
             {r.currency !== "USD" && <span className="block text-xs font-normal text-muted-foreground">{formatMoney(r.amount, "USD")}</span>}
           </span>

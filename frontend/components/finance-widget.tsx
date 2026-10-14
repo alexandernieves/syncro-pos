@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { IconArrowDownLeft, IconArrowUpRight, IconArrowsExchange, IconCamera, IconCheck, IconFileTypePdf, IconGripVertical, IconLoader2, IconLock, IconX } from "@tabler/icons-react";
+import { IconArrowDownLeft, IconArrowUpRight, IconArrowsExchange, IconCamera, IconCheck, IconFileTypePdf, IconLoader2, IconLock, IconX } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { API_URL } from "@/lib/constants";
@@ -244,16 +244,14 @@ export function FinanceWidget({ placement = "right" }: { placement?: "right" | "
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((o) => !o); } }}
         style={tabStyle}
         className={cn(
-          "group fixed z-40 flex touch-none select-none flex-col items-center gap-2 py-3 text-primary-foreground shadow-[0_10px_30px_-10px_color-mix(in_srgb,var(--primary)_70%,transparent)] outline-none transition-[padding,opacity,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-          "bg-gradient-to-b from-primary to-[color-mix(in_srgb,var(--primary)_78%,#7a2e00)]",
-          drag ? "cursor-grabbing rounded-2xl px-3 opacity-90" : side === "right" ? "cursor-grab rounded-l-2xl pl-2.5 pr-2 hover:pl-3.5" : "cursor-grab rounded-r-2xl pl-2 pr-2.5 hover:pr-3.5",
+          "group fixed z-40 flex touch-none select-none flex-col items-center gap-1.5 border bg-background/95 py-2.5 text-muted-foreground shadow-sm outline-none backdrop-blur transition-[padding,opacity,color,box-shadow] duration-200 hover:text-foreground hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+          drag ? "cursor-grabbing rounded-xl px-2 opacity-90 shadow-md" : side === "right" ? "cursor-grab rounded-l-xl border-r-0 pl-1.5 pr-1 hover:pl-2.5" : "cursor-grab rounded-r-xl border-l-0 pl-1 pr-1.5 hover:pr-2.5",
           open && !drag && "pointer-events-none opacity-0",
         )}
       >
-        <IconGripVertical size={14} className="opacity-60" />
-        <span className="flex size-7 items-center justify-center rounded-full bg-white/20"><IconArrowsExchange size={16} /></span>
-        <span className="rotate-180 text-[11px] font-semibold [writing-mode:vertical-rl]">{TAB_LABEL}</span>
-        <kbd className="rounded bg-white/20 px-1.5 py-0.5 font-mono text-[10px]">G</kbd>
+        <IconArrowsExchange size={15} className="text-primary" />
+        <span className="rotate-180 text-[10px] font-medium [writing-mode:vertical-rl]">{TAB_LABEL}</span>
+        <kbd className="rounded border bg-muted px-1 font-mono text-[9px] leading-4 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">G</kbd>
       </button>
 
       {/* The panel */}
@@ -289,7 +287,7 @@ export function FinanceWidget({ placement = "right" }: { placement?: "right" | "
               aria-hidden
               className={cn(
                 "absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-xl shadow-sm transition-all duration-300 ease-out motion-reduce:transition-none",
-                type === "OUT" ? "translate-x-0 bg-rose-600" : "translate-x-full bg-emerald-600",
+                type === "OUT" ? "translate-x-0 bg-primary" : "translate-x-full bg-emerald-600",
               )}
             />
             {(["OUT", "IN"] as const).map((t) => (
@@ -392,7 +390,7 @@ export function FinanceWidget({ placement = "right" }: { placement?: "right" | "
             </div>
           )}
 
-          <Button data-kbd-primary className={cn("w-full gap-2 text-white", type === "OUT" ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700")} disabled={saving} onClick={save}>
+          <Button data-kbd-primary className={cn("w-full gap-2 text-white", type === "OUT" ? "bg-primary hover:bg-primary/90" : "bg-emerald-600 hover:bg-emerald-700")} disabled={saving} onClick={save}>
             {saving ? <IconLoader2 size={16} className="animate-spin" /> : <IconCheck size={16} />} Registrar {type === "OUT" ? "egreso" : "ingreso"}
           </Button>
 
@@ -404,7 +402,7 @@ export function FinanceWidget({ placement = "right" }: { placement?: "right" | "
               <div key={m.id} className={cn("flex items-center gap-2 rounded-lg px-1 py-1.5 text-xs", m.status === "VOIDED" && "opacity-50")}>
                 <ReceiptThumb url={m.receiptUrl} onOpen={setViewing} size={32} />
                 <span className="min-w-0 flex-1 truncate">{categoryOf(m)}{m.description ? ` · ${m.description}` : ""}<span className="block text-[11px] text-muted-foreground">{methodOf(m)} · {m.userName ?? "—"} · {time(m.occurredAt)}{m.status === "VOIDED" ? <b className="ml-1 font-medium">Anulado</b> : m.reviewedAt ? <b className="ml-1 font-medium">Revisado</b> : null}</span></span>
-                <span className={cn("shrink-0 text-right font-semibold tabular-nums", m.type === "OUT" ? "text-rose-600" : "text-emerald-700", m.status === "VOIDED" && "line-through")}>{m.type === "OUT" ? "−" : "+"}{formatMoney(m.amountCurrency, m.currency)}</span>
+                <span className={cn("shrink-0 text-right font-semibold tabular-nums", m.type === "OUT" ? "text-primary" : "text-emerald-700", m.status === "VOIDED" && "line-through")}>{m.type === "OUT" ? "−" : "+"}{formatMoney(m.amountCurrency, m.currency)}</span>
                 {canUndo(m) && <button type="button" onClick={() => undo(m)} className="shrink-0 rounded-md px-2 py-1 font-medium text-primary hover:bg-primary/10">Deshacer</button>}
                 {!canUndo(m) && m.status === "ACTIVE" && meta?.isManager && <button type="button" onClick={() => setVoiding(m)} className="shrink-0 rounded-md px-2 py-1 font-medium text-rose-600 hover:bg-rose-500/10">Anular</button>}
               </div>
