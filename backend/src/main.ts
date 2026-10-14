@@ -82,9 +82,11 @@ async function bootstrap() {
   }
 
   app.enableCors({
-    origin: (origin, callback) => {
+    origin: (rawOrigin, callback) => {
       // Allow requests with no origin (mobile apps, curl, Postman, same-origin)
-      if (!origin) return callback(null, true);
+      if (!rawOrigin) return callback(null, true);
+      // "https://site.com." (final dot) is the same site written as a fully qualified name
+      const origin = rawOrigin.replace(/\.(?=(:\d+)?$)/, '');
 
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
