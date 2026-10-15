@@ -17,6 +17,8 @@ import { GymPage, GymPageHeader } from "@/components/gym/gym-ui";
 import { WhatsAppPreview } from "@/components/gym/whatsapp-preview";
 import { OptionSelect } from "@/components/forms/option-select";
 import { UnsavedChangesBar, useUnsavedGuard } from "@/components/forms/unsaved-changes";
+import { PosTable } from "@/components/pos-table";
+import type { ColumnDef } from "@tanstack/react-table";
 
 type Kind = "BEFORE" | "EXPIRY" | "AFTER";
 type Settings = {
@@ -24,6 +26,22 @@ type Settings = {
   reminders: { enabled: boolean; daysBefore: number; onExpiry: boolean; afterDays: number; hour: number; templates: Record<Kind, string> };
 };
 type Pending = { membershipId: string; memberId: string; name: string; planName: string; endDate: string; kind: Kind };
+const kindBadge = (kind: Kind) => <span className="whitespace-nowrap rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-700">{KIND_LABEL[kind]}</span>;
+
+const PENDING_COLUMNS: ColumnDef<Pending>[] = [
+  {
+    accessorKey: "name",
+    header: "Socio",
+    cell: ({ row }) => (
+      <span className="block min-w-0">
+        <span className="block truncate font-medium">{row.original.name}</span>
+        <span className="block text-xs text-muted-foreground">{row.original.planName} · vence {shortDate(row.original.endDate)}</span>
+      </span>
+    ),
+  },
+  { accessorKey: "kind", header: "Aviso", cell: ({ row }) => kindBadge(row.original.kind) },
+];
+
 type LogRow = {
   id: string;
   kind: Kind;
@@ -36,6 +54,33 @@ type LogRow = {
 };
 
 const KIND_LABEL: Record<Kind, string> = { BEFORE: "Vence pronto", EXPIRY: "Vence hoy", AFTER: "Ya venció" };
+
+const LOG_COLUMNS: ColumnDef<LogRow>[] = [
+  {
+    id: "socio",
+    accessorFn: (l) => l.member.client.name,
+    header: "Socio",
+    cell: ({ row }) => {
+      const l = row.original;
+      return (
+        <span className="flex min-w-0 items-center gap-2.5">
+          {l.status === "SENT" ? <IconCircleCheckFilled size={18} className="shrink-0 text-emerald-600" /> : <IconCircleXFilled size={18} className="shrink-0 text-rose-600" />}
+          <span className="min-w-0">
+            <span className="block truncate font-medium">{l.member.client.name}</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {KIND_LABEL[l.kind]}{l.manual ? " · a mano" : ""}{l.status === "FAILED" && l.error ? ` · ${l.error}` : ""}
+            </span>
+          </span>
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "createdAt",
+    header: "Fecha",
+    cell: ({ row }) => <span className="whitespace-nowrap text-xs text-muted-foreground">{new Date(row.original.createdAt).toLocaleString("es-VE", { dateStyle: "short", timeStyle: "short" })}</span>,
+  },
+];
 const PLACEHOLDERS: [string, string][] = [["{nombre}", "Nombre"], ["{plan}", "Plan"], ["{fecha}", "Fecha de vencimiento"], ["{dias}", "Días"], ["{gimnasio}", "Gimnasio"]];
 const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12}:00 ${h < 12 ? "a. m." : "p. m."}`;
 
@@ -216,23 +261,9 @@ export default function GymRemindersPage() {
                 {running ? <IconLoader2 size={14} className="animate-spin" /> : <IconSend size={14} />} Enviar ahora
               </Button>
             </div>
-            {!pending ? (
-              <div className="p-4"><Skeleton className="h-10" /></div>
-            ) : pending.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">No hay recordatorios pendientes.</p>
-            ) : (
-              <div className="divide-y">
-                {pending.map((p) => (
-                  <div key={p.membershipId + p.kind} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium">{p.name}</span>
-                      <span className="block text-xs text-muted-foreground">{p.planName} · vence {shortDate(p.endDate)}</span>
-                    </span>
-                    <span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-700">{KIND_LABEL[p.kind]}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="p-4">
+              <PosTable columns={PENDING_COLUMNS} data={pending ?? []} loading={!pending} searchPlaceholder="Buscar socio…" getRowId={(p) => p.membershipId + p.kind} emptyMessage="No hay recordatorios pendientes." />
+            </div>
           </CardContent>
         </Card>
 
@@ -242,26 +273,9 @@ export default function GymRemindersPage() {
               <p className="font-semibold">Enviados</p>
               <p className="text-xs text-muted-foreground">Los últimos 100 recordatorios.</p>
             </div>
-            {!log ? (
-              <div className="p-4"><Skeleton className="h-10" /></div>
-            ) : log.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">Aún no se ha enviado ningún recordatorio.</p>
-            ) : (
-              <div className="max-h-[420px] divide-y overflow-y-auto">
-                {log.map((l) => (
-                  <div key={l.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                    {l.status === "SENT" ? <IconCircleCheckFilled size={18} className="shrink-0 text-emerald-600" /> : <IconCircleXFilled size={18} className="shrink-0 text-rose-600" />}
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{l.member.client.name}</span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {KIND_LABEL[l.kind]}{l.manual ? " · a mano" : ""}{l.status === "FAILED" && l.error ? ` · ${l.error}` : ""}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{new Date(l.createdAt).toLocaleString("es-VE", { dateStyle: "short", timeStyle: "short" })}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="p-4">
+              <PosTable columns={LOG_COLUMNS} data={log ?? []} loading={!log} searchPlaceholder="Buscar socio…" getRowId={(l) => l.id} emptyMessage="Aún no se ha enviado ningún recordatorio." />
+            </div>
           </CardContent>
         </Card>
       </div>
