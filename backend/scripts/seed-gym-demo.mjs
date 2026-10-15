@@ -8,7 +8,7 @@
  *   node scripts/seed-gym-demo.mjs            creates the demo business
  *   node scripts/seed-gym-demo.mjs --wipe     deletes the demo business and everything in it
  *   node scripts/seed-gym-demo.mjs --replace  deletes it and creates it again
- *   DEMO_PASSWORD=… keeps the same password across runs
+ *   DEMO_PASSWORD=… keeps the same password across runs; DEMO_EMAIL=… sets the owner's login
  *
  * Phones are 58400xxxxxxx (no such line in Venezuela) and reminders and class notices are off,
  * so no WhatsApp ever reaches a real person.
@@ -21,6 +21,8 @@ const { PrismaClient } = pkg;
 const prisma = new PrismaClient();
 const args = new Set(process.argv.slice(2));
 const MARKER = 'demo@ebanocontrol.local';
+// The owner's login; the business keeps MARKER so --wipe always finds it
+const OWNER_EMAIL = (process.env.DEMO_EMAIL || MARKER).trim().toLowerCase();
 
 // ── Random, but the same every run ──────────────────────────────────────────
 let seed = 20240415;
@@ -178,6 +180,10 @@ async function create() {
     console.log('Ya existe el negocio demo. Usa --replace para crearlo de nuevo.');
     return;
   }
+  if (await prisma.user.findUnique({ where: { email: OWNER_EMAIL } })) {
+    console.log(`Ya hay un usuario con el correo ${OWNER_EMAIL} en otro negocio. Elige otro con DEMO_EMAIL.`);
+    return;
+  }
   console.log('Creando Ebano Demo (unos minutos)…');
   // A fixed password survives --replace; otherwise a new one each time
   const password = process.env.DEMO_PASSWORD || `Demo-${randomBytes(4).toString('hex')}`;
@@ -236,7 +242,7 @@ async function create() {
   const locked = await bcrypt.hash(randomBytes(24).toString('hex'), 10);
   await prisma.user.createMany({
     data: [
-      { id: owner.id, email: MARKER, password: await bcrypt.hash(password, 10), name: owner.name, role: 'ownerpos', businessId, createdAt: OPEN_MAIN },
+      { id: owner.id, email: OWNER_EMAIL, password: await bcrypt.hash(password, 10), name: owner.name, role: 'ownerpos', businessId, createdAt: OPEN_MAIN },
       ...reception.map((r, i) => ({ id: r.id, email: `recepcion${i + 1}@ebanocontrol.local`, password: locked, name: r.name, role: 'pos', permissions: ['pos'], branchIds: [r.branch.id], businessId, createdAt: r.branch.opened })),
     ],
   });
@@ -651,7 +657,7 @@ async function create() {
   const active = [...intervals.values()].flat().filter((iv) => iv.start <= NOW && iv.end > NOW).length;
   console.log('\n✅ Ebano Demo listo');
   console.log(`   Socios: ${members.length} (${active} con plan vigente hoy)`);
-  console.log(`   Usuario: ${MARKER}`);
+  console.log(`   Usuario: ${OWNER_EMAIL}`);
   console.log(`   Clave:   ${password}`);
   if (!process.env.DEMO_PASSWORD) console.log('   Guarda la clave: no se vuelve a mostrar. Si la pierdes, corre el script con --replace.');
 }
