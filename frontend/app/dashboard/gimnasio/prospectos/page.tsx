@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import {
   IconBrandWhatsapp,
   IconCalendarEvent,
@@ -64,17 +64,19 @@ function StageBadge({ stage }: { stage: LeadStage }) {
 // ── Board ────────────────────────────────────────────────────────────────────
 
 function LeadCard({ lead, onOpen }: { lead: GymLead; onOpen: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: lead.id, data: { lead } });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id, data: { lead } });
+  // While dragged, the card floats above the board (DragOverlay) and this one stays as a placeholder
+  return (
+    <div ref={setNodeRef} {...attributes} {...listeners} onClick={onOpen} className={cn("shrink-0 cursor-grab rounded-xl outline-none active:cursor-grabbing", isDragging && "opacity-40")}>
+      <LeadCardBody lead={lead} />
+    </div>
+  );
+}
+
+function LeadCardBody({ lead, floating }: { lead: GymLead; floating?: boolean }) {
   const overdue = isOverdue(lead);
   return (
-    <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      onClick={onOpen}
-      style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
-      className={cn("cursor-grab rounded-xl bg-card p-3 shadow-sm ring-1 ring-border/60 transition-shadow hover:shadow-md active:cursor-grabbing", isDragging && "z-50 rotate-1 shadow-xl")}
-    >
+    <div className={cn("rounded-xl bg-card p-3 shadow-sm ring-1 ring-border/60 transition-shadow hover:shadow-md", floating && "w-[17rem] rotate-1 cursor-grabbing shadow-xl")}>
       <div className="flex items-start gap-2.5">
         <MemberAvatar name={lead.name} size={32} />
         <div className="min-w-0 flex-1">
@@ -103,12 +105,13 @@ function LeadCard({ lead, onOpen }: { lead: GymLead; onOpen: () => void }) {
 function StageColumn({ stage, label, leads, onOpen }: { stage: LeadStage; label: string; leads: GymLead[]; onOpen: (l: GymLead) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage });
   return (
-    <div ref={setNodeRef} className={cn("flex w-72 shrink-0 flex-col rounded-2xl bg-muted/50 p-2 transition-colors", isOver && "bg-primary/10")}>
-      <div className="flex items-center justify-between px-2 pb-2 pt-1">
+    // As tall as the screen allows; the cards scroll inside and the header stays put
+    <div ref={setNodeRef} className={cn("flex h-[calc(100dvh-22rem)] min-h-[22rem] w-72 shrink-0 flex-col rounded-2xl bg-muted/50 p-2 transition-colors", isOver && "bg-primary/10")}>
+      <div className="flex shrink-0 items-center justify-between px-2 pb-2 pt-1">
         <span className="text-sm font-semibold">{label}</span>
         <span className="rounded-full bg-background px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">{leads.length}</span>
       </div>
-      <div className="flex min-h-24 flex-col gap-2">
+      <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain px-1 pb-1 [scrollbar-width:thin]">
         {leads.map((l) => <LeadCard key={l.id} lead={l} onOpen={() => onOpen(l)} />)}
         {!leads.length && <p className="px-2 py-6 text-center text-xs text-muted-foreground">Arrastra un prospecto aquí</p>}
       </div>
@@ -558,6 +561,7 @@ export default function GymLeadsPage() {
   const [version, setVersion] = useState(0);
   const refresh = () => { load(); setVersion((v) => v + 1); };
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const [dragging, setDragging] = useState<GymLead | null>(null);
 
   const load = useCallback(() => {
     gymApi<GymLead[]>(`/leads?${new URLSearchParams({ ...(source && { source }) })}`).then(setLeads).catch((e) => toast.error(e.message));
@@ -649,14 +653,15 @@ export default function GymLeadsPage() {
 
       {view === "board" ? (
         !leads ? (
-          <div className="flex gap-3 overflow-hidden">{LEAD_STAGES.map(([k]) => <div key={k} className="h-72 w-72 shrink-0 animate-pulse rounded-2xl bg-muted/60" />)}</div>
+          <div className="flex gap-3 overflow-hidden">{LEAD_STAGES.map(([k]) => <div key={k} className="h-[calc(100dvh-22rem)] min-h-[22rem] w-72 shrink-0 animate-pulse rounded-2xl bg-muted/60" />)}</div>
         ) : (
-          <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+          <DndContext sensors={sensors} onDragStart={({ active }) => setDragging((active.data.current?.lead as GymLead) ?? null)} onDragEnd={(e) => { setDragging(null); onDragEnd(e); }} onDragCancel={() => setDragging(null)}>
             <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-4 lg:-mx-6 lg:px-6">
               {LEAD_STAGES.map(([stage, label]) => (
                 <StageColumn key={stage} stage={stage} label={label} leads={filtered.filter((l) => l.stage === stage)} onOpen={(l) => setOpenId(l.id)} />
               ))}
             </div>
+            <DragOverlay dropAnimation={null}>{dragging && <LeadCardBody lead={dragging} floating />}</DragOverlay>
           </DndContext>
         )
       ) : (
