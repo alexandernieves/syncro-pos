@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { InvoiceDocument } from "@/components/invoice/invoice-document";
 import type { InvoiceDesign } from "@/lib/invoice/design";
 import { printInvoice } from "@/lib/invoice/render";
-import type { InvoiceBusiness, InvoiceData } from "@/lib/invoice/types";
+import { type InvoiceBusiness, type InvoiceData, invoiceNumber } from "@/lib/invoice/types";
 
 export type ReceiptData = InvoiceData;
 
@@ -59,8 +59,12 @@ export function ReceiptPrinter({ receipt, design, business, onDone, doneLabel = 
     };
   }, []);
 
+  // The screens rebuild the receipt on every render (for example when "WhatsApp" is pressed):
+  // the paper and the sound start only when it is another sale
+  const receiptKey = receipt ? invoiceNumber(receipt) : null;
+
   useEffect(() => {
-    if (!receipt) return;
+    if (!receiptKey) return;
     setFinished(false);
     let soundAllowed = true;
     try {
@@ -81,7 +85,7 @@ export function ReceiptPrinter({ receipt, design, business, onDone, doneLabel = 
     };
     // printMs is read when the ticket starts; a later change must not restart it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [receipt]);
+  }, [receiptKey]);
 
   useEffect(() => {
     if (finished) doneRef.current?.focus();
