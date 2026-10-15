@@ -16,6 +16,12 @@ const TICKET_SOUND = "/media/ticket.mp3";
 /** Used until the audio duration is known, or if it cannot load. */
 const DEFAULT_PRINT_MS = 3600;
 const SOUND_KEY = "syncro-receipt-sound";
+/**
+ * Receipts that already came out of the printer in this session. A screen can unmount and mount
+ * the printer again (sending it by WhatsApp, a side panel that redraws): it shows the paper
+ * already printed, without the sound.
+ */
+const printed = new Set<string>();
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -34,7 +40,10 @@ type ReceiptPrinterProps = {
 
 /** Animated receipt that comes out of a printer after a sale, with printer and cash register sounds. */
 export function ReceiptPrinter({ receipt, design, business, onDone, doneLabel = "Nueva venta", extraActions }: ReceiptPrinterProps) {
-  const [finished, setFinished] = useState(false);
+  const receiptKey = receipt ? invoiceNumber(receipt) : null;
+  const [finished, setFinished] = useState(() => !!receiptKey && printed.has(receiptKey));
+  // Whether this receipt is printing now (paper animation) or was printed before
+  const [animate, setAnimate] = useState(() => !receiptKey || !printed.has(receiptKey));
   const [soundOn, setSoundOn] = useState(true);
   const ticketAudioRef = useRef<HTMLAudioElement | null>(null);
   const [printMs, setPrintMs] = useState(DEFAULT_PRINT_MS);
@@ -59,12 +68,16 @@ export function ReceiptPrinter({ receipt, design, business, onDone, doneLabel = 
     };
   }, []);
 
-  // The screens rebuild the receipt on every render (for example when "WhatsApp" is pressed):
-  // the paper and the sound start only when it is another sale
-  const receiptKey = receipt ? invoiceNumber(receipt) : null;
-
+  // The paper and the sound only for a receipt that hasn't come out yet
   useEffect(() => {
     if (!receiptKey) return;
+    if (printed.has(receiptKey)) {
+      setAnimate(false);
+      setFinished(true);
+      return;
+    }
+    printed.add(receiptKey);
+    setAnimate(true);
     setFinished(false);
     let soundAllowed = true;
     try {
@@ -145,7 +158,7 @@ export function ReceiptPrinter({ receipt, design, business, onDone, doneLabel = 
         <div className="relative z-30 -mt-[11px] overflow-hidden px-5 pb-3">
           {/* Shadow the slot casts on the paper */}
           <div className="pointer-events-none absolute inset-x-5 top-0 z-10 h-5 bg-gradient-to-b from-black/35 via-black/10 to-transparent" />
-          <div className="rp-paper relative bg-white px-6 pb-8 pt-8 text-[11px] leading-relaxed text-zinc-900 shadow-[0_26px_40px_-20px_rgba(50,50,120,.45),0_2px_8px_rgba(50,50,120,.12)]">
+          <div className={`${animate ? "rp-paper " : ""}relative bg-white px-6 pb-8 pt-8 text-[11px] leading-relaxed text-zinc-900 shadow-[0_26px_40px_-20px_rgba(50,50,120,.45),0_2px_8px_rgba(50,50,120,.12)]`}>
             <div className="flex flex-col items-center gap-1 text-center">
               <IconCircleCheckFilled className="size-9 text-emerald-500" />
               <p className="font-sans text-base font-black tracking-tight">{receipt.pending ? "Venta guardada" : "¡Venta registrada!"}</p>
