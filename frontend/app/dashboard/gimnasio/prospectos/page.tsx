@@ -656,7 +656,7 @@ export default function GymLeadsPage() {
           <div className="flex gap-3 overflow-hidden">{LEAD_STAGES.map(([k]) => <div key={k} className="h-[calc(100dvh-22rem)] min-h-[22rem] w-72 shrink-0 animate-pulse rounded-2xl bg-muted/60" />)}</div>
         ) : (
           <DndContext sensors={sensors} onDragStart={({ active }) => setDragging((active.data.current?.lead as GymLead) ?? null)} onDragEnd={(e) => { setDragging(null); onDragEnd(e); }} onDragCancel={() => setDragging(null)}>
-            <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-4 lg:-mx-6 lg:px-6">
+            <div className="scrollbar-none -mx-4 flex min-w-0 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 lg:-mx-6 lg:px-6">
               {LEAD_STAGES.map(([stage, label]) => (
                 <StageColumn key={stage} stage={stage} label={label} leads={filtered.filter((l) => l.stage === stage)} onOpen={(l) => setOpenId(l.id)} />
               ))}
