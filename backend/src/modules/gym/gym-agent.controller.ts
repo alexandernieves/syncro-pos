@@ -1,6 +1,6 @@
 import { ArgumentsHost, Body, CanActivate, Catch, Controller, ExceptionFilter, ExecutionContext, Get, HttpCode, HttpException, Injectable, Logger, Param, Post, Query, Request, UseFilters, UseGuards } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
-import { GymAgentService } from './gym-agent.service';
+import { GymAgentService, fail } from './gym-agent.service';
 
 /** Koenyx sends X-Api-Key (the gym's key) and X-Gimnasio-Id (the gym's id in Syncro). */
 @Injectable()
@@ -9,9 +9,18 @@ export class AgentKeyGuard implements CanActivate {
   async canActivate(context: ExecutionContext) {
     const req = context.switchToHttp().getRequest();
     req.agentBusinessId = await this.agent.authenticate(req.headers['x-api-key'] || req.headers['authorization'], req.headers['x-gimnasio-id']);
+    // A tool variable the agent didn't fill ("{PARAM:CEDULA}") must never be saved as data
+    for (const [field, value] of Object.entries({ ...(req.query || {}), ...(req.params || {}), ...(typeof req.body === 'object' && req.body ? req.body : {}) })) {
+      if (typeof value === 'string' && UNFILLED.test(value)) {
+        throw fail(400, 'dato_sin_reemplazar', `El campo ${field} llegó sin reemplazar (${value.slice(0, 60)}). Pídele el dato a la persona antes de llamar a la herramienta`);
+      }
+    }
     return true;
   }
 }
+
+/** {PARAM:CEDULA}, {{cedula}}, {cedula} and the like: a placeholder, not a value. */
+const UNFILLED = /\{\s*PARAM\s*:|\{\{[^}]*\}\}|^\{[A-Za-z_]+\}$/i;
 
 const CODES: Record<number, string> = { 400: 'datos_invalidos', 401: 'no_autorizado', 403: 'no_autorizado', 404: 'no_encontrado', 409: 'conflicto', 429: 'demasiadas_peticiones' };
 
