@@ -54,6 +54,18 @@ const dayTime = (d: string) => new Date(d).toLocaleString("es-VE", { weekday: "s
 const pad = (n: number) => String(n).padStart(2, "0");
 const localInput = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+/** "4 h", "3 h 30 min", or that it ends the next day. */
+function shiftLength(start: string, end: string) {
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return "";
+  let mins = eh * 60 + em - (sh * 60 + sm);
+  const overnight = mins <= 0;
+  if (overnight) mins += 24 * 60;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `Duración: ${h ? `${h} h` : ""}${h && m ? " " : ""}${m ? `${m} min` : ""}${overnight ? " · termina al día siguiente" : ""}`;
+}
 const mondayOf = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
 
 function availabilitySummary(rows: Availability[]) {
@@ -220,6 +232,7 @@ function ShiftDialog({ draft, staff, onClose, onSaved }: { draft: ShiftDraft | n
           <div className="space-y-1.5 sm:col-span-2"><Label>Día</Label><DateField value={form.day} onChange={(v) => set("day", v)} presets={FUTURE_PRESETS} /></div>
           <div className="space-y-1.5"><Label>Entrada</Label><Input type="time" value={form.start} onChange={(e) => set("start", e.target.value)} /></div>
           <div className="space-y-1.5"><Label>Salida</Label><Input type="time" value={form.end} onChange={(e) => set("end", e.target.value)} /></div>
+          <p className="-mt-1 text-xs text-muted-foreground sm:col-span-2">{shiftLength(form.start, form.end)}</p>
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Área</Label>
             <div className="flex flex-wrap gap-1.5">
@@ -243,7 +256,16 @@ function ShiftDialog({ draft, staff, onClose, onSaved }: { draft: ShiftDraft | n
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 function ShiftCard({ arg }: { arg: EventContentArg }) {
-  const s = arg.event.extendedProps.shift as Shift;
+  const s = arg.event.extendedProps.shift as Shift | undefined;
+  // The preview while choosing an empty space (it has no shift behind it yet)
+  if (!s) {
+    return (
+      <div className="flex h-full flex-col overflow-hidden rounded-lg border-2 border-dashed border-primary bg-primary/10 px-2 py-1 text-[11px] font-semibold leading-tight text-primary">
+        <span>Nuevo turno</span>
+        {arg.event.start && arg.event.end && <span className="font-normal opacity-80">{time(arg.event.start)} – {time(arg.event.end)}</span>}
+      </div>
+    );
+  }
   const color = s.staff.color || COLORS[1];
   return (
     <div
@@ -268,6 +290,9 @@ export default function GymStaffPage() {
   const [staffDialog, setStaffDialog] = useState<{ open: boolean; staff: Staff | null }>({ open: false, staff: null });
   const [draft, setDraft] = useState<ShiftDraft | null>(null);
   const [copying, setCopying] = useState(false);
+  const [view, setView] = useState<"timeGridWeek" | "timeGridDay">("timeGridWeek");
+  useEffect(() => { if (typeof window !== "undefined" && window.innerWidth < 768) setView("timeGridDay"); }, []);
+  useEffect(() => { ref.current?.getApi().changeView(view); }, [view]);
 
   const loadStaff = useCallback(() => gymApi<Staff[]>("/trainers").then(setStaff).catch((e) => toast.error(e.message)), []);
   const loadShifts = useCallback(() => {
@@ -315,6 +340,11 @@ export default function GymStaffPage() {
   const hours = (data?.totals ?? []).reduce((t, x) => t + x.hours, 0);
   const cost = (data?.totals ?? []).reduce((t, x) => t + (x.cost ?? 0), 0);
   const active = (staff ?? []).filter((s) => s.isActive);
+  // With one person chosen, the calendar greys out the hours they can't work
+  const chosen = filter !== "all" ? (staff ?? []).find((s) => s.id === filter) : undefined;
+  const availabilityHours = chosen?.availability.length
+    ? chosen.availability.map((a) => ({ daysOfWeek: [a.dayOfWeek], startTime: a.startTime, endTime: a.endTime }))
+    : undefined;
 
   const columns = useMemo<ColumnDef<Staff>[]>(
     () => [
@@ -383,12 +413,29 @@ export default function GymStaffPage() {
             <h2 className="ml-2 text-lg font-semibold first-letter:uppercase">{title}</h2>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <select value={filter} onChange={(e) => setFilter(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm">
-              <option value="all">Todo el equipo</option>
-              {(staff ?? []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+            <div className="flex rounded-lg border p-0.5">
+              {([["timeGridWeek", "Semana"], ["timeGridDay", "Día"]] as const).map(([v, label]) => (
+                <button key={v} type="button" onClick={() => setView(v)} className={cn("rounded-md px-3 py-1.5 text-sm font-medium", view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{label}</button>
+              ))}
+            </div>
             <Button variant="outline" className="gap-2" disabled={copying} onClick={copyPrevious}>{copying ? <IconLoader2 size={16} className="animate-spin" /> : <IconCopy size={16} />} Copiar semana anterior</Button>
           </div>
+        </div>
+
+        {/* Who to look at: everyone, or one person with their availability shaded */}
+        <div className="scrollbar-none -mx-1 flex gap-1.5 overflow-x-auto px-1">
+          <button type="button" onClick={() => setFilter("all")} className={cn("shrink-0 rounded-full border px-3 py-1.5 text-sm", filter === "all" ? "border-primary bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:text-foreground")}>
+            Todo el equipo · {Math.round(hours)} h
+          </button>
+          {active.map((p) => {
+            const t = data?.totals.find((x) => x.staffId === p.id);
+            return (
+              <button key={p.id} type="button" onClick={() => setFilter(filter === p.id ? "all" : p.id)} title={`Disponible: ${availabilitySummary(p.availability)}`} className={cn("flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm", filter === p.id ? "border-primary bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:text-foreground")}>
+                <span className="size-2.5 rounded-full" style={{ background: p.color || COLORS[1] }} />
+                {p.name.split(" ")[0]} · {t ? `${t.hours} h` : "0 h"}
+              </button>
+            );
+          })}
         </div>
 
         {!!data?.uncovered.length && (
@@ -415,7 +462,7 @@ export default function GymStaffPage() {
           <FullCalendar
             ref={ref}
             plugins={[timeGridPlugin, interactionPlugin]}
-            initialView="timeGridWeek"
+            initialView={view}
             locale={esLocale}
             firstDay={1}
             headerToolbar={false}
@@ -435,6 +482,7 @@ export default function GymStaffPage() {
               </div>
             )}
             events={events}
+            businessHours={availabilityHours}
             eventContent={(arg) => <ShiftCard arg={arg} />}
             eventClassNames="gym-fc-event"
             eventClick={(arg) => { const s = arg.event.extendedProps.shift as Shift; const a = new Date(s.startsAt), b = new Date(s.endsAt); setDraft({ id: s.id, staffId: s.staffId, day: localInput(a), start: hhmm(a), end: hhmm(b), area: s.area ?? "", notes: s.notes ?? "", shift: s }); }}
@@ -443,11 +491,20 @@ export default function GymStaffPage() {
             eventResize={(arg: EventResizeDoneArg) => move(arg.event.extendedProps.shift, arg.event.start!, arg.event.end!, arg.revert)}
             selectable
             selectMirror
-            select={(arg) => { setDraft({ staffId: filter !== "all" ? filter : active[0]?.id ?? "", day: localInput(arg.start), start: hhmm(arg.start), end: hhmm(arg.end), area: "", notes: "" }); arg.view.calendar.unselect(); }}
+            select={(arg) => {
+              // A click marks a single slot: open a 4-hour shift from there (until 11:00 p. m. at the latest)
+              let end = arg.end;
+              if (end.getTime() - arg.start.getTime() <= 30 * 60000) {
+                const close = new Date(arg.start); close.setHours(23, 0, 0, 0);
+                end = new Date(Math.min(arg.start.getTime() + 4 * 3600000, close.getTime()));
+              }
+              setDraft({ staffId: filter !== "all" ? filter : active[0]?.id ?? "", day: localInput(arg.start), start: hhmm(arg.start), end: hhmm(end), area: "", notes: "" });
+              arg.view.calendar.unselect();
+            }}
             datesSet={(arg: DatesSetArg) => { setTitle(arg.view.title); setRange({ start: arg.start, end: arg.end }); }}
           />
         </div>
-        <p className="text-xs text-muted-foreground">Arrastra sobre un espacio vacío para crear un turno; arrastra un turno para moverlo o estira su borde para cambiar la hora. Toca un turno para marcar la entrada y la salida.</p>
+        <p className="text-xs text-muted-foreground">Toca un espacio vacío para crear un turno de 4 horas, o arrastra para elegir el horario exacto. Arrastra un turno para moverlo, estira su borde para cambiar la hora y tócalo para marcar la entrada y la salida. Al elegir a una persona, se ven en gris las horas en que no está disponible.</p>
       </div>
 
       {tab === "team" && (

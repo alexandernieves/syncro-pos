@@ -70,7 +70,15 @@ function Seats({ booked, capacity, color }: { booked: number; capacity: number; 
 }
 
 function EventCard({ arg }: { arg: EventContentArg }) {
-  const s = arg.event.extendedProps.session as CalendarSession;
+  const s = arg.event.extendedProps.session as CalendarSession | undefined;
+  // The preview while choosing an empty slot (no session behind it yet)
+  if (!s) {
+    return (
+      <div className="flex h-full flex-col overflow-hidden rounded-lg border-2 border-dashed border-primary bg-primary/10 px-2 py-1 text-[11px] font-semibold leading-tight text-primary">
+        <span>Agregar aquí</span>
+      </div>
+    );
+  }
   const color = s.class.color || DEFAULT_COLOR;
   const cancelled = s.status === "CANCELLED";
   const full = !cancelled && s.booked >= s.capacity;
