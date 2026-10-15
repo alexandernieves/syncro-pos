@@ -1,13 +1,17 @@
 {
   "name": "syncro-desktop",
   "productName": "Syncro POS",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Syncro desktop app: opens the business's Syncro server and prints tickets directly",
   "author": "Syncro",
   "private": true,
   "main": "src/main.js",
   "syncro": {
-    "defaultServer": "https://ebanocontrol.total-net.net"
+    "defaultServer": "https://ebanocontrol.total-net.net",
+    "releases": {
+      "owner": "alexandernieves",
+      "repo": "syncro-pos"
+    }
   },
   "scripts": {
     "start": "electron .",

@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('electron', {
     return () => ipcRenderer.removeListener('update-status', listener);
   },
   installUpdate: () => ipcRenderer.send('install-update'),
+  checkUpdates: () => ipcRenderer.send('check-updates'),
   // Only for the server setup page
   saveServer: (url) => ipcRenderer.invoke('save-server', url),
   retry: () => ipcRenderer.invoke('retry'),

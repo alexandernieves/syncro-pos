@@ -60,6 +60,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
+import { DesktopVersion } from "@/components/desktop-update-badge";
 import { IconSparkles } from "@tabler/icons-react";
 
 const data = {
@@ -458,6 +459,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarContent>
         <SidebarFooter>
           <NavUser user={user} />
+          <DesktopVersion />
         </SidebarFooter>
       </Sidebar>
     </>

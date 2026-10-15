@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import { IconDownload, IconLoader2, IconRefresh } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 
-type UpdateStatus = { state: "idle" | "downloading" | "ready" | "error"; version?: string; percent?: number };
+type UpdateStatus = { state: "idle" | "downloading" | "ready" | "error"; version?: string; percent?: number; current?: string };
 
 type DesktopBridge = {
   updateStatus?: () => Promise<UpdateStatus | null>;
   onUpdateStatus?: (cb: (s: UpdateStatus) => void) => () => void;
   onUpdateDownloaded?: (cb: (info: { version?: string }) => void) => () => void;
   installUpdate?: () => void;
+  checkUpdates?: () => void;
 };
 
 const bridge = () => (typeof window === "undefined" ? undefined : (window as unknown as { electron?: DesktopBridge }).electron);
@@ -43,6 +44,21 @@ export function DesktopUpdateBadge({ className }: { className?: string }) {
     );
   }
 
+  if (status.state === "error") {
+    const e = bridge();
+    return (
+      <button
+        type="button"
+        onClick={() => e?.checkUpdates?.()}
+        title="La actualización no se pudo descargar. Pulsa para intentarlo de nuevo."
+        className={cn("hidden h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary sm:inline-flex", className)}
+      >
+        <IconRefresh size={13} />
+        No se pudo actualizar · reintentar
+      </button>
+    );
+  }
+
   if (status.state !== "ready") return null;
 
   return (
@@ -67,4 +83,14 @@ export function DesktopUpdateBadge({ className }: { className?: string }) {
       {installing ? "Reiniciando…" : <>Actualizar a {status.version ? `v${status.version}` : "la versión nueva"}</>}
     </button>
   );
+}
+
+/** Only in the desktop app: the installed version, for the sidebar footer. */
+export function DesktopVersion({ className }: { className?: string }) {
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    bridge()?.updateStatus?.().then((s) => s?.current && setVersion(s.current)).catch(() => {});
+  }, []);
+  if (!version) return null;
+  return <p className={cn("px-2 pb-1 text-[10px] text-muted-foreground/80 tabular-nums group-data-[collapsible=icon]:hidden", className)}>Syncro POS v{version}</p>;
 }

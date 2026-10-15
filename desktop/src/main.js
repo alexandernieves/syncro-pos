@@ -182,7 +182,15 @@ const isMac = process.platform === 'darwin';
 let update = { state: 'idle' }; // idle | downloading | ready | error
 let macNewApp = null; // Mac: path of the downloaded app, ready to swap in
 
+const UPDATE_LOG = path.join(app.getPath('userData'), 'update.log');
+function logUpdate(line) {
+  try {
+    fs.appendFileSync(UPDATE_LOG, `${new Date().toISOString()} ${line}\n`);
+  } catch {}
+}
+
 function setUpdate(next) {
+  if (next.state !== update.state || next.version !== update.version) logUpdate(`${next.state} ${next.version || ''} ${next.message || ''}`.trim());
   update = next;
   win?.webContents.send('update-status', update);
   if (next.state === 'ready') win?.webContents.send('update-downloaded', { version: next.version }); // older panels
@@ -199,9 +207,10 @@ autoUpdater.on('download-progress', (p) => {
   if (update.state === 'downloading') setUpdate({ ...update, percent: Math.round(p.percent) });
 });
 autoUpdater.on('update-downloaded', (info) => setUpdate({ state: 'ready', version: info.version }));
-autoUpdater.on('error', () => {
+autoUpdater.on('error', (e) => {
   // No connection or no release yet: try again on the next check
-  if (update.state === 'downloading') setUpdate({ state: 'idle' });
+  logUpdate(`error ${e?.message || e}`);
+  if (update.state === 'downloading') setUpdate({ state: 'error', version: update.version, message: String(e?.message || e) });
 });
 
 /** Mac: downloads this computer's zip from the release, checks it and unpacks the new app. */
@@ -210,7 +219,8 @@ async function downloadMac(info) {
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
   const file = (info.files || []).find((f) => f.url.endsWith(`-${arch}.zip`));
   if (!file) throw new Error('El release no trae la app para esta Mac');
-  const { owner, repo } = pkg.build.publish;
+  // The packaged package.json loses its "build" section, so the repo lives under "syncro"
+  const { owner, repo } = pkg.syncro.releases;
   const url = `https://github.com/${owner}/${repo}/releases/download/v${info.version}/${file.url}`;
 
   setUpdate({ state: 'downloading', version: info.version, percent: 0 });
@@ -288,6 +298,9 @@ ipcMain.on('install-update', (e) => {
   if (isServer(e.senderFrame.url)) installUpdate();
 });
 ipcMain.handle('update-status', (e) => (isServer(e.senderFrame.url) ? { ...update, current: app.getVersion() } : null));
+ipcMain.on('check-updates', (e) => {
+  if (isServer(e.senderFrame.url)) checkUpdates(false);
+});
 
 function checkUpdates(manual) {
   if (!app.isPackaged) return;
