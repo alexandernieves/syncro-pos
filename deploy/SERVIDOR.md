@@ -2,13 +2,14 @@
 
 Syncro para el gimnasio Ebano, en `https://ebanocontrol.total-net.net`.
 
-Corre con Docker en tres contenedores:
+Corre con Docker en cuatro contenedores:
 
 | Contenedor | Qué es | Dónde escucha |
 |---|---|---|
 | `db` | PostgreSQL 16 con pgvector | `127.0.0.1:5442` (solo desde el servidor) |
 | `backend` | API de Syncro | Solo dentro de Docker |
 | `frontend` | El panel y el proxy de `/api` | `127.0.0.1:8095` |
+| `evolution` | WhatsApp (Evolution API) | Solo dentro de Docker |
 
 El servidor web que ya atiende los otros proyectos recibe el dominio y lo reenvía a `127.0.0.1:8095`. Nada de Ebano queda abierto a internet directamente.
 
@@ -124,6 +125,24 @@ ebanocontrol.total-net.net {
   reverse_proxy 127.0.0.1:8095
 }
 ```
+
+---
+
+## 2b. WhatsApp (Evolution API)
+
+Evolution corre en su propio contenedor (`evolution`), solo dentro de Docker. Le entrega los mensajes al backend por dentro, así que nadie de afuera puede mandarle mensajes falsos a la bandeja.
+
+Una sola vez:
+
+```bash
+cd ~/ebanocontrol
+echo "EVOLUTION_API_KEY=$(openssl rand -hex 24)" >> .env
+docker compose exec db createdb -U ebano evolution
+docker compose up -d evolution
+docker compose logs --tail 30 evolution
+```
+
+Después, en el panel: **Chat de WhatsApp → Vincular WhatsApp Web**, y escanea el código QR desde el teléfono del gimnasio (WhatsApp → Dispositivos vinculados).
 
 ---
 

@@ -1,4 +1,4 @@
-# Ebano Control (Syncro) on the server: database, backend and panel.
+# Ebano Control (Syncro) on the server: database, backend, panel and WhatsApp (Evolution API).
 # Only the panel is published, on 127.0.0.1:${EBANO_PORT}; the server's own web server
 # (the one serving the other projects) forwards ebanocontrol.total-net.net to it.
 #
@@ -40,8 +40,47 @@ services:
       DATABASE_URL: postgresql://ebano:${DB_PASSWORD}@db:5432/ebanocontrol
       PORT: "9000"
       TZ: America/Caracas
+      # WhatsApp through the Evolution container of this project
+      EVOLUTION_API_URL: http://evolution:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:?Falta EVOLUTION_API_KEY en .env}
+      BACKEND_WEBHOOK_URL: http://ebanocontrol-backend:9000/whatsapp/webhook
     volumes:
       - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # WhatsApp: the business links its number with a QR from Configuración. Only reachable inside
+  # this project; it sends the messages it receives straight to the backend.
+  evolution:
+    image: evoapicloud/evolution-api:v2.3.7
+    restart: unless-stopped
+    environment:
+      SERVER_TYPE: http
+      SERVER_PORT: "8080"
+      SERVER_URL: http://evolution:8080
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:?Falta EVOLUTION_API_KEY en .env}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://ebano:${DB_PASSWORD}@db:5432/evolution?schema=public
+      DATABASE_CONNECTION_CLIENT_NAME: ebanocontrol
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "false"
+      DATABASE_SAVE_MESSAGE_UPDATE: "false"
+      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CHATS: "false"
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_LOCAL_ENABLED: "true"
+      DEL_INSTANCE: "false"
+      LANGUAGE: es
+      CONFIG_SESSION_PHONE_CLIENT: Syncro POS
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      LOG_LEVEL: ERROR,WARN,INFO
+      LOG_BAILEYS: warn
+      NODE_OPTIONS: --dns-result-order=ipv4first
+      TZ: America/Caracas
+    volumes:
+      - evolution-instances:/evolution/instances
     depends_on:
       db:
         condition: service_healthy
@@ -61,3 +100,4 @@ services:
 volumes:
   db-data:
   uploads:
+  evolution-instances:
