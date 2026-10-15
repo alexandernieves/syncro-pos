@@ -78,6 +78,17 @@ export class GymAgentController {
     return this.agent.trial(req.agentBusinessId, body);
   }
 
+  @Get('members/:id/bookings')
+  memberBookings(@Param('id') id: string, @Request() req: any) {
+    return this.agent.memberBookings(req.agentBusinessId, id);
+  }
+
+  @HttpCode(200)
+  @Post('prospects/:id/trial')
+  changeTrial(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.agent.changeTrial(req.agentBusinessId, id, body);
+  }
+
   @HttpCode(200)
   @Post('payments/reported')
   reportPayment(@Body() body: any, @Request() req: any) {

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MemberAvatar } from "@/components/gym/gym-ui";
 import { ConfirmDialog } from "@/components/gym/confirm-dialog";
+import { ReceiptPreview, ReceiptThumb } from "@/components/receipt-preview";
 
 type Reported = {
   id: string;
@@ -16,6 +17,7 @@ type Reported = {
   amountText: string;
   bank: string | null;
   reference: string | null;
+  receiptUrl: string | null;
   createdAt: string;
   member: { id: string; memberNumber: number; photoUrl: string | null; client: { name: string; phone: string | null } };
 };
@@ -28,6 +30,7 @@ export function ReportedPayments() {
   const router = useRouter();
   const [rows, setRows] = useState<Reported[]>([]);
   const [rejecting, setRejecting] = useState<Reported | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const load = useCallback(() => gymApi<Reported[]>("/reported-payments").then(setRows).catch(() => {}), []);
   useEffect(() => {
     load();
@@ -55,6 +58,8 @@ export function ReportedPayments() {
                 {[r.planName, r.bank, r.reference && `Referencia ${r.reference}`, when(r.createdAt)].filter(Boolean).map((t) => ` · ${t}`).join("")}
               </p>
             </div>
+            {/* The photo of the bank receipt the member sent to the agent */}
+            {r.receiptUrl && <ReceiptThumb url={r.receiptUrl} onOpen={setPreview} size={40} />}
             <div className="flex gap-2">
               <Button size="sm" variant="ghost" className="gap-1 text-rose-600" onClick={() => setRejecting(r)}><IconX size={14} /> Rechazar</Button>
               <Button
@@ -91,6 +96,7 @@ export function ReportedPayments() {
         }}
         onClose={() => setRejecting(null)}
       />
+      <ReceiptPreview url={preview} onClose={() => setPreview(null)} title="Comprobante del pago" />
     </Card>
   );
 }

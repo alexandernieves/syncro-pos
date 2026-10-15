@@ -2022,6 +2022,8 @@ model GymReportedPayment {
   currency   String?
   bank       String?
   reference  String?
+  /// Photo of the bank receipt the member sent to the agent (stored in S3)
+  receiptUrl String?
   /// PENDING, CONFIRMED or REJECTED
   status     String    @default("PENDING")
   note       String?

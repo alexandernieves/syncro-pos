@@ -10,8 +10,22 @@ import { GymCrmService } from './gym-crm.service';
 import { GymVisitsService } from './gym-visits.service';
 import { GymRemindersService } from './gym-reminders.service';
 import { gymBranch, runInBranch } from './gym-branch';
+import { lookup as dnsLookup } from 'dns/promises';
+import { isIP } from 'net';
+import { UploadsService } from '../uploads/uploads.service';
 
 const DAY = 24 * 60 * 60 * 1000;
+
+/** Loopback, private, link-local and similar ranges: a receipt URL must not point inside our network. */
+function isPrivateAddress(ip: string) {
+  if (isIP(ip) === 6) {
+    const v = ip.toLowerCase();
+    if (v.startsWith('::ffff:')) return isPrivateAddress(v.slice(7));
+    return v === '::1' || v === '::' || v.startsWith('fc') || v.startsWith('fd') || v.startsWith('fe80');
+  }
+  const [a, b] = ip.split('.').map(Number);
+  return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+}
 const digits = (v?: string | null) => String(v ?? '').replace(/\D/g, '');
 /** Last 10 digits: the same number written with or without the country code. */
 const phoneKey = (v?: string | null) => digits(v).slice(-10);
@@ -48,6 +62,7 @@ export class GymAgentService {
     private visits: GymVisitsService,
     private settings: GymRemindersService,
     private whatsapp: WhatsAppService,
+    private uploads: UploadsService,
   ) {}
 
   // ── Keys (managed by the gym in Ajustes) ────────────────────────────────────
@@ -111,7 +126,10 @@ export class GymAgentService {
       const t = d.toLocaleTimeString('es-VE', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).replace(/\s+/g, ' ').trim();
       return `${day(d)}, ${t.replace(/([ap])\.?\s?m\.?$/i, (_x, l) => `${l.toLowerCase()}. m.`)}`;
     };
-    return { setting, gymSettings, rates: ratesFrom(setting), tz, day, when };
+    const rates = ratesFrom(setting);
+    // Without the BCV rate the bolívar price would be the dollar one: better none than a wrong one
+    const bs = (usd: number) => (Number(setting?.exchangeRate) > 1 ? money(fromUsd(usd, 'VES', rates), 'VES') : null);
+    return { setting, gymSettings, rates, bs, tz, day, when };
   }
 
   private async branchOf(businessId: string, branchId?: string | null) {
@@ -135,6 +153,23 @@ export class GymAgentService {
   private splitName(full: string) {
     const parts = full.trim().split(/\s+/);
     return { nombre: parts[0] ?? '', apellido: parts.slice(1).join(' ') };
+  }
+
+  /**
+   * The prospect's trial class and how it went: agendada, asistio, no_asistio or cancelada.
+   * A missed or cancelled trial frees the spot, so that case comes from the timeline.
+   */
+  private async trialOf(businessId: string, lead: { id: string; stage: string; trialSessionId: string | null }, when: (d: Date) => string) {
+    const session = lead.trialSessionId
+      ? await this.prisma.gymClassSession.findFirst({ where: { id: lead.trialSessionId, businessId }, include: { class: { select: { name: true } } } })
+      : null;
+    if (session && (lead.stage === 'TRIAL_SCHEDULED' || lead.stage === 'TRIAL_DONE')) {
+      return { clase_id: session.id, nombre: session.class.name, fecha_hora: when(session.startsAt), estado: lead.stage === 'TRIAL_DONE' ? 'asistio' : 'agendada' };
+    }
+    const last = await this.prisma.gymLeadActivity.findFirst({ where: { businessId, leadId: lead.id, type: 'TRIAL' }, orderBy: { createdAt: 'desc' } });
+    if (last && /^No vino/i.test(last.text)) return { clase_id: null, nombre: null, fecha_hora: null, estado: 'no_asistio' };
+    if (last && /cancelada/i.test(last.text)) return { clase_id: null, nombre: null, fecha_hora: null, estado: 'cancelada' };
+    return null;
   }
 
   private errorText(e: unknown) {
@@ -168,7 +203,7 @@ export class GymAgentService {
     const lead = await this.prisma.gymLead.findFirst({
       where: { businessId, phone: { endsWith: key }, stage: { not: 'WON' } },
       orderBy: { updatedAt: 'desc' },
-      include: { branch: { select: { id: true, name: true } }, trialSession: { include: { class: { select: { name: true } } } } },
+      include: { branch: { select: { id: true, name: true } } },
     });
     if (lead) {
       return {
@@ -177,7 +212,8 @@ export class GymAgentService {
         ...this.splitName(lead.name),
         sede_id: lead.branch?.id ?? null,
         sede_nombre: lead.branch?.name ?? null,
-        clase_prueba: lead.trialSession && lead.trialSession.startsAt > new Date() ? { clase_id: lead.trialSessionId, nombre: lead.trialSession.class.name, fecha_hora: when(lead.trialSession.startsAt) } : null,
+        interes: lead.interest ?? null,
+        clase_prueba: await this.trialOf(businessId, lead, when),
       };
     }
     return { tipo: 'desconocido', contacto_id: null, nombre: null, apellido: null, sede_id: null, sede_nombre: null };
@@ -187,7 +223,7 @@ export class GymAgentService {
 
   async membership(businessId: string, memberId: string) {
     await this.member(businessId, memberId);
-    const { day, rates, gymSettings } = await this.ctx(businessId);
+    const { day, rates, bs, gymSettings } = await this.ctx(businessId);
     const detail = await this.gym.getMember(businessId, memberId);
     const current: any = detail.currentMembership;
     const branch = detail.branchId ? await this.prisma.branch.findUnique({ where: { id: detail.branchId } }) : null;
@@ -214,14 +250,14 @@ export class GymAgentService {
       fecha_vencimiento: current ? day(new Date(current.endDate)) : null,
       dias_restantes: detail.daysLeft,
       deuda_usd: money(owed, 'USD'),
-      deuda_bs: money(fromUsd(owed, 'VES', rates), 'VES'),
+      deuda_bs: bs(owed),
       ...(cop && { deuda_cop: money(cashDue(fromUsd(owed, 'COP', rates), 'COP'), 'COP') }),
       sede: branch?.name ?? null,
       valido_todas_las_sedes: !!detail.allBranches,
       pases_invitado_disponibles: quota?.left ?? 0,
       pases_invitado_del_plan: quota?.allowed ?? 0,
       precio_pase_invitado_usd: money(pass, 'USD'),
-      precio_pase_invitado_bs: money(fromUsd(pass, 'VES', rates), 'VES'),
+      precio_pase_invitado_bs: bs(pass),
       ...(cop && { precio_pase_invitado_cop: money(cashDue(fromUsd(pass, 'COP', rates), 'COP'), 'COP') }),
       politica_congelacion: freezePolicy,
     };
@@ -230,7 +266,7 @@ export class GymAgentService {
   // ── 3. Plans ────────────────────────────────────────────────────────────────
 
   async plans(businessId: string, branchId?: string) {
-    const { rates } = await this.ctx(businessId);
+    const { rates, bs } = await this.ctx(businessId);
     const branch = branchId ? await this.branchOf(businessId, branchId) : null;
     const branches = branch ? [branch] : await this.prisma.branch.findMany({ where: { businessId } });
     const cop = branches.some((b) => isTachira(b.state)) && rates.COP > 0;
@@ -248,7 +284,7 @@ export class GymAgentService {
         nombre: p.name,
         duracion: p.durationDays === 1 ? '1 día' : `${p.durationDays} días`,
         precio_usd: money(p.price, 'USD'),
-        precio_bs: money(fromUsd(p.price, 'VES', rates), 'VES'),
+        precio_bs: bs(p.price),
         ...(cop && { precio_cop: money(cashDue(fromUsd(p.price, 'COP', rates), 'COP'), 'COP') }),
         incluye_clases: names,
         horario_acceso: windows.length ? windows.map((w) => `${w.days.map((d) => dayNames[d]).join(', ')} de ${hm(w.start)} a ${hm(w.end)}`).join('; ') : 'Todo el horario del gimnasio',
@@ -382,6 +418,65 @@ export class GymAgentService {
     });
   }
 
+  // ── 10. Upcoming bookings of a member ───────────────────────────────────────
+
+  async memberBookings(businessId: string, memberId: string) {
+    await this.member(businessId, memberId);
+    const { when } = await this.ctx(businessId);
+    const rows = await this.prisma.gymBooking.findMany({
+      where: { businessId, memberId, status: { in: ['BOOKED', 'WAITLIST'] }, session: { startsAt: { gt: new Date() }, status: 'SCHEDULED' } },
+      orderBy: { session: { startsAt: 'asc' } },
+      take: MAX_ITEMS,
+      include: { session: { include: { class: { select: { name: true } }, branch: { select: { name: true } } } } },
+    });
+    return Promise.all(
+      rows.map(async (b) => {
+        const base = { clase_id: b.sessionId, nombre: b.session.class.name, fecha_hora: when(b.session.startsAt), sede_nombre: b.session.branch?.name ?? null };
+        if (b.status === 'BOOKED') return { ...base, estado: 'reservado' };
+        const ahead = await this.prisma.gymBooking.count({ where: { sessionId: b.sessionId, status: 'WAITLIST', createdAt: { lt: b.createdAt } } });
+        return { ...base, estado: 'en_lista_espera', posicion_espera: ahead + 1 };
+      }),
+    );
+  }
+
+  // ── 12. Move or cancel a prospect's trial class ─────────────────────────────
+
+  async changeTrial(businessId: string, prospectId: string, data: { action?: string; class_id?: string }) {
+    const action = String(data?.action || '');
+    if (!['reagendar', 'cancelar'].includes(action)) throw fail(400, 'accion_invalida', 'La acción debe ser reagendar o cancelar');
+    const { when } = await this.ctx(businessId);
+    const lead = await this.prisma.gymLead.findFirst({ where: { id: prospectId, businessId } });
+    if (!lead) throw fail(404, 'prospecto_no_encontrado', 'No existe ese prospecto');
+    if (lead.stage === 'WON') throw fail(409, 'ya_es_socio', 'Ya es socio: puede reservar la clase directamente', { contacto_id: lead.memberId });
+
+    if (action === 'cancelar') {
+      if (lead.stage !== 'TRIAL_SCHEDULED' || !lead.trialSessionId) throw fail(404, 'sin_clase_prueba', 'No tiene una clase de prueba agendada');
+      const session = await this.prisma.gymClassSession.findUnique({ where: { id: lead.trialSessionId }, include: { class: { select: { name: true } } } });
+      const label = session ? `${session.class.name}, ${when(session.startsAt)}` : 'la clase de prueba';
+      // Frees the spot and leaves the prospect open for follow-up
+      await this.prisma.$transaction([
+        this.prisma.gymLead.update({ where: { id: lead.id }, data: { stage: 'CONTACTED', trialSessionId: null, trialAt: null, nextFollowUpAt: new Date(Date.now() + DAY) } }),
+        this.prisma.gymLeadActivity.create({ data: { businessId, leadId: lead.id, type: 'TRIAL', text: `Clase de prueba cancelada por WhatsApp: ${label}`, userName: 'Agente de WhatsApp' } }),
+      ]);
+      return { estado: 'cancelada', mensaje: `Cancelamos la clase de prueba de ${label}` };
+    }
+
+    if (!data.class_id) throw fail(400, 'falta_clase', 'Falta class_id (clase_id del nuevo horario)');
+    const session = await this.prisma.gymClassSession.findFirst({ where: { id: data.class_id, businessId }, include: { class: { select: { name: true, allowTrial: true } } } });
+    if (!session) throw fail(404, 'clase_no_encontrada', 'No existe esa clase. Consulta las clases de la semana');
+    if (session.class.allowTrial === false) throw fail(400, 'clase_no_apta_prueba', `${session.class.name} no está abierta para clases de prueba. Elige otra`);
+    if (lead.branchId && session.branchId && lead.branchId !== session.branchId) throw fail(400, 'sede_distinta', 'Esa clase es de otra sede');
+    try {
+      // The agent confirms in its own conversation, so no gym_clase_prueba notice here
+      await this.crm.scheduleTrial(businessId, lead.id, session.id, 'Agente de WhatsApp', false);
+    } catch (e) {
+      const text = this.errorText(e);
+      throw fail((e as any)?.getStatus?.() ?? 400, /llena/i.test(text) ? 'sin_cupo' : 'no_se_puede_agendar', text);
+    }
+    const fecha = when(session.startsAt);
+    return { estado: 'reagendada', clase: session.class.name, fecha_hora: fecha, mensaje: `Clase de prueba movida a ${session.class.name}, ${fecha}` };
+  }
+
   // ── 8. Payment reported by the member ───────────────────────────────────────
 
   // ── Reception: payments reported to the agent ───────────────────────────────
@@ -423,7 +518,7 @@ export class GymAgentService {
     });
   }
 
-  async reportPayment(businessId: string, data: { member_id?: string; plan_id?: string; amount?: string | number; bank?: string; reference?: string }) {
+  async reportPayment(businessId: string, data: { member_id?: string; plan_id?: string; amount?: string | number; bank?: string; reference?: string; comprobante_url?: string }) {
     const member = await this.member(businessId, data?.member_id);
     const amountText = String(data.amount ?? '').trim();
     if (!amountText) throw fail(400, 'falta_monto', 'Falta el monto pagado (amount)');
@@ -435,6 +530,8 @@ export class GymAgentService {
     const raw = amountText.replace(/[^\d.,]/g, '');
     const normalized = currency === 'USD' || currency === 'EUR' ? raw.replace(/,(?=\d{3}\b)/g, '').replace(',', '.') : raw.replace(/\./g, '').replace(',', '.');
     const amount = Number(normalized);
+    // The URL Koenyx sends may expire, so we keep our own copy. A bad photo doesn't block the report.
+    const receiptUrl = data.comprobante_url ? await this.saveReceipt(businessId, String(data.comprobante_url)).catch(() => null) : null;
     const row = await this.prisma.gymReportedPayment.create({
       data: {
         businessId,
@@ -447,9 +544,30 @@ export class GymAgentService {
         currency,
         bank: String(data.bank ?? '').trim() || null,
         reference: String(data.reference).trim(),
+        receiptUrl,
       },
     });
-    return { pago_reportado_id: row.id, estado: 'pendiente', mensaje: 'Pago recibido: recepción lo confirma y registra la renovación' };
+    return {
+      pago_reportado_id: row.id,
+      estado: 'pendiente',
+      comprobante_guardado: Boolean(receiptUrl),
+      mensaje: 'Pago recibido: recepción lo confirma y registra la renovación',
+    };
+  }
+
+  /** Downloads the receipt photo (https, public hosts only, up to 8 MB) and stores it in S3. */
+  private async saveReceipt(businessId: string, url: string) {
+    const u = new URL(url);
+    if (u.protocol !== 'https:') throw new Error('Solo https');
+    const { address } = await dnsLookup(u.hostname);
+    if (isPrivateAddress(address)) throw new Error('Dirección no permitida');
+    const res = await fetch(u, { redirect: 'error', signal: AbortSignal.timeout(15000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const type = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    if (!type.startsWith('image/') && type !== 'application/pdf') throw new Error('No es una imagen');
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length > 8 * 1024 * 1024) throw new Error('Muy grande');
+    return this.uploads.uploadReceipt(buffer, type, businessId);
   }
 
   // ── 9. Hand the chat to a person ────────────────────────────────────────────
