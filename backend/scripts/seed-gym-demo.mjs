@@ -8,6 +8,7 @@
  *   node scripts/seed-gym-demo.mjs            creates the demo business
  *   node scripts/seed-gym-demo.mjs --wipe     deletes the demo business and everything in it
  *   node scripts/seed-gym-demo.mjs --replace  deletes it and creates it again
+ *   DEMO_PASSWORD=… keeps the same password across runs
  *
  * Phones are 58400xxxxxxx (no such line in Venezuela) and reminders and class notices are off,
  * so no WhatsApp ever reaches a real person.
@@ -54,9 +55,15 @@ const id = () => randomUUID();
 
 // ── Time: the gym is in Caracas (UTC-4, no daylight saving) ─────────────────
 const DAY = 86400000;
-const NOW = new Date();
 /** Local Caracas date and time → Date. */
 const at = (y, m, d, h = 0, min = 0) => new Date(Date.UTC(y, m - 1, d, h + 4, min));
+// Run before the gym opens, the demo's last day is yesterday, closed at night: nothing happens in the future
+const REAL_NOW = process.env.DEMO_NOW ? new Date(process.env.DEMO_NOW) : new Date();
+const NOW = (() => {
+  const local = new Date(REAL_NOW.getTime() - 4 * 3600000);
+  if (local.getUTCHours() >= 8) return REAL_NOW;
+  return at(local.getUTCFullYear(), local.getUTCMonth() + 1, local.getUTCDate() - 1, 21, 30);
+})();
 const localDay = (date) => {
   const x = new Date(date.getTime() - 4 * 3600000);
   return { y: x.getUTCFullYear(), m: x.getUTCMonth() + 1, d: x.getUTCDate(), dow: x.getUTCDay() };
@@ -172,7 +179,8 @@ async function create() {
     return;
   }
   console.log('Creando Ebano Demo (unos minutos)…');
-  const password = `Demo-${randomBytes(4).toString('hex')}`;
+  // A fixed password survives --replace; otherwise a new one each time
+  const password = process.env.DEMO_PASSWORD || `Demo-${randomBytes(4).toString('hex')}`;
 
   // Business, settings and branches
   const businessId = id();
@@ -286,7 +294,7 @@ async function create() {
       const p = localDay(d);
       const opens = p.dow === 0 ? 8 : 6;
       const closes = p.dow === 0 ? 14 : p.dow === 6 ? 18 : 22;
-      shifts.set(`${b.id}|${d.getTime()}`, { id: id(), branchId: b.id, userId: desk[p.d % 2].id, openedAt: at(p.y, p.m, p.d, opens), closedAt: at(p.y, p.m, p.d, closes), open: d.getTime() === TODAY.getTime(), cash: { USD: 20 }, cashUsd: 20, totals: { CASH: 20 } });
+      shifts.set(`${b.id}|${d.getTime()}`, { id: id(), branchId: b.id, userId: desk[p.d % 2].id, openedAt: at(p.y, p.m, p.d, opens), closedAt: at(p.y, p.m, p.d, closes), open: d.getTime() === TODAY.getTime() && NOW === REAL_NOW, cash: { USD: 20 }, cashUsd: 20, totals: { CASH: 20 } });
     }
   }
   const shiftAt = (branchId, t) => shifts.get(`${branchId}|${dayStart(t).getTime()}`);
@@ -295,6 +303,7 @@ async function create() {
     const s = shiftAt(branchId, day);
     const end = Math.min(s.closedAt.getTime(), NOW.getTime() - 60000);
     const start = s.openedAt.getTime();
+    if (end <= start) return new Date(end);
     return new Date(start + (end - start) * (from + rnd() * (to - from)));
   };
 
@@ -409,7 +418,8 @@ async function create() {
     // Some come by after their plan ran out
     for (const m of members.filter((x) => x.branch.id === branchId && x.lastEnd < NOW && chance(0.12))) {
       const t = addDays(m.lastEnd, int(1, 6));
-      if (t < NOW) push('gymCheckIn', { id: id(), businessId, branchId, memberId: m.id, granted: false, reason: `Membresía vencida el ${localDay(m.lastEnd).d}/${localDay(m.lastEnd).m}`, method: 'FACE', createdAt: addDays(dayStart(t), 0.75) });
+      const when = addDays(dayStart(t), 0.75);
+      if (when < NOW) push('gymCheckIn', { id: id(), businessId, branchId, memberId: m.id, granted: false, reason: `Membresía vencida el ${localDay(m.lastEnd).d}/${localDay(m.lastEnd).m}`, method: 'FACE', createdAt: when });
     }
   }
   await flush('gymCheckIn');
@@ -643,7 +653,7 @@ async function create() {
   console.log(`   Socios: ${members.length} (${active} con plan vigente hoy)`);
   console.log(`   Usuario: ${MARKER}`);
   console.log(`   Clave:   ${password}`);
-  console.log('   Guarda la clave: no se vuelve a mostrar. Si la pierdes, corre el script con --replace.');
+  if (!process.env.DEMO_PASSWORD) console.log('   Guarda la clave: no se vuelve a mostrar. Si la pierdes, corre el script con --replace.');
 }
 
 try {
