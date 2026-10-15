@@ -208,7 +208,7 @@ async function create() {
       businessAddress: 'San Cristóbal, Táchira',
       country: 'Venezuela',
       businessType: 'GENERAL',
-      enabledModules: ['pos', 'products', 'inventory', 'clients', 'accounting', 'reports', 'historial', 'gym'],
+      enabledModules: ['pos', 'products', 'inventory', 'clients', 'accounting', 'reports', 'historial', 'gym', 'whatsapp'],
       exchangeRate: VES_NOW,
       exchangeRateEur: round2(VES_NOW * 1.16),
       exchangeRateDashboard: VES_NOW,
