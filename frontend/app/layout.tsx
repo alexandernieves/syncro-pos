@@ -56,6 +56,7 @@ export const viewport: Viewport = {
 
 import { NotificationsProvider } from "@/context/NotificationsContext";
 import { SessionMonitor } from "@/components/session-monitor";
+import { DesktopUpdateBadge } from "@/components/desktop-update-badge";
 
 export default function RootLayout({
   children,
@@ -125,6 +126,7 @@ export default function RootLayout({
               <ActiveThemeProvider>
                 {children}
                 <SessionMonitor timeoutMinutes={15} />
+                <DesktopUpdateBadge />
                 <KeyboardNav />
                 <Toaster position="top-right" closeButton visibleToasts={4} />
                 <script

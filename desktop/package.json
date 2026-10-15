@@ -1,7 +1,7 @@
 {
   "name": "syncro-desktop",
   "productName": "Syncro POS",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Syncro desktop app: opens the business's Syncro server and prints tickets directly",
   "author": "Syncro",
   "private": true,
@@ -42,7 +42,7 @@
       "provider": "github",
       "owner": "alexandernieves",
       "repo": "syncro-pos",
-      "releaseType": "release"
+      "releaseType": "draft"
     },
     "win": {
       "icon": "build/icon.ico",

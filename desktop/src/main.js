@@ -174,13 +174,14 @@ ipcMain.handle('retry', (e) => {
 
 // ── Updates ─────────────────────────────────────────────────────────────────
 //
-// The panel shows a badge when a new version is ready; "Actualizar" restarts into it.
+// When a new version is out, the panel shows a floating badge. One click downloads it,
+// installs it and opens the app again; the badge shows each step.
 // Windows uses the standard updater. The Mac app isn't signed with an Apple account, which
 // the standard Mac updater requires, so on Mac we download the new app and swap it ourselves.
 
 const isMac = process.platform === 'darwin';
-let update = { state: 'idle' }; // idle | downloading | ready | error
-let macNewApp = null; // Mac: path of the downloaded app, ready to swap in
+let update = { state: 'idle' }; // idle | available | downloading | installing | error
+let available = null; // info of the newer release, from the last check
 
 const UPDATE_LOG = path.join(app.getPath('userData'), 'update.log');
 function logUpdate(line) {
@@ -193,29 +194,33 @@ function setUpdate(next) {
   if (next.state !== update.state || next.version !== update.version) logUpdate(`${next.state} ${next.version || ''} ${next.message || ''}`.trim());
   update = next;
   win?.webContents.send('update-status', update);
-  if (next.state === 'ready') win?.webContents.send('update-downloaded', { version: next.version }); // older panels
 }
 
-autoUpdater.autoDownload = !isMac;
-autoUpdater.autoInstallOnAppQuit = !isMac;
+const fail = (e) => setUpdate({ state: 'error', version: available?.version, message: String(e?.message || e) });
+
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
 
 autoUpdater.on('update-available', (info) => {
-  if (isMac) downloadMac(info).catch((e) => setUpdate({ state: 'error', version: info.version, message: String(e.message || e) }));
-  else setUpdate({ state: 'downloading', version: info.version, percent: 0 });
+  available = info;
+  if (update.state === 'idle' || update.state === 'available' || update.state === 'error') setUpdate({ state: 'available', version: info.version });
 });
 autoUpdater.on('download-progress', (p) => {
   if (update.state === 'downloading') setUpdate({ ...update, percent: Math.round(p.percent) });
 });
-autoUpdater.on('update-downloaded', (info) => setUpdate({ state: 'ready', version: info.version }));
+autoUpdater.on('update-downloaded', (info) => {
+  // Windows: installs silently and opens the app again
+  setUpdate({ state: 'installing', version: info.version });
+  setTimeout(() => autoUpdater.quitAndInstall(true, true), 1200);
+});
 autoUpdater.on('error', (e) => {
-  // No connection or no release yet: try again on the next check
   logUpdate(`error ${e?.message || e}`);
-  if (update.state === 'downloading') setUpdate({ state: 'error', version: update.version, message: String(e?.message || e) });
+  // A failed check is retried on the next one; a failed download shows on the badge
+  if (update.state === 'downloading') fail(e);
 });
 
 /** Mac: downloads this computer's zip from the release, checks it and unpacks the new app. */
 async function downloadMac(info) {
-  if (update.state === 'downloading' || (update.state === 'ready' && update.version === info.version)) return;
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
   const file = (info.files || []).find((f) => f.url.endsWith(`-${arch}.zip`));
   if (!file) throw new Error('El release no trae la app para esta Mac');
@@ -249,11 +254,11 @@ async function downloadMac(info) {
   await new Promise((r, j) => out.end((e) => (e ? j(e) : r())));
   if (file.sha512 && hash.digest('base64') !== file.sha512) throw new Error('La descarga llegó incompleta');
 
+  setUpdate({ state: 'installing', version: info.version });
   await run('/usr/bin/ditto', ['-x', '-k', zip, dir]);
   const newApp = fs.readdirSync(dir).find((n) => n.endsWith('.app'));
   if (!newApp) throw new Error('La descarga no trae la app');
-  macNewApp = path.join(dir, newApp);
-  setUpdate({ state: 'ready', version: info.version });
+  return path.join(dir, newApp);
 }
 
 function run(cmd, args) {
@@ -264,15 +269,19 @@ function run(cmd, args) {
   });
 }
 
-/** Mac: once this app closes, a small script swaps in the new one and opens it. */
-function installMac() {
+/** Mac: the app being replaced, and whether we can write where it lives. */
+function macAppPath() {
   const current = path.resolve(app.getPath('exe'), '..', '..', '..');
   try {
     fs.accessSync(path.dirname(current), fs.constants.W_OK);
+    return current;
   } catch {
-    dialog.showMessageBox(win, { type: 'warning', message: 'No se puede actualizar desde aquí', detail: 'Mueve Syncro POS a la carpeta Aplicaciones y ábrela desde ahí.' });
-    return;
+    return null;
   }
+}
+
+/** Mac: once this app closes, a small script swaps in the new one and opens it. */
+function swapMac(current, newApp) {
   const script = [
     'while kill -0 "$OLD_PID" 2>/dev/null; do sleep 0.3; done',
     'rm -rf "$APP.old"',
@@ -283,19 +292,33 @@ function installMac() {
   spawn('/bin/sh', ['-c', script], {
     detached: true,
     stdio: 'ignore',
-    env: { ...process.env, OLD_PID: String(process.pid), APP: current, NEW: macNewApp },
+    env: { ...process.env, OLD_PID: String(process.pid), APP: current, NEW: newApp },
   }).unref();
-  app.quit();
+  setTimeout(() => app.quit(), 800);
 }
 
-function installUpdate() {
-  if (update.state !== 'ready') return;
-  if (isMac) installMac();
-  else autoUpdater.quitAndInstall(true, true); // silent, and open the app again afterwards
+/** The badge's click: download, install and reopen. */
+async function startUpdate() {
+  if (!available || update.state === 'downloading' || update.state === 'installing') return;
+  try {
+    if (isMac) {
+      const current = macAppPath();
+      if (!current) {
+        dialog.showMessageBox(win, { type: 'warning', message: 'No se puede actualizar desde aquí', detail: 'Mueve Syncro POS a la carpeta Aplicaciones y ábrela desde ahí.' });
+        return;
+      }
+      swapMac(current, await downloadMac(available));
+    } else {
+      setUpdate({ state: 'downloading', version: available.version, percent: 0 });
+      await autoUpdater.downloadUpdate();
+    }
+  } catch (e) {
+    fail(e);
+  }
 }
 
 ipcMain.on('install-update', (e) => {
-  if (isServer(e.senderFrame.url)) installUpdate();
+  if (isServer(e.senderFrame.url)) startUpdate();
 });
 ipcMain.handle('update-status', (e) => (isServer(e.senderFrame.url) ? { ...update, current: app.getVersion() } : null));
 ipcMain.on('check-updates', (e) => {
@@ -304,14 +327,15 @@ ipcMain.on('check-updates', (e) => {
 
 function checkUpdates(manual) {
   if (!app.isPackaged) return;
-  if (manual && update.state === 'ready') {
-    dialog.showMessageBox(win, { message: `La versión ${update.version} está lista.`, buttons: ['Actualizar ahora', 'Después'], defaultId: 0 }).then((r) => r.response === 0 && installUpdate());
-    return;
-  }
   autoUpdater
     .checkForUpdates()
     .then((r) => {
-      if (manual && (!r || !r.isUpdateAvailable)) dialog.showMessageBox(win, { message: `Tienes la versión más reciente (${app.getVersion()}).` });
+      if (!manual) return;
+      if (r && r.isUpdateAvailable) {
+        dialog
+          .showMessageBox(win, { message: `Hay una versión nueva: ${r.updateInfo.version}`, detail: 'Se descarga, se instala y la app se vuelve a abrir.', buttons: ['Actualizar ahora', 'Después'], defaultId: 0 })
+          .then((d) => d.response === 0 && startUpdate());
+      } else dialog.showMessageBox(win, { message: `Tienes la versión más reciente (${app.getVersion()}).` });
     })
     .catch(() => manual && dialog.showMessageBox(win, { type: 'warning', message: 'No se pudo buscar actualizaciones. Revisa la conexión.' }));
 }

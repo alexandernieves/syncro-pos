@@ -33,14 +33,15 @@ jobs:
         run: |
           v="v$(node -p "require('./package.json').version")"
           [ "$v" = "${GITHUB_REF_NAME}" ] || { echo "Tag ${GITHUB_REF_NAME} does not match package.json $v"; exit 1; }
-      # One release first, so the uploads below don't race to create it
-      - name: Create the release
+      # One draft release first, so the uploads below don't race to create it,
+      # and apps don't see a half-uploaded version
+      - name: Create the draft release
         run: |
           tag="v$(node -p "require('./package.json').version")"
           code=$(curl -s -o /tmp/release.json -w "%{http_code}" -X POST \
             -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases" \
-            -d "{\"tag_name\":\"$tag\",\"name\":\"$tag\",\"target_commitish\":\"${GITHUB_SHA}\"}")
+            -d "{\"tag_name\":\"$tag\",\"name\":\"$tag\",\"target_commitish\":\"${GITHUB_SHA}\",\"draft\":true}")
           # 201 created; 422 means it already exists, which is fine
           [ "$code" = "201" ] || [ "$code" = "422" ] || { cat /tmp/release.json; exit 1; }
         env:
@@ -51,6 +52,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and publish Mac (ad-hoc signed)
         run: npx electron-builder --mac --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Every file is up: now the apps can see it
+      - name: Publish the release
+        run: |
+          tag="v$(node -p "require('./package.json').version")"
+          id=$(curl -s -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases?per_page=30" \
+            | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const r=JSON.parse(d).find(x=>x.tag_name==='$tag');console.log(r?r.id:'')})")
+          [ -n "$id" ] || { echo "Release $tag not found"; exit 1; }
+          curl -sf -X PATCH -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/$id" -d '{"draft":false,"make_latest":"true"}' > /dev/null
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Clean up
