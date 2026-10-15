@@ -393,7 +393,7 @@ export default function GymStaffPage() {
         <StatCard label="Equipo activo" value={staff ? active.length : "—"} icon={<IconUsers size={20} />} title={`${active.filter((s) => s.role === "TRAINER").length} entrenadores`} hint={`${active.filter((s) => s.role === "RECEPTION").length} en recepción`} onClick={() => setTab("team")} />
         <StatCard label="Horas en pantalla" value={data ? `${Math.round(hours)} h` : "—"} icon={<IconClockHour4 size={20} />} tone="primary" title={`${data?.shifts.filter((s) => s.status !== "ABSENT").length ?? 0} turnos`} hint="Semana que estás viendo" />
         <StatCard label="Costo estimado" value={data ? money(cost) : "—"} icon={<IconWallet size={20} />} title="Según el pago por hora" hint="Solo personas con tarifa" />
-        <StatCard label="Clases sin cubrir" value={data?.uncovered.length ?? "—"} icon={<IconAlertTriangle size={20} />} tone={data?.uncovered.length ? "warn" : "good"} title={data?.uncovered.length ? "El entrenador no tiene turno" : "Todas cubiertas"} hint="Clases de la semana en pantalla" />
+        <StatCard label="Clases sin cubrir" value={data?.uncovered.length ?? "—"} icon={<IconAlertTriangle size={20} />} tone={data?.uncovered.length ? "warn" : "good"} title={data?.uncovered.length ? "Su entrenador no tiene turno a esa hora" : "Todas tienen a su entrenador en turno"} hint="Clases de la semana en pantalla" />
       </StatGrid>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as "shifts" | "team")}>
@@ -440,7 +440,8 @@ export default function GymStaffPage() {
 
         {!!data?.uncovered.length && (
           <div className="rounded-2xl bg-amber-500/10 p-4">
-            <p className="flex items-center gap-2 text-sm font-semibold text-amber-900"><IconAlertTriangle size={16} /> Clases sin turno del entrenador</p>
+            <p className="flex items-center gap-2 text-sm font-semibold text-amber-900"><IconAlertTriangle size={16} /> Clases sin su entrenador en turno</p>
+            <p className="mt-1 text-xs text-amber-900/80">Estas clases tienen entrenador asignado, pero ese día no tiene un turno que cubra la hora de la clase. Toca una para crearle el turno, o cambia el entrenador de la clase.</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {data.uncovered.slice(0, 12).map((u) => (
                 <button

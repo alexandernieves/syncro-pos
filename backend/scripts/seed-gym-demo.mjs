@@ -8,6 +8,7 @@
  *   node scripts/seed-gym-demo.mjs            creates the demo business
  *   node scripts/seed-gym-demo.mjs --wipe     deletes the demo business and everything in it
  *   node scripts/seed-gym-demo.mjs --replace  deletes it and creates it again
+ *   node scripts/seed-gym-demo.mjs --shifts   only redoes the staff shifts of the existing demo
  *   DEMO_PASSWORD=… keeps the same password across runs; DEMO_EMAIL=… sets the owner's login
  *
  * Phones are 58400xxxxxxx (no such line in Venezuela) and reminders and class notices are off,
@@ -172,6 +173,85 @@ async function wipeLeftovers(users, branches = []) {
   await prisma.user.deleteMany({ where: { id: { in: users } } });
   await prisma.branch.deleteMany({ where: { id: { in: branches } } });
   console.log('Listo: negocio demo borrado.');
+}
+
+// ── Staff shifts ────────────────────────────────────────────────────────────
+//
+// Two weeks back, this week and the next one: reception in two halves of the day, cleaning in the
+// morning and each trainer around their classes. Two absences in the past, and this Thursday's
+// boxing left without its trainer on purpose, to show "Clases sin cubrir".
+async function seedShifts(businessId) {
+  const staff = await prisma.gymTrainer.findMany({ where: { businessId } });
+  const by = (name) => staff.find((t) => t.name === name);
+  await prisma.gymStaffShift.deleteMany({ where: { businessId } });
+  await prisma.gymStaffAvailability.deleteMany({ where: { businessId } });
+
+  // [person, days (0 = Sunday), start, end, area]
+  const PLAN = [
+    ['Yuleidy Mora', [1, 2, 3, 4, 5], '05:30', '13:30', 'Recepción'], ['Kevin Chacón', [1, 2, 3, 4, 5], '13:30', '22:00', 'Recepción'],
+    ['Yuleidy Mora', [6], '07:00', '13:00', 'Recepción'], ['Kevin Chacón', [6], '13:00', '18:00', 'Recepción'], ['Kevin Chacón', [0], '08:00', '14:00', 'Recepción'],
+    ['Rosa Colmenares', [1, 2, 3, 4, 5, 6], '06:00', '12:00', 'Limpieza'],
+    ['Gabriel Rojas', [1, 3, 5], '05:45', '09:30', 'Clases'], ['Gabriel Rojas', [1, 3, 5], '18:15', '19:30', 'Clases'], ['Gabriel Rojas', [2, 4], '06:15', '10:00', 'Piso'],
+    ['Leonardo Vivas', [1, 2, 3, 4, 5], '16:30', '21:00', 'Clases'],
+    ['Andrea Medina', [2, 4], '17:30', '19:30', 'Clases'], ['Andrea Medina', [6], '08:30', '10:30', 'Clases'],
+    ['Paola Zambrano', [1, 3], '19:00', '21:00', 'Clases'], ['Paola Zambrano', [6], '10:00', '12:00', 'Clases'],
+    ['Óscar Carrero', [2, 4], '19:30', '21:30', 'Clases'],
+    ['Marisol Parra', [1, 2, 3, 4, 5], '09:00', '15:00', 'Piso'],
+    ['Dayana Pernía', [1, 2, 3, 4, 5], '06:00', '14:00', 'Recepción'], ['Wilmer Duque', [1, 2, 3, 4, 5], '14:00', '21:30', 'Recepción'], ['Dayana Pernía', [6], '08:00', '14:00', 'Recepción'],
+    ['Ramón Jaimes', [1, 2, 3, 4, 5, 6], '07:00', '12:00', 'Limpieza'],
+    ['Daniel Salas', [1, 3, 5], '06:15', '08:00', 'Clases'], ['Daniel Salas', [1, 3, 5], '17:30', '19:00', 'Clases'],
+    ['Jhonny Briceño', [2, 4], '06:30', '12:30', 'Piso'], ['Jhonny Briceño', [1, 3, 5], '14:00', '20:00', 'Piso'],
+    ['Carolina Ochoa', [2, 4], '18:30', '20:15', 'Clases'], ['Carolina Ochoa', [6], '08:30', '10:30', 'Clases'],
+  ];
+
+  // Availability: the days they work, a little wider than their shifts
+  const widen = (t, mins) => { const [h, m] = t.split(':').map(Number); const v = Math.min(23 * 60 + 59, Math.max(0, h * 60 + m + mins)); return `${String(Math.floor(v / 60)).padStart(2, '0')}:${String(v % 60).padStart(2, '0')}`; };
+  const avail = new Map();
+  for (const [name, days, start, end] of PLAN) {
+    const t = by(name);
+    if (!t) continue;
+    for (const d of days) {
+      const key = `${t.id}|${d}`;
+      const a = avail.get(key) ?? { staffId: t.id, dayOfWeek: d, startTime: widen(start, -60), endTime: widen(end, 60) };
+      if (widen(start, -60) < a.startTime) a.startTime = widen(start, -60);
+      if (widen(end, 60) > a.endTime) a.endTime = widen(end, 60);
+      avail.set(key, a);
+    }
+  }
+  await prisma.gymStaffAvailability.createMany({ data: [...avail.values()].map((a) => ({ id: id(), businessId, ...a })) });
+
+  const monday = (() => { const p = localDay(TODAY); return addDays(TODAY, -((p.dow + 6) % 7)); })();
+  const from = addDays(monday, -14);
+  const to = addDays(monday, 14);
+  const absences = new Set([`Paola Zambrano|${addDays(monday, -12).getTime()}`, `Jhonny Briceño|${addDays(monday, -5).getTime()}`]);
+  const thisThursday = addDays(monday, 3).getTime();
+  const rows = [];
+  for (let d = from; d < to; d = addDays(d, 1)) {
+    const p = localDay(d);
+    for (const [name, days, start, end, area] of PLAN) {
+      const t = by(name);
+      if (!t || !days.includes(p.dow)) continue;
+      if (name === 'Óscar Carrero' && d.getTime() === thisThursday) continue; // left uncovered on purpose
+      const [sh, sm] = start.split(':').map(Number);
+      const [eh, em] = end.split(':').map(Number);
+      const startsAt = at(p.y, p.m, p.d, sh, sm);
+      const endsAt = at(p.y, p.m, p.d, eh, em);
+      const row = { id: id(), businessId, branchId: t.branchId, staffId: t.id, startsAt, endsAt, area, status: 'SCHEDULED', clockInAt: null, clockOutAt: null, createdAt: addDays(startsAt, -7) };
+      if (absences.has(`${name}|${d.getTime()}`)) {
+        row.status = 'ABSENT';
+        row.notes = 'Avisó que estaba enferma';
+      } else if (endsAt <= REAL_NOW) {
+        row.status = 'DONE';
+        row.clockInAt = new Date(startsAt.getTime() + int(-8, 6) * 60000);
+        row.clockOutAt = new Date(endsAt.getTime() + int(-5, 12) * 60000);
+      } else if (startsAt <= REAL_NOW) {
+        row.clockInAt = new Date(startsAt.getTime() + int(-8, 6) * 60000); // working right now
+      }
+      rows.push(row);
+    }
+  }
+  await prisma.gymStaffShift.createMany({ data: rows });
+  console.log(`  gymStaffShift: ${rows.length} · gymStaffAvailability: ${avail.size}`);
 }
 
 // ── Seed ────────────────────────────────────────────────────────────────────
@@ -654,6 +734,8 @@ async function create() {
   await flush('gymPayment');
   await flush('financeMovement');
 
+  await seedShifts(businessId);
+
   const active = [...intervals.values()].flat().filter((iv) => iv.start <= NOW && iv.end > NOW).length;
   console.log('\n✅ Ebano Demo listo');
   console.log(`   Socios: ${members.length} (${active} con plan vigente hoy)`);
@@ -663,8 +745,17 @@ async function create() {
 }
 
 try {
-  if (args.has('--wipe') || args.has('--replace')) await wipe();
-  if (!args.has('--wipe')) await create();
+  if (args.has('--shifts')) {
+    const business = await prisma.business.findFirst({ where: { email: MARKER } });
+    if (!business) console.log('No hay negocio demo. Créalo primero.');
+    else {
+      await seedShifts(business.id);
+      console.log('✅ Turnos del personal listos');
+    }
+  } else {
+    if (args.has('--wipe') || args.has('--replace')) await wipe();
+    if (!args.has('--wipe')) await create();
+  }
 } catch (e) {
   console.error('❌', e.message);
   process.exitCode = 1;
