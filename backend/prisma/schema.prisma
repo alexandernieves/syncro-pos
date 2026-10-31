@@ -199,7 +199,7 @@ model Branch {
 model User {
   id                String              @id @default(uuid())
   email             String              @unique
-  password          String
+  password          String?
   name              String?
   role              String              @default("pos")
   country           String?

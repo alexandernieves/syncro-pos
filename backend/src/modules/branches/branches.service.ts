@@ -136,7 +136,7 @@ export class BranchesService {
     if (!user) throw new NotFoundException('Usuario no encontrado');
 
     const bcrypt = require('bcrypt');
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = user.password && password ? await bcrypt.compare(password, user.password) : false;
     if (!isPasswordValid) throw new UnauthorizedException('Contraseña incorrecta');
 
     return this.prisma.$transaction(async (tx) => {
