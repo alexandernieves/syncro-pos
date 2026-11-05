@@ -3,3 +3,5 @@ node_modules/
 state.json
 state.json.tmp
 test-face.jpg
+.env.*
+state.*.json

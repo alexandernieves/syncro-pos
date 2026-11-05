@@ -30,7 +30,10 @@ async function bootstrap() {
   app.use(urlencoded({ limit: '50mb', extended: true }));
 
   // ── Trust Proxy ────────────────────────────────────────────────────────────
-  app.set('trust proxy', 1);
+  // Number of proxies in front of the backend. Ebano runs behind two (host
+  // nginx → panel nginx); with 1, every visitor shares the panel's IP and the
+  // login rate limit locks out the whole gym at once.
+  app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
 
   // ── Security Headers (Helmet) ─────────────────────────────────────────────
   app.use(

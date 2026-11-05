@@ -18,7 +18,8 @@ ok = (await step('Lector responde', async () => { const i = await device.deviceI
 ok = (await step('Usuario y clave del lector', async () => `${await device.userCount()} personas cargadas`)) && ok;
 ok = (await step('Lectura de eventos', async () => {
   const end = new Date(), start = new Date(end.getTime() - 3600_000);
-  const iso = (d) => d.toISOString().slice(0, 19) + 'Z';
+  // Hikvision rejects the "Z" suffix (400 badJsonContent); it needs an explicit offset.
+  const iso = (d) => d.toISOString().slice(0, 19) + '+00:00';
   const r = await device.searchEvents(iso(start), iso(end));
   return `${r.items.length} eventos en la última hora`;
 })) && ok;

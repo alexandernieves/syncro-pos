@@ -40,6 +40,8 @@ services:
       DATABASE_URL: postgresql://ebano:${DB_PASSWORD}@db:5432/ebanocontrol
       PORT: "9000"
       TZ: America/Caracas
+      # host nginx → panel nginx → backend: trust both hops for the real client IP
+      TRUST_PROXY: "2"
       # WhatsApp through the Evolution container of this project
       EVOLUTION_API_URL: http://evolution:8080
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:?Falta EVOLUTION_API_KEY en .env}
