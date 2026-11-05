@@ -752,6 +752,7 @@ export class GymService {
     }
     else if (m.state === 'FROZEN') reason = m.freezeUntil ? `Membresía congelada hasta el ${fmt(m.freezeUntil)}` : 'Membresía congelada';
     else if (m.state === 'SCHEDULED') reason = `Su membresía empieza el ${fmt(m.startDate)}`;
+    else if (m.state === 'CANCELLED') reason = 'Membresía cancelada';
 
     // A member of another branch only comes in when their plan is valid in every branch
     const here = gymBranch();
@@ -759,7 +760,6 @@ export class GymService {
       if (!m?.plan?.allBranches) { granted = false; reason = `Es socio de ${member.branch?.name ?? 'otra sede'}: su plan solo vale allá`; }
       else warnings.push(`Socio de ${member.branch?.name ?? 'otra sede'} · plan válido en todas las sedes`);
     }
-    else reason = 'Membresía cancelada';
 
     // Plan rules: hours, entries per day and week, packs of visits
     const plan = m?.plan;
