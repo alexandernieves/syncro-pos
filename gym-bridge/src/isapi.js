@@ -42,7 +42,7 @@ export class Isapi {
   }
 
   async request(method, uri, { body, contentType, accept = 'application/json' } = {}) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       const headers = { Accept: accept };
       if (contentType) headers['Content-Type'] = contentType;
       const auth = this.authHeader(method, uri);
@@ -55,11 +55,16 @@ export class Isapi {
       } finally {
         clearTimeout(timer);
       }
-      if (res.status === 401 && attempt === 0) {
-        this.challenge = this.parseChallenge(res.headers.get('www-authenticate'));
+      if (res.status === 401 && attempt < 2) {
+        const header = res.headers.get('www-authenticate');
+        const hadChallenge = !!this.challenge;
+        this.challenge = this.parseChallenge(header);
         this.nc = 0;
-        if (!this.challenge) throw new Error('El lector pidió una autenticación que no es Digest');
-        continue;
+        if (this.challenge) continue;
+        // Hikvision (fw 3.3.x) answers an expired nonce with a bare 401 and no
+        // challenge; asking again without credentials returns a fresh one.
+        if (!header && hadChallenge) { await res.text().catch(() => {}); continue; }
+        throw new Error('El lector pidió una autenticación que no es Digest');
       }
       const text = await res.text();
       let data = text;
