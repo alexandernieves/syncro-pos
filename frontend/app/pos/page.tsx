@@ -72,6 +72,8 @@ import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
 import { useCurrency } from "@/context/CurrencyContext";
 import { FinanceWidget, categoryOf } from "@/components/finance-widget";
+import { SupportChatWidget } from "@/components/support-chat-widget";
+import { SupportNotifier } from "@/components/support-notifier";
 import { type Currency as CashCurrency, CURRENCY_META, cashChange, cashDue, formatMoney, fromUsd, toUsd } from "@/lib/currency";
 
 const API = API_URL;
@@ -4983,6 +4985,8 @@ export default function POSPage() {
 
       {/* Income and expenses that aren't sales (left, so it never covers the cart) */}
       <FinanceWidget placement="left" />
+      <SupportNotifier />
+      <SupportChatWidget placement="left" defaultTop={34} />
 
       {/* DIALOG: ESCÁNER Y CÁMARA (ESTILO UNIFICADO) */}
       <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>

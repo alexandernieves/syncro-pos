@@ -72,14 +72,20 @@ export function SupportNotifier() {
     socket.on("supportMessage", (n: Notice) => {
       refresh();
       const onChat = pathRef.current?.replace(/\/+$/, "") === chatPath;
-      if (onChat && !document.hidden) return; // the chat itself shows it
+      const widgetOpen = !!(window as unknown as Record<string, boolean>).__syncroChatWidgetOpen;
+      if ((onChat || widgetOpen) && !document.hidden) return; // the chat itself shows it
       const title = isSupport ? `💬 ${n.businessName ?? "Un negocio"}` : "💬 Equipo Syncro";
       const body = n.text.length > 140 ? `${n.text.slice(0, 140)}…` : n.text;
-      toast(title, { description: body, duration: 8000, action: { label: "Ver", onClick: () => router.push(chatPath) } });
+      // A business reads it in the floating chat without leaving the screen
+      const view = () => {
+        if (!isSupport && pathRef.current?.replace(/\/+$/, "") !== chatPath) window.dispatchEvent(new Event("support-chat:open"));
+        else router.push(chatPath);
+      };
+      toast(title, { description: body, duration: 8000, action: { label: "Ver", onClick: view } });
       if (document.hidden && "Notification" in window && Notification.permission === "granted") {
         try {
           const notification = new Notification(title, { body, icon: "/syncro.png", tag: n.conversationId });
-          notification.onclick = () => { window.focus(); router.push(chatPath); };
+          notification.onclick = () => { window.focus(); view(); };
         } catch {
           // some browsers only allow notifications from a service worker
         }

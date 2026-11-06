@@ -6,6 +6,7 @@ import { OpenShiftHost } from "@/components/gym/open-shift-dialog";
 import { FinanceWidget } from "@/components/finance-widget";
 import { SuspendedSessionGuard } from "@/components/suspended-session-guard";
 import { SupportNotifier } from "@/components/support-notifier";
+import { SupportChatWidget } from "@/components/support-chat-widget";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 import { useRouter, usePathname } from "next/navigation";
@@ -108,6 +109,7 @@ export default function DashboardLayout({
       <SupportNotifier />
         <OpenShiftHost />
         <FinanceWidget />
+        <SupportChatWidget />
       </div>
     );
   }
@@ -125,6 +127,7 @@ export default function DashboardLayout({
       <SupportNotifier />
       <OpenShiftHost />
         <FinanceWidget />
+        <SupportChatWidget />
       <AppSidebar variant="inset" />
       {/* La vista es la superficie que sobresale: blanca y elevada sobre el
           armazon gris del sidebar, con la esquina superior izquierda marcada. */}

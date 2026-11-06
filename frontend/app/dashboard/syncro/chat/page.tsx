@@ -217,6 +217,7 @@ export default function SyncroAdminChatPage() {
     if (!t) return;
     send({ text: t, type: "TEXT" });
     setText("");
+    if (active) socketRef.current?.emit("typing", { conversationId: active.id, isTyping: false });
   };
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -421,7 +422,11 @@ export default function SyncroAdminChatPage() {
                 className="h-10 flex-1 rounded-full bg-card px-4"
                 placeholder={uploading ? "Subiendo archivo…" : "Responder al negocio…"}
                 value={text}
-                onChange={(e) => setText(e.target.value)}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  // The business sees "Escribiendo…"
+                  if (active) socketRef.current?.emit("typing", { conversationId: active.id, isTyping: !!e.target.value });
+                }}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); } }}
                 disabled={uploading}
               />
