@@ -1,5 +1,4 @@
 "use client";
-import { StoreProfileEditor } from "@/components/syncro-shop/store-profile-editor";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { API_URL } from "@/lib/constants"
 import { clearAuthSession } from "@/lib/auth-helpers";
@@ -1258,30 +1257,24 @@ export default function ConfiguracionPage() {
                       </CardDescription>
                     </div>
                   </div>
-                  <Switch
-                    checked={isSyncroVendor}
-                    onCheckedChange={(checked) => {
-                      setIsSyncroVendor(checked);
-                      handleSaveSyncroShopSettings(checked);
-                    }}
-                    className="data-[state=checked]:bg-primary"
-                  />
+                  {/* Syncro Shop isn't open yet: the switch stays off and locked */}
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Próximamente</span>
+                    <Switch checked={false} disabled aria-label="Syncro Shop, próximamente" />
+                  </div>
                 </div>
               </CardHeader>
               
-              {!isSyncroVendor && (
-                <CardContent className="pt-0 pb-6">
-                  <div className="p-4 rounded-xl border border-dashed border-muted-foreground/30 bg-background/50 flex flex-col gap-2">
-                    <p className="text-sm text-muted-foreground">
-                      💡 <strong className="text-foreground font-semibold">¿Por qué activar Syncro Shop?</strong> Al convertirte en vendedor, tus productos e inventario estarán disponibles para miles de clientes en vivo. Además, desbloquearás la gestión de pedidos en línea directamente desde tu POS.
-                    </p>
-                  </div>
-                </CardContent>
-              )}
+              <CardContent className="pt-0 pb-6">
+                <div className="p-4 rounded-xl border border-dashed border-muted-foreground/30 bg-background/50 flex flex-col gap-2">
+                  <p className="text-sm text-muted-foreground">
+                    💡 <strong className="text-foreground font-semibold">¿Por qué activar Syncro Shop?</strong> Al convertirte en vendedor, tus productos e inventario estarán disponibles para miles de clientes en vivo. Además, desbloquearás la gestión de pedidos en línea directamente desde tu POS.
+                  </p>
+                </div>
+              </CardContent>
             </Card>
 
-            {/* Perfil público de la tienda (fase 1) */}
-            {isSyncroVendor && <StoreProfileEditor />}
+            {/* Store profile comes back with Syncro Shop */}
           </div>
         )}
 
