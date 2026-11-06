@@ -8,6 +8,40 @@ export type RemoteInput =
 /** Public STUN servers to find a direct path between both computers. */
 export const ICE_SERVERS: RTCIceServer[] = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
 
+/** Up to 30 frames per second and enough bitrate for sharp text. */
+export async function tuneSender(sender: RTCRtpSender) {
+  try {
+    const params = sender.getParameters();
+    if (!params.encodings?.length) params.encodings = [{}];
+    params.encodings[0].maxBitrate = 6_000_000;
+    params.encodings[0].maxFramerate = 30;
+    (params as RTCRtpSendParameters & { degradationPreference?: string }).degradationPreference = "maintain-framerate";
+    await sender.setParameters(params);
+  } catch {
+    // older browsers: defaults are fine
+  }
+}
+
+/** Prefer H.264 (hardware encoding on most computers, lower delay), then VP8. */
+export function preferFastCodecs(pc: RTCPeerConnection) {
+  try {
+    const caps = RTCRtpSender.getCapabilities?.("video");
+    if (!caps) return;
+    const rank = (mime: string) => (mime === "video/H264" ? 0 : mime === "video/VP8" ? 1 : 2);
+    const codecs = [...caps.codecs].sort((a, b) => rank(a.mimeType) - rank(b.mimeType));
+    for (const t of pc.getTransceivers()) if (t.sender.track?.kind === "video") t.setCodecPreferences(codecs);
+  } catch {
+    // not supported: the browser picks
+  }
+}
+
+/** Show frames as soon as they arrive instead of buffering them. */
+export function lowLatency(receiver: RTCRtpReceiver) {
+  const r = receiver as RTCRtpReceiver & { jitterBufferTarget?: number; playoutDelayHint?: number };
+  try { if ("jitterBufferTarget" in r) r.jitterBufferTarget = 0; } catch { /* ignore */ }
+  try { if ("playoutDelayHint" in r) r.playoutDelayHint = 0; } catch { /* ignore */ }
+}
+
 export function socketSession() {
   try {
     const pwa = window.matchMedia("(display-mode: standalone)").matches;

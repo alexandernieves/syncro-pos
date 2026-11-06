@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SyncroAvatar } from "@/components/syncro-avatar";
-import { ICE_SERVERS, type RemoteInput, socketSession } from "@/components/remote/remote-protocol";
+import { ICE_SERVERS, type RemoteInput, preferFastCodecs, socketSession, tuneSender } from "@/components/remote/remote-protocol";
 
 type DesktopBridge = { isDesktop?: boolean; remoteInput?: (ev: Record<string, unknown>) => void };
 const desktop = () => (typeof window !== "undefined" ? ((window as unknown as { electron?: DesktopBridge }).electron ?? null) : null);
@@ -129,7 +129,7 @@ export function RemoteAssistHost() {
   const [incoming, setIncoming] = useState<{ sessionId: string; adminName: string } | null>(null);
   const [allowControl, setAllowControl] = useState(true);
   const [active, setActive] = useState<{ sessionId: string; adminName: string; control: boolean } | null>(null);
-  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
+  const pointerRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -144,7 +144,23 @@ export function RemoteAssistHost() {
     pcRef.current?.close();
     pcRef.current = null;
     setActive(null);
-    setPointer(null);
+  }, []);
+
+  /** Syncro's pointer moves straight on the DOM, without re-rendering, so it keeps up every frame. */
+  const movePointer = useCallback((p: { x: number; y: number }) => {
+    const el = pointerRef.current;
+    if (!el) return;
+    const at = toPage(p.x, p.y);
+    el.style.transform = `translate(${at.x}px, ${at.y}px)`;
+    el.style.opacity = "1";
+  }, []);
+
+  /** Clicks and keys run only while the business allows control (it decides, here on its side). */
+  const runInput = useCallback((ev: RemoteInput) => {
+    if (!activeRef.current?.control) return;
+    const bridge = desktop();
+    if (bridge?.remoteInput) desktopInput(ev, bridge.remoteInput);
+    else browserInput(ev);
   }, []);
 
   useEffect(() => {
@@ -158,13 +174,9 @@ export function RemoteAssistHost() {
       stop(false);
       toast(by === "business" ? "Terminaste la asistencia en vivo" : `Asistencia en vivo terminada: ${reason}`);
     });
-    socket.on("remote:pointer", (p: { x: number; y: number }) => setPointer(p));
-    socket.on("remote:input", (ev: RemoteInput) => {
-      if (!activeRef.current?.control) return;
-      const bridge = desktop();
-      if (bridge?.remoteInput) desktopInput(ev, bridge.remoteInput);
-      else browserInput(ev);
-    });
+    // Fallback path through the server, used until the direct channels open
+    socket.on("remote:pointer", (p: { x: number; y: number }) => movePointer(p));
+    socket.on("remote:input", (ev: RemoteInput) => runInput(ev));
     socket.on("remote:signal", async ({ data }: { data: { type: string; sdp?: string; candidate?: RTCIceCandidateInit } }) => {
       const pc = pcRef.current;
       if (!pc) return;
@@ -176,7 +188,7 @@ export function RemoteAssistHost() {
       }
     });
     return () => { stop(true); socket.disconnect(); };
-  }, [stop]);
+  }, [stop, movePointer, runInput]);
 
   const accept = async () => {
     const req = incoming;
@@ -185,7 +197,12 @@ export function RemoteAssistHost() {
     let stream: MediaStream;
     try {
       // The desktop app answers with its own window; the browser asks which tab, suggesting this one
-      stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false, preferCurrentTab: true, selfBrowserSurface: "include" } as DisplayMediaStreamOptions);
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 30, max: 30 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+        preferCurrentTab: true,
+        selfBrowserSurface: "include",
+      } as DisplayMediaStreamOptions);
     } catch {
       socketRef.current?.emit("remote:respond", { sessionId: req.sessionId, accept: false });
       toast.error("No se pudo compartir la pantalla");
@@ -200,7 +217,20 @@ export function RemoteAssistHost() {
     streamRef.current = stream;
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     pcRef.current = pc;
-    stream.getTracks().forEach((t) => { pc.addTrack(t, stream); t.onended = () => stop(true); });
+    stream.getTracks().forEach((t) => {
+      // Keep the frame rate up when the network tightens: it feels live, and the text stays legible
+      if ("contentHint" in t) t.contentHint = "motion";
+      const sender = pc.addTrack(t, stream);
+      t.onended = () => stop(true);
+      void tuneSender(sender);
+    });
+    preferFastCodecs(pc);
+    // Direct channels between both computers: the pointer (latest wins, no retries) and the
+    // clicks and keys (in order, never lost). Faster than going through the server.
+    const pointerCh = pc.createDataChannel("pointer", { ordered: false, maxRetransmits: 0 });
+    pointerCh.onmessage = (e) => { try { movePointer(JSON.parse(e.data)); } catch { /* ignore */ } };
+    const inputCh = pc.createDataChannel("input", { ordered: true });
+    inputCh.onmessage = (e) => { try { runInput(JSON.parse(e.data)); } catch { /* ignore */ } };
     pc.onicecandidate = (e) => { if (e.candidate) socketRef.current?.emit("remote:signal", { sessionId: req.sessionId, data: { type: "candidate", candidate: e.candidate.toJSON() } }); };
     pc.onconnectionstatechange = () => { if (pc.connectionState === "failed") { toast.error("Se perdió la conexión con Syncro"); stop(true); } };
     setActive({ sessionId: req.sessionId, adminName: req.adminName, control: allowControl });
@@ -220,8 +250,6 @@ export function RemoteAssistHost() {
     setActive({ ...active, control });
     socketRef.current?.emit("remote:control", { sessionId: active.sessionId, control });
   };
-
-  const pagePointer = pointer ? toPage(pointer.x, pointer.y) : null;
 
   return (
     <>
@@ -262,8 +290,8 @@ export function RemoteAssistHost() {
               Terminar
             </button>
           </div>
-          {pagePointer && (
-            <div className="pointer-events-none fixed z-[101] transition-[left,top] duration-75" style={{ left: pagePointer.x, top: pagePointer.y }}>
+          {(
+            <div ref={pointerRef} className="pointer-events-none fixed left-0 top-0 z-[101] opacity-0 will-change-transform">
               <svg width="22" height="22" viewBox="0 0 24 24" className="drop-shadow" aria-hidden>
                 <path d="M3 2 L20 11 L12 13 L9 21 Z" fill="#F26B3A" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
               </svg>

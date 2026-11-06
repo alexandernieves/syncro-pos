@@ -8,7 +8,7 @@ import { connectSocket } from "@/lib/socket";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SyncroAvatar } from "@/components/syncro-avatar";
-import { ICE_SERVERS, type RemoteInput, socketSession } from "@/components/remote/remote-protocol";
+import { ICE_SERVERS, type RemoteInput, lowLatency, socketSession } from "@/components/remote/remote-protocol";
 
 type State = "idle" | "waiting" | "connecting" | "live";
 
@@ -24,11 +24,16 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
   const sessionRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
-  const lastMove = useRef(0);
+  const channels = useRef<{ pointer?: RTCDataChannel; input?: RTCDataChannel }>({});
+  const pending = useRef<{ x: number; y: number } | null>(null);
+  const frame = useRef(0);
+  const lastSocketMove = useRef(0);
 
   const cleanup = useCallback(() => {
     pcRef.current?.close();
     pcRef.current = null;
+    channels.current = {};
+    cancelAnimationFrame(frame.current);
     sessionRef.current = null;
     socketRef.current?.disconnect();
     socketRef.current = null;
@@ -64,7 +69,11 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
       setState("connecting");
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
       pcRef.current = pc;
+      pc.ondatachannel = (e) => {
+        if (e.channel.label === "pointer" || e.channel.label === "input") channels.current[e.channel.label] = e.channel;
+      };
       pc.ontrack = (e) => {
+        lowLatency(e.receiver);
         if (videoRef.current) videoRef.current.srcObject = e.streams[0];
         setState("live");
         setTimeout(() => surfaceRef.current?.focus(), 50);
@@ -109,7 +118,34 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
     return { x, y };
   };
 
-  const send = (event: RemoteInput) => { if (sessionRef.current) socketRef.current?.emit("remote:input", { sessionId: sessionRef.current, event }); };
+  /** Clicks and keys: straight to the business when the direct channel is open, else via the server. */
+  const send = (event: RemoteInput) => {
+    const ch = channels.current.input;
+    if (ch?.readyState === "open") ch.send(JSON.stringify(event));
+    else if (sessionRef.current) socketRef.current?.emit("remote:input", { sessionId: sessionRef.current, event });
+  };
+
+  /** The pointer goes out once per screen frame with its latest position. */
+  const queuePointer = (p: { x: number; y: number }) => {
+    pending.current = p;
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      const at = pending.current;
+      if (!at || !sessionRef.current) return;
+      const ch = channels.current.pointer;
+      if (ch?.readyState === "open") {
+        ch.send(JSON.stringify(at));
+        if (control) send({ kind: "move", ...at });
+      } else {
+        const now = Date.now();
+        if (now - lastSocketMove.current < 40) return;
+        lastSocketMove.current = now;
+        socketRef.current?.emit("remote:pointer", { sessionId: sessionRef.current, ...at });
+        if (control) send({ kind: "move", ...at });
+      }
+    });
+  };
   const button = (b: number) => (b === 2 ? "right" : b === 1 ? "middle" : "left") as "left" | "right" | "middle";
 
   if (state === "idle") {
@@ -154,13 +190,8 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
             className={cn("absolute inset-0 outline-none", control ? "cursor-default" : "cursor-crosshair")}
             onContextMenu={(e) => e.preventDefault()}
             onMouseMove={(e) => {
-              const now = Date.now();
-              if (now - lastMove.current < 40) return;
-              lastMove.current = now;
               const p = point(e);
-              if (!p || !sessionRef.current) return;
-              socketRef.current?.emit("remote:pointer", { sessionId: sessionRef.current, ...p });
-              if (control) send({ kind: "move", ...p });
+              if (p) queuePointer(p);
             }}
             onMouseDown={(e) => { surfaceRef.current?.focus(); const p = point(e); if (p && control) send({ kind: "down", ...p, button: button(e.button) }); }}
             onMouseUp={(e) => { const p = point(e); if (p && control) send({ kind: "up", ...p, button: button(e.button) }); }}
