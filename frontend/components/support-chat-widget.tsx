@@ -385,7 +385,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
               })}
               {typing && (
                 <span className="flex items-center gap-1.5 self-start rounded-full bg-background px-2 py-1 text-xs text-muted-foreground">
-                  <SyncroAvatar pose="think" size={22} /> Syncro está escribiendo…
+                  <SyncroBadge size={22} /> Syncro está escribiendo…
                 </span>
               )}
             </div>
