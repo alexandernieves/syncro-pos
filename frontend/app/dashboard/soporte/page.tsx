@@ -54,6 +54,7 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { PWAInstallButton } from "@/components/pwa-install-button";
 import { VoiceButton, VoiceButtonState } from "@/components/ui/voice-button";
 import { ChatCard } from "@/components/chat/chat-card";
+import { SyncroAvatar, SyncroBadge } from "@/components/syncro-avatar";
 import { useSupportUnread } from "@/components/support-notifier";
 import { WhatsAppAudioPlayer } from "@/components/ui/whatsapp-audio-player";
 import { motion, AnimatePresence } from "framer-motion";
@@ -1993,10 +1994,7 @@ export default function SupportChatPage() {
                 )}
               >
                 <div className="relative">
-                  <Avatar className="size-10">
-                    <AvatarImage src="/syncro.png" />
-                    <AvatarFallback className="bg-primary text-primary-foreground font-bold text-xs">Sp</AvatarFallback>
-                  </Avatar>
+                  <SyncroBadge size={40} />
                   <span className={cn(
                     "absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-background transition-colors duration-300",
                     isOtherOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-muted-foreground/30"
@@ -2051,10 +2049,7 @@ export default function SupportChatPage() {
                 </Button>
                 {chatType === "human" ? (
                   <>
-                    <Avatar className="size-9">
-                      <AvatarImage src="/syncro.png" />
-                      <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">Sp</AvatarFallback>
-                    </Avatar>
+                    <SyncroBadge size={36} />
                     <div>
                       <p className="font-semibold text-sm">
                         Equipo Syncro
@@ -2389,10 +2384,8 @@ export default function SupportChatPage() {
                   {/* Welcome message */}
                   {chatType === "human" && messages.length === 0 && (
                     <div className="self-center mt-8 flex flex-col items-center gap-3 text-center max-w-xs">
-                      <div className="size-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-                        <IconMessageCircle size={32} className="text-primary/60" />
-                      </div>
-                      <p className="text-sm font-semibold">¡Hola! ¿En qué te ayudamos?</p>
+                      <SyncroAvatar pose="wave" size={96} />
+                      <p className="text-sm font-semibold">¡Hola! Soy Syncro. ¿En qué te ayudamos?</p>
                     </div>
                   )}
 
@@ -2438,8 +2431,8 @@ export default function SupportChatPage() {
                           )}>
                             {chatType === "human" && !isMe && (
                               <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold text-primary">
-                                <img src="/iconosyncro.png" alt="" className="shrink-0 object-contain" style={{ width: 11, height: 11 }} />
-                                <span>Equipo Syncro</span>
+                                <SyncroBadge size={16} />
+                                <span>Syncro · Equipo Syncro</span>
                               </div>
                             )}
                             {chatType === "ai" && !isMe && (

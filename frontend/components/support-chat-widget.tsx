@@ -12,6 +12,7 @@ import { connectSocket } from "@/lib/socket";
 import { cn } from "@/lib/utils";
 import { ChatCard, type CardMeta } from "@/components/chat/chat-card";
 import { useSupportUnread } from "@/components/support-notifier";
+import { SyncroAvatar, SyncroBadge } from "@/components/syncro-avatar";
 
 type Msg = {
   id?: string;
@@ -261,7 +262,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
       {/* The tab on the edge */}
       <button
         type="button"
-        aria-label={unread ? `Chat con Equipo Syncro, ${unread} sin leer` : "Chat con Equipo Syncro"}
+        aria-label={unread ? `Chat con Syncro, ${unread} sin leer` : "Chat con Syncro"}
         title="Chat con Equipo Syncro"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -294,8 +295,13 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
           className="fixed z-40 w-60 rounded-xl border bg-background p-3 text-sm shadow-lg"
           role="status"
         >
-          <p className="font-medium">¿Necesitas ayuda?</p>
-          <p className="mt-0.5 text-muted-foreground">Escríbele al Equipo Syncro desde aquí, en cualquier pantalla. Arrastra la pestaña si te estorba.</p>
+          <div className="flex items-start gap-2.5">
+            <SyncroAvatar pose="wave" size={40} />
+            <div>
+              <p className="font-medium">¡Hola! Soy Syncro</p>
+              <p className="mt-0.5 text-muted-foreground">Escríbeme desde aquí, en cualquier pantalla. Arrastra la pestaña si te estorba.</p>
+            </div>
+          </div>
           <div className="mt-2 flex gap-2">
             <button type="button" onClick={() => setOpen(true)} className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground">Abrir chat</button>
             <button type="button" onClick={() => { setIntro(false); try { localStorage.setItem(INTRO_KEY, "1"); } catch { /* storage blocked */ } }} className="rounded-md px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted">Entendido</button>
@@ -316,12 +322,9 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
         )}
       >
         <div className="flex items-center gap-3 border-b px-4 py-3">
-          <span className="relative">
-            <img src="/syncro.png" alt="" className="size-9 rounded-full" />
-            <span className={cn("absolute bottom-0 right-0 size-2.5 rounded-full ring-2 ring-background", online ? "bg-emerald-500" : "bg-muted-foreground/40")} />
-          </span>
+          <SyncroBadge size={38} online={online} />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">Equipo Syncro</p>
+            <p className="text-sm font-semibold">Syncro <span className="font-normal text-muted-foreground">· Equipo Syncro</span></p>
             <p className="truncate text-xs text-muted-foreground">{typing ? "Escribiendo…" : online ? "En línea ahora" : "Te respondemos lun – vie, 8 a. m. a 6 p. m."}</p>
           </div>
           <Link href="/dashboard/soporte" onClick={() => setOpen(false)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Abrir el chat completo" title="Abrir el chat completo"><IconArrowsMaximize size={16} /></Link>
@@ -333,9 +336,12 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
             <div className="flex justify-center py-16 text-muted-foreground"><IconLoader2 className="animate-spin" /></div>
           ) : !messages.length ? (
             <div className="space-y-3 px-1 py-4">
-              <div className="rounded-2xl border border-primary/30 bg-primary/10 p-3.5 text-sm">
-                <p className="font-semibold">¡Hola! Somos el Equipo Syncro 👋</p>
-                <p className="mt-1 text-muted-foreground">Escríbenos lo que necesites: una duda, algo que no funciona o una idea para tu negocio. Puedes mandar fotos.</p>
+              <div className="flex items-end gap-3">
+                <SyncroAvatar pose="wave" size={72} />
+                <div className="rounded-2xl rounded-bl-sm border border-primary/30 bg-primary/10 p-3.5 text-sm">
+                  <p className="font-semibold">¡Hola! Soy Syncro 👋</p>
+                  <p className="mt-1 text-muted-foreground">Junto al equipo te ayudo con lo que necesites: una duda, algo que no funciona o una idea para tu negocio. Puedes mandar fotos.</p>
+                </div>
               </div>
               <p className="px-1 text-xs text-muted-foreground">Para empezar:</p>
               <div className="flex flex-col items-start gap-1.5">
@@ -355,7 +361,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
                     {newDay && <span className="my-1 self-center rounded-full border bg-background px-2.5 py-0.5 text-[10px] text-muted-foreground first-letter:uppercase">{day(m.createdAt)}</span>}
                     <div className={cn("flex max-w-[85%] flex-col", syncro ? "items-start self-start" : "items-end self-end")}>
                       <div className={cn("rounded-2xl border px-3 py-2 text-sm", syncro ? "rounded-tl-sm border-primary/30 bg-primary/10" : "rounded-tr-sm bg-card shadow-sm")}>
-                        {syncro && <p className="mb-0.5 text-[10px] font-semibold text-primary">Equipo Syncro</p>}
+                        {syncro && <p className="mb-0.5 flex items-center gap-1 text-[10px] font-semibold text-primary"><SyncroBadge size={14} /> Syncro</p>}
                         {m.type === "CARD" && m.meta ? (
                           <ChatCard meta={m.meta} text={m.text} audience="business" />
                         ) : m.type === "IMAGE" ? (
@@ -376,7 +382,11 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
                   </div>
                 );
               })}
-              {typing && <span className="self-start rounded-full bg-background px-3 py-1 text-xs text-muted-foreground">Equipo Syncro está escribiendo…</span>}
+              {typing && (
+                <span className="flex items-center gap-1.5 self-start rounded-full bg-background px-2 py-1 text-xs text-muted-foreground">
+                  <SyncroAvatar pose="think" size={22} /> Syncro está escribiendo…
+                </span>
+              )}
             </div>
           )}
           <div ref={endRef} />
