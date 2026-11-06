@@ -215,7 +215,7 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
       <div className="relative min-h-0 flex-1">
         {state !== "live" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center text-white">
-            <SyncroAvatar pose={state === "waiting" ? "think" : "point"} size={110} />
+            <SyncroAvatar pose={state === "waiting" ? "think" : "point"} size={200} />
             <p className="text-lg font-medium">{state === "waiting" ? `Le pedimos permiso a ${businessName}` : "Conectando con su pantalla…"}</p>
             <p className="max-w-sm text-sm text-white/60">{state === "waiting" ? "Le aparece un aviso para aceptar. Si no lo ve, pídele por el chat que abra Syncro." : "Unos segundos."}</p>
             <IconLoader2 className="animate-spin text-white/60" />

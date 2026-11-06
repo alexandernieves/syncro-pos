@@ -2384,7 +2384,7 @@ export default function SupportChatPage() {
                   {/* Welcome message */}
                   {chatType === "human" && messages.length === 0 && (
                     <div className="self-center mt-8 flex flex-col items-center gap-3 text-center max-w-xs">
-                      <SyncroAvatar pose="wave" size={96} />
+                      <SyncroAvatar pose="wave" size={140} />
                       <p className="text-sm font-semibold">¡Hola! Soy Syncro. ¿En qué te ayudamos?</p>
                     </div>
                   )}

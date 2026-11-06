@@ -278,6 +278,12 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
           open && !drag && "pointer-events-none opacity-0",
         )}
       >
+        {/* Syncro peeking out next to the tab */}
+        {!drag && (
+          <span className={cn("absolute top-1/2 -translate-y-1/2 transition-transform duration-200", side === "right" ? "-left-11 group-hover:-translate-x-1" : "-right-11 group-hover:translate-x-1")} aria-hidden>
+            <SyncroAvatar size={42} title="" />
+          </span>
+        )}
         <span className="relative">
           <IconMessageCircle size={15} className="text-primary" />
           {unread > 0 && (
@@ -297,7 +303,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
           role="status"
         >
           <div className="flex items-start gap-2.5">
-            <SyncroAvatar pose="wave" size={40} />
+            <SyncroAvatar pose="wave" size={56} />
             <div>
               <p className="font-medium">¡Hola! Soy Syncro</p>
               <p className="mt-0.5 text-muted-foreground">Escríbeme desde aquí, en cualquier pantalla. Arrastra la pestaña si te estorba.</p>
@@ -338,7 +344,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
           ) : !messages.length ? (
             <div className="space-y-3 px-1 py-4">
               <div className="flex items-end gap-3">
-                <SyncroAvatar pose="wave" size={72} />
+                <SyncroAvatar pose="wave" size={88} />
                 <div className="rounded-2xl rounded-bl-sm border border-primary/30 bg-primary/10 p-3.5 text-sm">
                   <p className="font-semibold">¡Hola! Soy Syncro 👋</p>
                   <p className="mt-1 text-muted-foreground">Junto al equipo te ayudo con lo que necesites: una duda, algo que no funciona o una idea para tu negocio. Puedes mandar fotos.</p>

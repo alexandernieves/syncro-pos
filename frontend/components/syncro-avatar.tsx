@@ -24,8 +24,8 @@ function hasWebGL() {
 
 /**
  * Syncro, the mascot of the Syncro team: a chubby, glazed-white snowman-like character with two
- * black bead eyes. Rendered in 3D (it floats, breathes, blinks and follows the cursor). `full` shows
- * the whole body, `head` only the face; by default small sizes use the face. Without WebGL it falls
+ * black bead eyes. Rendered in 3D (it floats, breathes, blinks and follows the cursor). By default only the
+ * head is shown (`full` adds the body). Without WebGL it falls
  * back to a flat face. Original design for Syncro.
  */
 export function SyncroAvatar({
@@ -41,7 +41,7 @@ export function SyncroAvatar({
   className?: string;
   title?: string;
 }) {
-  const kind: MascotVariant = variant ?? (size < 64 ? "head" : "full");
+  const kind: MascotVariant = variant ?? "head";
   const [webgl, setWebgl] = useState<boolean | null>(null);
   useEffect(() => setWebgl(hasWebGL()), []);
 

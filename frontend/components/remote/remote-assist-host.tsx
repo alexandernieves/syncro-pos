@@ -283,7 +283,7 @@ export function RemoteAssistHost() {
       <Dialog open={!!incoming} onOpenChange={(o) => { if (!o) decline(); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="items-center text-center">
-            <SyncroAvatar pose="point" size={84} />
+            <SyncroAvatar pose="point" size={150} />
             <DialogTitle>{incoming?.adminName} quiere ayudarte en vivo</DialogTitle>
             <DialogDescription>
               Verá tu pantalla de Syncro mientras dure la ayuda. Solo esta ventana, no el resto de tu computadora. Puedes terminar cuando quieras.
