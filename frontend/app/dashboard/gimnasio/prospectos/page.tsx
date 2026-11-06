@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -9,6 +9,8 @@ import {
   IconCalendarEvent,
   IconCalendarPlus,
   IconCheck,
+  IconChevronLeft,
+  IconChevronRight,
   IconClock,
   IconLayoutKanban,
   IconList,
@@ -67,7 +69,7 @@ function LeadCard({ lead, onOpen }: { lead: GymLead; onOpen: () => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id, data: { lead } });
   // While dragged, the card floats above the board (DragOverlay) and this one stays as a placeholder
   return (
-    <div ref={setNodeRef} {...attributes} {...listeners} onClick={onOpen} className={cn("shrink-0 cursor-grab rounded-xl outline-none active:cursor-grabbing", isDragging && "opacity-40")}>
+    <div ref={setNodeRef} {...attributes} {...listeners} data-lead-card onClick={onOpen} className={cn("shrink-0 cursor-grab rounded-xl outline-none active:cursor-grabbing", isDragging && "opacity-40")}>
       <LeadCardBody lead={lead} />
     </div>
   );
@@ -115,6 +117,80 @@ function StageColumn({ stage, label, leads, onOpen }: { stage: LeadStage; label:
         {leads.map((l) => <LeadCard key={l.id} lead={l} onOpen={() => onOpen(l)} />)}
         {!leads.length && <p className="px-2 py-6 text-center text-xs text-muted-foreground">Arrastra un prospecto aquí</p>}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Horizontal board without a visible scrollbar. It still moves with the trackpad, the mouse
+ * wheel (when the column under the pointer has nothing left to scroll), by grabbing the empty
+ * part of the board, and with the edge arrows.
+ */
+function BoardScroller({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  const pan = useRef<{ x: number; left: number; id: number } | null>(null);
+
+  const measure = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setEdges({ left: el.scrollLeft > 4, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
+  }, []);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    // Native listener: React's onWheel is passive and can't stop the page from scrolling
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.ctrlKey) return; // trackpad sideways or zoom
+      let node = e.target as HTMLElement | null;
+      while (node && node !== el) {
+        const can = node.scrollHeight > node.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(node).overflowY);
+        if (can && (e.deltaY < 0 ? node.scrollTop > 0 : node.scrollTop + node.clientHeight < node.scrollHeight - 1)) return;
+        node = node.parentElement;
+      }
+      const atEnd = e.deltaY > 0 ? el.scrollLeft + el.clientWidth >= el.scrollWidth - 1 : el.scrollLeft <= 0;
+      if (atEnd) return; // let the page scroll once the board can't move further
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => { ro.disconnect(); el.removeEventListener("wheel", onWheel); };
+  }, [measure]);
+
+  const step = (dir: 1 | -1) => ref.current?.scrollBy({ left: dir * 300, behavior: "smooth" });
+
+  return (
+    <div className="relative">
+      <div
+        ref={ref}
+        onScroll={measure}
+        onPointerDown={(e) => {
+          // Grab the board (not a card, which is for dragging leads) to slide it
+          if (e.pointerType !== "mouse" || e.button !== 0 || (e.target as HTMLElement).closest("[data-lead-card],button,a,input,select,textarea")) return;
+          pan.current = { x: e.clientX, left: ref.current!.scrollLeft, id: e.pointerId };
+          ref.current!.setPointerCapture(e.pointerId);
+        }}
+        onPointerMove={(e) => { if (pan.current && ref.current) ref.current.scrollLeft = pan.current.left - (e.clientX - pan.current.x); }}
+        onPointerUp={() => { pan.current = null; }}
+        onPointerCancel={() => { pan.current = null; }}
+        className="scrollbar-none -mx-4 flex min-w-0 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 lg:-mx-6 lg:px-6"
+      >
+        {children}
+      </div>
+      {edges.left && (
+        <button type="button" aria-label="Ver etapas anteriores" onClick={() => step(-1)} className="absolute left-1 top-1/2 z-10 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-background shadow-md ring-1 ring-border transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <IconChevronLeft size={18} />
+        </button>
+      )}
+      {edges.right && (
+        <button type="button" aria-label="Ver más etapas" onClick={() => step(1)} className="absolute right-1 top-1/2 z-10 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-background shadow-md ring-1 ring-border transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <IconChevronRight size={18} />
+        </button>
+      )}
     </div>
   );
 }
@@ -656,11 +732,11 @@ export default function GymLeadsPage() {
           <div className="flex gap-3 overflow-hidden">{LEAD_STAGES.map(([k]) => <div key={k} className="h-[calc(100dvh-22rem)] min-h-[22rem] w-72 shrink-0 animate-pulse rounded-2xl bg-muted/60" />)}</div>
         ) : (
           <DndContext sensors={sensors} onDragStart={({ active }) => setDragging((active.data.current?.lead as GymLead) ?? null)} onDragEnd={(e) => { setDragging(null); onDragEnd(e); }} onDragCancel={() => setDragging(null)}>
-            <div className="scrollbar-none -mx-4 flex min-w-0 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-4 lg:-mx-6 lg:px-6">
+            <BoardScroller>
               {LEAD_STAGES.map(([stage, label]) => (
                 <StageColumn key={stage} stage={stage} label={label} leads={filtered.filter((l) => l.stage === stage)} onOpen={(l) => setOpenId(l.id)} />
               ))}
-            </div>
+            </BoardScroller>
             <DragOverlay dropAnimation={null}>{dragging && <LeadCardBody lead={dragging} floating />}</DragOverlay>
           </DndContext>
         )
