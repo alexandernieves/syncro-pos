@@ -2424,7 +2424,7 @@ export default function SupportChatPage() {
                           <div className={cn(
                             "px-4 py-2.5 rounded-2xl shadow-sm text-sm relative border",
                             isMe
-                              ? "bg-stone-800 border-stone-800 text-white rounded-tr-none dark:bg-stone-700 dark:border-stone-700"
+                              ? "bg-card border-border text-foreground rounded-tr-none shadow-md"
                               : chatType === "ai"
                                 ? "bg-primary/5 dark:bg-primary/10 border-primary/20 text-foreground rounded-tl-none shadow-md backdrop-blur-xs"
                                 : "bg-card border-border text-foreground rounded-tl-none"
@@ -2699,7 +2699,7 @@ export default function SupportChatPage() {
                             )}
 
                             {msg.type !== "AUDIO" && msg.type !== "audio" && (
-                              <div className={cn("flex items-center gap-1 mt-1.5 text-[9px]", isMe ? "text-white/60 justify-end" : "text-muted-foreground")}>
+                              <div className={cn("flex items-center gap-1 mt-1.5 text-[9px]", isMe ? "text-muted-foreground justify-end" : "text-muted-foreground")}>
                                 {(() => {
                                   try {
                                     const d = new Date(msg.createdAt || Date.now());
@@ -2709,7 +2709,7 @@ export default function SupportChatPage() {
                                     return "";
                                   }
                                 })()}
-                                {isMe && chatType === "human" && <IconChecks size={12} className={msg.isRead ? "text-sky-400" : "text-white/40"} />}
+                                {isMe && chatType === "human" && <IconChecks size={12} className={msg.isRead ? "text-sky-500" : "text-muted-foreground/60"} />}
                               </div>
                             )}
                           </div>

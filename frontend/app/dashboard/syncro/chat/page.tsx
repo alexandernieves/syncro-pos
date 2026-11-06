@@ -381,12 +381,12 @@ export default function SyncroAdminChatPage() {
                       {newDay && <span className="my-2 self-center rounded-full border bg-background px-3 py-1 text-[11px] text-muted-foreground first-letter:uppercase">{dayLabel(m.createdAt)}</span>}
                       <div className={cn("flex max-w-[75%] flex-col", isMe ? "self-end items-end" : "self-start items-start")}>
                         {!isMe && <span className="mb-1 ml-1 text-[11px] text-muted-foreground">{m.sender?.name ?? "Cliente"}</span>}
-                        <div className={cn("rounded-2xl px-4 py-2.5 text-sm shadow-sm", isMe ? "rounded-br-sm bg-stone-800 text-white dark:bg-stone-700" : "rounded-bl-sm border bg-card")}>
+                        <div className={cn("rounded-2xl px-4 py-2.5 text-sm shadow-sm", isMe ? "rounded-br-sm border bg-card shadow-md" : "rounded-bl-sm border bg-muted")}>
                           {renderContent(m, isMe)}
                           {m.type !== "AUDIO" && m.type !== "audio" && (
-                            <div className={cn("mt-1 flex items-center gap-1 text-[10px]", isMe ? "justify-end text-white/60" : "text-muted-foreground")}>
+                            <div className={cn("mt-1 flex items-center gap-1 text-[10px]", isMe ? "justify-end text-muted-foreground" : "text-muted-foreground")}>
                               {new Date(m.createdAt).toLocaleTimeString("es-VE", { hour: "numeric", minute: "2-digit" })}
-                              {isMe && (m.isRead ? <IconChecks size={12} className="text-sky-300" /> : <IconCheck size={12} />)}
+                              {isMe && (m.isRead ? <IconChecks size={12} className="text-sky-500" /> : <IconCheck size={12} />)}
                             </div>
                           )}
                         </div>
