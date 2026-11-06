@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WhatsAppAudioPlayer } from "@/components/ui/whatsapp-audio-player";
 import { BusinessSheet } from "@/components/syncro-admin/business-sheet";
+import { ChatCard } from "@/components/chat/chat-card";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
 import { STATUS_CLASS, STATUS_LABEL } from "@/lib/syncro-admin";
@@ -51,6 +52,8 @@ type Msg = {
   isRead?: boolean;
   createdAt: string;
   sender?: { id: string; name: string | null; role: string } | null;
+  meta?: Record<string, unknown> | null;
+  requestId?: string | null;
 };
 
 const getToken = () => {
@@ -267,6 +270,7 @@ export default function SyncroAdminChatPage() {
   const mine = (m: Msg) => (m.sender ? m.sender.role === "syncropos" : m.senderId === userId);
 
   const renderContent = (m: Msg, isMe: boolean) => {
+    if (m.type === "CARD" && m.meta) return <ChatCard meta={m.meta} text={m.text} audience="support" />;
     if (m.type === "IMAGE") return <a href={m.fileUrl ?? "#"} target="_blank" rel="noreferrer"><img src={m.fileUrl ?? ""} alt="Imagen" className="max-w-xs rounded-xl" /></a>;
     if (m.type === "VIDEO") return <video src={m.fileUrl ?? ""} controls className="max-w-xs rounded-xl" />;
     if (m.type === "AUDIO" || m.type === "audio") {
@@ -380,8 +384,8 @@ export default function SyncroAdminChatPage() {
                     <React.Fragment key={m.id ?? i}>
                       {newDay && <span className="my-2 self-center rounded-full border bg-background px-3 py-1 text-[11px] text-muted-foreground first-letter:uppercase">{dayLabel(m.createdAt)}</span>}
                       <div className={cn("flex max-w-[75%] flex-col", isMe ? "self-end items-end" : "self-start items-start")}>
-                        {!isMe && <span className="mb-1 ml-1 text-[11px] text-muted-foreground">{m.sender?.name ?? "Cliente"}</span>}
-                        <div className={cn("rounded-2xl px-4 py-2.5 text-sm shadow-sm", isMe ? "rounded-br-sm border bg-card shadow-md" : "rounded-bl-sm border bg-muted")}>
+                        <span className={cn("mb-1 text-[11px]", isMe ? "mr-1 font-medium text-primary" : "ml-1 text-muted-foreground")}>{isMe ? `Equipo Syncro${m.sender?.name ? ` · ${m.sender.name}` : ""}` : m.sender?.name ?? "Cliente"}</span>
+                        <div className={cn("rounded-2xl px-4 py-2.5 text-sm shadow-sm", isMe ? "rounded-br-sm border border-primary/30 bg-primary/10" : "rounded-bl-sm border bg-card")}>
                           {renderContent(m, isMe)}
                           {m.type !== "AUDIO" && m.type !== "audio" && (
                             <div className={cn("mt-1 flex items-center gap-1 text-[10px]", isMe ? "justify-end text-muted-foreground" : "text-muted-foreground")}>

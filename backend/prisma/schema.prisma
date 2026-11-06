@@ -102,8 +102,15 @@ model Message {
   fileUrl        String?
   isRead         Boolean      @default(false)
   createdAt      DateTime     @default(now())
+  /// Card messages (type CARD): what the card shows, e.g. a module offer or a request update
+  meta           Json?
+  /// The module request this message is about, for its thread
+  requestId      String?
   conversation   Conversation @relation(fields: [conversationId], references: [id])
   sender         User         @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId, isRead])
+  @@index([requestId])
 }
 
 model Product {

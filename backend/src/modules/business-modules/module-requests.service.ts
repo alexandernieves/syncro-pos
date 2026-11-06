@@ -91,7 +91,13 @@ export class ModuleRequestsService {
         : kind === 'CUSTOM_FEATURE'
           ? `🛠️ Solicité una función para ${catalogModule(moduleCode!)?.name}: «${title}».\n\n${problem}`
           : `🧩 Solicité un módulo a la medida: «${title}»${request.trade ? ` (${request.trade})` : ''}.\n\n${problem}`;
-    await this.chat.notifySupport(businessId, user.id, text).catch(() => undefined);
+    await this.chat
+      .notifySupport(businessId, user.id, text, {
+        type: 'CARD',
+        requestId: request.id,
+        meta: { card: 'request', requestId: request.id, title: request.title, kind, status: 'REQUESTED', trade: request.trade, moduleCode },
+      })
+      .catch(() => undefined);
     return request;
   }
 
@@ -140,7 +146,13 @@ export class ModuleRequestsService {
       .catch(() => undefined);
     if (body?.notify !== false) {
       const text = `Tu solicitud «${request.title}» ahora está: ${STATUS_TEXT[status]}.${note ? `\n\n${note}` : ''}`;
-      await this.chat.notifyBusiness(request.businessId, adminId, text).catch(() => undefined);
+      await this.chat
+        .notifyBusiness(request.businessId, adminId, text, {
+          type: 'CARD',
+          requestId: id,
+          meta: { card: 'request', requestId: id, title: request.title, kind: request.kind, status, note },
+        })
+        .catch(() => undefined);
     }
     return updated;
   }

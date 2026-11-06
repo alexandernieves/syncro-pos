@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { PosTable } from "@/components/pos-table";
 import { BusinessSheet } from "@/components/syncro-admin/business-sheet";
+import { RequestThread } from "@/components/chat/request-thread";
 import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
 import { adminApi, dateTime, shortDate } from "@/lib/syncro-admin";
 
@@ -55,7 +56,10 @@ export default function ModuleRequestsPage() {
   const load = useCallback(() => {
     adminApi<Data>("/requests").then((d) => {
       setData(d);
-      setOpen((cur) => (cur ? d.items.find((i) => i.id === cur.id) ?? null : cur));
+      // Opened from a chat card: /dashboard/syncro/requests?id=…
+      const wanted = new URLSearchParams(window.location.search).get("id");
+      setOpen((cur) => (cur ? d.items.find((i) => i.id === cur.id) ?? null : wanted ? d.items.find((i) => i.id === wanted) ?? null : cur));
+      if (wanted) window.history.replaceState(null, "", window.location.pathname);
     }).catch((e) => toast.error(e.message));
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -183,6 +187,11 @@ function RequestSheet({ request: r, onClose, onChanged, onOpenBusiness }: { requ
                 </div>
                 <label className="flex items-center gap-2"><Checkbox checked={notify} onCheckedChange={(v) => setNotify(v === true)} /> Avisarle por el chat de soporte</label>
                 <Button onClick={save} disabled={busy || (status === r.status && !note.trim())}>{busy && <IconLoader2 size={16} className="animate-spin" />} Guardar</Button>
+              </div>
+
+              <div className="space-y-2">
+                <p className="font-semibold">Conversación sobre esta solicitud</p>
+                <RequestThread key={r.id} businessId={r.business.id} requestId={r.id} audience="support" />
               </div>
 
               <div className="space-y-2">

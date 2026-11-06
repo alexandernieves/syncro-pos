@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { refreshMyModules, trialDaysLeft, useMyModules } from "@/lib/modules";
+import { RequestThread } from "@/components/chat/request-thread";
 
 type CatalogModule = { code: string; name: string; trade: string; summary: string; highlights: string[]; features: { key: string; label: string; description?: string }[] };
 type RequestEvent = { id: string; status: string; note: string | null; byRole: string | null; createdAt: string };
@@ -49,6 +50,15 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 const shortDate = (d: string) => new Date(d).toLocaleDateString("es-VE", { day: "numeric", month: "short" });
+
+function businessId(): string | null {
+  try {
+    const pwa = window.matchMedia("(display-mode: standalone)").matches;
+    return JSON.parse((pwa ? sessionStorage.getItem("user") : localStorage.getItem("user")) || "null")?.businessId ?? null;
+  } catch {
+    return null;
+  }
+}
 
 function isOwner() {
   try {
@@ -91,13 +101,15 @@ export default function ModuleStorePage() {
   const [owner, setOwner] = useState(false);
   const [asking, setAsking] = useState<CatalogModule | null>(null);
   const [custom, setCustom] = useState(false);
+  const [talking, setTalking] = useState<string | null>(null);
+  const [bizId, setBizId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     api<CatalogModule[]>("/modules/catalog").then(setCatalog).catch((e) => { toast.error(e.message); setCatalog([]); });
     api<ModuleRequest[]>("/modules/requests").then(setRequests).catch(() => setRequests([]));
     refreshMyModules();
   }, []);
-  useEffect(() => { setOwner(isOwner()); load(); }, [load]);
+  useEffect(() => { setOwner(isOwner()); setBizId(businessId()); load(); }, [load]);
 
   const myModule = (code: string) => mine?.find((m) => m.code === code);
   const openRequest = (code: string) => requests?.find((r) => r.kind === "CATALOG" && r.moduleCode === code && !["DONE", "REJECTED"].includes(r.status));
@@ -220,6 +232,10 @@ export default function ModuleStorePage() {
                   <Badge variant="outline">{STATUS_LABEL[r.status] ?? r.status}</Badge>
                 </div>
                 <Timeline r={r} />
+                <Button size="sm" variant="ghost" className="-ml-2" onClick={() => setTalking(talking === r.id ? null : r.id)}>
+                  <IconMessageCircle size={16} /> {talking === r.id ? "Ocultar conversación" : "Conversar sobre esta solicitud"}
+                </Button>
+                {talking === r.id && bizId && <RequestThread businessId={bizId} requestId={r.id} audience="business" />}
                 {(() => {
                   const note = [...r.events].reverse().find((e) => e.note && e.byRole === "syncro");
                   return note ? <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm"><span className="font-medium">Syncro:</span> {note.note}</p> : null;

@@ -7,6 +7,7 @@ import { IconCirclePlusFilled, IconMail, IconCornerDownRight, type Icon } from "
 import { ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useNavProximity } from "@/components/use-nav-proximity"
+import { useSupportUnread } from "@/components/support-notifier"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -59,6 +60,7 @@ export function NavMain({
   }
 
   const [openItem, setOpenItem] = useState<string | null>(null)
+  const supportUnread = useSupportUnread()
 
   useEffect(() => {
     const activeItem = items.find(item => isParentActive(item))
@@ -286,7 +288,7 @@ export function NavMain({
                                       : "text-muted-foreground hover:!text-primary hover:!bg-primary/5"
                                   )}
                                 >
-                                  <Link href={subItem.url} data-kbd-nav data-active={subActive ? "true" : undefined} className="flex items-center">
+                                  <Link href={subItem.url} data-kbd-nav data-active={subActive ? "true" : undefined} className="flex w-full items-center">
                                     <IconCornerDownRight 
                                       size={14} 
                                       stroke={2.5}
@@ -298,6 +300,9 @@ export function NavMain({
                                       )}
                                     />
                                     <span>{subItem.title}</span>
+                                    {subItem.url === "/dashboard/syncro/chat" && supportUnread > 0 && (
+                                      <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold tabular-nums text-primary-foreground" aria-label={`${supportUnread} mensajes sin leer`}>{supportUnread > 99 ? "99+" : supportUnread}</span>
+                                    )}
                                   </Link>
                                 </SidebarMenuSubButton>
                               </SidebarMenuSubItem>

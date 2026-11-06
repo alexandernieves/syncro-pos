@@ -74,6 +74,8 @@ export class ChatService {
     text?: string;
     type?: string;
     fileUrl?: string;
+    meta?: Record<string, unknown>;
+    requestId?: string | null;
   }) {
     const message = await this.prisma.message.create({
       data: {
@@ -81,7 +83,9 @@ export class ChatService {
         senderId: data.senderId,
         text: data.text,
         type: data.type || 'TEXT',
-        fileUrl: data.fileUrl
+        fileUrl: data.fileUrl,
+        meta: (data.meta as any) ?? undefined,
+        requestId: data.requestId ?? null,
       },
       include: {
         sender: {
@@ -102,14 +106,27 @@ export class ChatService {
     return message;
   }
 
-  async markAsRead(conversationId: string, userId: string) {
+  async conversationBusiness(conversationId: string) {
+    const c = await this.prisma.conversation.findUnique({ where: { id: conversationId }, select: { businessId: true } });
+    return c?.businessId ?? null;
+  }
+
+  /** Marks as read what the other side wrote: the business reads Syncro's messages and vice versa. */
+  async markAsRead(conversationId: string, bySupport: boolean) {
     return this.prisma.message.updateMany({
-      where: {
-        conversationId,
-        senderId: { not: userId },
-        isRead: false
-      },
-      data: { isRead: true }
+      where: { conversationId, isRead: false, sender: bySupport ? { role: { not: 'syncropos' } } : { role: 'syncropos' } },
+      data: { isRead: true },
     });
+  }
+
+  /** Unread messages for the badge: Syncro's for a business, every business's for the Syncro team. */
+  async unread(user: { role?: string; businessId?: string }) {
+    if (user?.role === 'syncropos') {
+      const count = await this.prisma.message.count({ where: { isRead: false, sender: { role: { not: 'syncropos' } } } });
+      return { count };
+    }
+    if (!user?.businessId) return { count: 0 };
+    const count = await this.prisma.message.count({ where: { isRead: false, sender: { role: 'syncropos' }, conversation: { businessId: user.businessId } } });
+    return { count };
   }
 }

@@ -150,7 +150,12 @@ export class BusinessModulesService {
     }
     await this.audit(adminId, businessId, `SYNCRO_MODULE_${action}`, { module: code, status: saved.status, trialEndsAt: saved.trialEndsAt });
     if (opts.notify !== false && text) {
-      await this.chat.notifyBusiness(businessId, adminId, opts.message?.trim() || text).catch(() => undefined);
+      await this.chat
+        .notifyBusiness(businessId, adminId, opts.message?.trim() || text, {
+          type: 'CARD',
+          meta: { card: 'module', action, moduleCode: code, name: mod.name, status: saved.status, trialEndsAt: saved.trialEndsAt },
+        })
+        .catch(() => undefined);
     }
     return saved;
   }

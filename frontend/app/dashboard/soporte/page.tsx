@@ -53,6 +53,8 @@ import { es } from "date-fns/locale";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { PWAInstallButton } from "@/components/pwa-install-button";
 import { VoiceButton, VoiceButtonState } from "@/components/ui/voice-button";
+import { ChatCard } from "@/components/chat/chat-card";
+import { useSupportUnread } from "@/components/support-notifier";
 import { WhatsAppAudioPlayer } from "@/components/ui/whatsapp-audio-player";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -368,6 +370,7 @@ export default function SupportChatPage() {
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [otherLastSeen, setOtherLastSeen] = useState<string | null>(null);
   const [isOtherOnline, setIsOtherOnline] = useState(false);
+  const supportUnread = useSupportUnread();
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [mounted, setMounted] = useState(false);
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
@@ -1699,10 +1702,10 @@ export default function SupportChatPage() {
       }
     });
 
-    socketRef.current.on("userPresence", ({ userId, status }: { userId: string, status: string }) => {
-      if (userId !== storedUser.id) {
-        setIsOtherOnline(status === 'online');
-      }
+    // Whether someone from the Syncro team is connected, straight from the server
+    socketRef.current.on("supportPresence", ({ online }: { online: boolean }) => setIsOtherOnline(online));
+    socketRef.current.on("connect", () => {
+      socketRef.current?.emit("supportPresence", null, (r: { online?: boolean }) => setIsOtherOnline(!!r?.online));
     });
   };
 
@@ -1862,6 +1865,7 @@ export default function SupportChatPage() {
   };
 
   const renderContent = (msg: any, isMe: boolean) => {
+    if (msg.type === "CARD" && msg.meta) return <ChatCard meta={msg.meta} text={msg.text} audience="business" />;
     if (msg.type === "IMAGE") return <img src={msg.fileUrl} alt="" className="rounded-xl max-w-xs" />;
     if (msg.type === "VIDEO") return <video src={msg.fileUrl} controls className="rounded-xl max-w-xs" />;
     if (msg.type === "AUDIO" || msg.type === "audio") {
@@ -1991,16 +1995,18 @@ export default function SupportChatPage() {
                   )} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={cn("font-bold text-xs truncate", chatType === "human" ? "text-foreground" : "text-muted-foreground")}>Soporte humano</p>
+                  <p className={cn("font-bold text-xs truncate", chatType === "human" ? "text-foreground" : "text-muted-foreground")}>Equipo Syncro</p>
                   <p className="text-[10px] text-muted-foreground truncate">
-                    {messages.at(-1)?.text ?? "Inicia una conversación..."}
+                    {messages.at(-1)?.text ?? "Escríbenos, te respondemos aquí"}
                   </p>
                 </div>
-                {chatType === "human" && (
+                {supportUnread > 0 && chatType !== "human" ? (
+                  <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">{supportUnread}</span>
+                ) : chatType === "human" ? (
                   <Badge variant="secondary" className="bg-primary/15 text-primary text-[9px] shrink-0 font-bold">
-                    Activo
+                    Abierto
                   </Badge>
-                )}
+                ) : null}
               </div>
             </div>
 
@@ -2043,7 +2049,7 @@ export default function SupportChatPage() {
                     </Avatar>
                     <div>
                       <p className="font-semibold text-sm">
-                        Soporte Syncro POS
+                        Equipo Syncro
                       </p>
                       <div className="flex items-center gap-1.5 h-4">
                         {mounted && (
@@ -2058,19 +2064,7 @@ export default function SupportChatPage() {
                                 isOtherOnline ? "bg-emerald-500" : "bg-muted-foreground/30"
                               )} />
                               <span className="text-[11px] text-muted-foreground font-medium">
-                                {isOtherOnline
-                                  ? "En línea"
-                                  : (() => {
-                                    try {
-                                      if (!otherLastSeen) return "Desconectado";
-                                      const d = new Date(otherLastSeen);
-                                      if (isNaN(d.getTime())) return "Desconectado";
-                                      return `Últ. vez ${formatDistanceToNow(d, { addSuffix: true, locale: es })}`;
-                                    } catch (e) {
-                                      return "Desconectado";
-                                    }
-                                  })()
-                                }
+                                {isOtherOnline ? "En línea ahora" : "Te respondemos lun – vie, 8 a. m. a 6 p. m."}
                               </span>
                             </>
                           )
@@ -2432,8 +2426,14 @@ export default function SupportChatPage() {
                               ? "bg-card border-border text-foreground rounded-tr-none shadow-md"
                               : chatType === "ai"
                                 ? "bg-primary/5 dark:bg-primary/10 border-primary/20 text-foreground rounded-tl-none shadow-md backdrop-blur-xs"
-                                : "bg-card border-border text-foreground rounded-tl-none"
+                                : "bg-primary/10 border-primary/30 text-foreground rounded-tl-none"
                           )}>
+                            {chatType === "human" && !isMe && (
+                              <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold text-primary">
+                                <img src="/iconosyncro.png" alt="" className="shrink-0 object-contain" style={{ width: 11, height: 11 }} />
+                                <span>Equipo Syncro</span>
+                              </div>
+                            )}
                             {chatType === "ai" && !isMe && (
                               <div className="flex items-center gap-1.5 mb-1 text-[10px] font-bold text-primary">
                                 <img src="/iconosyncro.png" alt="Syncro" className="shrink-0 object-contain" style={{ width: 11, height: 11 }} />

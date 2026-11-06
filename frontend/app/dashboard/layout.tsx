@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/site-header";
 import { OpenShiftHost } from "@/components/gym/open-shift-dialog";
 import { FinanceWidget } from "@/components/finance-widget";
 import { SuspendedSessionGuard } from "@/components/suspended-session-guard";
+import { SupportNotifier } from "@/components/support-notifier";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 import { useRouter, usePathname } from "next/navigation";
@@ -104,6 +105,7 @@ export default function DashboardLayout({
           {children}
         </main>
         <SuspendedSessionGuard />
+      <SupportNotifier />
         <OpenShiftHost />
         <FinanceWidget />
       </div>
@@ -120,6 +122,7 @@ export default function DashboardLayout({
       }
     >
       <SuspendedSessionGuard />
+      <SupportNotifier />
       <OpenShiftHost />
         <FinanceWidget />
       <AppSidebar variant="inset" />

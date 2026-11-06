@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { type Icon, IconBrandWhatsapp, IconMail } from "@tabler/icons-react"
 import { GlobalSearch } from "@/components/global-search"
+import { useSupportUnread } from "@/components/support-notifier"
 
 import {
   SidebarGroup,
@@ -34,6 +35,7 @@ export function NavSecondary({
   }[]
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
   const pathname = usePathname()
+  const supportUnread = useSupportUnread()
   const [isHelpOpen, setIsHelpOpen] = React.useState(false)
   const [isSearchOpen, setIsSearchOpen] = React.useState(false)
 
@@ -58,9 +60,15 @@ export function NavSecondary({
               return (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
-                    <Link href={item.url} onClick={(e) => handleItemClick(e, item)}>
+                    <Link href={item.url} onClick={(e) => handleItemClick(e, item)} className="relative">
                       <item.icon />
                       <span>{item.title}</span>
+                      {item.url === "/dashboard/soporte" && supportUnread > 0 && (
+                        <>
+                          <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold tabular-nums text-primary-foreground group-data-[collapsible=icon]:hidden" aria-label={`${supportUnread} mensajes sin leer`}>{supportUnread > 99 ? "99+" : supportUnread}</span>
+                          <span className="absolute right-1 top-1 hidden size-2 rounded-full bg-primary group-data-[collapsible=icon]:block" />
+                        </>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

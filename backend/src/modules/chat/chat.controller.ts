@@ -33,8 +33,15 @@ export class ChatController {
     return this.chatService.getConversationByBusiness(businessId);
   }
 
+  @Get('unread')
+  unread(@Req() req: any) {
+    return this.chatService.unread(req.user);
+  }
+
   @Post('read/:conversationId')
   async markAsRead(@Param('conversationId') conversationId: string, @Req() req: any) {
-    return this.chatService.markAsRead(conversationId, req.user.id);
+    const conv = await this.chatService.conversationBusiness(conversationId);
+    if (req.user?.role !== 'syncropos' && conv !== req.user?.businessId) throw new ForbiddenException('No tienes acceso a esta conversación');
+    return this.chatService.markAsRead(conversationId, req.user?.role === 'syncropos');
   }
 }

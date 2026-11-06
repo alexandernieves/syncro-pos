@@ -20,6 +20,9 @@ interface AuthedSocketData {
   businessId?: string;
 }
 
+/** Card messages (module offers, request updates) carry this alongside the plain text. */
+export type ChatExtra = { meta?: Record<string, unknown>; requestId?: string | null; type?: string };
+
 @WebSocketGateway({
   cors: {
     origin: '*',
@@ -30,6 +33,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   server: Server;
 
   private readonly logger = new Logger('ChatGateway');
+  /** Open sockets of the Syncro team, to tell businesses whether someone is there */
+  private supportSockets = 0;
 
   constructor(
     private readonly chatService: ChatService,
@@ -62,42 +67,38 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     client.data = auth;
     client.join(`user_${auth.userId}`);
-    // The Syncro team gets every conversation's updates for its inbox
-    if (auth.role === 'syncropos') client.join('support');
-    await this.prisma.user.update({
-      where: { id: auth.userId },
-      data: { lastSeen: new Date() }
-    });
-    this.logger.log(`User connected: ${auth.userId}`);
+    if (auth.role === 'syncropos') {
+      // The Syncro team gets every conversation's updates for its inbox
+      client.join('support');
+      if (++this.supportSockets === 1) this.server.emit('supportPresence', { online: true });
+    } else if (auth.businessId) {
+      // Every screen of the business hears about new support messages
+      client.join(`business_${auth.businessId}`);
+    }
+    await this.prisma.user.update({ where: { id: auth.userId }, data: { lastSeen: new Date() } }).catch(() => undefined);
   }
 
   async handleDisconnect(client: Socket) {
     const auth = client.data as AuthedSocketData | undefined;
-    if (auth?.userId) {
-      client.leave(`user_${auth.userId}`);
-      await this.prisma.user.update({
-        where: { id: auth.userId },
-        data: { lastSeen: new Date() }
-      });
-
-      this.server.emit('userPresence', {
-        userId: auth.userId,
-        status: 'offline',
-        lastSeen: new Date()
-      });
-
-      this.logger.log(`User disconnected: ${auth.userId}`);
+    if (!auth?.userId) return;
+    if (auth.role === 'syncropos') {
+      this.supportSockets = Math.max(0, this.supportSockets - 1);
+      if (this.supportSockets === 0) this.server.emit('supportPresence', { online: false });
     }
+    await this.prisma.user.update({ where: { id: auth.userId }, data: { lastSeen: new Date() } }).catch(() => undefined);
+    this.server.emit('userPresence', { userId: auth.userId, status: 'offline', lastSeen: new Date() });
+  }
+
+  /** Is anyone from Syncro connected right now? */
+  @SubscribeMessage('supportPresence')
+  handleSupportPresence() {
+    return { online: this.supportSockets > 0 };
   }
 
   @SubscribeMessage('joinConversation')
-  async handleJoinConversation(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() conversationId: string,
-  ) {
+  async handleJoinConversation(@ConnectedSocket() client: Socket, @MessageBody() conversationId: string) {
     const auth = client.data as AuthedSocketData | undefined;
     if (!auth) return { event: 'error', message: 'No autenticado' };
-
     // Support staff can join any conversation; a business user only their own.
     if (auth.role !== 'syncropos') {
       const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
@@ -105,172 +106,123 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return { event: 'error', message: 'No tienes acceso a esta conversación' };
       }
     }
-
     client.join(`conv_${conversationId}`);
-    this.server.to(`conv_${conversationId}`).emit('userPresence', {
-      userId: auth.userId,
-      status: 'online'
-    });
-
+    this.server.to(`conv_${conversationId}`).emit('userPresence', { userId: auth.userId, status: 'online' });
     return { event: 'joined', conversationId };
   }
 
   @SubscribeMessage('typing')
-  handleTyping(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { conversationId: string; isTyping: boolean },
-  ) {
+  handleTyping(@ConnectedSocket() client: Socket, @MessageBody() data: { conversationId: string; isTyping: boolean }) {
     const auth = client.data as AuthedSocketData | undefined;
     if (!auth) return;
-    client.to(`conv_${data.conversationId}`).emit('userTyping', {
-      userId: auth.userId,
-      isTyping: data.isTyping
-    });
+    client.to(`conv_${data.conversationId}`).emit('userTyping', { userId: auth.userId, isTyping: data.isTyping });
+  }
+
+  /**
+   * Saves a message and tells everyone who should know: the open conversation, the support inbox,
+   * every screen of the business (for the unread badge and the pop-up notice) and push.
+   */
+  private async deliver(conversationId: string, businessId: string | null, senderId: string, fromSupport: boolean, text: string | undefined, extra: ChatExtra & { fileUrl?: string } = {}) {
+    const message = await this.chatService.saveMessage({ conversationId, senderId, text, type: extra.type || 'TEXT', fileUrl: extra.fileUrl, meta: extra.meta, requestId: extra.requestId ?? null });
+    const preview = text || (extra.type === 'AUDIO' ? 'Nota de voz' : extra.type === 'IMAGE' ? 'Imagen' : extra.type === 'VIDEO' ? 'Video' : 'Archivo');
+
+    this.server.to(`conv_${conversationId}`).emit('newMessage', message);
+    this.server.to('support').to(`conv_${conversationId}`).emit('conversationUpdated', { conversationId, lastMessage: preview, updatedAt: new Date() });
+
+    const business = businessId ? await this.prisma.business.findUnique({ where: { id: businessId }, select: { name: true } }) : null;
+    const notice = { conversationId, businessId, businessName: business?.name ?? null, text: preview, messageId: message.id, requestId: extra.requestId ?? null, fromSupport };
+    if (fromSupport) {
+      if (businessId) this.server.to(`business_${businessId}`).emit('supportMessage', notice);
+    } else {
+      this.server.to('support').emit('supportMessage', notice);
+    }
+    this.emitUnread(businessId);
+
+    try {
+      const to = fromSupport
+        ? businessId ? await this.prisma.user.findMany({ where: { businessId, role: { not: 'syncropos' } }, select: { id: true } }) : []
+        : await this.prisma.user.findMany({ where: { role: 'syncropos' }, select: { id: true } });
+      for (const u of to) {
+        await this.pushService.sendToUser(u.id, fromSupport
+          ? { title: '💬 Equipo Syncro', body: preview.slice(0, 140), url: '/dashboard/soporte' }
+          : { title: `💬 ${business?.name ?? 'Cliente'}`, body: preview.slice(0, 140), url: '/dashboard/syncro/chat' });
+      }
+    } catch {
+      // push is best-effort
+    }
+    return message;
+  }
+
+  /** Unread counts changed: both sides refresh their badge. */
+  private emitUnread(businessId: string | null) {
+    this.server.to('support').emit('unreadChanged');
+    if (businessId) this.server.to(`business_${businessId}`).emit('unreadChanged');
   }
 
   @SubscribeMessage('sendMessage')
   async handleMessage(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: {
-      conversationId: string;
-      text?: string;
-      type?: string;
-      fileUrl?: string;
-    },
+    @MessageBody() data: { conversationId: string; text?: string; type?: string; fileUrl?: string; requestId?: string },
   ) {
     const auth = client.data as AuthedSocketData | undefined;
     if (!auth) return { event: 'error', message: 'No autenticado' };
-
-    if (auth.role !== 'syncropos') {
-      const conversation = await this.prisma.conversation.findUnique({ where: { id: data.conversationId } });
-      if (!conversation || conversation.businessId !== auth.businessId) {
-        return { event: 'error', message: 'No tienes acceso a esta conversación' };
-      }
+    const conversation = await this.prisma.conversation.findUnique({ where: { id: data.conversationId } });
+    if (!conversation) return { event: 'error', message: 'Conversación no encontrada' };
+    if (auth.role !== 'syncropos' && conversation.businessId !== auth.businessId) {
+      return { event: 'error', message: 'No tienes acceso a esta conversación' };
     }
-
-    const message = await this.chatService.saveMessage({ ...data, senderId: auth.userId });
-
-    // Broadcast to the conversation room
-    this.server.to(`conv_${data.conversationId}`).emit('newMessage', message);
-
-    // Notify the support inbox and the conversation itself (never other businesses)
-    this.server.to('support').to(`conv_${data.conversationId}`).emit('conversationUpdated', {
-      conversationId: data.conversationId,
-      lastMessage: data.text || `Envió un ${data.type}`,
-      updatedAt: new Date()
-    });
-
-    // Send push notification to the participant
-    try {
-      const conv = await this.prisma.conversation.findUnique({
-        where: { id: data.conversationId },
-        include: { business: true },
-      });
-      const isSupportSender = auth.role === 'syncropos';
-
-      if (isSupportSender && conv?.businessId) {
-        const businessUsers = await this.prisma.user.findMany({
-          where: { businessId: conv.businessId, role: { not: 'syncropos' } },
-        });
-        for (const u of businessUsers) {
-          await this.pushService.sendToUser(u.id, {
-            title: '💬 Soporte Syncro POS',
-            body: data.text || 'Te envió un archivo',
-            url: '/dashboard/soporte',
-          });
-        }
-      } else {
-        const supportUsers = await this.prisma.user.findMany({
-          where: { role: 'syncropos' },
-        });
-        for (const u of supportUsers) {
-          await this.pushService.sendToUser(u.id, {
-            title: `💬 ${conv?.business?.name || 'Cliente'}`,
-            body: data.text || 'Te envió un archivo',
-            url: '/dashboard/syncro/chat',
-          });
-        }
-      }
-    } catch (e) {}
-
-    return message;
+    // A message about a request must belong to the same business
+    let requestId: string | null = null;
+    if (data.requestId) {
+      const r = await this.prisma.moduleRequest.findUnique({ where: { id: data.requestId }, select: { businessId: true } });
+      if (r && r.businessId === conversation.businessId) requestId = data.requestId;
+    }
+    const type = ['TEXT', 'IMAGE', 'VIDEO', 'AUDIO'].includes(String(data.type)) ? String(data.type) : 'TEXT';
+    return this.deliver(conversation.id, conversation.businessId, auth.userId, auth.role === 'syncropos', data.text?.slice(0, 4000), { type, fileUrl: data.fileUrl, requestId });
   }
 
-  /**
-   * A message from the Syncro team to a business, sent by the server itself (module activated,
-   * trial offered…). Lands in the business's support chat like any other message.
-   */
-  async notifyBusiness(businessId: string, senderId: string, text: string) {
-    let conv = await this.prisma.conversation.findFirst({ where: { businessId }, select: { id: true } });
-    if (!conv) conv = await this.prisma.conversation.create({ data: { businessId }, select: { id: true } });
-    const message = await this.chatService.saveMessage({ conversationId: conv.id, senderId, text, type: 'TEXT' });
-    this.server.to(`conv_${conv.id}`).emit('newMessage', message);
-    this.server.to('support').to(`conv_${conv.id}`).emit('conversationUpdated', { conversationId: conv.id, lastMessage: text, updatedAt: new Date() });
-    try {
-      const users = await this.prisma.user.findMany({ where: { businessId, role: { not: 'syncropos' } }, select: { id: true } });
-      for (const u of users) await this.pushService.sendToUser(u.id, { title: '💬 Soporte Syncro', body: text.slice(0, 140), url: '/dashboard/soporte' });
-    } catch {
-      // push is best-effort
-    }
-    return message;
+  private async conversationOf(businessId: string) {
+    const conv = await this.prisma.conversation.findFirst({ where: { businessId }, select: { id: true } });
+    return conv ?? this.prisma.conversation.create({ data: { businessId }, select: { id: true } });
   }
 
-  /** A message from a business to Syncro, sent by the server (a module request…). Reaches the support inbox. */
-  async notifySupport(businessId: string, senderId: string, text: string) {
-    let conv = await this.prisma.conversation.findFirst({ where: { businessId }, select: { id: true, business: { select: { name: true } } } });
-    if (!conv) conv = await this.prisma.conversation.create({ data: { businessId }, select: { id: true, business: { select: { name: true } } } });
-    const message = await this.chatService.saveMessage({ conversationId: conv.id, senderId, text, type: 'TEXT' });
-    this.server.to(`conv_${conv.id}`).emit('newMessage', message);
-    this.server.to('support').to(`conv_${conv.id}`).emit('conversationUpdated', { conversationId: conv.id, lastMessage: text, updatedAt: new Date() });
-    try {
-      const team = await this.prisma.user.findMany({ where: { role: 'syncropos' }, select: { id: true } });
-      for (const u of team) await this.pushService.sendToUser(u.id, { title: `💬 ${conv.business?.name ?? 'Cliente'}`, body: text.slice(0, 140), url: '/dashboard/syncro/chat' });
-    } catch {
-      // push is best-effort
-    }
-    return message;
+  /** A message from the Syncro team to a business, sent by the server (module offered, request updated…). */
+  async notifyBusiness(businessId: string, senderId: string, text: string, extra: ChatExtra = {}) {
+    const conv = await this.conversationOf(businessId);
+    return this.deliver(conv.id, businessId, senderId, true, text, extra);
+  }
+
+  /** A message from a business to Syncro, sent by the server (a module request…). */
+  async notifySupport(businessId: string, senderId: string, text: string, extra: ChatExtra = {}) {
+    const conv = await this.conversationOf(businessId);
+    return this.deliver(conv.id, businessId, senderId, false, text, extra);
   }
 
   @SubscribeMessage('markAsRead')
-  async handleMarkRead(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { conversationId: string },
-  ) {
+  async handleMarkRead(@ConnectedSocket() client: Socket, @MessageBody() data: { conversationId: string }) {
     const auth = client.data as AuthedSocketData | undefined;
-    if (!auth) return;
+    if (!auth || !data?.conversationId) return;
+    const conversation = await this.prisma.conversation.findUnique({ where: { id: data.conversationId }, select: { businessId: true } });
+    if (!conversation || (auth.role !== 'syncropos' && conversation.businessId !== auth.businessId)) return;
     try {
-      await this.chatService.markAsRead(data.conversationId, auth.userId);
-      // Emit to the conversation room so the sender sees the double check turn blue
-      this.server.to(`conv_${data.conversationId}`).emit('messagesRead', {
-        conversationId: data.conversationId,
-        readBy: auth.userId
-      });
-      this.logger.log(`Messages marked as read in conv: ${data.conversationId} by ${auth.userId}`);
-    } catch (e) {
+      // Each side reads what the other side wrote
+      await this.chatService.markAsRead(data.conversationId, auth.role === 'syncropos');
+      this.server.to(`conv_${data.conversationId}`).emit('messagesRead', { conversationId: data.conversationId, readBy: auth.userId, bySupport: auth.role === 'syncropos' });
+      this.emitUnread(conversation.businessId);
+    } catch (e: any) {
       this.logger.error(`Error marking messages as read: ${e.message}`);
     }
   }
 
-  /**
-   * "Mike" live cursor — support staff only. Broadcasts a viewport-relative
-   * position (0-100) to the business's conversation room so their dashboard
-   * can render a ghost cursor. Purely presentational, no page/route data.
-   */
   @SubscribeMessage('cursorMove')
-  handleCursorMove(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { conversationId: string; x: number; y: number },
-  ) {
+  handleCursorMove(@ConnectedSocket() client: Socket, @MessageBody() data: { conversationId: string; x: number; y: number }) {
     const auth = client.data as AuthedSocketData | undefined;
     if (!auth || auth.role !== 'syncropos') return;
     client.to(`conv_${data.conversationId}`).emit('mikeCursor', { x: data.x, y: data.y });
   }
 
   @SubscribeMessage('cursorLeave')
-  handleCursorLeave(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { conversationId: string },
-  ) {
+  handleCursorLeave(@ConnectedSocket() client: Socket, @MessageBody() data: { conversationId: string }) {
     const auth = client.data as AuthedSocketData | undefined;
     if (!auth || auth.role !== 'syncropos') return;
     client.to(`conv_${data.conversationId}`).emit('mikeCursorLeave');
