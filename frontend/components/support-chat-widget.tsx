@@ -281,7 +281,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
         {/* Syncro peeking out next to the tab */}
         {!drag && (
           <span className={cn("absolute top-1/2 -translate-y-1/2 transition-transform duration-200", side === "right" ? "-left-11 group-hover:-translate-x-1" : "-right-11 group-hover:translate-x-1")} aria-hidden>
-            <SyncroAvatar size={42} title="" />
+            <SyncroAvatar size={42} title="" emotion={unread ? "surprised" : undefined} />
           </span>
         )}
         <span className="relative">

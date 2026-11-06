@@ -3,9 +3,10 @@
 import dynamic from "next/dynamic";
 import { useEffect, useId, useState } from "react";
 import { cn } from "@/lib/utils";
-import type { MascotPose, MascotVariant } from "@/components/mascot/syncro-mascot-3d";
+import type { MascotEmotion, MascotPose } from "@/components/mascot/syncro-mascot-3d";
 
 export type AvatarPose = MascotPose;
+export type AvatarEmotion = MascotEmotion;
 
 // three.js is heavy: load it only in the browser and only where the mascot shows up
 const SyncroMascot3D = dynamic(() => import("@/components/mascot/syncro-mascot-3d").then((m) => m.SyncroMascot3D), { ssr: false, loading: () => null });
@@ -23,32 +24,31 @@ function hasWebGL() {
 }
 
 /**
- * Syncro, the mascot of the Syncro team: a chubby, glazed-white snowman-like character with two
- * black bead eyes. Rendered in 3D (it floats, breathes, blinks and follows the cursor). By default only the
- * head is shown (`full` adds the body). Without WebGL it falls
- * back to a flat face. Original design for Syncro.
+ * Syncro, the mascot of the Syncro team: a glazed-white head with two black bead eyes, in 3D.
+ * It floats, blinks, follows the cursor and shows emotions with its eyes and a soft tint.
+ * Without WebGL it falls back to a flat face. Original design for Syncro.
  */
 export function SyncroAvatar({
   pose = "idle",
   size = 64,
-  variant,
+  emotion,
   className,
   title = "Syncro",
 }: {
   pose?: AvatarPose;
   size?: number;
-  variant?: MascotVariant;
+  /** Fixed feeling; without it Syncro reacts on its own (hover, clicks, idle). */
+  emotion?: AvatarEmotion;
   className?: string;
   title?: string;
 }) {
-  const kind: MascotVariant = variant ?? "head";
   const [webgl, setWebgl] = useState<boolean | null>(null);
   useEffect(() => setWebgl(hasWebGL()), []);
 
   return (
-    <div role="img" aria-label={title} className={cn("relative shrink-0", className)} style={{ width: size, height: kind === "full" ? size * 1.2 : size }}>
+    <div role="img" aria-label={title} className={cn("relative shrink-0", className)} style={{ width: size, height: size }}>
       {webgl ? (
-        <SyncroMascot3D variant={kind} pose={pose} />
+        <SyncroMascot3D pose={pose} emotion={emotion} />
       ) : webgl === false ? (
         <SyncroFace className="absolute inset-x-0 bottom-0 m-auto" size={size} />
       ) : null}
