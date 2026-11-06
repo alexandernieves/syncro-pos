@@ -805,6 +805,8 @@ export default function SupportChatPage() {
   };
 
   const stopScreenSharing = () => {
+    // Only tell the person when a screen was actually linked
+    const wasSharing = !!screenStream;
     if (screenStream) {
       screenStream.getTracks().forEach(t => t.stop());
       setScreenStream(null);
@@ -812,7 +814,7 @@ export default function SupportChatPage() {
     setAutopilotEnabled(false);
     lastScreenDataRef.current = null;
     sameScreenCountRef.current = 0;
-    toast.info("Pantalla desvinculada");
+    if (wasSharing) toast.info("Pantalla desvinculada");
   };
 
   const captureScreenshot = (): string | null => {
@@ -1612,8 +1614,11 @@ export default function SupportChatPage() {
 
   const fetchConversation = async (businessId: string) => {
     try {
-      const res = await fetch(`${API}/chat/business/${businessId}`);
-      if (res.ok) {
+      const isPwa = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+      const token = isPwa ? sessionStorage.getItem("token") : localStorage.getItem("token");
+      const res = await fetch(`${API}/chat/business/${businessId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) throw new Error(String(res.status));
+      {
         const data = await res.json();
         setConversation(data);
         setMessages(data.messages || []);
