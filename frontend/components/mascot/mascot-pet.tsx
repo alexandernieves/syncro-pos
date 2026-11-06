@@ -24,8 +24,9 @@ type Rect = { l: number; t: number; r: number; b: number };
 /** Nobody moved the mouse or typed for this long: Syncro dozes off. */
 const SLEEP_AFTER_MS = 30_000;
 
-/** A glossy 3D "Z" in midnight blue: extruded edge, gradient face and a highlight. */
+/** A glossy, rounded "Z" like a blue candy: one thick round stroke, a lighter core and white shine. */
 function SleepZ({ size, delay, toLeft }: { size: number; delay: number; toLeft: boolean }) {
+  const Z = "M6 6.5 H19.5 L6.5 19.5 H20";
   return (
     <svg
       viewBox="0 0 26 26"
@@ -33,27 +34,28 @@ function SleepZ({ size, delay, toLeft }: { size: number; delay: number; toLeft: 
       height={size}
       aria-hidden
       className="absolute bottom-0 left-0"
-      style={{ animation: `${toLeft ? "syncro-z-left" : "syncro-z-right"} 2.7s ease-out ${delay}s infinite both`, filter: "drop-shadow(0 3px 4px rgba(10,20,60,.35))" }}
+      style={{ animation: `${toLeft ? "syncro-z-left" : "syncro-z-right"} 2.7s ease-out ${delay}s infinite both` }}
     >
       <defs>
-        <linearGradient id="syncro-z-face" x1="0" y1="0" x2="0.4" y2="1">
-          <stop offset="0" stopColor="#6d8dff" />
-          <stop offset="0.45" stopColor="#2d4bc4" />
-          <stop offset="1" stopColor="#0f1f5c" />
+        <linearGradient id="syncro-z-body" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#7aa2ff" />
+          <stop offset="0.55" stopColor="#3f6df0" />
+          <stop offset="1" stopColor="#2f55d4" />
         </linearGradient>
       </defs>
-      {/* Extruded edge, darker layers behind the face */}
-      {[3, 2.2, 1.4].map((o, i) => (
-        <path key={i} d="M3 3 H21 V7 L9.5 19 H21 V23 H3 V19 L14.5 7 H3 Z" transform={`translate(${o} ${o})`} fill={["#050b24", "#08133a", "#0b1a4d"][i]} stroke={["#050b24", "#08133a", "#0b1a4d"][i]} strokeWidth="2" strokeLinejoin="round" />
-      ))}
-      {/* Face */}
-      <path d="M3 3 H21 V7 L9.5 19 H21 V23 H3 V19 L14.5 7 H3 Z" fill="url(#syncro-z-face)" stroke="url(#syncro-z-face)" strokeWidth="2" strokeLinejoin="round" />
-      {/* Glossy highlights */}
-      <path d="M4.5 4.6 H19.5" stroke="#ffffff" strokeWidth="1.3" strokeLinecap="round" opacity=".85" />
-      <path d="M5 20.4 H11" stroke="#ffffff" strokeWidth="1" strokeLinecap="round" opacity=".45" />
+      {/* Body */}
+      <path d={Z} fill="none" stroke="url(#syncro-z-body)" strokeWidth="5.6" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Lighter, jelly-like core */}
+      <path d={Z} fill="none" stroke="#9db9ff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" opacity=".55" transform="translate(0 -0.6)" />
+      {/* Shine */}
+      <path d="M7.4 5.6 H17" stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" opacity=".95" />
+      <path d="M16.6 9.2 L10.6 15.2" stroke="#ffffff" strokeWidth="1.1" strokeLinecap="round" opacity=".7" />
+      <path d="M8 18.7 H12" stroke="#ffffff" strokeWidth="1.1" strokeLinecap="round" opacity=".7" />
+      <circle cx="19.2" cy="6.3" r="0.9" fill="#ffffff" />
     </svg>
   );
 }
+
 type Exchange = { role: "user" | "assistant"; content: string };
 type Mode = "follow" | "drag" | "fly";
 
@@ -567,9 +569,9 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
         {/* Asleep: glossy midnight-blue Zs rising one after another */}
         {asleep && !cloud && !showBulb && (
           <span aria-hidden className={cn("pointer-events-none absolute -top-14 h-24 w-20", onRight ? "-left-6" : "-right-6")}>
-            <SleepZ size={18} delay={0} toLeft={onRight} />
-            <SleepZ size={24} delay={0.9} toLeft={onRight} />
-            <SleepZ size={31} delay={1.8} toLeft={onRight} />
+            <SleepZ size={24} delay={0} toLeft={onRight} />
+            <SleepZ size={31} delay={0.9} toLeft={onRight} />
+            <SleepZ size={40} delay={1.8} toLeft={onRight} />
           </span>
         )}
 
