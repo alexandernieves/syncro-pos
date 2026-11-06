@@ -23,7 +23,7 @@ export type MascotSettings = {
 
 export const MASCOT_DEFAULTS: MascotSettings = {
   visible: true,
-  roam: true,
+  roam: false,
   ideas: true,
   frequency: "normal",
   festive: true,

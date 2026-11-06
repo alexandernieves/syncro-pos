@@ -69,6 +69,35 @@ function eyePlacement(side: -1 | 1) {
   return { pos, quat };
 }
 
+/**
+ * A Santa hat that isn't a straight cone: soft folds in the fabric and a tip that droops to one side
+ * under its own weight. Built from a cylinder whose vertices are bent and rippled.
+ */
+function santaHatGeometry() {
+  const H = 1.4;
+  const g = new THREE.CylinderGeometry(0.07, 0.84, H, 96, 64, true);
+  const pos = g.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const h = (v.y + H / 2) / H; // 0 at the brim, 1 at the tip
+    const a = Math.atan2(v.z, v.x);
+    // Folds: a few soft wrinkles that grow towards the tip, and a little dent where it bends
+    const fold = 1 + h * (0.06 * Math.sin(a * 5 + h * 7) + 0.035 * Math.sin(a * 9 - h * 4)) - 0.08 * Math.exp(-((h - 0.62) ** 2) / 0.01) * Math.max(0, Math.cos(a));
+    v.x *= fold;
+    v.z *= fold;
+    // Droop: the top half falls to the side and down
+    const bend = Math.max(0, h - 0.35) / 0.65;
+    v.x += 0.95 * bend * bend;
+    v.y -= 0.72 * bend * bend * bend;
+    pos.setXYZ(i, v.x, v.y + H / 2, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+/** Where the bent tip ends up (for the pompom). */
+const HAT_TIP = new THREE.Vector3(0.95, 1.4 - 0.72, 0);
+
 type EyeParts = { bead: THREE.Mesh | null; arc: THREE.Mesh | null; brow: THREE.Mesh | null };
 
 function Head({ emotion, pose, still, anchor, poke, festive }: { emotion?: MascotEmotion; pose: MascotPose; still: boolean; anchor: React.RefObject<HTMLDivElement | null>; poke: React.RefObject<number>; festive: boolean }) {
@@ -78,12 +107,14 @@ function Head({ emotion, pose, still, anchor, poke, festive }: { emotion?: Masco
       skin: new THREE.MeshPhysicalMaterial({ color: "#fbfcfd", roughness: 0.12, metalness: 0.02, clearcoat: 1, clearcoatRoughness: 0.03, reflectivity: 0.5, emissive: "#000000" }),
       eye: new THREE.MeshPhysicalMaterial({ color: "#050506", roughness: 0.04, metalness: 0.15, clearcoat: 1, clearcoatRoughness: 0.01 }),
       // Christmas: glazed red hat, white trim and a soft white beard
-      hat: new THREE.MeshPhysicalMaterial({ color: "#d42a2a", roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.05, side: THREE.DoubleSide }),
-      fluff: new THREE.MeshPhysicalMaterial({ color: "#ffffff", roughness: 0.45, clearcoat: 0.6, clearcoatRoughness: 0.3, sheen: 1, sheenColor: new THREE.Color("#ffffff") }),
+      hat: new THREE.MeshPhysicalMaterial({ color: "#c81e24", roughness: 0.32, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.06, sheen: 0.6, sheenRoughness: 0.4, sheenColor: new THREE.Color("#ff6b6b"), side: THREE.DoubleSide }),
+      fluff: new THREE.MeshPhysicalMaterial({ color: "#ffffff", roughness: 0.55, clearcoat: 0.5, clearcoatRoughness: 0.25, sheen: 1, sheenRoughness: 0.6, sheenColor: new THREE.Color("#ffffff") }),
     }),
     [],
   );
   useEffect(() => () => { Object.values(mat).forEach((m) => m.dispose()); }, [mat]);
+  const hatGeometry = useMemo(() => santaHatGeometry(), []);
+  useEffect(() => () => hatGeometry.dispose(), [hatGeometry]);
   const frame = useRef<THREE.Group>(null);
   const hat = useRef<THREE.Group>(null);
   const beard = useRef<THREE.Group>(null);
@@ -229,8 +260,8 @@ function Head({ emotion, pose, still, anchor, poke, festive }: { emotion?: Masco
       const target = festive ? 0.8 : 1;
       const sc = frame.current.scale.x + (target - frame.current.scale.x) * ease(6);
       frame.current.scale.setScalar(sc);
-      frame.current.position.y = (1 - sc) * -1.1;
-      if (hat.current) hat.current.rotation.z = -0.28 + (still ? 0 : Math.sin(t * 2.2) * 0.05);
+      frame.current.position.y = (1 - sc) * -0.55;
+      if (hat.current) hat.current.rotation.z = -0.12 + (still ? 0 : Math.sin(t * 2.2) * 0.04);
     }
 
     // Idle float; bouncier when happy, slow and low when sleepy; a little stretch when surprised
@@ -248,15 +279,18 @@ function Head({ emotion, pose, still, anchor, poke, festive }: { emotion?: Masco
     <group ref={root}>
       <group ref={head}>
         {/* Santa hat: brim, cone leaning to one side and a pompom */}
-        <group ref={hat} position={[0, 0.62, -0.05]} rotation={[-0.12, 0, -0.28]} scale={0.001} visible={false}>
-          <mesh material={mat.fluff} rotation={[Math.PI / 2, 0, 0]} scale={[1.02, 1, 1]}>
-            <torusGeometry args={[0.8, 0.17, 24, 64]} />
+        <group ref={hat} position={[0, 0.6, -0.04]} rotation={[-0.16, 0, -0.12]} scale={0.001} visible={false}>
+          <mesh material={mat.hat} geometry={hatGeometry} />
+          {/* Thick fur trim, slightly uneven */}
+          <mesh material={mat.fluff} rotation={[Math.PI / 2, 0, 0]} scale={[1.04, 1, 0.98]}>
+            <torusGeometry args={[0.84, 0.2, 32, 96]} />
           </mesh>
-          <mesh material={mat.hat} position={[0, 0.58, 0]}>
-            <coneGeometry args={[0.8, 1.15, 64, 1, true]} />
+          <mesh material={mat.fluff} position={[0, 0.05, 0]} rotation={[Math.PI / 2, 0, 0.6]} scale={[1.02, 1.03, 0.9]}>
+            <torusGeometry args={[0.83, 0.15, 24, 96]} />
           </mesh>
-          <mesh material={mat.fluff} position={[0, 1.18, 0]}>
-            <sphereGeometry args={[0.2, 32, 24]} />
+          {/* Pompom hanging from the drooping tip */}
+          <mesh material={mat.fluff} position={[HAT_TIP.x + 0.06, HAT_TIP.y - 0.1, HAT_TIP.z]}>
+            <sphereGeometry args={[0.21, 40, 32]} />
           </mesh>
         </group>
         {/* Beard and moustache */}

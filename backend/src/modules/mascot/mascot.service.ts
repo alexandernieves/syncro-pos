@@ -7,7 +7,7 @@ import { softwareKnowledge } from './mascot-knowledge';
 /** Everything the merchant can tune in Configuración → Mascota. */
 export const MASCOT_DEFAULTS = {
   visible: true,
-  roam: true,
+  roam: false,
   ideas: true,
   /** few | normal | many */
   frequency: 'normal',
