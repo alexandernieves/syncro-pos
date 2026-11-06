@@ -88,8 +88,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // The Syncro team gets every conversation's updates for its inbox
       client.join('support');
       if (++this.supportSockets === 1) this.server.emit('supportPresence', { online: true });
-    } else if (auth.businessId) {
-      // Every screen of the business hears about new support messages
+    } else if (auth.businessId && auth.role !== 'client') {
+      // Every screen of the business hears about new support messages (not its customers' portal)
       client.join(`business_${auth.businessId}`);
     }
     await this.prisma.user.update({ where: { id: auth.userId }, data: { lastSeen: new Date() } }).catch(() => undefined);

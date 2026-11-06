@@ -154,17 +154,26 @@ export default function SyncroAdminChatPage() {
       if (activeRef.current?.id === msg.conversationId) {
         setMessages((prev) => (prev.some((m) => m.id && m.id === msg.id) ? prev : [...prev, msg]));
         scrollToEnd();
-        if (msg.sender?.role !== "syncropos") socket.emit("markAsRead", { conversationId: msg.conversationId });
+        if (msg.sender?.role !== "syncropos" && !document.hidden) socket.emit("markAsRead", { conversationId: msg.conversationId });
       }
     });
-    socket.on("messagesRead", ({ conversationId }: { conversationId: string }) => {
-      if (activeRef.current?.id === conversationId) setMessages((prev) => prev.map((m) => (m.sender?.role === "syncropos" ? { ...m, isRead: true } : m)));
+    // Blue double check: only when the business read Syncro's messages
+    socket.on("messagesRead", ({ conversationId, bySupport }: { conversationId: string; bySupport?: boolean }) => {
+      if (!bySupport && activeRef.current?.id === conversationId) setMessages((prev) => prev.map((m) => (m.sender?.role === "syncropos" ? { ...m, isRead: true } : m)));
     });
     socket.on("conversationUpdated", () => fetchConversations());
     // Rejoin the open conversation after a reconnect
     socket.on("connect", () => { if (activeRef.current) socket.emit("joinConversation", activeRef.current.id); });
     return () => { socket.disconnect(); socketRef.current = null; };
   }, [fetchConversations]);
+
+  // Coming back to this tab reads what arrived meanwhile in the open conversation
+  useEffect(() => {
+    const onVisible = () => { if (!document.hidden && activeRef.current) markRead(activeRef.current.id); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Show the Syncro cursor on the business's screen while a conversation is open (~15 fps)
   useEffect(() => {

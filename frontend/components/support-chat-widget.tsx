@@ -153,7 +153,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
         socket.on("connect", () => {
           socket.emit("joinConversation", data.id);
           socket.emit("supportPresence", null, (r: { online?: boolean }) => setOnline(!!r?.online));
-          if (openRef.current) socket.emit("markAsRead", { conversationId: data.id });
+          if (openRef.current && !document.hidden) socket.emit("markAsRead", { conversationId: data.id });
         });
         socket.on("supportPresence", ({ online: o }: { online: boolean }) => setOnline(o));
         socket.on("newMessage", (m: Msg) => {
@@ -161,7 +161,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
           setMessages((prev) => (prev?.some((x) => x.id && x.id === m.id) ? prev : [...(prev ?? []), m]));
           setTyping(false);
           scrollToEnd();
-          if (openRef.current && m.sender?.role === "syncropos") socket.emit("markAsRead", { conversationId: data.id });
+          if (openRef.current && !document.hidden && m.sender?.role === "syncropos") socket.emit("markAsRead", { conversationId: data.id });
         });
         socket.on("messagesRead", ({ bySupport }: { bySupport?: boolean }) => {
           if (bySupport) setMessages((prev) => prev?.map((m) => (m.sender?.role !== "syncropos" ? { ...m, isRead: true } : m)) ?? prev);
@@ -177,6 +177,14 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
   useEffect(() => () => { socketRef.current?.disconnect(); }, []);
   useEffect(() => {
     if (open) { markRead(); scrollToEnd(); setTimeout(() => inputRef.current?.focus(), 120); }
+  }, [open, markRead]);
+
+  // Open but in a background tab: read what arrived once the person comes back
+  useEffect(() => {
+    if (!open) return;
+    const onVisible = () => { if (!document.hidden) markRead(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [open, markRead]);
 
   // The pop-up notice ("Ver") and other screens open it with an event
@@ -276,11 +284,10 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
         className={cn(
           "group fixed z-40 touch-none select-none rounded-full outline-none transition-[opacity,transform] duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
           drag ? "cursor-grabbing opacity-90" : cn("cursor-grab", side === "right" ? "mr-3" : "ml-3"),
-          pulse && "animate-bounce",
           open && !drag && "pointer-events-none opacity-0",
         )}
       >
-        <span className="block drop-shadow-[0_8px_14px_rgba(0,0,0,0.18)] transition-transform duration-200 group-hover:scale-105">
+        <span className={cn("block drop-shadow-[0_8px_14px_rgba(0,0,0,0.18)] transition-transform duration-200 group-hover:scale-105", pulse && "animate-bounce")}>
           <SyncroAvatar size={MASCOT_SIZE} title="" emotion={unread ? "surprised" : undefined} />
         </span>
         {unread > 0 && (

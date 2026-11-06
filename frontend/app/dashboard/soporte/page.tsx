@@ -370,6 +370,9 @@ export default function SupportChatPage() {
   const [user, setUser] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+  // Marks Syncro's messages as read only while this screen is really being looked at
+  const readOnVisible = useRef<(() => void) | null>(null);
+  useEffect(() => () => { if (readOnVisible.current) document.removeEventListener("visibilitychange", readOnVisible.current); }, []);
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -1668,11 +1671,8 @@ export default function SupportChatPage() {
     socketRef.current.on("connect", () => {
       setIsConnected(true);
       socketRef.current?.emit("joinConversation", convId);
-      // Mark as read when entering
-      socketRef.current?.emit("markAsRead", {
-        conversationId: convId,
-        userId: storedUser.id
-      });
+      // Mark as read when entering, if the screen is in view
+      if (!document.hidden) socketRef.current?.emit("markAsRead", { conversationId: convId });
     });
 
     socketRef.current.on("disconnect", () => {
@@ -1689,21 +1689,22 @@ export default function SupportChatPage() {
         return [...prev, msg];
       });
 
-      // If we are the receiver and the chat is open, mark as read immediately
-      if (msg.senderId !== storedUser.id) {
-        socketRef.current?.emit("markAsRead", {
-          conversationId: convId,
-          userId: storedUser.id
-        });
+      // A message from Syncro while this screen is in view counts as read
+      if (msg.sender?.role === "syncropos" && !document.hidden) {
+        socketRef.current?.emit("markAsRead", { conversationId: convId });
       }
       setTimeout(scrollToBottom, 100);
     });
 
-    socketRef.current.on("messagesRead", ({ conversationId }: { conversationId: string }) => {
-      setMessages((prev) =>
-        prev.map(m => ({ ...m, isRead: true }))
-      );
+    // Blue double check: only when Syncro read the business's messages
+    socketRef.current.on("messagesRead", ({ bySupport }: { conversationId: string; bySupport?: boolean }) => {
+      if (!bySupport) return;
+      setMessages((prev) => prev.map((m) => (m.sender?.role !== "syncropos" ? { ...m, isRead: true } : m)));
     });
+
+    if (readOnVisible.current) document.removeEventListener("visibilitychange", readOnVisible.current);
+    readOnVisible.current = () => { if (!document.hidden) socketRef.current?.emit("markAsRead", { conversationId: convId }); };
+    document.addEventListener("visibilitychange", readOnVisible.current);
 
     socketRef.current.on("userTyping", ({ userId, isTyping }: { userId: string, isTyping: boolean }) => {
       if (userId !== storedUser.id) {
