@@ -2424,7 +2424,7 @@ export default function SupportChatPage() {
                           <div className={cn(
                             "px-4 py-2.5 rounded-2xl shadow-sm text-sm relative border",
                             isMe
-                              ? "bg-primary border-primary/20 text-white rounded-tr-none"
+                              ? "bg-stone-800 border-stone-800 text-white rounded-tr-none dark:bg-stone-700 dark:border-stone-700"
                               : chatType === "ai"
                                 ? "bg-primary/5 dark:bg-primary/10 border-primary/20 text-foreground rounded-tl-none shadow-md backdrop-blur-xs"
                                 : "bg-card border-border text-foreground rounded-tl-none"
@@ -2988,7 +2988,7 @@ export default function SupportChatPage() {
                       </motion.div>
                     ) : (
                       <>
-                        <div className="flex-1 flex items-center bg-primary/5 hover:bg-primary/10 focus-within:bg-background rounded-full px-4 py-1.5 border border-primary/10 focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/30 transition-all">
+                        <div className="flex-1 flex items-center bg-card rounded-full px-4 py-1.5 border border-border shadow-sm focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15 transition-all">
                           {/* Web Search Toggle — only visible in Ads Mode */}
                           {adsMode && (
                             <button
@@ -3021,7 +3021,7 @@ export default function SupportChatPage() {
                           {/* Text Input for AI */}
                           <input
                             type="text"
-                            className="flex-1 min-w-0 bg-transparent border-none outline-none focus:outline-none focus:ring-0 px-1 py-1 text-sm text-foreground placeholder:text-primary/40"
+                            className="flex-1 min-w-0 bg-transparent border-none outline-none focus:outline-none focus:ring-0 px-1 py-1 text-sm text-foreground placeholder:text-muted-foreground"
                             placeholder={adsMode && webSearchEnabled ? "Busca productos, tendencias, mercados en tiempo real..." : "Pregúntame sobre el cuadre de caja, egresos, ventas..."}
                             value={aiInputText}
                             onChange={(e) => setAiInputText(e.target.value)}
