@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IconDeviceDesktop, IconLoader2, IconPointer, IconX } from "@tabler/icons-react";
+import { IconDeviceDesktop, IconLoader2, IconMicrophone, IconMicrophoneOff, IconPointer, IconX } from "@tabler/icons-react";
 import type { Socket } from "socket.io-client";
 import { toast } from "sonner";
 import { connectSocket } from "@/lib/socket";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SyncroAvatar } from "@/components/syncro-avatar";
-import { ICE_SERVERS, type RemoteInput, lowLatency, socketSession } from "@/components/remote/remote-protocol";
+import { ICE_SERVERS, type RemoteInput, lowLatency, openMic, playVoice, socketSession } from "@/components/remote/remote-protocol";
 
 type State = "idle" | "waiting" | "connecting" | "live";
 
@@ -19,6 +19,9 @@ type State = "idle" | "waiting" | "connecting" | "live";
 export function RemoteViewer({ businessId, businessName }: { businessId: string; businessName: string }) {
   const [state, setState] = useState<State>("idle");
   const [control, setControl] = useState(false);
+  const [mic, setMic] = useState<"on" | "off" | "none">("none");
+  const micRef = useRef<MediaStream | null>(null);
+  const voiceRef = useRef<HTMLAudioElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const sessionRef = useRef<string | null>(null);
@@ -33,6 +36,9 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
     pcRef.current?.close();
     pcRef.current = null;
     channels.current = {};
+    micRef.current?.getTracks().forEach((t) => t.stop());
+    micRef.current = null;
+    setMic("none");
     cancelAnimationFrame(frame.current);
     sessionRef.current = null;
     socketRef.current?.disconnect();
@@ -72,7 +78,16 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
       pc.ondatachannel = (e) => {
         if (e.channel.label === "pointer" || e.channel.label === "input") channels.current[e.channel.label] = e.channel;
       };
+      // Syncro's microphone, to explain while helping
+      openMic().then((m) => {
+        if (pcRef.current !== pc) { m?.getTracks().forEach((t) => t.stop()); return; }
+        micRef.current = m;
+        if (!m) { toast("No pudimos usar tu micrófono: el negocio no te escuchará."); return; }
+        setMic("on");
+        void attachMic(pc);
+      });
       pc.ontrack = (e) => {
+        if (e.track.kind === "audio") { playVoice(e.track, voiceRef.current); return; }
         lowLatency(e.receiver);
         if (videoRef.current) videoRef.current.srcObject = e.streams[0];
         setState("live");
@@ -87,6 +102,10 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
       try {
         if (data.type === "offer" && data.sdp) {
           await pc.setRemoteDescription({ type: "offer", sdp: data.sdp });
+          // Answer "send and receive" on the voice line even if the mic isn't ready yet, so it can
+          // be plugged in later without renegotiating
+          for (const t of pc.getTransceivers()) if (t.receiver.track?.kind === "audio") t.direction = "sendrecv";
+          await attachMic(pc);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           socket.emit("remote:signal", { sessionId: sessionRef.current, data: { type: "answer", sdp: answer.sdp } });
@@ -97,6 +116,21 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
         // stale signal
       }
     });
+  };
+
+  /** Puts the microphone on the voice line the business offered (whichever comes first: mic or offer). */
+  const attachMic = async (pc: RTCPeerConnection) => {
+    const track = micRef.current?.getAudioTracks()[0];
+    const t = pc.getTransceivers().find((x) => x.receiver.track?.kind === "audio");
+    if (!track || !t || t.sender.track) return;
+    await t.sender.replaceTrack(track).catch(() => undefined);
+  };
+
+  const toggleMic = () => {
+    const track = micRef.current?.getAudioTracks()[0];
+    if (!track) return;
+    track.enabled = !track.enabled;
+    setMic(track.enabled ? "on" : "off");
   };
 
   const end = () => {
@@ -169,9 +203,15 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
             <IconPointer size={13} /> {control ? "Tienes el control: clic, rueda y teclado" : "Solo puedes señalar"}
           </span>
         )}
-        <Button size="sm" variant="secondary" className="ml-auto" onClick={end}><IconX size={16} /> Terminar</Button>
+        {mic !== "none" && (
+          <Button size="sm" variant={mic === "on" ? "secondary" : "destructive"} className="ml-auto" onClick={toggleMic} title={mic === "on" ? "Silenciar tu micrófono" : "Activar tu micrófono"}>
+            {mic === "on" ? <IconMicrophone size={16} /> : <IconMicrophoneOff size={16} />} {mic === "on" ? "Micrófono" : "Silenciado"}
+          </Button>
+        )}
+        <Button size="sm" variant="secondary" className={mic === "none" ? "ml-auto" : undefined} onClick={end}><IconX size={16} /> Terminar</Button>
       </div>
 
+      <audio ref={voiceRef} autoPlay hidden />
       <div className="relative min-h-0 flex-1">
         {state !== "live" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center text-white">

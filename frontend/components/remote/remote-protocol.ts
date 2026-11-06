@@ -42,6 +42,22 @@ export function lowLatency(receiver: RTCRtpReceiver) {
   try { if ("playoutDelayHint" in r) r.playoutDelayHint = 0; } catch { /* ignore */ }
 }
 
+/** The microphone for talking during live assistance. Null when there is none or it was denied. */
+export async function openMic(): Promise<MediaStream | null> {
+  try {
+    return await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+  } catch {
+    return null;
+  }
+}
+
+/** Plays the other side's voice. */
+export function playVoice(track: MediaStreamTrack, el: HTMLAudioElement | null) {
+  if (!el) return;
+  el.srcObject = new MediaStream([track]);
+  void el.play().catch(() => undefined);
+}
+
 export function socketSession() {
   try {
     const pwa = window.matchMedia("(display-mode: standalone)").matches;

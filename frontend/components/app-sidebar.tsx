@@ -515,7 +515,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       onClose={() => setAskingFeature(false)}
                       moduleCode="core"
                       moduleName="Syncro"
-                      sections={filteredNavMain.filter((i) => !i.soon).flatMap((i) => (i.items?.length ? i.items.map((sub) => `${i.title} · ${sub.title}`) : [i.title]))}
+                      sections={filteredNavMain.filter((i) => !("soon" in i && i.soon)).flatMap((i) => (i.items?.length ? i.items.map((sub) => `${i.title} · ${sub.title}`) : [i.title]))}
                       examples={{
                         title: "Ej.: Productos por lote, Etiquetas con precio, Pedidos a proveedores",
                         problem: "Ej.: vendemos medicinas y necesitamos controlar el vencimiento de cada lote en el inventario…",

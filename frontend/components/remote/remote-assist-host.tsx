@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { IconMicrophone, IconMicrophoneOff } from "@tabler/icons-react";
 import type { Socket } from "socket.io-client";
 import { toast } from "sonner";
 import { connectSocket } from "@/lib/socket";
@@ -9,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SyncroAvatar } from "@/components/syncro-avatar";
-import { ICE_SERVERS, type RemoteInput, preferFastCodecs, socketSession, tuneSender } from "@/components/remote/remote-protocol";
+import { ICE_SERVERS, type RemoteInput, openMic, playVoice, preferFastCodecs, socketSession, tuneSender } from "@/components/remote/remote-protocol";
 
 type DesktopBridge = { isDesktop?: boolean; remoteInput?: (ev: Record<string, unknown>) => void };
 const desktop = () => (typeof window !== "undefined" ? ((window as unknown as { electron?: DesktopBridge }).electron ?? null) : null);
@@ -128,6 +129,10 @@ function desktopInput(ev: RemoteInput, send: (e: Record<string, unknown>) => voi
 export function RemoteAssistHost() {
   const [incoming, setIncoming] = useState<{ sessionId: string; adminName: string } | null>(null);
   const [allowControl, setAllowControl] = useState(true);
+  const [allowVoice, setAllowVoice] = useState(true);
+  const [mic, setMic] = useState<"on" | "off" | "none">("none");
+  const micRef = useRef<MediaStream | null>(null);
+  const voiceRef = useRef<HTMLAudioElement>(null);
   const [active, setActive] = useState<{ sessionId: string; adminName: string; control: boolean } | null>(null);
   const pointerRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -141,6 +146,10 @@ export function RemoteAssistHost() {
     if (notify && a) socketRef.current?.emit("remote:end", { sessionId: a.sessionId });
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    micRef.current?.getTracks().forEach((t) => t.stop());
+    micRef.current = null;
+    setMic("none");
+    if (voiceRef.current) voiceRef.current.srcObject = null;
     pcRef.current?.close();
     pcRef.current = null;
     setActive(null);
@@ -168,7 +177,7 @@ export function RemoteAssistHost() {
     if (!s.token || !s.businessId || s.role === "syncropos" || s.role === "client") return;
     const socket = connectSocket({ auth: { token: s.token }, reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 2000 });
     socketRef.current = socket;
-    socket.on("remote:incoming", (d: { sessionId: string; adminName: string }) => { setAllowControl(true); setIncoming(d); });
+    socket.on("remote:incoming", (d: { sessionId: string; adminName: string }) => { setAllowControl(true); setAllowVoice(true); setIncoming(d); });
     socket.on("remote:closed", ({ sessionId }: { sessionId: string }) => setIncoming((cur) => (cur?.sessionId === sessionId ? null : cur)));
     socket.on("remote:ended", ({ reason, by }: { reason: string; by?: string }) => {
       stop(false);
@@ -208,9 +217,13 @@ export function RemoteAssistHost() {
       toast.error("No se pudo compartir la pantalla");
       return;
     }
+    // Voice: the business's microphone, if it agreed to talk
+    const micStream = allowVoice ? await openMic() : null;
+    if (allowVoice && !micStream) toast("No pudimos usar tu micrófono. Igual escucharás a Syncro.");
     const answer: { ok?: boolean; error?: string } = await new Promise((resolve) => socketRef.current?.emit("remote:respond", { sessionId: req.sessionId, accept: true, control: allowControl }, resolve));
     if (!answer?.ok) {
       stream.getTracks().forEach((t) => t.stop());
+      micStream?.getTracks().forEach((t) => t.stop());
       toast.error(answer?.error || "La solicitud ya no está disponible");
       return;
     }
@@ -224,6 +237,12 @@ export function RemoteAssistHost() {
       t.onended = () => stop(true);
       void tuneSender(sender);
     });
+    // Two-way voice: always ready to hear Syncro; sends this side's microphone when there is one
+    micRef.current = micStream;
+    const micTrack = micStream?.getAudioTracks()[0] ?? null;
+    pc.addTransceiver(micTrack ?? "audio", { direction: "sendrecv", streams: micStream ? [micStream] : [] });
+    setMic(micTrack ? "on" : "none");
+    pc.ontrack = (e) => { if (e.track.kind === "audio") playVoice(e.track, voiceRef.current); };
     preferFastCodecs(pc);
     // Direct channels between both computers: the pointer (latest wins, no retries) and the
     // clicks and keys (in order, never lost). Faster than going through the server.
@@ -237,6 +256,13 @@ export function RemoteAssistHost() {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     socketRef.current?.emit("remote:signal", { sessionId: req.sessionId, data: { type: "offer", sdp: offer.sdp } });
+  };
+
+  const toggleMic = () => {
+    const track = micRef.current?.getAudioTracks()[0];
+    if (!track) return;
+    track.enabled = !track.enabled;
+    setMic(track.enabled ? "on" : "off");
   };
 
   const decline = () => {
@@ -253,6 +279,7 @@ export function RemoteAssistHost() {
 
   return (
     <>
+      <audio ref={voiceRef} autoPlay hidden />
       <Dialog open={!!incoming} onOpenChange={(o) => { if (!o) decline(); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="items-center text-center">
@@ -269,6 +296,13 @@ export function RemoteAssistHost() {
               <span className="block text-muted-foreground">Para cargar tus productos o configurar por ti. Lo puedes quitar en cualquier momento.</span>
             </span>
           </label>
+          <label className="flex items-start gap-2.5 rounded-xl bg-muted/50 p-3 text-sm">
+            <Checkbox checked={allowVoice} onCheckedChange={(v) => setAllowVoice(v === true)} className="mt-0.5" />
+            <span>
+              <span className="font-medium">Hablar por voz</span>
+              <span className="block text-muted-foreground">Usa tu micrófono para conversar mientras te explica. Puedes silenciarte cuando quieras.</span>
+            </span>
+          </label>
           <DialogFooter className="gap-2 sm:justify-center">
             <Button variant="outline" onClick={decline}>Ahora no</Button>
             <Button onClick={accept} autoFocus>Aceptar y compartir</Button>
@@ -283,6 +317,11 @@ export function RemoteAssistHost() {
               <span className="size-2 animate-pulse rounded-full bg-white" />
               {active.adminName} (Syncro) está viendo tu pantalla{active.control ? " y puede usar el mouse" : ""}
             </span>
+            {mic !== "none" && (
+              <button type="button" onClick={toggleMic} className="flex items-center gap-1 rounded-md bg-white/15 px-2.5 py-0.5 text-xs font-medium hover:bg-white/25" title={mic === "on" ? "Silenciar tu micrófono" : "Activar tu micrófono"}>
+                {mic === "on" ? <IconMicrophone size={14} /> : <IconMicrophoneOff size={14} />} {mic === "on" ? "Silenciar" : "Micrófono apagado"}
+              </button>
+            )}
             <button type="button" onClick={toggleControl} className="rounded-md bg-white/15 px-2.5 py-0.5 text-xs font-medium hover:bg-white/25">
               {active.control ? "Quitar el control" : "Permitir el control"}
             </button>
