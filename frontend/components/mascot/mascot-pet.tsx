@@ -20,6 +20,40 @@ const THINK_EVERY_MS = 4 * 60_000;
 const CLOUD_W = 330;
 
 type Rect = { l: number; t: number; r: number; b: number };
+
+/** Nobody moved the mouse or typed for this long: Syncro dozes off. */
+const SLEEP_AFTER_MS = 30_000;
+
+/** A glossy 3D "Z" in midnight blue: extruded edge, gradient face and a highlight. */
+function SleepZ({ size, delay, toLeft }: { size: number; delay: number; toLeft: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 26 26"
+      width={size}
+      height={size}
+      aria-hidden
+      className="absolute bottom-0 left-0"
+      style={{ animation: `${toLeft ? "syncro-z-left" : "syncro-z-right"} 2.7s ease-out ${delay}s infinite both`, filter: "drop-shadow(0 3px 4px rgba(10,20,60,.35))" }}
+    >
+      <defs>
+        <linearGradient id="syncro-z-face" x1="0" y1="0" x2="0.4" y2="1">
+          <stop offset="0" stopColor="#6d8dff" />
+          <stop offset="0.45" stopColor="#2d4bc4" />
+          <stop offset="1" stopColor="#0f1f5c" />
+        </linearGradient>
+      </defs>
+      {/* Extruded edge, darker layers behind the face */}
+      {[3, 2.2, 1.4].map((o, i) => (
+        <path key={i} d="M3 3 H21 V7 L9.5 19 H21 V23 H3 V19 L14.5 7 H3 Z" transform={`translate(${o} ${o})`} fill={["#050b24", "#08133a", "#0b1a4d"][i]} stroke={["#050b24", "#08133a", "#0b1a4d"][i]} strokeWidth="2" strokeLinejoin="round" />
+      ))}
+      {/* Face */}
+      <path d="M3 3 H21 V7 L9.5 19 H21 V23 H3 V19 L14.5 7 H3 Z" fill="url(#syncro-z-face)" stroke="url(#syncro-z-face)" strokeWidth="2" strokeLinejoin="round" />
+      {/* Glossy highlights */}
+      <path d="M4.5 4.6 H19.5" stroke="#ffffff" strokeWidth="1.3" strokeLinecap="round" opacity=".85" />
+      <path d="M5 20.4 H11" stroke="#ffffff" strokeWidth="1" strokeLinecap="round" opacity=".45" />
+    </svg>
+  );
+}
 type Exchange = { role: "user" | "assistant"; content: string };
 type Mode = "follow" | "drag" | "fly";
 
@@ -60,6 +94,7 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
   const walls = useRef<Rect[]>([]);
   const [onRight, setOnRight] = useState(true);
   const [onTop, setOnTop] = useState(false);
+  const [asleep, setAsleep] = useState(false);
 
   // Ideas
   const [thought, setThought] = useState<MascotThought | null>(null);
@@ -189,6 +224,7 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
     let raf = 0;
     let last = performance.now();
     let sideCheck = 0;
+    const startedAt = performance.now();
     /** One small physics step (the frame is split in steps of at most 1/60 s, so speed never depends on the frame rate). */
     const step = (dt: number, now: number) => {
       const p = pos.current;
@@ -306,6 +342,9 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
         const upper = p.y + HALF < vh / 2;
         setOnRight((r) => (r === right ? r : right));
         setOnTop((t) => (t === upper ? t : upper));
+        const I = interest.current;
+        const sleeping = !frozenRef.current && mode.current === "follow" && now - Math.max(I.at, startedAt) > SLEEP_AFTER_MS;
+        setAsleep((a) => (a === sleeping ? a : sleeping));
       }
       raf = requestAnimationFrame(tick);
     };
@@ -493,6 +532,8 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
         @keyframes syncro-bulb { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
         @keyframes syncro-glow { 0%,100% { opacity: .55; transform: scale(1); } 50% { opacity: .9; transform: scale(1.15); } }
         @keyframes syncro-pop { 0% { transform: scale(0); opacity: 0; } 70% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes syncro-z-right { 0% { transform: translate(28px, 10px) scale(.4) rotate(-8deg); opacity: 0; } 15% { opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(58px, -70px) scale(1.15) rotate(10deg); opacity: 0; } }
+        @keyframes syncro-z-left { 0% { transform: translate(38px, 10px) scale(.4) rotate(8deg); opacity: 0; } 15% { opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(4px, -70px) scale(1.15) rotate(-10deg); opacity: 0; } }
         .syncro-pop { animation: syncro-pop .35s cubic-bezier(.2,.9,.3,1.3) both; }
         .syncro-noscroll { scrollbar-width: none; -ms-overflow-style: none; }
         .syncro-noscroll::-webkit-scrollbar { display: none; }
@@ -514,7 +555,7 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
           style={{ width: SIZE, height: SIZE }}
         >
           <span ref={bodyRef} className="block will-change-transform" style={{ transformOrigin: "50% 60%" }}>
-            <SyncroAvatar size={SIZE} title="" emotion={mood ?? (unread ? "surprised" : undefined)} festive={festive} />
+            <SyncroAvatar size={SIZE} title="" emotion={mood ?? (asleep ? "sleepy" : unread ? "surprised" : undefined)} festive={festive} />
           </span>
           {unread > 0 && (
             <span className={cn("absolute bottom-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold tabular-nums text-primary-foreground ring-2 ring-background", onRight ? "left-0" : "right-0")}>
@@ -522,6 +563,15 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
             </span>
           )}
         </button>
+
+        {/* Asleep: glossy midnight-blue Zs rising one after another */}
+        {asleep && !cloud && !showBulb && (
+          <span aria-hidden className={cn("pointer-events-none absolute -top-14 h-24 w-20", onRight ? "-left-6" : "-right-6")}>
+            <SleepZ size={18} delay={0} toLeft={onRight} />
+            <SleepZ size={24} delay={0.9} toLeft={onRight} />
+            <SleepZ size={31} delay={1.8} toLeft={onRight} />
+          </span>
+        )}
 
         {/* The idea: a glowing, glossy light bulb on the edge of the head, facing the screen */}
         {showBulb && (
