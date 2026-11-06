@@ -2,6 +2,7 @@ import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, Put, Qu
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SyncroAdminService } from './syncro-admin.service';
 import { BusinessModulesService, type ModuleAction } from '../business-modules/business-modules.service';
+import { ModuleRequestsService } from '../business-modules/module-requests.service';
 
 @Controller('syncro-admin')
 @UseGuards(JwtAuthGuard)
@@ -9,6 +10,7 @@ export class SyncroAdminController {
   constructor(
     private readonly adminService: SyncroAdminService,
     private readonly modules: BusinessModulesService,
+    private readonly requests: ModuleRequestsService,
   ) {}
 
   private assertAdmin(req: any) {
@@ -96,5 +98,17 @@ export class SyncroAdminController {
   moduleTrials(@Req() req: any) {
     this.assertAdmin(req);
     return this.modules.trials();
+  }
+
+  @Get('requests')
+  moduleRequests(@Query('status') status: string | undefined, @Req() req: any) {
+    this.assertAdmin(req);
+    return this.requests.all(status || undefined);
+  }
+
+  @Put('requests/:id')
+  updateRequest(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    const adminId = this.assertAdmin(req);
+    return this.requests.setStatus(id, body ?? {}, adminId);
   }
 }

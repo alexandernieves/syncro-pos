@@ -96,7 +96,7 @@ export function ModulesSection({ businessId, businessName, onChanged }: { busine
                 </p>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {!m.status || m.status === "PAUSED" || m.status === "REJECTED" ? (
+                {!m.status || ["PAUSED", "REJECTED", "REQUESTED", "IN_REVIEW", "BUILDING", "READY"].includes(m.status) ? (
                   <>
                     <Button size="sm" onClick={() => setPending({ mod: m, action: "TRIAL" })}><IconClockPlay size={16} /> Ofrecer prueba</Button>
                     <Button size="sm" variant="outline" onClick={() => setPending({ mod: m, action: "ACTIVATE" })}><IconCheck size={16} /> Activar</Button>

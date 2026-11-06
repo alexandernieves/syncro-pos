@@ -138,6 +138,16 @@ export class BusinessModulesService {
       ? await this.prisma.businessModule.update({ where: { id: row.id }, data })
       : await this.prisma.businessModule.create({ data: { businessId, moduleCode: code, origin: 'OFFER', ...data } });
     await this.syncEnabledModules(businessId);
+    // Turning it on answers any open request for this module
+    if (action === 'TRIAL' || action === 'ACTIVATE') {
+      const open = await this.prisma.moduleRequest.findMany({ where: { businessId, kind: 'CATALOG', moduleCode: code, status: { in: ['REQUESTED', 'IN_REVIEW', 'BUILDING', 'READY'] } }, select: { id: true } });
+      for (const r of open) {
+        await this.prisma.moduleRequest.update({
+          where: { id: r.id },
+          data: { status: 'DONE', events: { create: { status: 'DONE', note: action === 'TRIAL' ? `Activado en prueba hasta el ${fmt(saved.trialEndsAt!)}` : 'Activado', byRole: 'syncro' } } },
+        });
+      }
+    }
     await this.audit(adminId, businessId, `SYNCRO_MODULE_${action}`, { module: code, status: saved.status, trialEndsAt: saved.trialEndsAt });
     if (opts.notify !== false && text) {
       await this.chat.notifyBusiness(businessId, adminId, opts.message?.trim() || text).catch(() => undefined);

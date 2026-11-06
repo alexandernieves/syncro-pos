@@ -215,6 +215,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return message;
   }
 
+  /** A message from a business to Syncro, sent by the server (a module request…). Reaches the support inbox. */
+  async notifySupport(businessId: string, senderId: string, text: string) {
+    let conv = await this.prisma.conversation.findFirst({ where: { businessId }, select: { id: true, business: { select: { name: true } } } });
+    if (!conv) conv = await this.prisma.conversation.create({ data: { businessId }, select: { id: true, business: { select: { name: true } } } });
+    const message = await this.chatService.saveMessage({ conversationId: conv.id, senderId, text, type: 'TEXT' });
+    this.server.to(`conv_${conv.id}`).emit('newMessage', message);
+    this.server.to('support').to(`conv_${conv.id}`).emit('conversationUpdated', { conversationId: conv.id, lastMessage: text, updatedAt: new Date() });
+    try {
+      const team = await this.prisma.user.findMany({ where: { role: 'syncropos' }, select: { id: true } });
+      for (const u of team) await this.pushService.sendToUser(u.id, { title: `💬 ${conv.business?.name ?? 'Cliente'}`, body: text.slice(0, 140), url: '/dashboard/syncro/chat' });
+    } catch {
+      // push is best-effort
+    }
+    return message;
+  }
+
   @SubscribeMessage('markAsRead')
   async handleMarkRead(
     @ConnectedSocket() client: Socket,

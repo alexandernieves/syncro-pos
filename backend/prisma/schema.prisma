@@ -79,6 +79,7 @@ model Business {
   financeMovements      FinanceMovement[]
   subscriptionPayments  SubscriptionPayment[]
   modules               BusinessModule[]
+  moduleRequests        ModuleRequest[]
   features              BusinessFeature[]
 }
 
@@ -2147,4 +2148,44 @@ model BusinessFeature {
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@unique([businessId, featureKey])
+}
+
+/// What a business owner asks Syncro to build or turn on (Tienda de módulos)
+model ModuleRequest {
+  id             String               @id @default(uuid())
+  businessId     String
+  requestedById  String?
+  /// CATALOG (a packaged module), CUSTOM_MODULE (a new module for this business) or CUSTOM_FEATURE
+  kind           String
+  moduleCode     String?
+  title          String
+  trade          String?
+  /// What problem the business wants to solve
+  problem        String
+  /// How the business works today
+  currentProcess String?
+  /// Anything else: volume, people involved, deadlines
+  extra          String?
+  /// REQUESTED, IN_REVIEW, BUILDING, READY, DONE, REJECTED
+  status         String               @default("REQUESTED")
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  business       Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  events         ModuleRequestEvent[]
+
+  @@index([businessId, createdAt])
+  @@index([status])
+}
+
+/// Timeline of a request: every status change, with an optional note shown to the business
+model ModuleRequestEvent {
+  id        String        @id @default(uuid())
+  requestId String
+  status    String
+  note      String?
+  byRole    String?
+  createdAt DateTime      @default(now())
+  request   ModuleRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
 }

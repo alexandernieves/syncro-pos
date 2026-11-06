@@ -133,6 +133,7 @@ const ACTION_LABEL: Record<string, string> = {
   SYNCRO_MODULE_PAUSE: "Syncro pausó un módulo",
   SYNCRO_MODULE_REMOVE: "Syncro quitó un módulo",
   SYNCRO_FEATURE_TOGGLE: "Syncro cambió una función de un módulo",
+  SYNCRO_REQUEST_STATUS: "Syncro cambió el estado de una solicitud",
 };
 export function actionLabel(action: string) {
   if (ACTION_LABEL[action]) return ACTION_LABEL[action];

@@ -26,6 +26,7 @@ import {
   IconChevronDown,
   IconCirclePlusFilled,
   IconMessageCircle,
+  IconApps,
   IconBarbell,
   IconArrowLeft,
   IconLayoutDashboard,
@@ -188,6 +189,11 @@ const data = {
   ],
   navSecondary: [
     {
+      title: "Tienda de módulos",
+      url: "/dashboard/tienda",
+      icon: IconApps,
+    },
+    {
       title: "Soporte",
       url: "/dashboard/soporte",
       icon: IconMessageCircle,
@@ -216,6 +222,7 @@ const data = {
       items: [
         { title: "Gestión de negocios", url: "/dashboard/syncro/owners" },
         { title: "Mensajería", url: "/dashboard/syncro/chat" },
+        { title: "Solicitudes", url: "/dashboard/syncro/requests" },
         { title: "Feedback de IA", url: "/dashboard/syncro/feedback" },
         { title: "Suscripciones", url: "/dashboard/syncro/subscriptions" },
         { title: "Métricas globales", url: "/dashboard/syncro/stats" },
@@ -387,11 +394,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const isSyncro = user.role === "syncropos";
     // Support team uses Mensajería from navSyncro — hide Soporte + Configuración
     if (isSyncro) return data.navSecondary.filter(
-      i => i.title !== "Configuración" && i.title !== "Soporte"
+      i => i.title !== "Configuración" && i.title !== "Soporte" && i.url !== "/dashboard/tienda"
     );
 
+    // Only the owner asks for modules
+    const isOwner = user.role === "ownerpos" || user.role === "owner";
     const isAdmin = user.role === "ownerpos" || user.role === "admin";
-    if (isAdmin) return data.navSecondary;
+    if (isAdmin) return data.navSecondary.filter((i) => isOwner || i.url !== "/dashboard/tienda");
     if (!user.permissions || user.permissions.length === 0) return [];
     
     return data.navSecondary.filter(item => {
