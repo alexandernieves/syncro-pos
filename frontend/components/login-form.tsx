@@ -20,6 +20,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { Eye, EyeOff, Trash2, ArrowLeft, ChevronRight } from "lucide-react"
 
@@ -77,6 +78,9 @@ export function LoginForm({
   const [savedProfiles, setSavedProfiles] = useState<SavedProfile[]>([])
   const [selectedProfile, setSelectedProfile] = useState<SavedProfile | null>(null)
   const [viewMode, setViewMode] = useState<"profiles" | "password" | "classic">("classic")
+  // Only save the profile on this device when the person asks for it
+  const [rememberProfile, setRememberProfile] = useState(false)
+  const rememberId = useId()
   const [isStandalone, setIsStandalone] = useState(false)
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
@@ -196,8 +200,8 @@ export function LoginForm({
         document.cookie = `token=${token}; path=/; max-age=28800; SameSite=Strict; Secure`
       }
 
-      // Save the profile (async, non-blocking)
-      handleLoginSuccess(data.user, targetEmail, token)
+      // Save the profile when asked (async, non-blocking). Signing in from a saved profile keeps it fresh.
+      if (rememberProfile || (viewMode === "password" && selectedProfile)) handleLoginSuccess(data.user, targetEmail, token)
 
       return data
     }
@@ -540,6 +544,12 @@ export function LoginForm({
                   </button>
                 </div>
               </Field>
+              <div className="flex items-center gap-2">
+                <Checkbox id={rememberId} checked={rememberProfile} onCheckedChange={(v) => setRememberProfile(v === true)} />
+                <label htmlFor={rememberId} className="cursor-pointer select-none text-sm text-muted-foreground">
+                  Guardar mi perfil en este equipo
+                </label>
+              </div>
               <Field>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Iniciando sesión..." : "Iniciar sesión"}
