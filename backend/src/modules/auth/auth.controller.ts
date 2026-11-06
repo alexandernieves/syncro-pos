@@ -28,8 +28,8 @@ export class AuthController {
   }
 
   // ── Login ─────────────────────────────────────────────────────────────────
-  // Strict rate-limit: max 5 attempts per 15 minutes per IP
-  @Throttle({ default: { limit: 5, ttl: 900000 } })
+  // Strict rate-limit: max 8 attempts per 15 minutes per IP and account
+  @Throttle({ default: { limit: 8, ttl: 900000 } })
   @Post('login')
   async login(@Body() body: any, @Ip() ip: string) {
     const user = await this.authService.validateUser(body.email, body.password, ip);

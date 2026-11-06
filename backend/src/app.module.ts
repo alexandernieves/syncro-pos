@@ -1,7 +1,8 @@
 import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AppThrottlerGuard } from './common/app-throttler.guard';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -44,12 +45,13 @@ import { BusinessModulesModule } from './modules/business-modules/business-modul
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
-    // ── Rate Limiting (global, 60 req / 60 s; login overrides to 5 / 900 s) ──
+    // ── Rate Limiting: 600 req / 60 s per client IP. A gym's front desk has several
+    // computers behind one internet IP, with screens that refresh on their own. ──
     ThrottlerModule.forRoot([
       {
         name: 'default',
         ttl: 60000,   // 60 seconds
-        limit: 60,    // max 60 requests per window
+        limit: 600,   // max requests per window
       },
     ]),
     AppCacheModule,
@@ -92,7 +94,7 @@ import { BusinessModulesModule } from './modules/business-modules/business-modul
     // ── Global Rate-Limit Guard ────────────────────────────────────────────
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: AppThrottlerGuard,
     },
   ],
 })
