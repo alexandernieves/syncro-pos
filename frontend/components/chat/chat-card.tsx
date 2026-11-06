@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { IconApps, IconBarbell, IconPuzzle } from "@tabler/icons-react";
+import { IconApps, IconBarbell, IconDeviceDesktop, IconPuzzle } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -19,7 +19,7 @@ const MODULE_ROUTE: Record<string, string> = { gym: "/dashboard/gimnasio" };
 const KIND_LABEL: Record<string, string> = { CATALOG: "Módulo del catálogo", CUSTOM_MODULE: "Módulo a la medida", CUSTOM_FEATURE: "Función nueva" };
 
 export type CardMeta = {
-  card?: "module" | "request";
+  card?: "module" | "request" | "remote";
   // module
   action?: string;
   moduleCode?: string;
@@ -32,6 +32,9 @@ export type CardMeta = {
   kind?: string;
   note?: string | null;
   trade?: string | null;
+  // remote
+  sessionId?: string;
+  minutes?: number;
 };
 
 const longDate = (d: string) => new Date(d).toLocaleDateString("es-VE", { day: "numeric", month: "long" });
@@ -59,6 +62,16 @@ export function ChatCard({ meta, text, audience }: { meta: CardMeta; text?: stri
         {audience === "business" && usable && meta.moduleCode && MODULE_ROUTE[meta.moduleCode] && (
           <Button asChild size="sm"><Link href={MODULE_ROUTE[meta.moduleCode]}>Abrir {meta.name}</Link></Button>
         )}
+      </div>
+    );
+  }
+
+  if (meta.card === "remote") {
+    return (
+      <div className="w-full max-w-md space-y-1.5">
+        <p className="flex items-center gap-2 font-semibold"><IconDeviceDesktop size={16} className="text-primary" /> {meta.status === "ENDED" ? "Asistencia en vivo terminada" : "Asistencia en vivo"}</p>
+        {text && <p className="whitespace-pre-wrap leading-relaxed">{text}</p>}
+        {meta.status === "PENDING" && audience === "business" && <p className="text-xs text-muted-foreground">Te aparece un aviso para aceptar. Solo se ve tu ventana de Syncro y puedes terminar cuando quieras.</p>}
       </div>
     );
   }

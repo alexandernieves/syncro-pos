@@ -7,6 +7,7 @@ import { FinanceWidget } from "@/components/finance-widget";
 import { SuspendedSessionGuard } from "@/components/suspended-session-guard";
 import { SupportNotifier } from "@/components/support-notifier";
 import { SupportChatWidget } from "@/components/support-chat-widget";
+import { RemoteAssistHost } from "@/components/remote/remote-assist-host";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 import { useRouter, usePathname } from "next/navigation";
@@ -110,6 +111,7 @@ export default function DashboardLayout({
         <OpenShiftHost />
         <FinanceWidget />
         <SupportChatWidget />
+        <RemoteAssistHost />
       </div>
     );
   }
@@ -128,6 +130,7 @@ export default function DashboardLayout({
       <OpenShiftHost />
         <FinanceWidget />
         <SupportChatWidget />
+        <RemoteAssistHost />
       <AppSidebar variant="inset" />
       {/* La vista es la superficie que sobresale: blanca y elevada sobre el
           armazon gris del sidebar, con la esquina superior izquierda marcada. */}

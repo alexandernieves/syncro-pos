@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell, dialog, net } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog, net, desktopCapturer, session } = require('electron');
 const { spawn } = require('child_process');
 const crypto = require('crypto');
 const { autoUpdater } = require('electron-updater');
@@ -121,6 +121,37 @@ function createWindow() {
   });
 
   openServer();
+}
+
+// ── Remote assistance ───────────────────────────────────────────────────────
+// The Syncro team can see this window and, if the person allows it, click and type in it.
+// Only this window: the screen share picks Syncro's own window, and input events go to its page.
+
+const INPUT_TYPES = new Set(['mouseMove', 'mouseDown', 'mouseUp', 'mouseWheel', 'keyDown', 'keyUp', 'char']);
+
+ipcMain.on('remote-input', (e, ev) => {
+  if (!isServer(e.senderFrame.url) || !ev || !INPUT_TYPES.has(ev.type)) return;
+  const target = BrowserWindow.fromWebContents(e.sender);
+  if (!target || target.isDestroyed()) return;
+  const clean = { type: ev.type };
+  for (const k of ['x', 'y', 'deltaX', 'deltaY', 'clickCount']) if (Number.isFinite(ev[k])) clean[k] = ev[k];
+  if (['left', 'middle', 'right'].includes(ev.button)) clean.button = ev.button;
+  if (typeof ev.keyCode === 'string' && ev.keyCode.length <= 20) clean.keyCode = ev.keyCode;
+  if (Array.isArray(ev.modifiers)) clean.modifiers = ev.modifiers.filter((m) => ['shift', 'control', 'alt', 'meta'].includes(m));
+  target.webContents.sendInputEvent(clean);
+});
+
+function allowOwnWindowCapture() {
+  session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+    try {
+      if (!isServer(request.frame?.url || request.securityOrigin || '')) return callback({});
+      const sources = await desktopCapturer.getSources({ types: ['window'] });
+      const own = win && !win.isDestroyed() ? sources.find((s) => s.id === win.getMediaSourceId()) : null;
+      callback(own ? { video: own } : {});
+    } catch {
+      callback({});
+    }
+  });
 }
 
 // ── Printing ────────────────────────────────────────────────────────────────
@@ -410,6 +441,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
+    allowOwnWindowCapture();
     createWindow();
     buildMenu();
     checkUpdates(false);

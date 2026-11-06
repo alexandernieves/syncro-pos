@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('electron', {
     return () => ipcRenderer.removeListener('update-status', listener);
   },
   installUpdate: () => ipcRenderer.send('install-update'),
+  // Remote assistance: real mouse and keyboard events, only inside this window
+  remoteInput: (event) => ipcRenderer.send('remote-input', event),
   checkUpdates: () => ipcRenderer.send('check-updates'),
   // Only for the server setup page
   saveServer: (url) => ipcRenderer.invoke('save-server', url),

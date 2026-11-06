@@ -74,6 +74,7 @@ import { useCurrency } from "@/context/CurrencyContext";
 import { FinanceWidget, categoryOf } from "@/components/finance-widget";
 import { SupportChatWidget } from "@/components/support-chat-widget";
 import { SupportNotifier } from "@/components/support-notifier";
+import { RemoteAssistHost } from "@/components/remote/remote-assist-host";
 import { type Currency as CashCurrency, CURRENCY_META, cashChange, cashDue, formatMoney, fromUsd, toUsd } from "@/lib/currency";
 
 const API = API_URL;
@@ -4987,6 +4988,7 @@ export default function POSPage() {
       <FinanceWidget placement="left" />
       <SupportNotifier />
       <SupportChatWidget placement="left" defaultTop={34} />
+      <RemoteAssistHost />
 
       {/* DIALOG: ESCÁNER Y CÁMARA (ESTILO UNIFICADO) */}
       <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>

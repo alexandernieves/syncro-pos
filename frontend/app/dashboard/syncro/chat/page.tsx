@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { WhatsAppAudioPlayer } from "@/components/ui/whatsapp-audio-player";
 import { BusinessSheet } from "@/components/syncro-admin/business-sheet";
 import { ChatCard } from "@/components/chat/chat-card";
+import { RemoteViewer } from "@/components/remote/remote-viewer";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
 import { STATUS_CLASS, STATUS_LABEL } from "@/lib/syncro-admin";
@@ -364,6 +365,7 @@ export default function SyncroAdminChatPage() {
               </div>
               <p className="truncate text-xs text-muted-foreground">{[active.business?.email, active.business?.phone].filter(Boolean).join(" · ") || "Sin datos de contacto"}</p>
             </div>
+            <RemoteViewer key={active.businessId} businessId={active.businessId} businessName={active.business?.name ?? "el negocio"} />
             <Button variant="outline" size="sm" onClick={() => setProfileOf(active.businessId)}><IconUserCircle size={16} /> Ver negocio</Button>
           </div>
 

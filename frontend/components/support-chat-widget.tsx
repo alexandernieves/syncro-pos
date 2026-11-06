@@ -68,6 +68,7 @@ const STARTERS = [
   "Tengo un problema con una venta",
   "¿Cómo registro un producto?",
   "Necesito ayuda con el cierre de caja",
+  "Quiero que me ayuden en vivo en mi pantalla",
 ];
 
 /**
