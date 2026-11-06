@@ -46,11 +46,13 @@ export class UploadService {
     const { buffer, mimetype, extension } = await this.optimizeImage(file);
     
     // Generate fileName with correct extension
-    const lastDotIdx = file.originalname.lastIndexOf('.');
-    const baseName = lastDotIdx !== -1 ? file.originalname.substring(0, lastDotIdx) : file.originalname;
+    // Only safe characters from the original name end up in the key
+    const safe = (file.originalname || 'archivo').normalize('NFKD').replace(/[^\w.-]+/g, '-').replace(/^[.-]+/, '').slice(-80) || 'archivo';
+    const lastDotIdx = safe.lastIndexOf('.');
+    const baseName = lastDotIdx > 0 ? safe.substring(0, lastDotIdx) : safe;
     const fileName = extension === 'webp'
       ? `${uuidv4()}-${baseName}.webp`
-      : `${uuidv4()}-${file.originalname}`;
+      : `${uuidv4()}-${safe}`;
     
     const key = `${folder}/${fileName}`;
 

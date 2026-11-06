@@ -3201,7 +3201,8 @@ export default function ClientPortal() {
 
                                                     const uploadRes = await fetch(`${API}/upload`, {
                                                         method: "POST",
-                                                        body: formData
+                                                        body: formData,
+                                                        headers: { Authorization: `Bearer ${localStorage.getItem("client_token") ?? ""}` }
                                                     });
                                                     if (!uploadRes.ok) throw new Error("Upload failed");
                                                     const { url } = await uploadRes.json();

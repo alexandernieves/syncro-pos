@@ -352,6 +352,14 @@ const IconElevenLabs = ({ className, size = 18 }: { className?: string; size?: n
   </svg>
 );
 
+/** Uploads need the session (the server refuses anonymous files). */
+function uploadHeaders(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const pwa = window.matchMedia("(display-mode: standalone)").matches;
+  const token = pwa ? sessionStorage.getItem("token") : localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export default function SupportChatPage() {
   const { activeTheme } = useThemeConfig();
   const [messages, setMessages] = useState<any[]>([]);
@@ -1764,7 +1772,7 @@ export default function SupportChatPage() {
     formData.append("file", file);
     formData.append("folder", "chat");
     try {
-      const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
+      const res = await fetch(`${API}/upload`, { method: "POST", body: formData, headers: uploadHeaders() });
       const { url } = await res.json();
       const type = file.type.startsWith("video") ? "VIDEO" : "IMAGE";
       socketRef.current?.emit("sendMessage", {
@@ -1835,7 +1843,7 @@ export default function SupportChatPage() {
     formData.append("file", file);
     formData.append("folder", "chat/voice");
     try {
-      const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
+      const res = await fetch(`${API}/upload`, { method: "POST", body: formData, headers: uploadHeaders() });
       const { url } = await res.json();
       socketRef.current?.emit("sendMessage", {
         conversationId: conversation.id,
