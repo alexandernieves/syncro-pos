@@ -27,6 +27,8 @@ import {
   IconCirclePlusFilled,
   IconMessageCircle,
   IconApps,
+  IconBulb,
+  IconPuzzle,
   IconBarbell,
   IconArrowLeft,
   IconLayoutDashboard,
@@ -63,6 +65,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { DesktopVersion } from "@/components/desktop-update-badge";
 import { useMyModules } from "@/lib/modules";
+import { FeatureRequestDialog } from "@/components/feature-request-dialog";
 import { IconSparkles } from "@tabler/icons-react";
 
 const data = {
@@ -247,8 +250,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const gymNav = React.useMemo(() => {
     if (!gymModule) return data.navGym;
     const on = new Set(gymModule.features.map((f) => f.route));
-    return data.navGym.filter((item) => !gymModule.gatedRoutes.includes(item.url) || on.has(item.url));
+    const base = data.navGym.filter((item) => !gymModule.gatedRoutes.includes(item.url) || on.has(item.url));
+    // Functions built only for this business get their own entry, before Ajustes
+    const known = new Set(data.navGym.map((i) => i.url));
+    const extra = gymModule.features.filter((f) => f.route && !known.has(f.route)).map((f) => ({ title: f.label, url: f.route!, icon: IconPuzzle }));
+    const at = base.findIndex((i) => i.url === "/dashboard/gimnasio/ajustes");
+    return at < 0 ? [...base, ...extra] : [...base.slice(0, at), ...extra, ...base.slice(at)];
   }, [gymModule]);
+  const [askingFeature, setAskingFeature] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
@@ -470,6 +479,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             {gymMode ? (
               <>
                 <NavMain items={gymNav} />
+                {(user.role === "ownerpos" || user.role === "owner") && (
+                  <SidebarMenu className="px-2 pl-[72px]">
+                    <SidebarMenuItem>
+                      <SidebarMenuButton onClick={() => setAskingFeature(true)} tooltip="Pedir una función" className="text-muted-foreground hover:text-foreground">
+                        <IconBulb />
+                        <span>¿Te falta algo? Pídelo</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                )}
+                <FeatureRequestDialog
+                  open={askingFeature}
+                  onClose={() => setAskingFeature(false)}
+                  moduleCode="gym"
+                  moduleName="Gimnasio"
+                  sections={gymNav.filter((i) => i.url.startsWith("/dashboard/gimnasio/")).map((i) => i.title)}
+                />
               </>
             ) : (
               <NavMain items={filteredNavMain} />

@@ -26,6 +26,11 @@ export class BusinessModulesService {
     return (mod?.features ?? []).map((f) => ({ ...f, enabled: own.has(f.key) ? own.get(f.key)! : f.default && !f.custom }));
   }
 
+  /** A custom feature can go to its own business, or to others once that business authorized it. */
+  private canUse(feature: { custom?: boolean; builtFor?: string; shareAuthorized?: boolean }, businessId: string) {
+    return !feature.custom || !feature.builtFor || feature.builtFor === businessId || !!feature.shareAuthorized;
+  }
+
   /** Keeps Setting.enabledModules (what the sidebar reads) in line with the modules the business can use. */
   private async syncEnabledModules(businessId: string) {
     const usable = await this.prisma.businessModule.findMany({ where: { businessId, status: { in: USABLE_STATUSES } }, select: { moduleCode: true } });
@@ -60,7 +65,9 @@ export class BusinessModulesService {
         usable: USABLE_STATUSES.includes(m.status as ModuleStatus),
         trialEndsAt: m.trialEndsAt,
         activatedAt: m.activatedAt,
-        features: this.featureMap(m.moduleCode, features.filter((f) => f.moduleCode === m.moduleCode)).filter((f) => f.enabled).map((f) => ({ key: f.key, label: f.label, route: f.route })),
+        features: this.featureMap(m.moduleCode, features.filter((f) => f.moduleCode === m.moduleCode))
+          .filter((f) => f.enabled && this.canUse(f, businessId))
+          .map((f) => ({ key: f.key, label: f.label, route: f.route, custom: !!f.custom })),
         /** Every route the module's features control, so the sidebar hides the ones turned off */
         gatedRoutes: (mod?.features ?? []).map((f) => f.route).filter(Boolean),
       };
@@ -84,7 +91,10 @@ export class BusinessModulesService {
         origin: row?.origin ?? null,
         trialEndsAt: row?.trialEndsAt ?? null,
         activatedAt: row?.activatedAt ?? null,
-        features: this.featureMap(mod.code, features.filter((f) => f.moduleCode === mod.code)),
+        features: this.featureMap(mod.code, features.filter((f) => f.moduleCode === mod.code))
+          // Custom features of other businesses only show once they can be offered
+          .filter((f) => !f.custom || f.builtFor === businessId || f.shareAuthorized || f.enabled)
+          .map((f) => ({ ...f, ownBuild: !!f.custom && f.builtFor === businessId })),
       };
     });
   }
@@ -164,6 +174,9 @@ export class BusinessModulesService {
     const mod = catalogModule(code);
     const feature = mod?.features.find((f) => f.key === featureKey);
     if (!mod || !feature) throw new NotFoundException('Función no encontrada');
+    if (enabled && !this.canUse(feature, businessId)) {
+      throw new BadRequestException('Esta función se hizo para otro negocio y todavía no autorizó ofrecerla a otros');
+    }
     const saved = await this.prisma.businessFeature.upsert({
       where: { businessId_featureKey: { businessId, featureKey } },
       create: { businessId, moduleCode: code, featureKey, enabled: !!enabled },

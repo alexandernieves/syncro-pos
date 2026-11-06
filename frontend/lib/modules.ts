@@ -10,7 +10,7 @@ export type MyModule = {
   usable: boolean;
   trialEndsAt: string | null;
   activatedAt: string | null;
-  features: { key: string; label: string; route?: string }[];
+  features: { key: string; label: string; route?: string; custom?: boolean }[];
   gatedRoutes: string[];
 };
 

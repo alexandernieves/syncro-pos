@@ -30,7 +30,7 @@ export const MODULE_STATUS_CLASS: Record<string, string> = {
   REJECTED: "border-rose-600/30 bg-rose-600/10 text-rose-700",
 };
 
-type Feature = { key: string; label: string; description?: string; enabled: boolean; custom?: boolean };
+type Feature = { key: string; label: string; description?: string; enabled: boolean; custom?: boolean; ownBuild?: boolean; shareAuthorized?: boolean };
 type Mod = { code: string; name: string; summary: string; status: string | null; origin: string | null; trialEndsAt: string | null; activatedAt: string | null; features: Feature[] };
 type Action = "ACTIVATE" | "TRIAL" | "EXTEND_TRIAL" | "PAUSE" | "REMOVE";
 
@@ -126,7 +126,7 @@ export function ModulesSection({ businessId, businessName, onChanged }: { busine
                     <label key={f.key} className={cn("flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/50", !f.enabled && "text-muted-foreground")}>
                       <span className="min-w-0 truncate">
                         {f.label}
-                        {f.custom && <Badge variant="secondary" className="ml-1.5 text-[10px]">A la medida</Badge>}
+                        {f.custom && <Badge variant="secondary" className="ml-1.5 text-[10px]">{f.ownBuild ? "Hecha para este negocio" : "A la medida · autorizada"}</Badge>}
                       </span>
                       <Switch checked={f.enabled} disabled={busyFeature === f.key} onCheckedChange={(v) => toggleFeature(m, f, v)} aria-label={f.label} />
                     </label>

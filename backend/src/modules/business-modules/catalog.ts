@@ -2,9 +2,13 @@
  * Packaged modules Syncro offers on top of the base (POS, products, inventory…).
  *
  * One codebase per module, switched per business: every part of a module is a feature with
- * a key. A feature built for a single business is listed here with `custom: true` and stays off
- * for everyone else until the Syncro team turns it on (with the authorization of the business
- * that asked for it).
+ * a key. A feature built for a single business is listed here with `custom: true`,
+ * `builtFor: '<businessId>'` and, once that business agrees, `shareAuthorized: true`. It stays off
+ * for everyone else; Syncro central can turn it on elsewhere only when it's authorized.
+ *
+ * Example:
+ *   { key: 'gym.lockers', label: 'Casilleros', route: '/dashboard/gimnasio/casilleros', default: false,
+ *     custom: true, builtFor: '<id de Ebano>', shareAuthorized: false }
  */
 export type CatalogFeature = {
   key: string;
@@ -16,6 +20,13 @@ export type CatalogFeature = {
   default: boolean;
   /** Built for one business; never on by default */
   custom?: boolean;
+  /** Business that asked for it (custom features) */
+  builtFor?: string;
+  /**
+   * That business authorized offering it to others. Without it, the feature can only be
+   * turned on for the business it was built for.
+   */
+  shareAuthorized?: boolean;
 };
 
 export type CatalogModule = {
