@@ -498,7 +498,33 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 />
               </>
             ) : (
-              <NavMain items={filteredNavMain} />
+              <>
+                <NavMain items={filteredNavMain} />
+                {(user.role === "ownerpos" || user.role === "owner") && (
+                  <>
+                    <SidebarMenu className="px-2">
+                      <SidebarMenuItem>
+                        <SidebarMenuButton onClick={() => setAskingFeature(true)} tooltip="¿Te falta algo? Pídelo" className="text-muted-foreground hover:text-foreground">
+                          <IconBulb />
+                          <span>¿Te falta algo? Pídelo</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
+                    <FeatureRequestDialog
+                      open={askingFeature}
+                      onClose={() => setAskingFeature(false)}
+                      moduleCode="core"
+                      moduleName="Syncro"
+                      sections={filteredNavMain.filter((i) => !i.soon).flatMap((i) => (i.items?.length ? i.items.map((sub) => `${i.title} · ${sub.title}`) : [i.title]))}
+                      examples={{
+                        title: "Ej.: Productos por lote, Etiquetas con precio, Pedidos a proveedores",
+                        problem: "Ej.: vendemos medicinas y necesitamos controlar el vencimiento de cada lote en el inventario…",
+                        process: "Ej.: en una hoja de Excel aparte",
+                      }}
+                    />
+                  </>
+                )}
+              </>
             )}
           </div>
 

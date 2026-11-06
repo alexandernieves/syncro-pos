@@ -3,6 +3,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ChatGateway } from '../chat/chat.gateway';
 import { USABLE_STATUSES, type ModuleStatus, catalogModule } from './catalog';
 
+/** Syncro's base functions (products, inventory, sales…), not a catalog module. */
+export const CORE_MODULE = { code: 'core', name: 'Syncro' } as const;
+const moduleName = (code: string) => (code === CORE_MODULE.code ? CORE_MODULE.name : catalogModule(code)?.name ?? code);
+
 export const REQUEST_KINDS = ['CATALOG', 'CUSTOM_MODULE', 'CUSTOM_FEATURE'] as const;
 export const REQUEST_STATUSES = ['REQUESTED', 'IN_REVIEW', 'BUILDING', 'READY', 'DONE', 'REJECTED'] as const;
 export type RequestStatus = (typeof REQUEST_STATUSES)[number];
@@ -43,7 +47,10 @@ export class ModuleRequestsService {
 
     let moduleCode: string | null = null;
     let title = clean(body?.title, 120);
-    if (kind === 'CATALOG' || kind === 'CUSTOM_FEATURE') {
+    if (kind === 'CUSTOM_FEATURE' && String(body?.moduleCode ?? '') === CORE_MODULE.code) {
+      // A function for Syncro's base (products, inventory, sales…): every business has it
+      moduleCode = CORE_MODULE.code;
+    } else if (kind === 'CATALOG' || kind === 'CUSTOM_FEATURE') {
       const mod = catalogModule(String(body?.moduleCode ?? ''));
       if (!mod) throw new BadRequestException('Módulo no encontrado');
       moduleCode = mod.code;
@@ -89,7 +96,7 @@ export class ModuleRequestsService {
       kind === 'CATALOG'
         ? `📦 Solicité el módulo ${catalogModule(moduleCode!)?.name}.`
         : kind === 'CUSTOM_FEATURE'
-          ? `🛠️ Solicité una función para ${catalogModule(moduleCode!)?.name}: «${title}».\n\n${problem}`
+          ? `🛠️ Solicité una función para ${moduleName(moduleCode!)}: «${title}».\n\n${problem}`
           : `🧩 Solicité un módulo a la medida: «${title}»${request.trade ? ` (${request.trade})` : ''}.\n\n${problem}`;
     await this.chat
       .notifySupport(businessId, user.id, text, {
