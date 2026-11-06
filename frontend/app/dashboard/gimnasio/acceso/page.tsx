@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { IconCheck, IconCopy, IconDoor, IconFaceId, IconKey, IconLoader2, IconPlugConnected, IconPlus, IconRefresh, IconServer, IconUserScan } from "@tabler/icons-react";
+import { IconCheck, IconCopy, IconDoor, IconFaceId, IconKey, IconLoader2, IconPlugConnected, IconPlus, IconRefresh, IconUserScan } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { API_URL } from "@/lib/constants";
@@ -285,15 +285,6 @@ export default function GymAccessPage() {
           )}
         </>
       )}
-
-      <Card className="gap-2">
-        <CardHeader><CardTitle className="flex items-center gap-2 text-base"><IconServer size={18} className="text-muted-foreground" /> Cómo funciona</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 text-sm text-muted-foreground md:grid-cols-3">
-          <p>El puente corre en tu servidor Ubuntu, en la misma red del lector. Se conecta a Syncro hacia afuera: no hace falta abrir puertos.</p>
-          <p>Syncro le pasa al lector a cada socio con su foto y la fecha hasta la que puede entrar. Al renovar, congelar o bloquear a alguien, el lector se actualiza en menos de un minuto.</p>
-          <p>Cada vez que alguien pasa la cara, la entrada queda registrada en recepción y en los reportes, igual que una entrada manual.</p>
-        </CardContent>
-      </Card>
 
       <DeviceDialog device={dialog.device} open={dialog.open} onClose={() => setDialog({ open: false, device: null })} onSaved={(k) => { load(); if (k) setKeyInfo(k); }} />
       <KeyDialog data={keyInfo} onClose={() => setKeyInfo(null)} />
