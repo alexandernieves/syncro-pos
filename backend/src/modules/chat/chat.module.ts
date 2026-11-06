@@ -10,6 +10,6 @@ import { PrismaModule } from '../prisma/prisma.module';
   imports: [PrismaModule],
   controllers: [ChatController, PushController],
   providers: [ChatService, ChatGateway, PushService],
-  exports: [ChatService, PushService],
+  exports: [ChatService, PushService, ChatGateway],
 })
 export class ChatModule {}

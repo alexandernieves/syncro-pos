@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/gym/confirm-dialog";
+import { ModulesSection } from "@/components/syncro-admin/modules-section";
 import {
   type BusinessDetail,
   type BusinessStatus,
@@ -152,8 +153,12 @@ export function BusinessSheet({ businessId, onClose, onChanged }: { businessId: 
                   <Fact label="Socios del gimnasio" value={data._count.gymMembers} />
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {data.enabledModules.length ? data.enabledModules.map((m) => <Badge key={m} variant="secondary">{MODULE_LABEL[m] ?? m}</Badge>) : <span className="text-sm text-muted-foreground">Todos los módulos</span>}
+                  {data.enabledModules.length ? data.enabledModules.filter((m) => m !== "gym").map((m) => <Badge key={m} variant="secondary">{MODULE_LABEL[m] ?? m}</Badge>) : <span className="text-sm text-muted-foreground">Todos los módulos</span>}
                 </div>
+              </Section>
+
+              <Section title="Módulos personalizados">
+                <ModulesSection businessId={data.id} businessName={data.name} onChanged={refresh} />
               </Section>
 
               <Section title="Suscripción">

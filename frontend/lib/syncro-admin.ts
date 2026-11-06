@@ -78,6 +78,7 @@ export type AdminBusiness = {
   lastActivityAt: string | null;
   revenue30d: number;
   _count: { users: number; sales: number; branches: number; products: number; gymMembers: number };
+  modules?: { moduleCode: string; status: string; trialEndsAt: string | null }[];
 };
 
 export type SubscriptionPayment = {
@@ -126,6 +127,12 @@ const ACTION_LABEL: Record<string, string> = {
   SYNCRO_SUBSCRIPTION_UPDATE: "Syncro editó la suscripción",
   SYNCRO_PAYMENT: "Syncro registró un pago de suscripción",
   SYNCRO_PAYMENT_DELETED: "Syncro anuló un pago de suscripción",
+  SYNCRO_MODULE_TRIAL: "Syncro ofreció un módulo en prueba",
+  SYNCRO_MODULE_EXTEND_TRIAL: "Syncro extendió la prueba de un módulo",
+  SYNCRO_MODULE_ACTIVATE: "Syncro activó un módulo",
+  SYNCRO_MODULE_PAUSE: "Syncro pausó un módulo",
+  SYNCRO_MODULE_REMOVE: "Syncro quitó un módulo",
+  SYNCRO_FEATURE_TOGGLE: "Syncro cambió una función de un módulo",
 };
 export function actionLabel(action: string) {
   if (ACTION_LABEL[action]) return ACTION_LABEL[action];

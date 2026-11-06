@@ -1,3 +1,4 @@
+import { CATALOG_CODES, USABLE_STATUSES } from '../business-modules/catalog';
 import { Injectable, Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
@@ -100,6 +101,15 @@ export class SettingsService {
       if (updateData[key] !== undefined) {
         filteredData[key] = updateData[key];
       }
+    }
+
+    // Packaged modules (gym…) are turned on from Syncro central, never from the business's own switches
+    if (Array.isArray(filteredData.enabledModules)) {
+      const usable = await this.prisma.businessModule.findMany({ where: { businessId, status: { in: USABLE_STATUSES } }, select: { moduleCode: true } });
+      filteredData.enabledModules = [
+        ...filteredData.enabledModules.filter((m: unknown) => typeof m === 'string' && !CATALOG_CODES.includes(m)),
+        ...usable.map((u) => u.moduleCode),
+      ];
     }
 
     try {

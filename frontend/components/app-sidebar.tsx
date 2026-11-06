@@ -61,6 +61,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 import { DesktopVersion } from "@/components/desktop-update-badge";
+import { useMyModules } from "@/lib/modules";
 import { IconSparkles } from "@tabler/icons-react";
 
 const data = {
@@ -233,6 +234,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [mounted, setMounted] = React.useState(false);
   const pathname = usePathname() || "";
   const gymMode = pathname.startsWith("/dashboard/gimnasio");
+  // Inside the gym, show only the parts of the module this business has turned on
+  const myModules = useMyModules();
+  const gymModule = myModules?.find((m) => m.code === "gym");
+  const gymNav = React.useMemo(() => {
+    if (!gymModule) return data.navGym;
+    const on = new Set(gymModule.features.map((f) => f.route));
+    return data.navGym.filter((item) => !gymModule.gatedRoutes.includes(item.url) || on.has(item.url));
+  }, [gymModule]);
 
   React.useEffect(() => {
     setMounted(true);
@@ -331,6 +340,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         if (item.moduleId === "syncroshop") {
           return isSyncroVendor;
         }
+        // Packaged modules follow what Syncro central turned on (fresh), not the saved list
+        if (item.moduleId === "gym" && myModules) return !!myModules.find((m) => m.code === "gym")?.usable;
         if (!item.moduleId || item.moduleId === "dashboard") return true;
         if (enabledModules && enabledModules.length > 0) {
           return enabledModules.includes(item.moduleId);
@@ -370,7 +381,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       return false;
     });
-  }, [user, isSyncroVendor, enabledModules]);
+  }, [user, isSyncroVendor, enabledModules, myModules]);
 
   const filteredNavSecondary = React.useMemo(() => {
     const isSyncro = user.role === "syncropos";
@@ -449,7 +460,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <div key={gymMode ? "gym" : "main"} className={gymMode ? "animate-in slide-in-from-right-full fade-in duration-300" : "animate-in slide-in-from-left-full fade-in duration-300"}>
             {gymMode ? (
               <>
-                <NavMain items={data.navGym} />
+                <NavMain items={gymNav} />
               </>
             ) : (
               <NavMain items={filteredNavMain} />

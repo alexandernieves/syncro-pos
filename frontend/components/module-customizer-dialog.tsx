@@ -43,6 +43,8 @@ export interface ModuleDefinition {
   isCore?: boolean;
   /** Listed but locked until it's ready */
   comingSoon?: boolean;
+  /** Packaged module turned on from Syncro central, not from here */
+  catalog?: boolean;
 }
 
 export const ALL_MODULES: ModuleDefinition[] = [
@@ -132,6 +134,7 @@ export const ALL_MODULES: ModuleDefinition[] = [
     description: "Socios, membresías y control de acceso con lector de rostro.",
     icon: IconBarbell,
     category: "operacion",
+    catalog: true,
   },
 ];
 
@@ -302,11 +305,11 @@ export function ModuleCustomizerDialog({
         {/* MODULOS */}
         <div className="space-y-2.5">
           <span className="text-xs font-medium text-muted-foreground">
-            Módulos ({enabledList.length}/{ALL_MODULES.length})
+            Módulos ({enabledList.filter((id) => !ALL_MODULES.find((m) => m.id === id)?.catalog).length}/{ALL_MODULES.filter((m) => !m.catalog).length})
           </span>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            {ALL_MODULES.map((mod) => {
+            {ALL_MODULES.filter((m) => !m.catalog).map((mod) => {
               const Icon = mod.icon;
               const isChecked = enabledList.includes(mod.id);
 

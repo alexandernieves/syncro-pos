@@ -49,7 +49,10 @@ export class SyncroAdminService {
     const since = new Date(Date.now() - 30 * DAY);
     const [businesses, activity, sales30, gym30, owners] = await Promise.all([
       this.prisma.business.findMany({
-        include: { _count: { select: { users: true, sales: true, branches: true, products: true, gymMembers: true } } },
+        include: {
+          _count: { select: { users: true, sales: true, branches: true, products: true, gymMembers: true } },
+          modules: { select: { moduleCode: true, status: true, trialEndsAt: true } },
+        },
         orderBy: { createdAt: 'desc' },
       }),
       this.lastActivity(),

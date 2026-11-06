@@ -1,11 +1,15 @@
 import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SyncroAdminService } from './syncro-admin.service';
+import { BusinessModulesService, type ModuleAction } from '../business-modules/business-modules.service';
 
 @Controller('syncro-admin')
 @UseGuards(JwtAuthGuard)
 export class SyncroAdminController {
-  constructor(private readonly adminService: SyncroAdminService) {}
+  constructor(
+    private readonly adminService: SyncroAdminService,
+    private readonly modules: BusinessModulesService,
+  ) {}
 
   private assertAdmin(req: any) {
     if (req.user?.role !== 'syncropos') {
@@ -66,5 +70,31 @@ export class SyncroAdminController {
   getAudit(@Query() query: any, @Req() req: any) {
     this.assertAdmin(req);
     return this.adminService.getAudit(query ?? {});
+  }
+
+  // ── Modules ────────────────────────────────────────────────────────────────
+
+  @Get('business/:id/modules')
+  businessModules(@Param('id') id: string, @Req() req: any) {
+    this.assertAdmin(req);
+    return this.modules.forBusiness(id);
+  }
+
+  @Put('business/:id/modules/:code')
+  applyModule(@Param('id') id: string, @Param('code') code: string, @Body() body: { action: ModuleAction; days?: number; notify?: boolean; message?: string }, @Req() req: any) {
+    const adminId = this.assertAdmin(req);
+    return this.modules.apply(id, code, body?.action, body ?? {}, adminId);
+  }
+
+  @Put('business/:id/modules/:code/features/:key')
+  setFeature(@Param('id') id: string, @Param('code') code: string, @Param('key') key: string, @Body() body: { enabled: boolean }, @Req() req: any) {
+    const adminId = this.assertAdmin(req);
+    return this.modules.setFeature(id, code, key, !!body?.enabled, adminId);
+  }
+
+  @Get('modules/trials')
+  moduleTrials(@Req() req: any) {
+    this.assertAdmin(req);
+    return this.modules.trials();
   }
 }

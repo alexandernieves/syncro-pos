@@ -78,6 +78,8 @@ model Business {
   gymReportedPayments   GymReportedPayment[]
   financeMovements      FinanceMovement[]
   subscriptionPayments  SubscriptionPayment[]
+  modules               BusinessModule[]
+  features              BusinessFeature[]
 }
 
 model Conversation {
@@ -2111,4 +2113,38 @@ model SubscriptionPayment {
   business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId, createdAt])
+}
+
+/// A packaged module (catalog code, e.g. "gym") for one business and where it stands
+model BusinessModule {
+  id              String    @id @default(uuid())
+  businessId      String
+  moduleCode      String
+  /// REQUESTED, IN_REVIEW, BUILDING, READY, TRIAL, ACTIVE, PAUSED, REJECTED
+  status          String    @default("REQUESTED")
+  /// REQUEST (the owner asked), OFFER (Syncro turned it on) or MIGRATION
+  origin          String    @default("REQUEST")
+  trialEndsAt     DateTime?
+  activatedAt     DateTime?
+  /// Internal note from the Syncro team
+  note            String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  business        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, moduleCode])
+  @@index([status])
+}
+
+/// A module feature switched on or off for one business (including features built only for it)
+model BusinessFeature {
+  id         String   @id @default(uuid())
+  businessId String
+  moduleCode String
+  featureKey String
+  enabled    Boolean  @default(true)
+  updatedAt  DateTime @updatedAt
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, featureKey])
 }

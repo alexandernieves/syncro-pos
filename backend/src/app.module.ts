@@ -38,6 +38,7 @@ import { AiAgentModule } from './modules/ai-agent/ai-agent.module';
 import { AppCacheModule } from './modules/cache/app-cache.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 import { GymModule } from './modules/gym/gym.module';
+import { BusinessModulesModule } from './modules/business-modules/business-modules.module';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { GymModule } from './modules/gym/gym.module';
     AiAgentModule,
     WhatsAppModule,
     GymModule,
+    BusinessModulesModule,
   ],
   controllers: [AppController],
   providers: [
