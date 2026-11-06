@@ -161,8 +161,11 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
     return () => { window.clearInterval(id); window.removeEventListener("scroll", refresh, true); window.removeEventListener("resize", refresh); };
   }, [visible, roam]);
 
-  /** Where the head wants to be (top-left corner), given what the person is doing. */
-  const goal = useCallback((now: number) => {
+  /**
+   * Where the head rests (top-left corner). It doesn't chase the pointer: it stays where it is and
+   * only moves when someone drags or throws it. Without "roam" it settles on the nearest edge.
+   */
+  const goal = useCallback(() => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const p = pos.current;
@@ -171,49 +174,14 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
     const minY = MARGIN;
     const maxY = vh - SIZE - MARGIN;
     if (forceDocked) return { x: side === "right" ? maxX - 4 : minX + 4, y: (vh * top) / 100 - HALF };
-    const I = interest.current;
-    const fresh = I.at > 0 && now - I.at < 8000;
-
-    if (roam) {
-      if (!fresh) return { x: p.x, y: p.y };
-      // Keep company a little away from the pointer, on the side it already is
-      const cx = p.x + HALF;
-      const cy = p.y + HALF;
-      let dx = cx - I.x;
-      let dy = cy - I.y;
-      const d = Math.hypot(dx, dy) || 1;
-      dx /= d;
-      dy /= d;
-      const keep = 130;
-      return { x: Math.min(maxX, Math.max(minX, I.x + dx * keep - HALF)), y: Math.min(maxY, Math.max(minY, I.y + dy * keep - HALF)) };
-    }
-
-    // Along the frame of the screen: the closest spot on the edge to what the person is doing
-    const P = fresh ? { x: I.x - HALF, y: I.y - HALF } : { x: p.x, y: p.y };
-    const dl = P.x - minX;
-    const dr = maxX - P.x;
-    const dt = P.y - minY;
-    const db = maxY - P.y;
+    if (roam) return { x: p.x, y: p.y };
+    const dl = p.x - minX;
+    const dr = maxX - p.x;
+    const dt = p.y - minY;
+    const db = maxY - p.y;
     const m = Math.min(dl, dr, dt, db);
-    const T = m === dl ? { x: minX, y: P.y } : m === dr ? { x: maxX, y: P.y } : m === dt ? { x: P.x, y: minY } : { x: P.x, y: maxY };
-    T.x = Math.min(maxX, Math.max(minX, T.x));
-    T.y = Math.min(maxY, Math.max(minY, T.y));
-    // Never sit on top of what the person is about to click: slide aside along the edge
-    if (fresh) {
-      const gap = 150;
-      const vertical = m === dl || m === dr;
-      const along = vertical ? I.y - (T.y + HALF) : I.x - (T.x + HALF);
-      const across = vertical ? Math.abs(I.x - (T.x + HALF)) : Math.abs(I.y - (T.y + HALF));
-      if (across < gap && Math.abs(along) < gap) {
-        const shift = (along >= 0 ? -1 : 1) * (gap - Math.abs(along));
-        if (vertical) T.y = Math.min(maxY, Math.max(minY, T.y + shift));
-        else T.x = Math.min(maxX, Math.max(minX, T.x + shift));
-        // At a corner it can't slide further: go to the other side of the pointer
-        if (vertical && Math.abs(I.y - (T.y + HALF)) < gap) T.y = Math.min(maxY, Math.max(minY, I.y + (along >= 0 ? gap : -gap) - HALF));
-        if (!vertical && Math.abs(I.x - (T.x + HALF)) < gap) T.x = Math.min(maxX, Math.max(minX, I.x + (along >= 0 ? gap : -gap) - HALF));
-      }
-    }
-    return T;
+    const T = m === dl ? { x: minX, y: p.y } : m === dr ? { x: maxX, y: p.y } : m === dt ? { x: p.x, y: minY } : { x: p.x, y: maxY };
+    return { x: Math.min(maxX, Math.max(minX, T.x)), y: Math.min(maxY, Math.max(minY, T.y)) };
   }, [roam, forceDocked, side, top]);
 
   // ── The motion loop ─────────────────────────────────────────────────────────────────────────
@@ -266,7 +234,7 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
         if (Math.hypot(v.x, v.y) < 45) { mode.current = "follow"; v.x = 0; v.y = 0; }
       } else {
         // Follow with a soft, critically damped spring: smooth, never jerky
-        const g = goal(now);
+        const g = goal();
         const w = roam ? 3.2 : 2.6;
         v.x += ((g.x - p.x) * w * w - v.x * 2 * w) * dt;
         v.y += ((g.y - p.y) * w * w - v.y * 2 * w) * dt;

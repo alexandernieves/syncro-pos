@@ -121,7 +121,7 @@ export function MascotSettingsPanel() {
         <Row title={`Mostrar a ${name}`} description="Si lo apagas, el chat de soporte vuelve a ser una pestaña en el borde." htmlFor="m-visible">
           <Switch id="m-visible" checked={settings.visible} onCheckedChange={(v) => save({ visible: v })} />
         </Row>
-        <Row title="Que pasee por la pantalla" description="Te sigue por toda la página, se achica para pasar entre las tarjetas y salta por encima. Apagado, se desliza por el marco de la pantalla cerca de donde trabajas." htmlFor="m-roam">
+        <Row title="Que pasee por la pantalla" description="Puedes dejarlo en cualquier parte de la página (se achica entre tarjetas y salta por encima). Apagado, siempre vuelve al marco de la pantalla." htmlFor="m-roam">
           <Switch id="m-roam" checked={settings.roam} disabled={!settings.visible} onCheckedChange={(v) => save({ roam: v })} />
         </Row>
         <Row title="Decoraciones de temporada" description="De vez en cuando se pone gorro y barba de Navidad, y lo que traiga cada fecha." htmlFor="m-festive">
