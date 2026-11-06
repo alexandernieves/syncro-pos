@@ -36,6 +36,8 @@ export function NavMain({
     url: string
     icon?: Icon
     isActive?: boolean
+    /** Shown but locked, with a "Próximamente" tag */
+    soon?: boolean
     items?: {
       title: string
       url: string
@@ -304,6 +306,13 @@ export function NavMain({
                         </SidebarMenuSub>
                       </CollapsibleContent>
                     </>
+                  ) : item.soon ? (
+                    <SidebarMenuButton tooltip={`${item.title} · próximamente`} aria-disabled className="cursor-not-allowed opacity-60">
+                      {item.icon && <item.icon />}
+                      <span className="syncro-idx">{String(itemIndex + 1).padStart(2, "0")}</span>
+                      <span>{item.title}</span>
+                      <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Próximamente</span>
+                    </SidebarMenuButton>
                   ) : (
                     <SidebarMenuButton
                       asChild

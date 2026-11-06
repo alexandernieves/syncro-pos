@@ -159,6 +159,7 @@ const data = {
       url: "/dashboard/deliveries",
       icon: IconTruck,
       moduleId: "deliveries",
+      soon: true,
     },
     {
       title: "Gimnasio",

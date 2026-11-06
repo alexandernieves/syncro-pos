@@ -41,6 +41,8 @@ export interface ModuleDefinition {
   icon: React.ComponentType<{ className?: string }>;
   category: "operacion" | "gestion" | "ventas";
   isCore?: boolean;
+  /** Listed but locked until it's ready */
+  comingSoon?: boolean;
 }
 
 export const ALL_MODULES: ModuleDefinition[] = [
@@ -122,6 +124,7 @@ export const ALL_MODULES: ModuleDefinition[] = [
     description: "Órdenes y rutas a domicilio.",
     icon: IconTruck,
     category: "operacion",
+    comingSoon: true,
   },
   {
     id: "gym",
@@ -310,9 +313,10 @@ export function ModuleCustomizerDialog({
               return (
                 <div
                   key={mod.id}
-                  onClick={() => handleToggleModule(mod.id)}
+                  onClick={() => { if (!mod.comingSoon) handleToggleModule(mod.id); }}
                   className={cn(
-                    "flex items-center justify-between gap-2 rounded-xl border p-2.5 transition-colors cursor-pointer select-none",
+                    "flex items-center justify-between gap-2 rounded-xl border p-2.5 transition-colors select-none",
+                    mod.comingSoon ? "cursor-not-allowed" : "cursor-pointer",
                     isChecked
                       ? "border-border/70 bg-card"
                       : "border-border/40 bg-transparent opacity-55 hover:opacity-90"
@@ -330,6 +334,11 @@ export function ModuleCustomizerDialog({
                             Esencial
                           </Badge>
                         )}
+                        {mod.comingSoon && (
+                          <Badge variant="secondary" className="h-4 px-1 py-0 text-[9px]">
+                            Próximamente
+                          </Badge>
+                        )}
                       </div>
                       <p className="truncate text-[11px] text-muted-foreground">
                         {mod.description}
@@ -339,7 +348,7 @@ export function ModuleCustomizerDialog({
 
                   <Switch
                     checked={isChecked}
-                    disabled={mod.isCore}
+                    disabled={mod.isCore || mod.comingSoon}
                     onCheckedChange={() => handleToggleModule(mod.id)}
                     className="shrink-0"
                   />
