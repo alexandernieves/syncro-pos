@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { IconApps, IconArrowsMaximize, IconCheck, IconChecks, IconLoader2, IconPaperclip, IconSend, IconX } from "@tabler/icons-react";
+import { IconApps, IconArrowsMaximize, IconCheck, IconChecks, IconLoader2, IconMessageCircle, IconPaperclip, IconSend, IconX } from "@tabler/icons-react";
 import type { Socket } from "socket.io-client";
 import { toast } from "sonner";
 import { API_URL } from "@/lib/constants";
@@ -13,9 +13,7 @@ import { cn } from "@/lib/utils";
 import { ChatCard, type CardMeta } from "@/components/chat/chat-card";
 import { useSupportUnread } from "@/components/support-notifier";
 import { SyncroAvatar, SyncroBadge } from "@/components/syncro-avatar";
-
-/** Size of Syncro's head, which is the chat button. */
-const MASCOT_SIZE = 96;
+import { useMascotSettings } from "@/lib/mascot";
 
 type Msg = {
   id?: string;
@@ -81,6 +79,9 @@ const STARTERS = [
 export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { placement?: "left" | "right"; defaultTop?: number }) {
   const pathname = usePathname();
   const unread = useSupportUnread();
+  // When the mascot is on screen it is the button that opens this chat
+  const mascot = useMascotSettings();
+  const showTab = mascot !== null && !mascot.visible;
   const [enabled, setEnabled] = useState(false);
   const [dock, setDock] = useState<Dock>({ side: placement, top: defaultTop });
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
@@ -271,7 +272,8 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
 
   return (
     <>
-      {/* Syncro itself is the button: drag it anywhere on the edge, click to open the chat */}
+      {/* With the mascot hidden, a classic tab on the edge opens the chat */}
+      {showTab && (
       <button
         type="button"
         aria-label={unread ? `Chat con Syncro, ${unread} sin leer` : "Chat con Syncro"}
@@ -282,25 +284,28 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((o) => !o); } }}
         style={tabStyle}
         className={cn(
-          "group fixed z-40 touch-none select-none rounded-full outline-none transition-[opacity,transform] duration-200 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-          drag ? "cursor-grabbing opacity-90" : cn("cursor-grab", side === "right" ? "mr-3" : "ml-3"),
+          "group fixed z-40 flex touch-none select-none flex-col items-center gap-1.5 border bg-background/95 py-2.5 shadow-sm outline-none backdrop-blur transition-[padding,opacity,color,box-shadow] duration-200 hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+          unread ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+          drag ? "cursor-grabbing rounded-xl px-2 opacity-90 shadow-md" : side === "right" ? "cursor-grab rounded-l-xl border-r-0 pl-1.5 pr-1 hover:pl-2.5" : "cursor-grab rounded-r-xl border-l-0 pl-1 pr-1.5 hover:pr-2.5",
           open && !drag && "pointer-events-none opacity-0",
         )}
       >
-        <span className={cn("block drop-shadow-[0_8px_14px_rgba(0,0,0,0.18)] transition-transform duration-200 group-hover:scale-105", pulse && "animate-bounce")}>
-          <SyncroAvatar size={MASCOT_SIZE} title="" emotion={unread ? "surprised" : undefined} />
+        <span className={cn("relative", pulse && "animate-bounce")}>
+          <IconMessageCircle size={15} className="text-primary" />
+          {unread > 0 && (
+            <span className="absolute -right-2.5 -top-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold tabular-nums text-primary-foreground ring-2 ring-background">
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
         </span>
-        {unread > 0 && (
-          <span className="absolute right-1 top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold tabular-nums text-primary-foreground ring-2 ring-background">
-            {unread > 9 ? "9+" : unread}
-          </span>
-        )}
+        <span className="rotate-180 text-[10px] font-medium [writing-mode:vertical-rl]">Soporte</span>
       </button>
+      )}
 
       {/* First time: a short hint next to the tab */}
-      {intro && !open && !drag && (
+      {intro && showTab && !open && !drag && (
         <div
-          style={{ top: `${dock.top}%`, [side]: MASCOT_SIZE + 20, transform: "translateY(-50%)" }}
+          style={{ top: `${dock.top}%`, [side]: 44, transform: "translateY(-50%)" }}
           className="fixed z-40 w-60 rounded-xl border bg-background p-3 text-sm shadow-lg"
           role="status"
         >

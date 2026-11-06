@@ -40,6 +40,7 @@ import { AppCacheModule } from './modules/cache/app-cache.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 import { GymModule } from './modules/gym/gym.module';
 import { BusinessModulesModule } from './modules/business-modules/business-modules.module';
+import { MascotModule } from './modules/mascot/mascot.module';
 
 @Module({
   imports: [
@@ -87,6 +88,7 @@ import { BusinessModulesModule } from './modules/business-modules/business-modul
     WhatsAppModule,
     GymModule,
     BusinessModulesModule,
+    MascotModule,
   ],
   controllers: [AppController],
   providers: [

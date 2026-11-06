@@ -71,16 +71,22 @@ function eyePlacement(side: -1 | 1) {
 
 type EyeParts = { bead: THREE.Mesh | null; arc: THREE.Mesh | null; brow: THREE.Mesh | null };
 
-function Head({ emotion, pose, still, anchor, poke }: { emotion?: MascotEmotion; pose: MascotPose; still: boolean; anchor: React.RefObject<HTMLDivElement | null>; poke: React.RefObject<number> }) {
+function Head({ emotion, pose, still, anchor, poke, festive }: { emotion?: MascotEmotion; pose: MascotPose; still: boolean; anchor: React.RefObject<HTMLDivElement | null>; poke: React.RefObject<number>; festive: boolean }) {
   // "Polished skin": white glazed ceramic with a clear coat; the emotion only tints it softly
   const mat = useMemo(
     () => ({
       skin: new THREE.MeshPhysicalMaterial({ color: "#fbfcfd", roughness: 0.12, metalness: 0.02, clearcoat: 1, clearcoatRoughness: 0.03, reflectivity: 0.5, emissive: "#000000" }),
       eye: new THREE.MeshPhysicalMaterial({ color: "#050506", roughness: 0.04, metalness: 0.15, clearcoat: 1, clearcoatRoughness: 0.01 }),
+      // Christmas: glazed red hat, white trim and a soft white beard
+      hat: new THREE.MeshPhysicalMaterial({ color: "#d42a2a", roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.05, side: THREE.DoubleSide }),
+      fluff: new THREE.MeshPhysicalMaterial({ color: "#ffffff", roughness: 0.45, clearcoat: 0.6, clearcoatRoughness: 0.3, sheen: 1, sheenColor: new THREE.Color("#ffffff") }),
     }),
     [],
   );
-  useEffect(() => () => { mat.skin.dispose(); mat.eye.dispose(); }, [mat]);
+  useEffect(() => () => { Object.values(mat).forEach((m) => m.dispose()); }, [mat]);
+  const frame = useRef<THREE.Group>(null);
+  const hat = useRef<THREE.Group>(null);
+  const beard = useRef<THREE.Group>(null);
 
   const root = useRef<THREE.Group>(null);
   const head = useRef<THREE.Group>(null);
@@ -211,6 +217,22 @@ function Head({ emotion, pose, still, anchor, poke }: { emotion?: MascotEmotion;
       eyes.current.rotation.x += (b.ly * 0.1 + b.sy - eyes.current.rotation.x) * ease(22);
     }
 
+    // Christmas outfit: pops in and out; the head shrinks a bit so the hat fits
+    const dress = festive ? 1 : 0;
+    for (const g of [hat.current, beard.current]) {
+      if (!g) continue;
+      const next = g.scale.x + (dress - g.scale.x) * ease(6);
+      g.scale.setScalar(Math.max(0.001, next));
+      g.visible = next > 0.02;
+    }
+    if (frame.current) {
+      const target = festive ? 0.8 : 1;
+      const sc = frame.current.scale.x + (target - frame.current.scale.x) * ease(6);
+      frame.current.scale.setScalar(sc);
+      frame.current.position.y = (1 - sc) * -1.1;
+      if (hat.current) hat.current.rotation.z = -0.28 + (still ? 0 : Math.sin(t * 2.2) * 0.05);
+    }
+
     // Idle float; bouncier when happy, slow and low when sleepy; a little stretch when surprised
     if (root.current) {
       const speed = feeling === "sleepy" ? 0.7 : feeling === "happy" ? 2.4 : 1.4;
@@ -222,8 +244,40 @@ function Head({ emotion, pose, still, anchor, poke }: { emotion?: MascotEmotion;
   });
 
   return (
+    <group ref={frame}>
     <group ref={root}>
       <group ref={head}>
+        {/* Santa hat: brim, cone leaning to one side and a pompom */}
+        <group ref={hat} position={[0, 0.62, -0.05]} rotation={[-0.12, 0, -0.28]} scale={0.001} visible={false}>
+          <mesh material={mat.fluff} rotation={[Math.PI / 2, 0, 0]} scale={[1.02, 1, 1]}>
+            <torusGeometry args={[0.8, 0.17, 24, 64]} />
+          </mesh>
+          <mesh material={mat.hat} position={[0, 0.58, 0]}>
+            <coneGeometry args={[0.8, 1.15, 64, 1, true]} />
+          </mesh>
+          <mesh material={mat.fluff} position={[0, 1.18, 0]}>
+            <sphereGeometry args={[0.2, 32, 24]} />
+          </mesh>
+        </group>
+        {/* Beard and moustache */}
+        <group ref={beard} scale={0.001} visible={false}>
+          <mesh material={mat.fluff} position={[0, -0.6, 0.5]} scale={[1, 0.78, 0.62]}>
+            <sphereGeometry args={[0.62, 48, 32]} />
+          </mesh>
+          {([-1, 1] as const).map((sd) => (
+            <mesh key={`side${sd}`} material={mat.fluff} position={[0.52 * sd, -0.38, 0.52]}>
+              <sphereGeometry args={[0.34, 32, 24]} />
+            </mesh>
+          ))}
+          <mesh material={mat.fluff} position={[0, -1.02, 0.42]}>
+            <sphereGeometry args={[0.36, 32, 24]} />
+          </mesh>
+          {([-1, 1] as const).map((sd) => (
+            <mesh key={`m${sd}`} material={mat.fluff} position={[0.2 * sd, -0.2, 0.93]} rotation={[0, 0, 0.35 * sd]} scale={[1.7, 0.75, 0.6]}>
+              <sphereGeometry args={[0.15, 24, 16]} />
+            </mesh>
+          ))}
+        </group>
         <mesh material={mat.skin} scale={HEAD.scale}>
           <sphereGeometry args={[HEAD.r, 64, 48]} />
         </mesh>
@@ -246,6 +300,7 @@ function Head({ emotion, pose, still, anchor, poke }: { emotion?: MascotEmotion;
           ))}
         </group>
       </group>
+    </group>
     </group>
   );
 }
@@ -274,7 +329,7 @@ function Studio() {
  * its own: follows the cursor, smiles when the pointer is over it, gets startled when poked, dozes
  * off when nobody moves the mouse for a while, and shows a short mood now and then.
  */
-export function SyncroMascot3D({ pose = "idle", emotion }: { pose?: MascotPose; emotion?: MascotEmotion }) {
+export function SyncroMascot3D({ pose = "idle", emotion, festive = false }: { pose?: MascotPose; emotion?: MascotEmotion; festive?: boolean }) {
   const anchor = useRef<HTMLDivElement>(null);
   const poke = useRef(0);
   const [visible, setVisible] = useState(true);
@@ -299,7 +354,7 @@ export function SyncroMascot3D({ pose = "idle", emotion }: { pose?: MascotPose; 
         onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
       >
         <Studio />
-        <Head emotion={emotion} pose={pose} still={still} anchor={anchor} poke={poke} />
+        <Head emotion={emotion} pose={pose} still={still} anchor={anchor} poke={poke} festive={festive} />
       </Canvas>
     </div>
   );

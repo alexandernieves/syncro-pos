@@ -32,6 +32,7 @@ export function SyncroAvatar({
   pose = "idle",
   size = 64,
   emotion,
+  festive,
   className,
   title = "Syncro",
 }: {
@@ -39,6 +40,8 @@ export function SyncroAvatar({
   size?: number;
   /** Fixed feeling; without it Syncro reacts on its own (hover, clicks, idle). */
   emotion?: AvatarEmotion;
+  /** Santa hat and beard */
+  festive?: boolean;
   className?: string;
   title?: string;
 }) {
@@ -48,7 +51,7 @@ export function SyncroAvatar({
   return (
     <div role="img" aria-label={title} className={cn("relative shrink-0", className)} style={{ width: size, height: size }}>
       {webgl ? (
-        <SyncroMascot3D pose={pose} emotion={emotion} />
+        <SyncroMascot3D pose={pose} emotion={emotion} festive={festive} />
       ) : webgl === false ? (
         <SyncroFace className="absolute inset-x-0 bottom-0 m-auto" size={size} />
       ) : null}

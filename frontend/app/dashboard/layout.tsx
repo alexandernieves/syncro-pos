@@ -8,6 +8,7 @@ import { SuspendedSessionGuard } from "@/components/suspended-session-guard";
 import { SupportNotifier } from "@/components/support-notifier";
 import { SupportChatWidget } from "@/components/support-chat-widget";
 import { RemoteAssistHost } from "@/components/remote/remote-assist-host";
+import { MascotPet } from "@/components/mascot/mascot-pet";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 import { useRouter, usePathname } from "next/navigation";
@@ -111,6 +112,7 @@ export default function DashboardLayout({
         <OpenShiftHost />
         <FinanceWidget />
         <SupportChatWidget />
+        <MascotPet />
         <RemoteAssistHost />
       </div>
     );
@@ -130,6 +132,7 @@ export default function DashboardLayout({
       <OpenShiftHost />
         <FinanceWidget />
         <SupportChatWidget />
+        <MascotPet />
         <RemoteAssistHost />
       <AppSidebar variant="inset" />
       {/* La vista es la superficie que sobresale: blanca y elevada sobre el

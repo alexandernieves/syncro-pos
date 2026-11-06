@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { API_URL } from "@/lib/constants"
 import { clearAuthSession } from "@/lib/auth-helpers";
+import { MascotSettingsPanel } from "@/components/mascot/mascot-settings";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { 
@@ -32,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   IconBuilding,
+  IconMoodSmile,
   IconUsers,
   IconCash,
   IconShieldLock,
@@ -167,6 +169,7 @@ const SECTIONS = [
   { id: "usuarios", label: "Usuarios y roles", icon: IconShieldLock },
   { id: "sucursales", label: "Sucursales", icon: IconMapPin },
   { id: "sesiones", label: "Sesión y seguridad", icon: IconFingerprint },
+  { id: "mascota", label: "Mascota", icon: IconMoodSmile },
   { id: "whatsapp", label: "WhatsApp bot", icon: IconBrandWhatsapp },
   { id: "ads_copilot", label: "Entrenamiento ads IA", icon: IconHexagon },
 ];
@@ -2845,6 +2848,8 @@ export default function ConfiguracionPage() {
         )}
 
         {/* ─── ADS COPILOT TRAINING ─── */}
+        {activeSection === "mascota" && <MascotSettingsPanel />}
+
         {activeSection === "ads_copilot" && (
           <div className="max-w-2xl flex flex-col gap-6">
             <div>

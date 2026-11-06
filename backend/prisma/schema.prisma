@@ -2196,3 +2196,38 @@ model ModuleRequestEvent {
 
   @@index([requestId, createdAt])
 }
+
+/// Syncro the mascot, per user: how it behaves and talks (see the Mascota section in Configuración)
+model MascotProfile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  /// Toggles and personality: visible, roam, ideas, frequency, festive, tone, warmth, enthusiasm, emoji, length, name, instructions, aboutMe, memory
+  settings  Json     @default("{}")
+  /// Short facts it learned from the user's replies (only when memory is on)
+  memory    Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// An idea the mascot had for a user (the light bulb), with the conversation that followed
+model MascotThought {
+  id         String   @id @default(uuid())
+  userId     String
+  businessId String
+  text       String
+  /// sales, expenses, inventory, customers, modules, tip, greeting…
+  topic      String?
+  /// 1 low, 2 medium, 3 high: high ones show up on their own if the user doesn't click the bulb
+  importance Int      @default(1)
+  /// The mascot wants an answer: the reply box opens right away
+  needsReply Boolean  @default(false)
+  emotion    String   @default("neutral")
+  /// NEW (bulb on), SHOWN (read), DISMISSED (bulb went off)
+  status     String   @default("NEW")
+  /// [{ role: "user" | "assistant", content, at }]
+  messages   Json     @default("[]")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId, createdAt])
+}
