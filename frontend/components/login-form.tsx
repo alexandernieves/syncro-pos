@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
+import { takeSuspendedMessage } from "@/components/suspended-session-guard"
 import { toast } from "sonner"
 import { Eye, EyeOff, Trash2, ArrowLeft, ChevronRight } from "lucide-react"
 
@@ -96,6 +97,8 @@ export function LoginForm({
   // ── Mount ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     setMounted(true)
+    const suspended = takeSuspendedMessage()
+    if (suspended) toast.error(suspended, { duration: 12000 })
     if (typeof window !== "undefined") {
       const standalone = window.matchMedia("(display-mode: standalone)").matches
       setIsStandalone(standalone)

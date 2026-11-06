@@ -6,16 +6,23 @@ export class ChatService {
   constructor(private prisma: PrismaService) {}
 
   async getConversationsForSupport() {
-    return this.prisma.conversation.findMany({
-      include: {
-        business: true,
-        messages: {
-          orderBy: { createdAt: 'desc' },
-          take: 1
-        }
-      },
-      orderBy: { updatedAt: 'desc' }
-    });
+    const [conversations, unread] = await Promise.all([
+      this.prisma.conversation.findMany({
+        include: {
+          business: { select: { id: true, name: true, email: true, phone: true, status: true } },
+          messages: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true, senderId: true, type: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+      }),
+      // Messages from the business that nobody in Syncro has read yet
+      this.prisma.message.groupBy({
+        by: ['conversationId'],
+        where: { isRead: false, sender: { role: { not: 'syncropos' } } },
+        _count: true,
+      }),
+    ]);
+    const unreadBy = new Map(unread.map((u) => [u.conversationId, u._count]));
+    return conversations.map((c) => ({ ...c, unread: unreadBy.get(c.id) ?? 0, lastMessageAt: c.messages[0]?.createdAt ?? null }));
   }
 
   async getAllBusinessesForSupport() {
@@ -41,7 +48,8 @@ export class ChatService {
       where: { businessId },
       include: {
         messages: {
-          orderBy: { createdAt: 'asc' }
+          orderBy: { createdAt: 'asc' },
+          include: { sender: { select: { id: true, name: true, avatar: true, role: true } } },
         },
         business: true
       }
@@ -51,7 +59,7 @@ export class ChatService {
       conversation = await this.prisma.conversation.create({
         data: { businessId },
         include: {
-          messages: true,
+          messages: { include: { sender: { select: { id: true, name: true, avatar: true, role: true } } } },
           business: true
         }
       });

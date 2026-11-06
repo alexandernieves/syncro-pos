@@ -6,6 +6,7 @@ import { SettingsService } from '../settings/settings.service';
 import { BranchesService } from '../branches/branches.service';
 import { HistoryService } from '../history/history.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { suspendedMessage } from '../syncro-admin/suspension';
 
 @Injectable()
 export class AuthService {
@@ -59,6 +60,10 @@ export class AuthService {
 
   // ── Login ──────────────────────────────────────────────────────────────────
   async login(user: any) {
+    if (user.businessId && user.role !== 'syncropos') {
+      const business = await this.prisma.business.findUnique({ where: { id: user.businessId }, select: { status: true, suspendedReason: true } });
+      if (business?.status === 'SUSPENDED') throw new UnauthorizedException(suspendedMessage(business.suspendedReason));
+    }
     const payload = {
       email:      user.email,
       sub:        user.id,

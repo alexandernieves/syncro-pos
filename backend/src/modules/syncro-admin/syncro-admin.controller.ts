@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Param, Body, UseGuards, Req, ForbiddenException } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SyncroAdminService } from './syncro-admin.service';
 
@@ -11,27 +11,60 @@ export class SyncroAdminController {
     if (req.user?.role !== 'syncropos') {
       throw new ForbiddenException('Solo el equipo de Syncro puede acceder a este recurso');
     }
+    return req.user.id as string;
   }
 
   @Get('stats')
-  async getStats(@Req() req: any) {
+  getStats(@Req() req: any) {
     this.assertAdmin(req);
     return this.adminService.getGlobalStats();
   }
 
   @Get('businesses')
-  async getBusinesses(@Req() req: any) {
+  getBusinesses(@Req() req: any) {
     this.assertAdmin(req);
     return this.adminService.getAllBusinesses();
   }
 
-  @Put('business/:id/status')
-  async updateStatus(
-    @Param('id') id: string,
-    @Body('status') status: string,
-    @Req() req: any
-  ) {
+  @Get('business/:id')
+  getBusiness(@Param('id') id: string, @Req() req: any) {
     this.assertAdmin(req);
-    return this.adminService.updateBusinessStatus(id, status);
+    return this.adminService.getBusiness(id);
+  }
+
+  @Put('business/:id/status')
+  updateStatus(@Param('id') id: string, @Body() body: { status: string; reason?: string }, @Req() req: any) {
+    const adminId = this.assertAdmin(req);
+    return this.adminService.updateBusinessStatus(id, body?.status, body?.reason, adminId);
+  }
+
+  @Put('business/:id')
+  updateBusiness(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    const adminId = this.assertAdmin(req);
+    return this.adminService.updateBusiness(id, body ?? {}, adminId);
+  }
+
+  @Post('business/:id/payments')
+  registerPayment(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    const adminId = this.assertAdmin(req);
+    return this.adminService.registerPayment(id, body ?? {}, adminId);
+  }
+
+  @Delete('payments/:paymentId')
+  deletePayment(@Param('paymentId') paymentId: string, @Req() req: any) {
+    const adminId = this.assertAdmin(req);
+    return this.adminService.deletePayment(paymentId, adminId);
+  }
+
+  @Get('subscriptions')
+  getSubscriptions(@Req() req: any) {
+    this.assertAdmin(req);
+    return this.adminService.getSubscriptions();
+  }
+
+  @Get('audit')
+  getAudit(@Query() query: any, @Req() req: any) {
+    this.assertAdmin(req);
+    return this.adminService.getAudit(query ?? {});
   }
 }

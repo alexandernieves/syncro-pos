@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { OpenShiftHost } from "@/components/gym/open-shift-dialog";
 import { FinanceWidget } from "@/components/finance-widget";
+import { SuspendedSessionGuard } from "@/components/suspended-session-guard";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 import { useRouter, usePathname } from "next/navigation";
@@ -102,6 +103,7 @@ export default function DashboardLayout({
         <main className="flex-1 flex flex-col overflow-hidden">
           {children}
         </main>
+        <SuspendedSessionGuard />
         <OpenShiftHost />
         <FinanceWidget />
       </div>
@@ -117,6 +119,7 @@ export default function DashboardLayout({
         } as React.CSSProperties
       }
     >
+      <SuspendedSessionGuard />
       <OpenShiftHost />
         <FinanceWidget />
       <AppSidebar variant="inset" />

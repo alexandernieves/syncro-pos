@@ -1,158 +1,231 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { API_URL } from "@/lib/constants"
-import { apiFetch } from "@/lib/api"
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  IconSend,
-  IconMicrophone,
-  IconPaperclip,
+  IconBuilding,
   IconCheck,
   IconChecks,
-  IconMoodSmile,
-  IconDotsVertical,
-  IconSearch,
+  IconLoader2,
   IconMessageCircle,
-  IconBuilding,
-  IconFilter,
+  IconMicrophone,
+  IconPaperclip,
+  IconPlayerStopFilled,
   IconRefresh,
+  IconSearch,
+  IconSend,
+  IconUserCircle,
+  IconX,
 } from "@tabler/icons-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { WhatsAppAudioPlayer } from "@/components/ui/whatsapp-audio-player";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import type { Socket } from "socket.io-client";
+import { toast } from "sonner";
+import { API_URL } from "@/lib/constants";
+import { apiFetch } from "@/lib/api";
 import { connectSocket } from "@/lib/socket";
+import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { WhatsAppAudioPlayer } from "@/components/ui/whatsapp-audio-player";
+import { BusinessSheet } from "@/components/syncro-admin/business-sheet";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
+import { STATUS_CLASS, STATUS_LABEL } from "@/lib/syncro-admin";
 
-const API = API_URL;
+type Conv = {
+  id: string;
+  businessId: string;
+  lastMessage: string | null;
+  updatedAt: string;
+  lastMessageAt: string | null;
+  unread: number;
+  business: { id: string; name: string; email: string | null; phone: string | null; status: string } | null;
+};
+type Msg = {
+  id?: string;
+  conversationId: string;
+  senderId: string;
+  text?: string | null;
+  type: string;
+  fileUrl?: string | null;
+  isRead?: boolean;
+  createdAt: string;
+  sender?: { id: string; name: string | null; role: string } | null;
+};
+
+const getToken = () => {
+  if (typeof window === "undefined") return null;
+  const pwa = window.matchMedia("(display-mode: standalone)").matches;
+  return pwa ? sessionStorage.getItem("token") : localStorage.getItem("token");
+};
+
+const initials = (name?: string | null) => (name ?? "??").trim().slice(0, 2).toUpperCase();
+
+/** "10:24 a. m." today, "ayer", or "3 nov." */
+function when(d: string | null | undefined) {
+  if (!d) return "";
+  const date = new Date(d);
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) return date.toLocaleTimeString("es-VE", { hour: "numeric", minute: "2-digit" });
+  const y = new Date(today);
+  y.setDate(today.getDate() - 1);
+  if (date.toDateString() === y.toDateString()) return "Ayer";
+  return date.toLocaleDateString("es-VE", { day: "numeric", month: "short" });
+}
+
+const dayLabel = (d: string) => {
+  const date = new Date(d);
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) return "Hoy";
+  const y = new Date(today);
+  y.setDate(today.getDate() - 1);
+  if (date.toDateString() === y.toDateString()) return "Ayer";
+  return date.toLocaleDateString("es-VE", { weekday: "long", day: "numeric", month: "long" });
+};
+
+async function upload(file: File, folder: string) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("folder", folder);
+  const token = getToken();
+  const res = await fetch(`${API_URL}/upload`, { method: "POST", body: form, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body?.url) throw new Error("No se pudo subir el archivo");
+  return body.url as string;
+}
 
 export default function SyncroAdminChatPage() {
   useRequireSyncroAdmin();
-  const [conversations, setConversations] = useState<any[]>([]);
-  const [activeConv, setActiveConv] = useState<any>(null);
-  const [messages, setMessages] = useState<any[]>([]);
-  const [inputText, setInputText] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
+  const [conversations, setConversations] = useState<Conv[] | null>(null);
+  const [active, setActive] = useState<Conv | null>(null);
+  const [messages, setMessages] = useState<Msg[]>([]);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [text, setText] = useState("");
+  const [recording, setRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [onlyUnread, setOnlyUnread] = useState(false);
+  const [profileOf, setProfileOf] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  usePushNotifications(user?.id ?? null);
+  const activeRef = useRef<Conv | null>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const discardRef = useRef(false);
+  usePushNotifications(userId);
 
-  useEffect(() => {
-    const userStr = localStorage.getItem("user");
-    if (userStr) {
-      const u = JSON.parse(userStr);
-      setUser(u);
-      fetchConversations();
-      initSocket();
+  useEffect(() => { activeRef.current = active; }, [active]);
+
+  const fetchConversations = useCallback(async () => {
+    try {
+      const res = await apiFetch(`/chat/support/sync`);
+      if (!res.ok) throw new Error();
+      setConversations(await res.json());
+    } catch {
+      toast.error("No se pudieron cargar las conversaciones");
+      setConversations((c) => c ?? []);
     }
   }, []);
 
-  const fetchConversations = async () => {
-    try {
-      const res = await apiFetch(`/chat/support/sync`);
-      if (res.ok) setConversations(await res.json());
-    } catch {
-      toast.error("Error al cargar chats");
-    }
+  const scrollToEnd = () => setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }), 60);
+
+  const markRead = (conversationId: string) => {
+    socketRef.current?.emit("markAsRead", { conversationId });
+    setConversations((list) => list?.map((c) => (c.id === conversationId ? { ...c, unread: 0 } : c)) ?? list);
   };
 
-  const initSocket = () => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-    socketRef.current = connectSocket({ auth: { token } });
-    socketRef.current.on("newMessage", (msg: any) => {
-      setMessages((prev) => {
-        if (prev.length && prev[0].conversationId === msg.conversationId) {
-          return [...prev, msg];
-        }
-        return prev;
-      });
-      setTimeout(scrollToBottom, 100);
-      fetchConversations();
-    });
-  };
-
-  // Broadcast Mike's cursor (viewport %) to the active business's dashboard
-  // while a conversation is open, throttled to ~15fps.
   useEffect(() => {
-    if (!activeConv?.id) return;
-    let lastEmit = 0;
-    const handleMove = (e: MouseEvent) => {
-      const now = Date.now();
-      if (now - lastEmit < 66) return;
-      lastEmit = now;
-      socketRef.current?.emit("cursorMove", {
-        conversationId: activeConv.id,
-        x: (e.clientX / window.innerWidth) * 100,
-        y: (e.clientY / window.innerHeight) * 100,
-      });
-    };
-    window.addEventListener("mousemove", handleMove);
-    return () => {
-      window.removeEventListener("mousemove", handleMove);
-      socketRef.current?.emit("cursorLeave", { conversationId: activeConv.id });
-    };
-  }, [activeConv?.id]);
+    try {
+      const raw = localStorage.getItem("user") || sessionStorage.getItem("user");
+      setUserId(raw ? JSON.parse(raw).id : null);
+    } catch { /* ignore */ }
+    fetchConversations();
+    const token = getToken();
+    if (!token) return;
+    const socket = connectSocket({ auth: { token } });
+    socketRef.current = socket;
+    socket.on("newMessage", (msg: Msg) => {
+      if (activeRef.current?.id === msg.conversationId) {
+        setMessages((prev) => (prev.some((m) => m.id && m.id === msg.id) ? prev : [...prev, msg]));
+        scrollToEnd();
+        if (msg.sender?.role !== "syncropos") socket.emit("markAsRead", { conversationId: msg.conversationId });
+      }
+    });
+    socket.on("messagesRead", ({ conversationId }: { conversationId: string }) => {
+      if (activeRef.current?.id === conversationId) setMessages((prev) => prev.map((m) => (m.sender?.role === "syncropos" ? { ...m, isRead: true } : m)));
+    });
+    socket.on("conversationUpdated", () => fetchConversations());
+    // Rejoin the open conversation after a reconnect
+    socket.on("connect", () => { if (activeRef.current) socket.emit("joinConversation", activeRef.current.id); });
+    return () => { socket.disconnect(); socketRef.current = null; };
+  }, [fetchConversations]);
 
-  const selectConversation = async (conv: any) => {
-    setActiveConv(conv);
+  // Show the Syncro cursor on the business's screen while a conversation is open (~15 fps)
+  useEffect(() => {
+    if (!active?.id) return;
+    let last = 0;
+    const move = (e: MouseEvent) => {
+      const now = Date.now();
+      if (now - last < 66) return;
+      last = now;
+      socketRef.current?.emit("cursorMove", { conversationId: active.id, x: (e.clientX / window.innerWidth) * 100, y: (e.clientY / window.innerHeight) * 100 });
+    };
+    window.addEventListener("mousemove", move);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      socketRef.current?.emit("cursorLeave", { conversationId: active.id });
+    };
+  }, [active?.id]);
+
+  const open = async (conv: Conv) => {
+    setActive(conv);
     setMessages([]);
+    setLoadingMsgs(true);
     try {
       const res = await apiFetch(`/chat/business/${conv.businessId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setMessages(data.messages || []);
-        socketRef.current?.emit("joinConversation", conv.id);
-        setTimeout(scrollToBottom, 150);
-      }
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setMessages(data.messages ?? []);
+      socketRef.current?.emit("joinConversation", conv.id);
+      markRead(conv.id);
+      scrollToEnd();
+      setTimeout(() => inputRef.current?.focus(), 50);
     } catch {
-      toast.error("Error al cargar mensajes");
+      toast.error("No se pudieron cargar los mensajes");
+    } finally {
+      setLoadingMsgs(false);
     }
   };
 
-  const scrollToBottom = () => scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-
-  const handleSend = () => {
-    if (!inputText.trim() || !socketRef.current || !activeConv) return;
-    socketRef.current.emit("sendMessage", {
-      conversationId: activeConv.id,
-      senderId: user.id,
-      text: inputText,
-      type: "TEXT",
-    });
-    setInputText("");
+  const send = (payload: { text?: string; type: string; fileUrl?: string }) => {
+    if (!active) return;
+    if (!socketRef.current?.connected) {
+      toast.error("Sin conexión con el servidor. Reintentando…");
+      socketRef.current?.connect();
+      return;
+    }
+    socketRef.current.emit("sendMessage", { conversationId: active.id, ...payload });
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const sendText = () => {
+    const t = text.trim();
+    if (!t) return;
+    send({ text: t, type: "TEXT" });
+    setText("");
+  };
+
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    e.target.value = "";
+    if (!file || !active) return;
     setUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("folder", "chat");
     try {
-      const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
-      const { url } = await res.json();
-      const type = file.type.startsWith("video") ? "VIDEO" : "IMAGE";
-      socketRef.current?.emit("sendMessage", {
-        conversationId: activeConv.id,
-        senderId: user.id,
-        type,
-        fileUrl: url,
-      });
-    } catch {
-      toast.error("Error al subir archivo");
+      const url = await upload(file, "chat");
+      send({ type: file.type.startsWith("video") ? "VIDEO" : "IMAGE", fileUrl: url });
+    } catch (err) {
+      toast.error((err as Error).message);
     } finally {
       setUploading(false);
     }
@@ -162,304 +235,214 @@ export default function SyncroAdminChatPage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      audioChunksRef.current = [];
-      recorder.ondataavailable = (e) => audioChunksRef.current.push(e.data);
+      recorderRef.current = recorder;
+      chunksRef.current = [];
+      discardRef.current = false;
+      recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
       recorder.onstop = async () => {
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const file = new File([blob], "voice.webm", { type: "audio/webm" });
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("folder", "chat/voice");
-        const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
-        const { url } = await res.json();
-        socketRef.current?.emit("sendMessage", {
-          conversationId: activeConv.id,
-          senderId: user.id,
-          type: "AUDIO",
-          fileUrl: url,
-        });
+        stream.getTracks().forEach((t) => t.stop());
+        if (discardRef.current || !chunksRef.current.length) return;
+        setUploading(true);
+        try {
+          const url = await upload(new File([new Blob(chunksRef.current, { type: "audio/webm" })], "voice.webm", { type: "audio/webm" }), "chat/voice");
+          send({ type: "AUDIO", fileUrl: url });
+        } catch (err) {
+          toast.error((err as Error).message);
+        } finally {
+          setUploading(false);
+        }
       };
       recorder.start();
-      setIsRecording(true);
+      setRecording(true);
     } catch {
-      toast.error("No se pudo acceder al micrófono");
+      toast.error("No se pudo usar el micrófono");
     }
   };
-
-  const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    setIsRecording(false);
+  const stopRecording = (discard: boolean) => {
+    discardRef.current = discard;
+    recorderRef.current?.stop();
+    setRecording(false);
   };
 
-  const renderContent = (msg: any, isMe: boolean) => {
-    if (msg.type === "IMAGE") return <img src={msg.fileUrl} alt="" className="rounded-xl max-w-xs" />;
-    if (msg.type === "VIDEO") return <video src={msg.fileUrl} controls className="rounded-xl max-w-xs" />;
-    if (msg.type === "AUDIO" || msg.type === "audio") {
-      const timestamp = new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      const fallbackInitials = activeConv?.business?.name?.substring(0, 2).toUpperCase() ?? "??";
-      return (
-        <WhatsAppAudioPlayer
-          src={msg.fileUrl}
-          isMe={isMe}
-          timestamp={timestamp}
-          isRead={msg.isRead}
-          senderFallback={!isMe ? fallbackInitials : undefined}
-        />
-      );
+  const mine = (m: Msg) => (m.sender ? m.sender.role === "syncropos" : m.senderId === userId);
+
+  const renderContent = (m: Msg, isMe: boolean) => {
+    if (m.type === "IMAGE") return <a href={m.fileUrl ?? "#"} target="_blank" rel="noreferrer"><img src={m.fileUrl ?? ""} alt="Imagen" className="max-w-xs rounded-xl" /></a>;
+    if (m.type === "VIDEO") return <video src={m.fileUrl ?? ""} controls className="max-w-xs rounded-xl" />;
+    if (m.type === "AUDIO" || m.type === "audio") {
+      return <WhatsAppAudioPlayer src={m.fileUrl ?? ""} isMe={isMe} timestamp={when(m.createdAt)} isRead={m.isRead} senderFallback={!isMe ? initials(active?.business?.name) : undefined} />;
     }
-    return <span className="leading-relaxed">{msg.text}</span>;
+    return <span className="whitespace-pre-wrap break-words leading-relaxed">{m.text}</span>;
   };
 
-  const filtered = conversations.filter((c) =>
-    c.business?.name?.toLowerCase().includes(search.toLowerCase())
-  );
+  const list = (conversations ?? [])
+    .filter((c) => !onlyUnread || c.unread > 0)
+    .filter((c) => `${c.business?.name ?? ""} ${c.business?.email ?? ""}`.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => new Date(b.lastMessageAt ?? 0).getTime() - new Date(a.lastMessageAt ?? 0).getTime() || (a.business?.name ?? "").localeCompare(b.business?.name ?? ""));
+  const unreadTotal = (conversations ?? []).reduce((s, c) => s + c.unread, 0);
 
   return (
-    <div className="flex h-[calc(100vh-60px)] overflow-hidden bg-background">
-
-      {/* ── LEFT SIDEBAR ─────────────────────────────── */}
-      <aside className="w-[300px] shrink-0 border-r flex flex-col">
-        {/* Sidebar header */}
-        <div className="p-4 border-b space-y-4">
+    <div className="flex h-[calc(100dvh-var(--header-height)-1rem)] min-h-[32rem] overflow-hidden bg-background">
+      {/* Inbox */}
+      <aside className={cn("flex w-full shrink-0 flex-col border-r md:w-[320px]", active && "hidden md:flex")}>
+        <div className="space-y-3 border-b p-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold tracking-tight">Mensajería</h2>
-              <p className="text-[10px] text-muted-foreground font-semibold">Panel de soporte SaaS</p>
+              <h1 className="text-lg font-semibold tracking-tight">Mensajería</h1>
+              <p className="text-xs text-muted-foreground">{unreadTotal ? `${unreadTotal} sin leer` : "Todo leído"}</p>
             </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={fetchConversations}>
-              <IconRefresh size={16} className="text-muted-foreground" />
-            </Button>
+            <Button variant="ghost" size="icon" className="size-8" onClick={fetchConversations} aria-label="Actualizar"><IconRefresh size={16} /></Button>
           </div>
-          <div className="relative">
-            <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-            <Input 
-              placeholder="Buscar negocio..." 
-              className="pl-9 bg-muted/50 border-none h-9 text-sm rounded-xl focus-visible:ring-1 focus-visible:ring-primary/20"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <label className="relative block">
+            <IconSearch size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Buscar negocio…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </label>
+          <div className="flex rounded-lg border bg-muted/40 p-0.5 text-sm">
+            {[{ k: false, l: "Todas" }, { k: true, l: `Sin leer${unreadTotal ? ` · ${unreadTotal}` : ""}` }].map((o) => (
+              <button key={String(o.k)} type="button" onClick={() => setOnlyUnread(o.k)} className={cn("flex-1 rounded-md px-3 py-1.5 transition", onlyUnread === o.k ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground")}>{o.l}</button>
+            ))}
           </div>
         </div>
 
-        {/* Conversations list */}
-        <ScrollArea className="flex-1">
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4 text-center gap-2">
-              <div className="size-12 rounded-xl bg-muted flex items-center justify-center">
-                <IconMessageCircle size={22} className="text-muted-foreground" />
-              </div>
-              <p className="text-xs text-muted-foreground">No hay conversaciones aún</p>
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          {!conversations ? (
+            <div className="flex justify-center py-12 text-muted-foreground"><IconLoader2 className="animate-spin" /></div>
+          ) : !list.length ? (
+            <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+              <IconMessageCircle size={22} className="text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">{onlyUnread ? "No hay mensajes sin leer." : "No hay conversaciones."}</p>
             </div>
           ) : (
-            <div className="p-2 space-y-1">
-              {filtered.map((conv) => {
-                const initials = conv.business?.name?.substring(0, 2).toUpperCase() ?? "??";
-                const isActive = activeConv?.id === conv.id;
+            <div className="space-y-1">
+              {list.map((c) => {
+                const isActive = active?.id === c.id;
                 return (
                   <button
-                    key={conv.id}
-                    onClick={() => selectConversation(conv)}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left",
-                      isActive
-                        ? "bg-primary/10 border border-primary/20"
-                        : "hover:bg-muted/60"
-                    )}
+                    key={c.id}
+                    type="button"
+                    onClick={() => open(c)}
+                    className={cn("flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left outline-none transition focus-visible:ring-2 focus-visible:ring-ring", isActive ? "bg-muted" : "hover:bg-muted/60")}
                   >
-                    <div className="relative shrink-0">
-                      <Avatar className="size-10">
-                        <AvatarFallback className={cn(
-                          "text-xs font-bold",
-                          isActive ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20"
-                        )}>
-                          {initials}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="absolute bottom-0 right-0 size-2.5 rounded-full bg-emerald-500 border-2 border-background" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-sm font-semibold truncate">{conv.business?.name ?? "Sin nombre"}</span>
-                        <span className="text-[10px] text-muted-foreground shrink-0">
-                          {new Date(conv.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        </span>
+                    <Avatar className="size-10"><AvatarFallback className="text-xs font-semibold">{initials(c.business?.name)}</AvatarFallback></Avatar>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={cn("truncate text-sm", c.unread ? "font-semibold" : "font-medium")}>{c.business?.name ?? "Sin nombre"}</span>
+                        <span className={cn("shrink-0 text-[11px]", c.unread ? "font-medium text-primary" : "text-muted-foreground")}>{when(c.lastMessageAt)}</span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                        {conv.lastMessage ?? "Sin mensajes aún"}
-                      </p>
+                      <div className="mt-0.5 flex items-center justify-between gap-2">
+                        <p className={cn("truncate text-xs", c.unread ? "text-foreground" : "text-muted-foreground")}>{c.lastMessage ?? "Sin mensajes todavía"}</p>
+                        {c.unread > 0 && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">{c.unread}</span>}
+                      </div>
                     </div>
                   </button>
                 );
               })}
             </div>
           )}
-        </ScrollArea>
+        </div>
 
-        {/* Footer stats */}
-        <div className="p-3 border-t bg-muted/10 shrink-0">
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <IconBuilding size={13} />
-            <span>{conversations.length} negocio{conversations.length !== 1 ? "s" : ""} activo{conversations.length !== 1 ? "s" : ""}</span>
-          </div>
+        <div className="flex items-center gap-2 border-t px-4 py-2.5 text-xs text-muted-foreground">
+          <IconBuilding size={13} /> {conversations?.length ?? 0} negocios
         </div>
       </aside>
 
-      {/* ── MAIN CHAT AREA ───────────────────────────── */}
-      {activeConv ? (
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Chat header */}
-          <div className="flex items-center justify-between px-5 py-3 border-b bg-background/90 backdrop-blur-sm shrink-0">
-            <div className="flex items-center gap-3">
-              <Avatar className="size-9">
-                <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
-                  {activeConv.business?.name?.substring(0, 2).toUpperCase() ?? "??"}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="font-semibold text-sm">{activeConv.business?.name ?? "Cliente"}</p>
-                <p className="text-[11px] text-emerald-500 font-medium flex items-center gap-1">
-                  <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
-                  OwnerPOS · en línea
-                </p>
+      {/* Conversation */}
+      {active ? (
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-center gap-3 border-b px-4 py-3">
+            <Button variant="ghost" size="icon" className="size-8 md:hidden" onClick={() => setActive(null)} aria-label="Volver"><IconX size={16} /></Button>
+            <Avatar className="size-9"><AvatarFallback className="text-xs font-semibold">{initials(active.business?.name)}</AvatarFallback></Avatar>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-semibold">{active.business?.name ?? "Negocio"}</p>
+                {active.business?.status && <Badge variant="outline" className={cn("text-[10px]", STATUS_CLASS[active.business.status])}>{STATUS_LABEL[active.business.status]}</Badge>}
               </div>
+              <p className="truncate text-xs text-muted-foreground">{[active.business?.email, active.business?.phone].filter(Boolean).join(" · ") || "Sin datos de contacto"}</p>
             </div>
-            <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="size-8 text-muted-foreground"><IconSearch size={16} /></Button>
-              <Button variant="ghost" size="icon" className="size-8 text-muted-foreground"><IconDotsVertical size={16} /></Button>
-            </div>
+            <Button variant="outline" size="sm" onClick={() => setProfileOf(active.businessId)}><IconUserCircle size={16} /> Ver negocio</Button>
           </div>
 
-          {/* Messages area */}
-          <div className="flex-1 relative overflow-hidden">
-            {/* Original Shadcn-style background */}
-            <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/3 via-background to-muted/20" />
-              <svg className="absolute inset-0 w-full h-full opacity-[0.04] dark:opacity-[0.07]" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <pattern id="admin-dots" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
-                    <circle cx="14" cy="14" r="1.5" fill="currentColor" />
-                  </pattern>
-                </defs>
-                <rect width="100%" height="100%" fill="url(#admin-dots)" />
-              </svg>
-              <div className="absolute top-1/3 right-1/4 size-72 rounded-full bg-primary/4 blur-3xl" />
-              <div className="absolute bottom-1/4 left-1/3 size-56 rounded-full bg-secondary/6 blur-3xl" />
-            </div>
-
-            <ScrollArea className="h-full">
-              <div className="px-6 py-4 flex flex-col gap-2 relative">
-                <div className="self-center">
-                  <span className="text-[10px] font-medium px-3 py-1 rounded-full bg-muted/80 backdrop-blur-sm text-muted-foreground border">
-                    Conversación con {activeConv.business?.name}
-                  </span>
-                </div>
-
-                {messages.length === 0 && (
-                  <div className="self-center mt-8 flex flex-col items-center gap-3 text-center max-w-xs">
-                    <div className="size-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-                      <IconMessageCircle size={32} className="text-primary/60" />
-                    </div>
-                    <p className="text-sm font-semibold text-muted-foreground">Aún no hay mensajes</p>
-                    <p className="text-xs text-muted-foreground/70">Inicia la conversación con este cliente.</p>
-                  </div>
-                )}
-
-                {messages.map((msg, i) => {
-                  const isMe = msg.senderId === user?.id;
+          <div className="min-h-0 flex-1 overflow-y-auto bg-muted/20 px-4 py-4 sm:px-6">
+            {loadingMsgs ? (
+              <div className="flex justify-center py-16 text-muted-foreground"><IconLoader2 className="animate-spin" /></div>
+            ) : !messages.length ? (
+              <div className="mx-auto mt-16 max-w-xs text-center">
+                <IconMessageCircle size={28} className="mx-auto text-muted-foreground" />
+                <p className="mt-2 text-sm font-medium">Aún no hay mensajes</p>
+                <p className="text-xs text-muted-foreground">Escríbele a este negocio para empezar.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {messages.map((m, i) => {
+                  const isMe = mine(m);
+                  const newDay = i === 0 || new Date(messages[i - 1].createdAt).toDateString() !== new Date(m.createdAt).toDateString();
                   return (
-                    <div key={msg.id || i} className={cn("flex flex-col max-w-[70%]", isMe ? "self-end items-end" : "self-start items-start")}>
-                      {!isMe && (
-                        <span className="text-[10px] text-muted-foreground mb-1 ml-1">{msg.sender?.name ?? "Cliente"}</span>
-                      )}
-                      <div className={cn(
-                        "px-4 py-2.5 rounded-2xl shadow-sm text-sm",
-                        isMe
-                          ? "bg-primary text-primary-foreground rounded-br-sm"
-                          : "bg-card border rounded-bl-sm"
-                      )}>
-                        {renderContent(msg, isMe)}
-                        {msg.type !== "AUDIO" && msg.type !== "audio" && (
-                          <div className={cn("flex items-center gap-1 mt-1 text-[10px]", isMe ? "text-primary-foreground/60 justify-end" : "text-muted-foreground")}>
-                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                            {isMe && (msg.isRead ? <IconChecks size={12} className="text-blue-300" /> : <IconCheck size={12} />)}
-                          </div>
-                        )}
+                    <React.Fragment key={m.id ?? i}>
+                      {newDay && <span className="my-2 self-center rounded-full border bg-background px-3 py-1 text-[11px] text-muted-foreground first-letter:uppercase">{dayLabel(m.createdAt)}</span>}
+                      <div className={cn("flex max-w-[75%] flex-col", isMe ? "self-end items-end" : "self-start items-start")}>
+                        {!isMe && <span className="mb-1 ml-1 text-[11px] text-muted-foreground">{m.sender?.name ?? "Cliente"}</span>}
+                        <div className={cn("rounded-2xl px-4 py-2.5 text-sm shadow-sm", isMe ? "rounded-br-sm bg-stone-800 text-white dark:bg-stone-700" : "rounded-bl-sm border bg-card")}>
+                          {renderContent(m, isMe)}
+                          {m.type !== "AUDIO" && m.type !== "audio" && (
+                            <div className={cn("mt-1 flex items-center gap-1 text-[10px]", isMe ? "justify-end text-white/60" : "text-muted-foreground")}>
+                              {new Date(m.createdAt).toLocaleTimeString("es-VE", { hour: "numeric", minute: "2-digit" })}
+                              {isMe && (m.isRead ? <IconChecks size={12} className="text-sky-300" /> : <IconCheck size={12} />)}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    </React.Fragment>
                   );
                 })}
-                <div ref={scrollRef} />
               </div>
-            </ScrollArea>
+            )}
+            <div ref={endRef} />
           </div>
 
-          {/* Input bar */}
-          <div className="px-4 py-3 border-t bg-background/90 backdrop-blur-sm shrink-0 flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground size-9">
-              <IconMoodSmile size={20} />
-            </Button>
-            <div className="relative shrink-0">
-              <Button variant="ghost" size="icon" className="text-muted-foreground size-9">
-                <IconPaperclip size={20} />
-              </Button>
-              <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleFileUpload} accept="image/*,video/*" />
-            </div>
+          <div className="flex items-center gap-2 border-t px-3 py-3">
+            <label className={cn("flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground", (uploading || recording) && "pointer-events-none opacity-50")} aria-label="Adjuntar imagen o video">
+              <IconPaperclip size={20} />
+              <input type="file" className="sr-only" onChange={onFile} accept="image/*,video/*" />
+            </label>
 
-            {isRecording ? (
-              <div className="flex-1 flex items-center gap-3 px-4 h-10 bg-red-500/10 rounded-full border border-red-500/20">
-                <span className="size-2 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-xs font-semibold text-red-500 flex-1">Grabando respuesta de voz...</span>
-                <Button variant="ghost" size="sm" className="text-red-500 text-xs h-6 px-2" onClick={stopRecording}>Cancelar</Button>
+            {recording ? (
+              <div className="flex h-10 flex-1 items-center gap-3 rounded-full border border-rose-600/30 bg-rose-600/10 px-4">
+                <span className="size-2 animate-pulse rounded-full bg-rose-600" />
+                <span className="flex-1 text-sm font-medium text-rose-700">Grabando nota de voz…</span>
+                <Button variant="ghost" size="sm" className="h-7 text-rose-700" onClick={() => stopRecording(true)}>Descartar</Button>
               </div>
             ) : (
               <Input
-                className="flex-1 h-10 rounded-full bg-muted/50 border-none focus-visible:ring-1 focus-visible:ring-primary/30 px-4 text-sm"
-                placeholder={uploading ? "Subiendo archivo..." : "Responder al cliente..."}
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                ref={inputRef}
+                className="h-10 flex-1 rounded-full bg-card px-4"
+                placeholder={uploading ? "Subiendo archivo…" : "Responder al negocio…"}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); } }}
                 disabled={uploading}
               />
             )}
 
-            <Button
-              size="icon"
-              className={cn("shrink-0 size-10 rounded-full transition-all", inputText.trim() ? "bg-primary shadow-lg shadow-primary/20" : "bg-muted text-muted-foreground")}
-              onClick={inputText.trim() ? handleSend : (isRecording ? stopRecording : startRecording)}
-            >
-              {inputText.trim() ? <IconSend size={18} /> : (isRecording ? <IconSend size={18} /> : <IconMicrophone size={18} />)}
-            </Button>
+            {text.trim() ? (
+              <Button size="icon" className="size-10 shrink-0 rounded-full" onClick={sendText} aria-label="Enviar"><IconSend size={18} /></Button>
+            ) : recording ? (
+              <Button size="icon" className="size-10 shrink-0 rounded-full" onClick={() => stopRecording(false)} aria-label="Enviar nota de voz"><IconPlayerStopFilled size={18} /></Button>
+            ) : (
+              <Button size="icon" variant="outline" className="size-10 shrink-0 rounded-full" onClick={startRecording} disabled={uploading} aria-label="Grabar nota de voz"><IconMicrophone size={18} /></Button>
+            )}
           </div>
         </div>
       ) : (
-        /* Empty state */
-        <div className="flex-1 flex items-center justify-center bg-muted/5 relative">
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/3 via-background to-muted/10" />
-            <svg className="absolute inset-0 w-full h-full opacity-[0.04] dark:opacity-[0.06]" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern id="empty-dots" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
-                  <circle cx="14" cy="14" r="1.5" fill="currentColor" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#empty-dots)" />
-            </svg>
-          </div>
-          <div className="text-center z-10">
-            <div className="size-20 rounded-3xl bg-primary/10 flex items-center justify-center mx-auto mb-5 border border-primary/10">
-              <IconMessageCircle size={38} className="text-primary/50" />
-            </div>
-            <h3 className="text-lg font-bold">Syncro central · mensajería</h3>
-            <p className="text-sm text-muted-foreground mt-2 max-w-xs">
-              Selecciona un negocio del panel izquierdo para ver la conversación y brindar soporte.
-            </p>
-            <Badge variant="outline" className="mt-4 text-xs">
-              {conversations.length} conversación{conversations.length !== 1 ? "es" : ""} disponible{conversations.length !== 1 ? "s" : ""}
-            </Badge>
+        <div className="hidden flex-1 items-center justify-center md:flex">
+          <div className="text-center">
+            <IconMessageCircle size={36} className="mx-auto text-muted-foreground" />
+            <h2 className="mt-3 text-lg font-semibold">Soporte a los negocios</h2>
+            <p className="mt-1 max-w-xs text-sm text-muted-foreground">Elige una conversación a la izquierda para leerla y responder.</p>
           </div>
         </div>
       )}
+
+      <BusinessSheet businessId={profileOf} onClose={() => setProfileOf(null)} onChanged={fetchConversations} />
     </div>
   );
 }

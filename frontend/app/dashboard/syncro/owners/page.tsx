@@ -1,266 +1,123 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api"
-import { 
-  IconUsers, 
-  IconBuildingStore, 
-  IconCreditCard, 
-  IconCheck, 
-  IconX, 
-  IconDotsVertical,
-  IconSearch,
-  IconShoppingCart
-} from "@tabler/icons-react";
-import { cn } from "@/lib/utils";
-import { 
-  Card,
-  CardHeader, 
-  CardTitle, 
-  CardDescription,
-  CardAction,
-  CardFooter 
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { IconBan, IconBuildingStore, IconCheck, IconClockPlay } from "@tabler/icons-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { PosTable } from "@/components/pos-table";
+import { StatCard, StatGrid } from "@/components/stat-card";
+import { BusinessSheet } from "@/components/syncro-admin/business-sheet";
 import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
+import { type AdminBusiness, PLAN_LABEL, STATUS_CLASS, STATUS_LABEL, adminApi, ago, shortDate, usd } from "@/lib/syncro-admin";
+
+type Filter = "ALL" | "ACTIVE" | "TRIAL" | "SUSPENDED";
 
 export default function OwnersManagementPage() {
   useRequireSyncroAdmin();
-  const [businesses, setBusinesses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [businesses, setBusinesses] = useState<AdminBusiness[] | null>(null);
+  const [filter, setFilter] = useState<Filter>("ALL");
+  const [openId, setOpenId] = useState<string | null>(null);
 
-  const fetchBusinesses = async () => {
-    try {
-      const res = await apiFetch(`/syncro-admin/businesses`);
-      if (res.ok) {
-        const data = await res.json();
-        setBusinesses(data);
-      }
-    } catch (error) {
-      console.error("Error fetching businesses:", error);
-      toast.error("No se pudieron cargar los negocios");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchBusinesses();
+  const load = useCallback(() => {
+    adminApi<AdminBusiness[]>("/businesses").then(setBusinesses).catch((e) => { toast.error(e.message); setBusinesses([]); });
   }, []);
+  useEffect(() => { load(); }, [load]);
 
-  const handleStatusChange = async (id: string, newStatus: string) => {
-    try {
-      const res = await apiFetch(`/syncro-admin/business/${id}/status`, {
-        method: "PUT",
-        body: JSON.stringify({ status: newStatus })
-      });
+  const count = (s: Filter) => (businesses ?? []).filter((b) => s === "ALL" || b.status === s).length;
+  const rows = useMemo(() => (businesses ?? []).filter((b) => filter === "ALL" || b.status === filter), [businesses, filter]);
 
-      if (res.ok) {
-        toast.success(`Estado actualizado a ${newStatus}`);
-        fetchBusinesses();
-      }
-    } catch (error) {
-      toast.error("Error al actualizar el estado");
-    }
-  };
+  const columns: ColumnDef<AdminBusiness>[] = [
+    {
+      id: "name",
+      header: "Negocio",
+      accessorFn: (b) => `${b.name} ${b.owner?.email ?? ""} ${b.owner?.name ?? ""} ${b.ruc ?? ""}`,
+      cell: ({ row: { original: b } }) => (
+        <div className="min-w-0">
+          <p className="truncate font-semibold">{b.name}</p>
+          <p className="truncate text-xs text-muted-foreground">{b.owner ? `${b.owner.name ?? ""} · ${b.owner.email}` : "Sin dueño"}</p>
+        </div>
+      ),
+    },
+    {
+      id: "status",
+      header: "Estado",
+      accessorFn: (b) => STATUS_LABEL[b.status],
+      cell: ({ row: { original: b } }) => <Badge variant="outline" className={STATUS_CLASS[b.status]}>{STATUS_LABEL[b.status] ?? b.status}</Badge>,
+    },
+    { id: "plan", header: "Plan", accessorFn: (b) => PLAN_LABEL[b.subscription] ?? b.subscription },
+    {
+      id: "due",
+      header: "Pagado hasta",
+      accessorFn: (b) => b.subscriptionEndsAt ?? "",
+      cell: ({ row: { original: b } }) => {
+        if (!b.subscriptionEndsAt) return <span className="text-muted-foreground">Sin fecha</span>;
+        const late = new Date(b.subscriptionEndsAt) < new Date();
+        return <span className={cn(late && "font-medium text-rose-700")}>{shortDate(b.subscriptionEndsAt)}</span>;
+      },
+    },
+    {
+      id: "activity",
+      header: "Última actividad",
+      accessorFn: (b) => b.lastActivityAt ?? "",
+      cell: ({ row: { original: b } }) => {
+        const stale = !b.lastActivityAt || Date.now() - new Date(b.lastActivityAt).getTime() > 14 * 86_400_000;
+        return <span className={cn(stale && "text-amber-700")}>{ago(b.lastActivityAt)}</span>;
+      },
+    },
+    { id: "revenue", header: "Movido en 30 días", accessorFn: (b) => b.revenue30d, cell: ({ row: { original: b } }) => <span className="tabular-nums">{usd(b.revenue30d)}</span> },
+    { id: "users", header: "Usuarios", accessorFn: (b) => b._count.users, cell: ({ row: { original: b } }) => <span className="tabular-nums">{b._count.users}</span> },
+    { id: "branches", header: "Sucursales", accessorFn: (b) => b._count.branches, cell: ({ row: { original: b } }) => <span className="tabular-nums">{b._count.branches}</span> },
+    { id: "created", header: "Cliente desde", accessorFn: (b) => b.createdAt, cell: ({ row: { original: b } }) => shortDate(b.createdAt) },
+  ];
 
-  const filtered = businesses.filter(b => 
-    b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (b.ruc && b.ruc.includes(searchTerm))
-  );
+  const filters: { key: Filter; label: string }[] = [
+    { key: "ALL", label: "Todos" },
+    { key: "ACTIVE", label: "Activos" },
+    { key: "TRIAL", label: "En prueba" },
+    { key: "SUSPENDED", label: "Suspendidos" },
+  ];
 
   return (
-    <div className="p-6 flex flex-col gap-6">
-      <div className="flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Gestión de negocios (owners)</h1>
-          <p className="text-muted-foreground">Monitorea y gestiona todos los clientes de la plataforma Syncro POS.</p>
-        </div>
-        <div className="relative w-72">
-          <IconSearch className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nombre o RUC..."
-            className="pl-9"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
+    <div className="flex flex-col gap-6 p-4 lg:p-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Gestión de negocios</h1>
+        <p className="text-sm text-muted-foreground">Todos los negocios registrados en Syncro. Toca uno para ver su ficha, su suscripción y su actividad.</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
-        <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
-          <CardHeader>
-            <CardDescription>Total negocios</CardDescription>
-            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-              {businesses.length}
-            </CardTitle>
-            <CardAction>
-              <IconBuildingStore className="size-5 text-muted-foreground/50" />
-            </CardAction>
-          </CardHeader>
-          <CardFooter className="flex-col items-start gap-1.5 text-sm">
-            <div className="line-clamp-1 flex gap-2 font-medium">Registrados</div>
-            <div className="text-muted-foreground italic text-xs">En toda la plataforma</div>
-          </CardFooter>
-        </Card>
+      <StatGrid>
+        <StatCard label="Negocios registrados" value={businesses ? businesses.length : "—"} icon={<IconBuildingStore size={20} />} title="En toda la plataforma" onClick={() => setFilter("ALL")} />
+        <StatCard label="Activos" value={businesses ? count("ACTIVE") : "—"} tone="good" icon={<IconCheck size={20} />} title="Con acceso completo" onClick={() => setFilter("ACTIVE")} />
+        <StatCard label="En prueba" value={businesses ? count("TRIAL") : "—"} tone="primary" icon={<IconClockPlay size={20} />} title="Probando el sistema" onClick={() => setFilter("TRIAL")} />
+        <StatCard label="Suspendidos" value={businesses ? count("SUSPENDED") : "—"} tone="bad" icon={<IconBan size={20} />} title="Sin acceso" onClick={() => setFilter("SUSPENDED")} />
+      </StatGrid>
 
-        <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
-          <CardHeader>
-            <CardDescription>Suscripciones activas</CardDescription>
-            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-emerald-600">
-              {businesses.filter(b => b.status === "ACTIVE").length}
-            </CardTitle>
-            <CardAction>
-              <Badge variant="outline" className="gap-1 border-emerald-500/20 text-emerald-500">
-                <IconCheck className="size-3" /> Activo
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardFooter className="flex-col items-start gap-1.5 text-sm">
-            <div className="line-clamp-1 flex gap-2 font-medium">Generando ingresos</div>
-            <div className="text-muted-foreground italic text-xs">Clientes vigentes</div>
-          </CardFooter>
-        </Card>
+      <PosTable
+        columns={columns}
+        data={rows}
+        loading={!businesses}
+        searchPlaceholder="Buscar por negocio, dueño, correo o RIF…"
+        getRowId={(b) => b.id}
+        onRowClick={(b) => setOpenId(b.id)}
+        emptyMessage={filter === "ALL" ? "Todavía no hay negocios registrados." : "No hay negocios con este estado."}
+        actions={
+          <div className="flex rounded-lg border bg-muted/40 p-0.5">
+            {filters.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setFilter(f.key)}
+                className={cn("rounded-md px-3 py-1.5 text-sm transition", filter === f.key ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              >
+                {f.label} <span className="tabular-nums text-muted-foreground">{businesses ? count(f.key) : ""}</span>
+              </button>
+            ))}
+          </div>
+        }
+      />
 
-        <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
-          <CardHeader>
-            <CardDescription>En período de prueba</CardDescription>
-            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-blue-600">
-              {businesses.filter(b => b.status === "TRIAL").length}
-            </CardTitle>
-            <CardAction>
-              <IconUsers className="size-5 text-blue-500/30" />
-            </CardAction>
-          </CardHeader>
-          <CardFooter className="flex-col items-start gap-1.5 text-sm">
-            <div className="line-clamp-1 flex gap-2 font-medium">Potenciales clientes</div>
-            <div className="text-muted-foreground italic text-xs">Probando el sistema</div>
-          </CardFooter>
-        </Card>
-
-        <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
-          <CardHeader>
-            <CardDescription>Suspendidos</CardDescription>
-            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl text-red-600">
-              {businesses.filter(b => b.status === "SUSPENDED").length}
-            </CardTitle>
-            <CardAction>
-              <IconX className="size-5 text-red-500/30" />
-            </CardAction>
-          </CardHeader>
-          <CardFooter className="flex-col items-start gap-1.5 text-sm">
-            <div className="line-clamp-1 flex gap-2 font-medium">Acceso restringido</div>
-            <div className="text-muted-foreground italic text-xs">Cuentas inactivas</div>
-          </CardFooter>
-        </Card>
-      </div>
-
-      <Card className="border-none shadow-none bg-transparent">
-        <CardHeader className="px-0">
-          <CardTitle>Listado de clientes</CardTitle>
-          <CardDescription>Detalle de cada negocio y su uso del sistema.</CardDescription>
-        </CardHeader>
-        <div className="rounded-xl border border-border/40 bg-card overflow-hidden">
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow className="hover:bg-transparent border-border/10 font-semibold tracking-tight text-[10px] text-muted-foreground">
-                <TableHead className="px-4 h-10">Negocio</TableHead>
-                <TableHead className="px-4 h-10">Estado</TableHead>
-                <TableHead className="px-4 h-10">Plan</TableHead>
-                <TableHead className="px-4 h-10 text-right">Sucursales</TableHead>
-                <TableHead className="px-4 h-10 text-right">Ventas</TableHead>
-                <TableHead className="px-4 h-10 text-right">Usuarios</TableHead>
-                <TableHead className="px-4 h-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((b) => (
-                <TableRow key={b.id} className="hover:bg-muted/30 border-border/5 transition-colors group">
-                  <TableCell className="px-4 py-3">
-                    <div className="font-bold text-xs text-white tracking-tight">{b.name}</div>
-                    <div className="text-[10px] font-mono text-primary/70">{b.id.substring(0, 8)} • {b.ruc || "Sin RUC"}</div>
-                  </TableCell>
-                  <TableCell className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      <div className={cn(
-                        "size-1.5 rounded-full shadow-lg",
-                        b.status === "ACTIVE" ? "bg-emerald-500 shadow-emerald-500/40" : 
-                        b.status === "TRIAL" ? "bg-blue-500 shadow-blue-500/40" : 
-                        "bg-red-500 shadow-red-500/40"
-                      )} />
-                      <span className={cn(
-                        "text-[10px] font-semibold tracking-tight",
-                        b.status === "ACTIVE" ? "text-emerald-500" : 
-                        b.status === "TRIAL" ? "text-blue-500" : 
-                        "text-red-500"
-                      )}>
-                        {b.status}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-4 py-3">
-                    <Badge variant="outline" className="text-[9px] font-black border-primary/20 text-primary">
-                      {b.subscription}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="px-4 py-3 text-right font-bold text-xs tabular-nums text-white">
-                    {b._count?.branches || 0}
-                  </TableCell>
-                  <TableCell className="px-4 py-3 text-right font-bold text-xs tabular-nums text-white">
-                    {b._count?.sales || 0}
-                  </TableCell>
-                  <TableCell className="px-4 py-3 text-right font-bold text-xs tabular-nums text-white">
-                    {b._count?.users || 0}
-                  </TableCell>
-                  <TableCell className="px-4 py-3 text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-primary/10 transition-colors">
-                          <IconDotsVertical className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-56 border-border/40 shadow-2xl rounded-xl">
-                        <DropdownMenuLabel className="text-[10px] text-muted-foreground">Control SaaS</DropdownMenuLabel>
-                        <DropdownMenuSeparator className="bg-border/10" />
-                        <DropdownMenuItem onClick={() => handleStatusChange(b.id, "ACTIVE")} className="text-xs font-semibold gap-2 py-2.5">
-                          <IconCheck className="size-4 text-emerald-500" /> Activar negocio
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleStatusChange(b.id, "SUSPENDED")} className="text-xs font-semibold gap-2 py-2.5 text-red-500">
-                          <IconX className="size-4" /> Suspender acceso
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator className="bg-border/10" />
-                        <DropdownMenuItem className="text-xs font-semibold gap-2 py-2.5">
-                          Ver detalles de cliente
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
+      <BusinessSheet businessId={openId} onClose={() => setOpenId(null)} onChanged={load} />
     </div>
   );
 }

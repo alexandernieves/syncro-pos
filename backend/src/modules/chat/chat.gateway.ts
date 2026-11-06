@@ -62,6 +62,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     client.data = auth;
     client.join(`user_${auth.userId}`);
+    // The Syncro team gets every conversation's updates for its inbox
+    if (auth.role === 'syncropos') client.join('support');
     await this.prisma.user.update({
       where: { id: auth.userId },
       data: { lastSeen: new Date() }
@@ -151,8 +153,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Broadcast to the conversation room
     this.server.to(`conv_${data.conversationId}`).emit('newMessage', message);
 
-    // Notify sidebar list
-    this.server.emit('conversationUpdated', {
+    // Notify the support inbox and the conversation itself (never other businesses)
+    this.server.to('support').to(`conv_${data.conversationId}`).emit('conversationUpdated', {
       conversationId: data.conversationId,
       lastMessage: data.text || `Envió un ${data.type}`,
       updatedAt: new Date()
