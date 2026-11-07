@@ -50,7 +50,7 @@ import type { Socket } from "socket.io-client";
 import { connectSocket } from "@/lib/socket";
 import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
-import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { ensurePushSubscription } from "@/hooks/usePushNotifications";
 import { PWAInstallButton } from "@/components/pwa-install-button";
 import { VoiceButton, VoiceButtonState } from "@/components/ui/voice-button";
 import { ChatCard } from "@/components/chat/chat-card";
@@ -643,60 +643,15 @@ export default function SupportChatPage() {
     window.location.href = "/";
   };
 
-  const urlBase64ToUint8Array = (base64String: string) => {
-    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-  };
-
   const handleRequestNotificationPermission = async () => {
-    if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
-      toast.error("Tu dispositivo no es compatible con notificaciones push.");
-      return;
-    }
-
-    try {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-      
-      if (permission === "granted") {
-        toast.success("¡Permiso concedido!");
-        
-        const registration = await navigator.serviceWorker.ready;
-        const res = await fetch(`${API}/push/vapid-key`);
-        if (!res.ok) throw new Error("No VAPID key");
-        const data = await res.json();
-        const publicKey = data.publicKey;
-
-        if (publicKey) {
-          const subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(publicKey)
-          });
-
-          await fetch(`${API}/push/subscribe`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: user?.id, subscription }),
-          });
-          toast.success("Notificaciones activadas con éxito.");
-        }
-      } else {
-        toast.error("Permiso de notificaciones denegado.");
-      }
-    } catch (e: any) {
-      console.error(e);
-      toast.error("Error al activar notificaciones: " + e.message);
-    }
+    const state = await ensurePushSubscription({ ask: true });
+    if ("Notification" in window) setNotificationPermission(Notification.permission);
+    if (state === "on" || (state === "unsupported" && Notification.permission === "granted")) toast.success("Notificaciones activadas.");
+    else if (state === "denied") toast.error("Bloqueaste las notificaciones. Actívalas desde el candado de la barra de direcciones.");
+    else if (state === "unsupported") toast.error("Este dispositivo no admite notificaciones.");
+    else if (state === "off-server") toast.error("Las notificaciones aún no están activas en el servidor.");
+    else if (state !== "default") toast.error("No se pudieron activar las notificaciones.");
   };
-
-  usePushNotifications(user?.id ?? null);
-
 
   // Role guard: support team has their own chat panel
   useEffect(() => {

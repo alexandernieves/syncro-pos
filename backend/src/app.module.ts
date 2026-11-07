@@ -41,6 +41,7 @@ import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 import { GymModule } from './modules/gym/gym.module';
 import { BusinessModulesModule } from './modules/business-modules/business-modules.module';
 import { MascotModule } from './modules/mascot/mascot.module';
+import { PushModule } from './modules/push/push.module';
 
 @Module({
   imports: [
@@ -89,6 +90,7 @@ import { MascotModule } from './modules/mascot/mascot.module';
     GymModule,
     BusinessModulesModule,
     MascotModule,
+    PushModule,
   ],
   controllers: [AppController],
   providers: [

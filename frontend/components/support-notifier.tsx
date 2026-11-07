@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { Socket } from "socket.io-client";
 import { apiFetch } from "@/lib/api";
 import { connectSocket } from "@/lib/socket";
+import { currentSubscription, usePushNotifications } from "@/hooks/usePushNotifications";
 
 /**
  * Unread support messages, shared by the whole app: the sidebar badge reads it, and a single
@@ -41,7 +42,22 @@ function session() {
   }
 }
 
+type SyncroPush = { id: string; title: string; body: string; url: string | null; devices: number };
+
+/** Shows a notification from the operating system, through the service worker when there is one. */
+async function systemNotice(title: string, body: string, tag: string, onClick: () => void) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try {
+    const notification = new Notification(title, { body, icon: "/syncro.png", tag });
+    notification.onclick = () => { window.focus(); onClick(); notification.close(); };
+  } catch {
+    const reg = await navigator.serviceWorker?.getRegistration().catch(() => undefined);
+    await reg?.showNotification(title, { body, icon: "/syncro.png", tag, data: { url: "/dashboard" } }).catch(() => undefined);
+  }
+}
+
 export function SupportNotifier() {
+  usePushNotifications();
   const pathname = usePathname();
   const router = useRouter();
   const pathRef = useRef(pathname);
@@ -82,26 +98,23 @@ export function SupportNotifier() {
         else router.push(chatPath);
       };
       toast(title, { description: body, duration: 8000, action: { label: "Ver", onClick: view } });
-      if (document.hidden && "Notification" in window && Notification.permission === "granted") {
-        try {
-          const notification = new Notification(title, { body, icon: "/syncro.png", tag: n.conversationId });
-          notification.onclick = () => { window.focus(); view(); };
-        } catch {
-          // some browsers only allow notifications from a service worker
-        }
-      }
+      if (document.hidden) void systemNotice(title, body, n.conversationId, view);
     });
-    // Ask once for desktop notifications, the first time someone clicks anywhere
-    const ask = () => {
-      if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => undefined);
-      window.removeEventListener("pointerdown", ask);
-    };
-    window.addEventListener("pointerdown", ask);
+    // Notifications from Syncro central and the automations (welcome, reminders…)
+    socket.on("syncroPush", async (n: SyncroPush) => {
+      const open = () => {
+        if (!n.url) return;
+        if (/^https?:\/\//.test(n.url)) window.open(n.url, "_blank", "noopener");
+        else router.push(n.url);
+      };
+      toast(n.title, { id: `push-${n.id}`, description: n.body, duration: 10000, action: n.url ? { label: "Ver", onClick: open } : undefined });
+      // With the window in the background, a device without web push (the desktop app) shows it itself
+      if (document.hidden && !(n.devices > 0 && (await currentSubscription().catch(() => null)))) void systemNotice(n.title, n.body, `push-${n.id}`, open);
+    });
     window.addEventListener("focus", refresh);
     refresh();
     return () => {
       socket.disconnect();
-      window.removeEventListener("pointerdown", ask);
       window.removeEventListener("focus", refresh);
       document.title = baseTitle;
     };

@@ -160,6 +160,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.emitUnread(businessId);
 
     try {
+      if (!(await this.pushService.automationOn('support_message'))) return message;
+      // A request's status card has its own notification ("Avance de una solicitud", to the owner)
+      if (fromSupport && extra.type === 'CARD' && extra.requestId) return message;
       const to = fromSupport
         ? businessId ? await this.prisma.user.findMany({ where: { businessId, role: { not: 'syncropos' } }, select: { id: true } }) : []
         : await this.prisma.user.findMany({ where: { role: 'syncropos' }, select: { id: true } });

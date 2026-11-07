@@ -2,11 +2,15 @@ import { Controller, Get, Post, Body, Param, Delete, UseGuards, Patch, Request, 
 import { AuthGuard } from '@nestjs/passport';
 import { UsersService } from './users.service';
 import { User } from './user.schema';
+import { PushCampaignsService } from '../push/push-campaigns.service';
 
 @Controller('users')
 @UseGuards(AuthGuard('jwt'))
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly pushCampaigns: PushCampaignsService,
+  ) {}
 
   @Get()
   async findAll(@Request() req: any) {
@@ -19,7 +23,10 @@ export class UsersController {
   async create(@Body() createUserDto: Partial<User>, @Request() req: any) {
     if (!req.user) throw new UnauthorizedException('No user context');
     const businessId = req.user.businessId;
-    return this.usersService.create({ ...createUserDto, businessId });
+    const user: any = await this.usersService.create({ ...createUserDto, businessId });
+    // Someone new on the team gets a welcome (when they turn notifications on, if not yet)
+    if (user?.id) void this.pushCampaigns.automate('welcome_member', { userIds: [user.id] }, {}, `welcome_member:${user.id}`);
+    return user;
   }
 
   @Delete(':id')

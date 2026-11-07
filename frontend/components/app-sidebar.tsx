@@ -226,6 +226,7 @@ const data = {
         { title: "Gestión de negocios", url: "/dashboard/syncro/owners" },
         { title: "Mensajería", url: "/dashboard/syncro/chat" },
         { title: "Solicitudes", url: "/dashboard/syncro/requests" },
+        { title: "Notificaciones", url: "/dashboard/syncro/notificaciones" },
         { title: "Feedback de IA", url: "/dashboard/syncro/feedback" },
         { title: "Suscripciones", url: "/dashboard/syncro/subscriptions" },
         { title: "Métricas globales", url: "/dashboard/syncro/stats" },

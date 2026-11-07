@@ -1,3 +1,4 @@
+import { PushCampaignsService } from '../push/push-campaigns.service';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
@@ -17,6 +18,7 @@ export class AuthService {
     private branchesService: BranchesService,
     private historyService: HistoryService,
     private prisma: PrismaService,
+    private pushCampaigns: PushCampaignsService,
   ) {}
 
   // ── Validate User ──────────────────────────────────────────────────────────
@@ -304,12 +306,16 @@ export class AuthService {
      * sidebar — locked out of the inventory, reports and settings of a shop
      * that is their own.
      */
-    return await this.usersService.create({
+    const owner = await this.usersService.create({
       ...userFields,
       businessId:  business.id,
       role:        'ownerpos',
       permissions: ['all'],
     });
+
+    // 6. Welcome push: right away on a device, or as soon as they turn notifications on
+    void this.pushCampaigns.automate('welcome_business', { userIds: [owner.id] }, {}, `welcome_business:${owner.id}`);
+    return owner;
   }
 
   // ── Saved Profiles ─────────────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import { PushCampaignsService } from '../push/push-campaigns.service';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChatGateway } from '../chat/chat.gateway';
@@ -30,6 +31,7 @@ export class ModuleRequestsService {
   constructor(
     private prisma: PrismaService,
     private chat: ChatGateway,
+    private pushCampaigns: PushCampaignsService,
   ) {}
 
   private assertOwner(user: any) {
@@ -160,6 +162,7 @@ export class ModuleRequestsService {
           meta: { card: 'request', requestId: id, title: request.title, kind: request.kind, status, note },
         })
         .catch(() => undefined);
+      void this.pushCampaigns.automate('request_update', { ownersOf: request.businessId }, { solicitud: request.title, estado: STATUS_TEXT[status] });
     }
     return updated;
   }

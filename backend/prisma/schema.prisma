@@ -314,8 +314,63 @@ model PushSubscription {
   endpoint  String   @unique
   p256dh    String
   auth      String
+  /// Browser or app that registered it, to tell devices apart
+  userAgent String?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
+}
+
+/// A push notification sent from Syncro central, by hand or by an automation.
+model PushCampaign {
+  id         String         @id @default(uuid())
+  /// MANUAL | AUTO
+  kind       String         @default("MANUAL")
+  /// The automation that sent it (welcome_business, payment_reminder, …)
+  trigger    String?
+  /// Stops an automation from sending the same thing twice
+  dedupeKey  String?        @unique
+  title      String
+  body       String
+  url        String?
+  /// { mode: 'all' | 'selected', businessIds: string[], who: 'owners' | 'team' }
+  audience   Json?
+  sentById   String?
+  recipients Int            @default(0)
+  /// People reached on at least one device
+  reached    Int            @default(0)
+  devices    Int            @default(0)
+  createdAt  DateTime       @default(now())
+  deliveries PushDelivery[]
+
+  @@index([kind, createdAt])
+}
+
+/// One person a campaign went to. PENDING waits until they turn notifications on.
+model PushDelivery {
+  id         String       @id @default(uuid())
+  campaignId String
+  userId     String
+  businessId String?
+  title      String
+  body       String
+  /// SENT | PENDING
+  status     String       @default("PENDING")
+  sentAt     DateTime?
+  createdAt  DateTime     @default(now())
+  campaign   PushCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, userId])
+  @@index([userId, status])
+}
+
+/// The texts and on/off switch of each automatic notification.
+model PushAutomation {
+  key       String   @id
+  enabled   Boolean  @default(true)
+  title     String
+  body      String
+  url       String?
+  updatedAt DateTime @updatedAt
 }
 
 model Setting {

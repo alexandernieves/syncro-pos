@@ -30,7 +30,6 @@ import { WhatsAppAudioPlayer } from "@/components/ui/whatsapp-audio-player";
 import { BusinessSheet } from "@/components/syncro-admin/business-sheet";
 import { ChatCard } from "@/components/chat/chat-card";
 import { RemoteViewer } from "@/components/remote/remote-viewer";
-import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
 import { STATUS_CLASS, STATUS_LABEL } from "@/lib/syncro-admin";
 
@@ -118,7 +117,6 @@ export default function SyncroAdminChatPage() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const discardRef = useRef(false);
-  usePushNotifications(userId);
 
   useEffect(() => { activeRef.current = active; }, [active]);
 
