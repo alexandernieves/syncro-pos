@@ -108,8 +108,10 @@ export function SupportNotifier() {
         else router.push(n.url);
       };
       toast(n.title, { id: `push-${n.id}`, description: n.body, duration: 10000, action: n.url ? { label: "Ver", onClick: open } : undefined });
-      // With the window in the background, a device without web push (the desktop app) shows it itself
-      if (document.hidden && !(n.devices > 0 && (await currentSubscription().catch(() => null)))) void systemNotice(n.title, n.body, `push-${n.id}`, open);
+      // This computer shows it in the system too, unless web push already did (the service worker
+      // shows it on every subscribed device). The desktop app has no web push, so it always shows it here.
+      const viaPush = n.devices > 0 && !!(await currentSubscription().catch(() => null));
+      if (!viaPush) void systemNotice(n.title, n.body, `push-${n.id}`, open);
     });
     window.addEventListener("focus", refresh);
     refresh();

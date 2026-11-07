@@ -440,6 +440,9 @@ if (!app.requestSingleInstanceLock()) {
     win.focus();
   });
 
+  // Windows only shows an app's notifications when it knows the app's id
+  if (process.platform === 'win32') app.setAppUserModelId('com.syncro.pos');
+
   app.whenReady().then(() => {
     allowOwnWindowCapture();
     createWindow();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { toast } from "sonner";
 import { API_URL } from "@/lib/constants";
 
 /**
@@ -99,20 +100,56 @@ export function ensurePushSubscription({ ask = false }: { ask?: boolean } = {}):
   return inFlight;
 }
 
+const SNOOZE_KEY = "syncro-push-prompt-snooze";
+const snoozed = () => {
+  try { return Number(localStorage.getItem(SNOOZE_KEY) || 0) > Date.now(); } catch { return false; }
+};
+const snooze = (hours: number) => {
+  try { localStorage.setItem(SNOOZE_KEY, String(Date.now() + hours * 3_600_000)); } catch { /* private mode */ }
+};
+
+/** Asks with a button the person sees (Chrome hides prompts that pop up on their own). */
+function promptToEnable() {
+  toast("Activa las notificaciones de esta computadora", {
+    id: "push-enable",
+    description: "Así te llegan los avisos de Syncro aunque tengas la ventana cerrada o minimizada.",
+    duration: Infinity,
+    action: {
+      label: "Activar",
+      onClick: async () => {
+        const state = await ensurePushSubscription({ ask: true });
+        if (state === "on") toast.success("Listo: las notificaciones están activas en esta computadora.");
+        else if (state === "denied") blockedNotice();
+        else if (state === "error" || state === "off-server") toast.error("No se pudieron activar. Intenta de nuevo en un momento.");
+      },
+    },
+    cancel: { label: "Ahora no", onClick: () => snooze(24) },
+  });
+}
+
+function blockedNotice() {
+  toast("Las notificaciones están bloqueadas en este navegador", {
+    id: "push-blocked",
+    description: "Haz clic en el ícono a la izquierda de la dirección (el candado o los controles), entra en Notificaciones, elige Permitir y recarga la página.",
+    duration: 20000,
+    cancel: { label: "Entendido", onClick: () => snooze(24 * 7) },
+  });
+}
+
 /**
- * Keeps this device registered: at once if permission was already given, otherwise it asks
- * the first time the person clicks anywhere (browsers only allow asking after a click).
+ * Keeps this device registered. If permission was never given, it offers a button to turn
+ * notifications on; if they are blocked, it explains how to unblock them.
  */
 export function usePushNotifications() {
   useEffect(() => {
     if (typeof window === "undefined" || !token()) return;
-    void ensurePushSubscription();
-    if (!("Notification" in window) || Notification.permission !== "default") return;
-    const ask = () => {
-      window.removeEventListener("pointerdown", ask);
-      void ensurePushSubscription({ ask: true });
-    };
-    window.addEventListener("pointerdown", ask);
-    return () => window.removeEventListener("pointerdown", ask);
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const state = await ensurePushSubscription();
+      if (cancelled || snoozed()) return;
+      if (state === "default") promptToEnable();
+      else if (state === "denied") { blockedNotice(); snooze(24); }
+    }, 2500);
+    return () => { cancelled = true; clearTimeout(t); };
   }, []);
 }
