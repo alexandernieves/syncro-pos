@@ -36,6 +36,24 @@ export class MascotController {
     return this.mascot.think(req.user).then((t) => t ?? { none: true });
   }
 
+  /** The idea history (saved thoughts). */
+  @Get('thoughts/saved')
+  saved(@Req() req: any) {
+    return this.mascot.savedThoughts(req.user);
+  }
+
+  /** The user shares a thought; the mascot answers right away. */
+  @Post('share')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  share(@Req() req: any, @Body() body: { text: string }) {
+    return this.mascot.share(req.user, body?.text);
+  }
+
+  @Put('thoughts/:id/saved')
+  setSaved(@Req() req: any, @Param('id') id: string, @Body() body: { saved: boolean }) {
+    return this.mascot.setSaved(req.user, id, !!body?.saved);
+  }
+
   @Put('thoughts/:id')
   status(@Req() req: any, @Param('id') id: string, @Body() body: { status: string }) {
     return this.mascot.setStatus(req.user, id, body?.status);

@@ -282,6 +282,31 @@ Responde SOLO con JSON: {"thought": "...", "topic": "sales|expenses|inventory|cu
     return this.prisma.mascotThought.update({ where: { id: t.id }, data: { status } });
   }
 
+  /** The user shares a thought of their own (from the bulb in the chat); the mascot answers. */
+  async share(user: AuthUser, text: string) {
+    this.assertMerchant(user);
+    const clean = String(text ?? '').trim().slice(0, 1500);
+    if (!clean) throw new BadRequestException('Escribe lo que quieres compartir');
+    const t = await this.prisma.mascotThought.create({
+      data: { userId: user.id, businessId: user.businessId!, text: clean, topic: 'user', importance: 1, status: 'SHOWN', messages: [] },
+    });
+    const answer = await this.reply(user, t.id, clean);
+    const thought = await this.prisma.mascotThought.findUnique({ where: { id: t.id } });
+    return { thought, ...answer };
+  }
+
+  /** Keeps (or drops) a thought in the user's idea history. */
+  async setSaved(user: AuthUser, id: string, saved: boolean) {
+    const t = await this.own(user, id);
+    return this.prisma.mascotThought.update({ where: { id: t.id }, data: { saved: !!saved } });
+  }
+
+  /** The idea history: thoughts the user saved, newest first. */
+  async savedThoughts(user: AuthUser) {
+    this.assertMerchant(user);
+    return this.prisma.mascotThought.findMany({ where: { userId: user.id, saved: true }, orderBy: { updatedAt: 'desc' }, take: 60 });
+  }
+
   /** The user answers a thought; the mascot replies and may remember something useful. */
   async reply(user: AuthUser, id: string, text: string) {
     this.assertMerchant(user);
@@ -300,7 +325,9 @@ Responde SOLO con JSON: {"thought": "...", "topic": "sales|expenses|inventory|cu
       this.persona(s, dbUser?.name ?? undefined, memory),
       `CONOCES EL SOFTWARE:\n${softwareKnowledge(snap.modules)}`,
       `DATOS ACTUALES DEL NEGOCIO:\n${snap.text}`,
-      'Estás conversando sobre una idea que compartiste. Contesta como en una burbuja de pensamiento: corto y concreto.',
+      t.topic === 'user'
+        ? 'El comerciante te compartió un pensamiento suyo (una idea, una duda o algo que le preocupa del negocio). Respóndele con criterio, usando sus datos, como en una burbuja de pensamiento: corto y concreto.'
+        : 'Estás conversando sobre una idea que compartiste. Contesta como en una burbuja de pensamiento: corto y concreto.',
       `Responde SOLO con JSON: {"reply": "...", "emotion": "happy|surprised|thinking|sad|angry|neutral", "needsReply": false, "remember": "..."}
 En "remember" anota en una frase corta cualquier dato duradero que el comerciante te haya contado en su último mensaje (proveedores, días de compra, horarios, metas, empleados, preferencias). Déjalo vacío solo si no contó nada nuevo.`,
     ].join('\n\n');

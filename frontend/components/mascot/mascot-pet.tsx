@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IconArrowBackUp, IconLoader2, IconSend, IconX } from "@tabler/icons-react";
+import { IconArrowBackUp, IconBookmark, IconBookmarkFilled, IconLoader2, IconSend, IconX } from "@tabler/icons-react";
+import { toast } from "sonner";
+import { GlossyBulb } from "@/components/mascot/glossy-bulb";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 import { SyncroAvatar, type AvatarEmotion } from "@/components/syncro-avatar";
@@ -101,6 +103,8 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
   // Ideas
   const [thought, setThought] = useState<MascotThought | null>(null);
   const [cloud, setCloud] = useState<{ dx: number; above: boolean; maxH: number } | null>(null);
+  /** The person is writing a thought of their own (no idea from the mascot yet) */
+  const [composing, setComposing] = useState(false);
   const [typed, setTyped] = useState("");
   const [exchange, setExchange] = useState<Exchange[]>([]);
   const [replying, setReplying] = useState(false);
@@ -371,7 +375,7 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
     if (!visible || !settings?.ideas) return;
     let alive = true;
     const ask = async () => {
-      if (document.hidden || thoughtRef.current) return;
+      if (document.hidden || thoughtRef.current || frozenRef.current) return;
       try {
         const res = await apiFetch("/mascot/think", { method: "POST" });
         if (!res.ok || !alive) return;
@@ -388,8 +392,12 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
 
   const setStatus = (id: string, status: "SHOWN" | "DISMISSED") => apiFetch(`/mascot/thoughts/${id}`, { method: "PUT", body: JSON.stringify({ status }) }).catch(() => undefined);
 
-  /** Opens the cloud attached to the head, on the side with room; the head stops while it thinks. */
-  const openThought = useCallback((t: MascotThought) => {
+  /** Ideas already opened once: they never pop up on their own again, the bulb just waits. */
+  const seen = useRef(new Set<string>());
+  const lastOpened = useRef<string | null>(null);
+
+  /** Places the cloud next to the head, on the side with room; the head stops while it thinks. */
+  const placeCloud = useCallback(() => {
     mode.current = "follow";
     vel.current = { x: 0, y: 0 };
     const p = pos.current;
@@ -401,34 +409,78 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
     const above = p.y + HALF > vh / 2;
     const maxH = Math.max(180, above ? p.y - 80 : vh - (p.y + SIZE) - 80);
     setCloud({ dx: screenX - p.x, above, maxH });
-    setExchange([]);
-    setReplying(false);
-    setDraft("");
-    setTyped("");
-    setMood((t.emotion as AvatarEmotion) || "happy");
-    void setStatus(t.id, "SHOWN");
   }, []);
 
-  // Bulb waiting: if nobody clicks it, the mascot decides — important ideas speak up, the rest fade
+  /**
+   * Opens a thought in the cloud. Reopening the same one keeps the conversation; one from the
+   * history comes with its messages.
+   */
+  const openThought = useCallback((t: MascotThought, history?: Exchange[]) => {
+    placeCloud();
+    setComposing(false);
+    if (history) {
+      setExchange(t.topic === "user" ? history : history.slice(1));
+      setTyped(t.text);
+      setReplying(true);
+    } else if (lastOpened.current !== t.id) {
+      setExchange([]);
+      setTyped("");
+      setReplying(false);
+    }
+    lastOpened.current = t.id;
+    setDraft("");
+    setMood((t.emotion as AvatarEmotion) || "happy");
+    if (!seen.current.has(t.id)) { seen.current.add(t.id); void setStatus(t.id, "SHOWN"); }
+  }, [placeCloud]);
+
+  /** The person wants to share a thought (the bulb in the chat): an empty cloud to write in. */
+  const compose = useCallback(() => {
+    setThought(null);
+    lastOpened.current = null;
+    setExchange([]);
+    setTyped("");
+    setDraft("");
+    setComposing(true);
+    setReplying(true);
+    setMood("happy");
+    placeCloud();
+    setTimeout(() => inputRef.current?.focus(), 450);
+  }, [placeCloud]);
+
+  // Other screens open the cloud: the bulb in the chat and the idea history
+  useEffect(() => {
+    if (!visible) return;
+    const onShare = () => compose();
+    const onOpen = (e: Event) => {
+      const t = (e as CustomEvent<MascotThought & { messages?: { role: "user" | "assistant"; content: string }[] }>).detail;
+      if (!t?.id) return;
+      setThought(t);
+      openThought(t, (t.messages ?? []).map((m) => ({ role: m.role, content: m.content })));
+    };
+    window.addEventListener("mascot:share", onShare);
+    window.addEventListener("mascot:open-thought", onOpen);
+    return () => { window.removeEventListener("mascot:share", onShare); window.removeEventListener("mascot:open-thought", onOpen); };
+  }, [visible, compose, openThought]);
+
+  // Bulb waiting: a new idea that nobody opens — important ones speak up, the rest fade.
+  // An idea already opened keeps the bulb on for a while and then it goes out.
   useEffect(() => {
     if (!thought || cloud) return;
     const id = window.setTimeout(() => {
-      if (thought.importance >= 3) openThought(thought);
-      else {
-        setBulbOut(true);
-        void setStatus(thought.id, "DISMISSED");
-        window.setTimeout(() => { setThought(null); setBulbOut(false); }, 700);
-      }
+      if (thought.importance >= 3 && !seen.current.has(thought.id)) { openThought(thought); return; }
+      setBulbOut(true);
+      if (!seen.current.has(thought.id)) void setStatus(thought.id, "DISMISSED");
+      window.setTimeout(() => { setThought(null); setBulbOut(false); lastOpened.current = null; }, 700);
     }, BULB_WAIT_MS);
     return () => window.clearTimeout(id);
   }, [thought, cloud, openThought]);
 
-  // Types the idea out, then opens the reply box if the mascot asked something
+  // Types the idea out (only the first time), then opens the reply box if the mascot asked something
   const cloudOpen = cloud !== null;
   useEffect(() => {
-    if (!cloudOpen || !thought) return;
+    if (!cloudOpen || !thought || composing || typed.length >= thought.text.length) return;
     const text = thought.text;
-    let i = 0;
+    let i = typed.length;
     const id = window.setInterval(() => {
       i += 2;
       setTyped(text.slice(0, i));
@@ -438,7 +490,8 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
       }
     }, 22);
     return () => window.clearInterval(id);
-  }, [cloudOpen, thought]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloudOpen, thought, composing]);
 
   // The conversation keeps scrolling to the newest line
   useEffect(() => {
@@ -446,24 +499,47 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
     if (el) el.scrollTop = el.scrollHeight;
   }, [typed, exchange, busy, replying]);
 
-  const closeCloud = () => {
+  /** Closes the cloud. The bulb stays on (if there was an idea) so it can be reopened. */
+  const closeCloud = useCallback(() => {
     setCloud(null);
-    setThought(null);
+    setComposing(false);
     setMood(undefined);
-    setReplying(false);
-  };
+    setBulbOut(false);
+  }, []);
+
+  // A click anywhere outside the mascot closes the cloud
+  useEffect(() => {
+    if (!cloudOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (rootRef.current?.contains(e.target as Node)) return;
+      closeCloud();
+    };
+    const t = window.setTimeout(() => document.addEventListener("pointerdown", onDown, true), 0);
+    return () => { window.clearTimeout(t); document.removeEventListener("pointerdown", onDown, true); };
+  }, [cloudOpen, closeCloud]);
 
   const sendReply = async () => {
     const text = draft.trim();
-    if (!text || !thought || busy) return;
+    if (!text || busy) return;
+    if (!thought && !composing) return;
     setBusy(true);
     setExchange((x) => [...x, { role: "user", content: text }]);
     setDraft("");
     setMood("thinking");
     try {
-      const res = await apiFetch(`/mascot/thoughts/${thought.id}/reply`, { method: "POST", body: JSON.stringify({ text }) });
+      const res = thought
+        ? await apiFetch(`/mascot/thoughts/${thought.id}/reply`, { method: "POST", body: JSON.stringify({ text }) })
+        : await apiFetch("/mascot/share", { method: "POST", body: JSON.stringify({ text }) });
       const body = await res.json().catch(() => null);
       if (!res.ok) throw new Error(body?.message || "No pude pensar en eso ahora");
+      if (!thought && body?.thought) {
+        // The person's own thought now exists: keep talking about it
+        seen.current.add(body.thought.id);
+        lastOpened.current = body.thought.id;
+        setThought(body.thought);
+        setTyped(body.thought.text);
+        setComposing(false);
+      }
       setExchange((x) => [...x, { role: "assistant", content: body.reply }]);
       setMood((body.emotion as AvatarEmotion) || "happy");
       setReplying(true);
@@ -474,6 +550,15 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
     } finally {
       setBusy(false);
     }
+  };
+
+  const toggleSaved = async () => {
+    if (!thought) return;
+    const next = !thought.saved;
+    setThought({ ...thought, saved: next });
+    const res = await apiFetch(`/mascot/thoughts/${thought.id}/saved`, { method: "PUT", body: JSON.stringify({ saved: next }) }).catch(() => null);
+    if (!res?.ok) { setThought((t) => (t ? { ...t, saved: !next } : t)); toast.error("No se pudo guardar"); return; }
+    toast.success(next ? "Guardado en tus ideas. Lo encuentras en el chat de soporte." : "Quitado de tus ideas guardadas");
   };
 
   // ── Christmas: now and then the Santa hat and beard ───────────────────────────────────────
@@ -553,32 +638,12 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
             className={cn("pointer-events-auto absolute origin-bottom outline-none transition-[opacity,transform] duration-500 focus-visible:ring-2 focus-visible:ring-amber-400", onRight ? "-left-3" : "-right-3", onTop ? "-bottom-6" : "-top-6", bulbOut ? "scale-50 opacity-0" : "syncro-pop")}
             style={{ width: 40, height: 52 }}
           >
-            <span className="absolute inset-0 rounded-full bg-amber-300 blur-md" style={{ animation: bulbOut ? undefined : "syncro-glow 1.8s ease-in-out infinite" }} />
-            <svg viewBox="0 0 40 52" width="40" height="52" className="relative" style={{ animation: bulbOut ? undefined : "syncro-bulb 2.4s ease-in-out infinite", transformOrigin: "50% 100%" }}>
-              <defs>
-                <radialGradient id="syncro-bulb-glass" cx="0.38" cy="0.32" r="0.75">
-                  <stop offset="0" stopColor="#fffbe6" />
-                  <stop offset="0.45" stopColor="#ffe066" />
-                  <stop offset="1" stopColor="#f5a623" />
-                </radialGradient>
-                <linearGradient id="syncro-bulb-base" x1="0" x2="1">
-                  <stop offset="0" stopColor="#9aa3ad" />
-                  <stop offset="0.45" stopColor="#f4f6f8" />
-                  <stop offset="1" stopColor="#8b939c" />
-                </linearGradient>
-              </defs>
-              <path d="M20 2 C31 2 37 10 37 18 C37 25 32 28 29 33 L11 33 C8 28 3 25 3 18 C3 10 9 2 20 2 Z" fill="url(#syncro-bulb-glass)" />
-              <path d="M15 33 L15 22 Q20 17 25 22 L25 33" fill="none" stroke="#f08c00" strokeWidth="1.4" opacity=".7" />
-              <ellipse cx="13" cy="11" rx="5" ry="3" fill="#fff" opacity=".85" transform="rotate(-30 13 11)" />
-              <rect x="11" y="33" width="18" height="11" rx="2.5" fill="url(#syncro-bulb-base)" />
-              <path d="M11 37 H29 M11 40.5 H29" stroke="#7d858e" strokeWidth="1" opacity=".7" />
-              <path d="M15 44 H25 L23 48 H17 Z" fill="#6b737c" />
-            </svg>
+            <GlossyBulb size={40} lit={!bulbOut} />
           </button>
         )}
 
         {/* Thought: glossy bubbles rising from the head to a glossy cloud, all attached to the head */}
-        {cloud && thought && (
+        {cloud && (thought || composing) && (
           <>
             {[0, 1, 2].map((i) => {
               const s = 10 + i * 6;
@@ -628,9 +693,17 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
                 <button type="button" onClick={closeCloud} aria-label="Cerrar" className="absolute right-3 top-3 rounded-full p-1 text-stone-400 hover:bg-white hover:text-stone-700">
                   <IconX size={14} />
                 </button>
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-primary">{name} pensó…</p>
+                <p className="mb-1 pr-14 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                  {composing ? `Cuéntale a ${name} lo que piensas` : thought?.topic === "user" ? `Tu pensamiento con ${name}` : `${name} pensó…`}
+                </p>
+                {thought && (
+                  <button type="button" onClick={toggleSaved} aria-label={thought.saved ? "Quitar de mis ideas guardadas" : "Guardar en mis ideas"} title={thought.saved ? "Guardado en tus ideas" : "Guardar en mis ideas"} className="absolute right-10 top-3 rounded-full p-1 text-stone-400 hover:bg-white hover:text-primary">
+                    {thought.saved ? <IconBookmarkFilled size={14} className="text-primary" /> : <IconBookmark size={14} />}
+                  </button>
+                )}
                 <div ref={scrollRef} className="syncro-noscroll -mr-2 overflow-y-auto scroll-smooth pr-2" style={{ maxHeight: Math.max(120, cloud.maxH - (replying ? 150 : 110)) }}>
-                  <p className="whitespace-pre-wrap pr-4">{typed}{typed.length < thought.text.length && <span className="ml-0.5 inline-block h-3 w-1 animate-pulse rounded bg-stone-400 align-middle" />}</p>
+                  {composing && !exchange.length && <p className="text-stone-500">Una idea, una duda o algo que te preocupa del negocio. Te digo lo que pienso con tus números.</p>}
+                  {thought && thought.topic !== "user" && <p className="whitespace-pre-wrap pr-4">{typed}{typed.length < thought.text.length && <span className="ml-0.5 inline-block h-3 w-1 animate-pulse rounded bg-stone-400 align-middle" />}</p>}
                   {exchange.map((m, i) => (
                     m.role === "user"
                       ? <p key={i} className="mt-3 ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-sm bg-primary/10 px-3 py-1.5 text-[12.5px] text-stone-700">{m.content}</p>
@@ -655,7 +728,7 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
                     </button>
                   </div>
                 ) : (
-                  typed.length >= thought.text.length && (
+                  thought && typed.length >= thought.text.length && (
                     <div className="mt-3 flex justify-end">
                       <button
                         type="button"

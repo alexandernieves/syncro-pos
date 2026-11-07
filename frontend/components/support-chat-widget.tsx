@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { IconApps, IconArrowsMaximize, IconCheck, IconChecks, IconLoader2, IconMessageCircle, IconPaperclip, IconSend, IconX } from "@tabler/icons-react";
+import { IconApps, IconArrowsMaximize, IconCheck, IconChecks, IconArrowLeft, IconBookmark, IconBookmarkOff, IconLoader2, IconMessageCircle, IconPaperclip, IconSend, IconX } from "@tabler/icons-react";
 import type { Socket } from "socket.io-client";
 import { toast } from "sonner";
 import { API_URL } from "@/lib/constants";
@@ -13,7 +13,8 @@ import { cn } from "@/lib/utils";
 import { ChatCard, type CardMeta } from "@/components/chat/chat-card";
 import { useSupportUnread } from "@/components/support-notifier";
 import { SyncroAvatar, SyncroBadge } from "@/components/syncro-avatar";
-import { useMascotSettings } from "@/lib/mascot";
+import { type MascotThought, useMascotSettings } from "@/lib/mascot";
+import { GlossyBulb } from "@/components/mascot/glossy-bulb";
 
 type Msg = {
   id?: string;
@@ -87,6 +88,10 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const dragStart = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const [open, setOpen] = useState(false);
+  // "ideas": the history of thoughts saved with the mascot, in place of the support chat
+  const [view, setView] = useState<"chat" | "ideas">("chat");
+  const [ideas, setIdeas] = useState<MascotThought[] | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [intro, setIntro] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[] | null>(null);
@@ -204,6 +209,34 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
   }, [open]);
 
   if (!enabled || onChatPage) return null;
+
+  const mascotOn = !!mascot?.visible;
+  const showIdeas = async () => {
+    setView("ideas");
+    setExpanded(null);
+    setIdeas(null);
+    try {
+      const res = await apiFetch("/mascot/thoughts/saved");
+      setIdeas(res.ok ? await res.json() : []);
+    } catch {
+      setIdeas([]);
+    }
+  };
+  const forget = async (id: string) => {
+    setIdeas((list) => list?.filter((t) => t.id !== id) ?? list);
+    await apiFetch(`/mascot/thoughts/${id}/saved`, { method: "PUT", body: JSON.stringify({ saved: false }) }).catch(() => undefined);
+  };
+  /** From the chat to the mascot's thought cloud */
+  const shareThought = () => {
+    setOpen(false);
+    setView("chat");
+    window.dispatchEvent(new Event("mascot:share"));
+  };
+  const continueIdea = (t: MascotThought) => {
+    setOpen(false);
+    setView("chat");
+    window.dispatchEvent(new CustomEvent("mascot:open-thought", { detail: t }));
+  };
 
   const send = (payload: { text?: string; type: string; fileUrl?: string }) => {
     if (!conversationId) return;
@@ -341,10 +374,62 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
             <p className="text-sm font-semibold">Syncro <span className="font-normal text-muted-foreground">· Equipo Syncro</span></p>
             <p className="truncate text-xs text-muted-foreground">{typing ? "Escribiendo…" : online ? "En línea ahora" : "Te respondemos lun – vie, 8 a. m. a 6 p. m."}</p>
           </div>
+          {mascotOn && (
+            <button
+              type="button"
+              onClick={() => (view === "ideas" ? setView("chat") : void showIdeas())}
+              className={cn("rounded-md p-1.5 hover:bg-muted hover:text-foreground", view === "ideas" ? "bg-primary/10 text-primary" : "text-muted-foreground")}
+              aria-label={view === "ideas" ? "Volver al chat" : "Ideas guardadas"}
+              title={view === "ideas" ? "Volver al chat" : `Ideas guardadas con ${mascot?.name || "Syncro"}`}
+            >
+              {view === "ideas" ? <IconArrowLeft size={16} /> : <IconBookmark size={16} />}
+            </button>
+          )}
           <Link href="/dashboard/soporte" onClick={() => setOpen(false)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Abrir el chat completo" title="Abrir el chat completo"><IconArrowsMaximize size={16} /></Link>
           <button type="button" onClick={() => setOpen(false)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Cerrar"><IconX size={16} /></button>
         </div>
 
+        {view === "ideas" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto bg-muted/20 px-3 py-3">
+            <p className="mb-3 px-1 text-sm font-semibold">Ideas guardadas</p>
+            {ideas === null ? (
+              <div className="flex justify-center py-16 text-muted-foreground"><IconLoader2 className="animate-spin" /></div>
+            ) : !ideas.length ? (
+              <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+                <GlossyBulb size={40} lit={false} />
+                <p className="text-sm text-muted-foreground">Aún no guardas ideas. Cuando {mascot?.name || "Syncro"} piense algo útil, toca el marcador en su nube para guardarlo aquí.</p>
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {ideas.map((t) => {
+                  const open = expanded === t.id;
+                  const msgs = t.messages ?? [];
+                  return (
+                    <li key={t.id} className="rounded-2xl border bg-background p-3 text-sm shadow-sm">
+                      <button type="button" onClick={() => setExpanded(open ? null : t.id)} className="w-full text-left">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+                          {t.topic === "user" ? "Tu pensamiento" : `${mascot?.name || "Syncro"} pensó`} · {new Date(t.updatedAt ?? t.createdAt).toLocaleDateString("es-VE", { day: "numeric", month: "short" })}
+                        </p>
+                        <p className={cn("mt-1 leading-relaxed", !open && "line-clamp-2")}>{t.text}</p>
+                      </button>
+                      {open && (
+                        <div className="mt-2 space-y-1.5 border-t pt-2">
+                          {msgs.slice(t.topic === "user" ? 1 : 1).map((m, i) => (
+                            <p key={i} className={cn("rounded-xl px-2.5 py-1.5 text-[13px] leading-relaxed", m.role === "user" ? "ml-6 bg-primary/10" : "mr-6 bg-muted/60")}>{m.content}</p>
+                          ))}
+                          <div className="flex justify-end gap-2 pt-1">
+                            <button type="button" onClick={() => forget(t.id)} className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted"><IconBookmarkOff size={13} /> Quitar</button>
+                            <button type="button" onClick={() => continueIdea(t)} className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">Seguir pensando</button>
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        ) : (
         <div className="min-h-0 flex-1 overflow-y-auto bg-muted/20 px-3 py-3">
           {messages === null ? (
             <div className="flex justify-center py-16 text-muted-foreground"><IconLoader2 className="animate-spin" /></div>
@@ -405,12 +490,25 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
           )}
           <div ref={endRef} />
         </div>
+        )}
 
+        {view === "chat" && (
         <div className="flex items-end gap-2 border-t p-2.5">
           <label className={cn("flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground", uploading && "pointer-events-none opacity-50")} aria-label="Adjuntar foto o video" title="Adjuntar foto o video">
             {uploading ? <IconLoader2 size={18} className="animate-spin" /> : <IconPaperclip size={18} />}
             <input type="file" className="sr-only" accept="image/*,video/*" onChange={onFile} />
           </label>
+          {mascotOn && (
+            <button
+              type="button"
+              onClick={shareThought}
+              aria-label={`Compartirle un pensamiento a ${mascot?.name || "Syncro"}`}
+              title={`¿No es para soporte? Compártele un pensamiento a ${mascot?.name || "Syncro"}`}
+              className="-my-1 flex h-11 w-9 shrink-0 items-center justify-center rounded-md outline-none transition hover:scale-110 focus-visible:ring-2 focus-visible:ring-amber-400"
+            >
+              <GlossyBulb size={30} />
+            </button>
+          )}
           <textarea
             ref={inputRef}
             rows={1}
@@ -427,6 +525,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
             <IconSend size={16} />
           </button>
         </div>
+        )}
       </div>
     </>
   );

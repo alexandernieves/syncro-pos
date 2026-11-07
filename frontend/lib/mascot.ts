@@ -46,7 +46,10 @@ export type MascotThought = {
   needsReply: boolean;
   emotion: string;
   status: string;
+  saved?: boolean;
+  messages?: { role: "user" | "assistant"; content: string; at?: string }[];
   createdAt: string;
+  updatedAt?: string;
 };
 
 /* One copy of the settings for the whole app: the pet, the chat button and the settings page. */

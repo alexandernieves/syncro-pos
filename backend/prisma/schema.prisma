@@ -2226,6 +2226,8 @@ model MascotThought {
   status     String   @default("NEW")
   /// [{ role: "user" | "assistant", content, at }]
   messages   Json     @default("[]")
+  /// Kept in the user's idea history (Chat → Ideas guardadas)
+  saved      Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
