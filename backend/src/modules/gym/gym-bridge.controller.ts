@@ -1,4 +1,4 @@
-import { Body, CanActivate, Controller, ExecutionContext, Get, Injectable, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, CanActivate, Controller, ExecutionContext, Get, Injectable, Param, Post, Request, StreamableFile, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertModule } from '../business-modules/module-access';
 import { SkipThrottle } from '@nestjs/throttler';
@@ -31,6 +31,13 @@ export class GymBridgeController {
   @Get('roster')
   roster(@Request() req: any) {
     return this.devices.roster(req.device);
+  }
+
+  /** The member's photo as a JPEG the reader accepts. */
+  @Get('photo/:memberId')
+  async photo(@Param('memberId') memberId: string, @Request() req: any) {
+    const jpeg = await this.devices.facePhoto(req.device, memberId);
+    return new StreamableFile(jpeg, { type: 'image/jpeg', length: jpeg.length });
   }
 
   @Post('roster/result')

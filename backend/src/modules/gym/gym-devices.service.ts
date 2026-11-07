@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException, UnauthorizedExcepti
 import { gymBranch, inBranch, runInBranch } from './gym-branch';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { GymRemindersService } from './gym-reminders.service';
 import { GymService, membershipOwed, membershipState, zonedParts } from './gym.service';
@@ -199,6 +201,45 @@ export class GymDevicesService {
       items.push({ memberId: m.id, employeeNo: m.deviceUserId, name, enabled, reason, ...window, photoUrl: m.photoUrl, hash });
     }
     return { mode: device.mode, timeZone: tz, generatedAt: now.toISOString(), members: items };
+  }
+
+  /**
+   * A member's photo the way the reader takes it: JPEG under 200 KB. Uploads are stored as WebP,
+   * which the bridge can't convert without native libraries (the desktop app has none).
+   * Only photos stored by Syncro (its uploads, the bucket or the CDN) are read.
+   */
+  async facePhoto(device: Device, memberId: string): Promise<Buffer> {
+    const m = await this.prisma.gymMember.findFirst({ where: { id: memberId, businessId: device.businessId }, select: { photoUrl: true } });
+    if (!m?.photoUrl) throw new NotFoundException('El socio no tiene foto');
+    let url: URL;
+    try { url = new URL(m.photoUrl); } catch { throw new BadRequestException('La foto no tiene una dirección válida'); }
+
+    let original: Buffer;
+    const api = process.env.API_URL ? new URL(process.env.API_URL) : null;
+    const uploads = path.join(process.cwd(), 'uploads');
+    if (url.pathname.startsWith('/uploads/') && (!api || url.host === api.host)) {
+      const file = path.normalize(path.join(uploads, decodeURIComponent(url.pathname.slice('/uploads/'.length))));
+      if (!file.startsWith(uploads + path.sep) || !fs.existsSync(file)) throw new NotFoundException('No se encontró la foto');
+      original = fs.readFileSync(file);
+    } else {
+      const allowed = new Set<string>();
+      if (process.env.CDN_URL) try { allowed.add(new URL(process.env.CDN_URL).host); } catch { /* ignore */ }
+      if (process.env.AWS_BUCKET_NAME) {
+        allowed.add(`${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com`);
+        allowed.add(`${process.env.AWS_BUCKET_NAME}.s3.amazonaws.com`);
+      }
+      if (url.protocol !== 'https:' || !allowed.has(url.host)) throw new BadRequestException('La foto está guardada fuera de Syncro');
+      const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+      if (!res.ok) throw new NotFoundException('No se pudo descargar la foto');
+      original = Buffer.from(await res.arrayBuffer());
+    }
+    if (original.length > 15 * 1024 * 1024) throw new BadRequestException('La foto es demasiado grande');
+
+    const sharp = require('sharp');
+    let jpeg: Buffer = await sharp(original).rotate().resize({ width: 640, height: 640, fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).jpeg({ quality: 82 }).toBuffer();
+    if (jpeg.length > 200_000) jpeg = await sharp(jpeg).jpeg({ quality: 65 }).toBuffer();
+    if (jpeg.length > 200_000) jpeg = await sharp(jpeg).resize({ width: 480 }).jpeg({ quality: 60 }).toBuffer();
+    return jpeg;
   }
 
   /** What the bridge managed to load: marks each member's face as synced or with its error. */

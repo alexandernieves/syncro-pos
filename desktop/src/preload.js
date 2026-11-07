@@ -22,6 +22,19 @@ contextBridge.exposeInMainWorld('electron', {
   // Remote assistance: real mouse and keyboard events, only inside this window
   remoteInput: (event) => ipcRenderer.send('remote-input', event),
   checkUpdates: () => ipcRenderer.send('check-updates'),
+  // Face reader bridge running in this app (Gimnasio → Control de acceso)
+  gymBridge: {
+    get: () => ipcRenderer.invoke('gym-bridge:get'),
+    test: (input) => ipcRenderer.invoke('gym-bridge:test', input),
+    save: (input) => ipcRenderer.invoke('gym-bridge:save', input),
+    stop: () => ipcRenderer.invoke('gym-bridge:stop'),
+    resume: () => ipcRenderer.invoke('gym-bridge:resume'),
+    onStatus: (callback) => {
+      const listener = (_event, value) => callback(value);
+      ipcRenderer.on('gym-bridge:status', listener);
+      return () => ipcRenderer.removeListener('gym-bridge:status', listener);
+    },
+  },
   // Only for the server setup page
   saveServer: (url) => ipcRenderer.invoke('save-server', url),
   retry: () => ipcRenderer.invoke('retry'),

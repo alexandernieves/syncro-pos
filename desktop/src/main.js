@@ -1,10 +1,11 @@
-const { app, BrowserWindow, Menu, ipcMain, shell, dialog, net, desktopCapturer, session } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog, net, desktopCapturer, session, Tray, nativeImage } = require('electron');
 const { spawn } = require('child_process');
 const crypto = require('crypto');
 const { autoUpdater } = require('electron-updater');
 const fs = require('fs');
 const path = require('path');
 const pkg = require('../package.json');
+const gymBridge = require('./gym-bridge-host');
 
 /**
  * The desktop app is a window on the business's Syncro server: screens update with the web,
@@ -93,6 +94,17 @@ function createWindow() {
   });
   win.maximize();
   win.once('ready-to-show', () => win.show());
+
+  // With the face reader bridge on, closing the window keeps the app (and the bridge) running
+  win.on('close', (e) => {
+    if (quitting || !gymBridge.running()) return;
+    e.preventDefault();
+    win.hide();
+    if (!hiddenHintShown && process.platform === 'win32' && tray) {
+      hiddenHintShown = true;
+      tray.displayBalloon({ title: 'Syncro sigue abierto', content: 'El lector facial sigue conectado. Para volver a Syncro, haz clic en este ícono junto al reloj.', iconType: 'info' });
+    }
+  });
 
   // No connection or the server is down: a page to retry or change the server
   win.webContents.on('did-fail-load', (_e, code, _desc, url, isMainFrame) => {
@@ -429,6 +441,54 @@ async function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+// ── Face reader bridge: tray icon while it runs ─────────────────────────────
+
+let tray = null;
+let quitting = false;
+let hiddenHintShown = false;
+
+function showWindow() {
+  if (!win || win.isDestroyed()) return createWindow();
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+async function confirmQuit() {
+  const { response } = await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['Salir', 'Cancelar'],
+    defaultId: 1,
+    cancelId: 1,
+    message: 'Si sales, el lector facial deja de conectarse con Syncro',
+    detail: 'Los socios podrán seguir entrando con las fechas que ya tiene el lector, pero las entradas, renovaciones y bloqueos no se sincronizan hasta que vuelvas a abrir Syncro.',
+  });
+  if (response === 0) {
+    quitting = true;
+    app.quit();
+  }
+}
+
+function updateTray() {
+  if (!gymBridge.running()) {
+    tray?.destroy();
+    tray = null;
+    return;
+  }
+  if (!tray) {
+    const icon = nativeImage.createFromPath(path.join(__dirname, '../build/icon.png')).resize({ width: 18, height: 18 });
+    tray = new Tray(icon);
+    tray.setToolTip('Syncro POS · lector facial');
+    tray.on('click', showWindow);
+  }
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: gymBridge.label(), enabled: false },
+    { type: 'separator' },
+    { label: 'Abrir Syncro', click: showWindow },
+    { label: 'Salir de Syncro', click: confirmQuit },
+  ]));
+}
+
 // ── Start ───────────────────────────────────────────────────────────────────
 
 if (!app.requestSingleInstanceLock()) {
@@ -436,21 +496,25 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', () => {
     if (!win) return;
-    if (win.isMinimized()) win.restore();
-    win.focus();
+    showWindow();
   });
 
   // Windows only shows an app's notifications when it knows the app's id
   if (process.platform === 'win32') app.setAppUserModelId('com.syncro.pos');
 
+  app.on('before-quit', () => { quitting = true; });
+
   app.whenReady().then(() => {
     allowOwnWindowCapture();
     createWindow();
+    gymBridge.onChange(updateTray);
+    gymBridge.init(isServer);
     buildMenu();
     checkUpdates(false);
     setInterval(() => checkUpdates(false), UPDATE_EVERY_MS);
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      else showWindow();
     });
   });
 

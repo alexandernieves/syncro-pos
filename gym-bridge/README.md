@@ -2,6 +2,10 @@
 
 Conecta el lector facial **Hikvision DS-K1T341CMFW** del gimnasio con Syncro. Corre en un servidor de la red local (Ubuntu) y solo hace conexiones de salida: hacia el lector (en la red local) y hacia Syncro (por internet). No hay que abrir puertos ni tener IP pública.
 
+> **Lo más fácil: la app de escritorio.** En la computadora de recepción, abre Syncro en la app de escritorio (1.2.0 o superior), entra a Gimnasio → Control de acceso y toca **Usar esta computadora**. Pones la IP, el usuario y la clave del lector y listo: el puente corre dentro de la app, arranca solo al encender la computadora, no deja que se suspenda y sigue funcionando con la ventana cerrada (queda junto al reloj). No hace falta servidor, terminal ni `caffeinate`.
+>
+> Lo que sigue es para correrlo como servicio en un servidor Linux.
+
 ## Qué hace
 
 - **Carga a los socios en el lector**: nombre, foto y la fecha hasta la que pueden entrar. Syncro calcula esa fecha con la membresía, los días de gracia, los congelamientos, las firmas obligatorias y las deudas (si el gimnasio bloquea por deuda). Al renovar, congelar o bloquear a alguien, el lector se actualiza en menos de un minuto.

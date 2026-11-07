@@ -19,6 +19,7 @@ import { PosTable } from "@/components/pos-table";
 import { StatCard, StatGrid } from "@/components/stat-card";
 import { GymPage, GymPageHeader, PersonCell } from "@/components/gym/gym-ui";
 import { ConfirmDialog } from "@/components/gym/confirm-dialog";
+import { DesktopBridgeCard, bridgeApi } from "@/components/gym/desktop-bridge";
 
 type Device = {
   id: string;
@@ -54,7 +55,7 @@ function KeyDialog({ data, onClose }: { data: { name: string; key: string } | nu
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Conecta {data?.name}</DialogTitle>
-          <DialogDescription>Esta clave se muestra una sola vez. Guárdala en el archivo de configuración del puente en tu servidor.</DialogDescription>
+          <DialogDescription>Esta clave se muestra una sola vez y sirve para el puente en un servidor. Si vas a usar la app de escritorio en la computadora de recepción, no la necesitas: abre esta pantalla allí y toca «Usar esta computadora».</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 text-sm">
           <div className="space-y-1.5">
@@ -79,7 +80,7 @@ function KeyDialog({ data, onClose }: { data: { name: string; key: string } | nu
   );
 }
 
-function DeviceDialog({ device, open, onClose, onSaved }: { device: Device | null; open: boolean; onClose: () => void; onSaved: (key?: { name: string; key: string }) => void }) {
+function DeviceDialog({ device, open, onClose, onSaved }: { device: Device | null; open: boolean; onClose: () => void; onSaved: (key?: { id: string; name: string; key: string }) => void }) {
   const [f, setF] = useState({ name: "", location: "", mode: "VALIDITY" as Device["mode"], doorNo: "1", isActive: true });
   const [saving, setSaving] = useState(false);
   useEffect(() => { if (open) setF(device ? { name: device.name, location: device.location ?? "", mode: device.mode, doorNo: String(device.doorNo), isActive: device.isActive } : { name: "Entrada principal", location: "", mode: "VALIDITY", doorNo: "1", isActive: true }); }, [open, device]);
@@ -92,7 +93,7 @@ function DeviceDialog({ device, open, onClose, onSaved }: { device: Device | nul
         onSaved();
       } else {
         const r = await gymApi<{ device: Device; key: string }>("/devices", { method: "POST", json: { ...f, doorNo: Number(f.doorNo) } });
-        onSaved({ name: r.device.name, key: r.key });
+        onSaved({ id: r.device.id, name: r.device.name, key: r.key });
       }
       onClose();
     } catch (e) {
@@ -106,7 +107,7 @@ function DeviceDialog({ device, open, onClose, onSaved }: { device: Device | nul
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{device ? "Editar lector" : "Agregar lector facial"}</DialogTitle>
-          <DialogDescription>Hikvision DS-K1T341CMFW conectado por el puente en tu servidor local.</DialogDescription>
+          <DialogDescription>Hikvision DS-K1T341CMFW, conectado por la app de escritorio en la computadora de recepción (o por el puente en un servidor local).</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5"><Label>Nombre</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
@@ -126,7 +127,7 @@ function DeviceDialog({ device, open, onClose, onSaved }: { device: Device | nul
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={save} disabled={saving || !f.name.trim()} className="gap-2">{saving && <IconLoader2 size={16} className="animate-spin" />} {device ? "Guardar" : "Crear y ver la clave"}</Button>
+          <Button onClick={save} disabled={saving || !f.name.trim()} className="gap-2">{saving && <IconLoader2 size={16} className="animate-spin" />} {device ? "Guardar" : bridgeApi() ? "Crear y conectar" : "Crear y ver la clave"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -141,6 +142,7 @@ export default function GymAccessPage() {
   const [tab, setTab] = useState<"events" | "faces">("events");
   const [dialog, setDialog] = useState<{ open: boolean; device: Device | null }>({ open: false, device: null });
   const [keyInfo, setKeyInfo] = useState<{ name: string; key: string } | null>(null);
+  const [bridgeSetup, setBridgeSetup] = useState<{ deviceId: string; key: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -221,12 +223,21 @@ export default function GymAccessPage() {
         <StatCard label="Lecturas de rostro" value={events?.filter((e) => new Date(e.occurredAt).toDateString() === new Date().toDateString()).length ?? "—"} icon={<IconDoor size={20} />} title="Hoy, incluidos los no reconocidos" hint="Las entradas aparecen en recepción" />
       </StatGrid>
 
+      {data && (
+        <DesktopBridgeCard
+          readers={devices.filter((d) => d.isActive).map((d) => ({ id: d.id, name: d.name, doorNo: d.doorNo, online: d.online }))}
+          setupFor={bridgeSetup}
+          onSetupClose={() => setBridgeSetup(null)}
+          onChanged={load}
+        />
+      )}
+
       {data && !devices.length && (
         <Card className="gap-0 py-0">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"><IconFaceId size={24} /></span>
             <p className="font-semibold">Conecta tu lector facial</p>
-            <p className="max-w-md text-sm text-muted-foreground">El lector Hikvision se conecta a Syncro por un pequeño programa (el puente) en un servidor de tu red local. No necesitas abrir puertos ni IP pública.</p>
+            <p className="max-w-md text-sm text-muted-foreground">El lector Hikvision se conecta a Syncro a través de la computadora de recepción, con la app de escritorio de Syncro. No necesitas servidor, abrir puertos ni IP pública.</p>
             <Button className="mt-2 gap-2" onClick={() => setDialog({ open: true, device: null })}><IconPlus size={16} /> Agregar lector</Button>
           </CardContent>
         </Card>
@@ -286,7 +297,7 @@ export default function GymAccessPage() {
         </>
       )}
 
-      <DeviceDialog device={dialog.device} open={dialog.open} onClose={() => setDialog({ open: false, device: null })} onSaved={(k) => { load(); if (k) setKeyInfo(k); }} />
+      <DeviceDialog device={dialog.device} open={dialog.open} onClose={() => setDialog({ open: false, device: null })} onSaved={(k) => { load(); if (k) { if (bridgeApi()) setBridgeSetup({ deviceId: k.id, key: k.key }); else setKeyInfo(k); } }} />
       <KeyDialog data={keyInfo} onClose={() => setKeyInfo(null)} />
       <ConfirmDialog
         open={!!rotating}
