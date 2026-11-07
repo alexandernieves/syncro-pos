@@ -101,36 +101,37 @@ services:
     restart: unless-stopped
     # Host network: it needs the UDP relay ports below as they are, without Docker's NAT
     network_mode: host
-    command:
-      - --listening-port=${TURN_PORT:-3478}
-      - --realm=${TURN_HOST:-ebanocontrol.total-net.net}
-      - --use-auth-secret
-      - --static-auth-secret=${TURN_SECRET:-}
+    environment:
+      TURN_SECRET: ${TURN_SECRET:-}
+      TURN_HOST: ${TURN_HOST:-ebanocontrol.total-net.net}
+      TURN_PORT: ${TURN_PORT:-3478}
       # Public IP, or "public/private" when the server is behind the router's NAT
-      - --external-ip=${TURN_EXTERNAL_IP:-}
-      - --min-port=${TURN_MIN_PORT:-49160}
-      - --max-port=${TURN_MAX_PORT:-49200}
-      - --fingerprint
-      - --no-cli
-      - --no-tls
-      - --no-dtls
-      - --no-multicast-peers
-      - --no-software-attribute
-      - --stale-nonce=600
-      - --user-quota=12
-      - --total-quota=240
-      # Never relay into the server's own network or the local machine
-      - --denied-peer-ip=0.0.0.0-0.255.255.255
-      - --denied-peer-ip=10.0.0.0-10.255.255.255
-      - --denied-peer-ip=100.64.0.0-100.127.255.255
-      - --denied-peer-ip=127.0.0.0-127.255.255.255
-      - --denied-peer-ip=169.254.0.0-169.254.255.255
-      - --denied-peer-ip=172.16.0.0-172.31.255.255
-      - --denied-peer-ip=192.168.0.0-192.168.255.255
-      # …except its own relay address when it sits behind NAT (two relayed computers meet there)
-      - --allowed-peer-ip=${TURN_PRIVATE_IP:-192.0.2.1}
-      - --log-file=stdout
-      - --simple-log
+      TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP:-}
+      # Only behind NAT: its own relay address, where two relayed computers meet
+      TURN_PRIVATE_IP: ${TURN_PRIVATE_IP:-}
+      TURN_MIN_PORT: ${TURN_MIN_PORT:-49160}
+      TURN_MAX_PORT: ${TURN_MAX_PORT:-49200}
+    # A small script so optional settings are only passed when they are set
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        [ -n "$$TURN_SECRET" ] || { echo "Falta TURN_SECRET en .env"; exit 1; }
+        set -- --listening-port="$$TURN_PORT" --realm="$$TURN_HOST" \
+          --use-auth-secret --static-auth-secret="$$TURN_SECRET" \
+          --min-port="$$TURN_MIN_PORT" --max-port="$$TURN_MAX_PORT" \
+          --fingerprint --no-cli --no-tls --no-multicast-peers --no-software-attribute \
+          --user-quota=12 --total-quota=240 \
+          --denied-peer-ip=0.0.0.0-0.255.255.255 \
+          --denied-peer-ip=10.0.0.0-10.255.255.255 \
+          --denied-peer-ip=100.64.0.0-100.127.255.255 \
+          --denied-peer-ip=127.0.0.0-127.255.255.255 \
+          --denied-peer-ip=169.254.0.0-169.254.255.255 \
+          --denied-peer-ip=172.16.0.0-172.31.255.255 \
+          --denied-peer-ip=192.168.0.0-192.168.255.255 \
+          --log-file=stdout --simple-log
+        [ -n "$$TURN_EXTERNAL_IP" ] && set -- "$$@" --external-ip="$$TURN_EXTERNAL_IP"
+        [ -n "$$TURN_PRIVATE_IP" ] && set -- "$$@" --allowed-peer-ip="$$TURN_PRIVATE_IP"
+        exec turnserver "$$@"
 
   frontend:
     build:
