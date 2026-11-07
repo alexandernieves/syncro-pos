@@ -1,3 +1,4 @@
+import { apiFetch } from "@/lib/api";
 /** What travels between the Syncro team's viewer and the business's screen. */
 export type RemoteInput =
   | { kind: "move"; x: number; y: number }
@@ -7,6 +8,43 @@ export type RemoteInput =
 
 /** Public STUN servers to find a direct path between both computers. */
 export const ICE_SERVERS: RTCIceServer[] = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+
+/**
+ * STUN plus Syncro's TURN server (with credentials that expire), from the backend. When the two
+ * networks can't connect directly, TURN relays the encrypted video. Falls back to STUN only.
+ */
+let iceCache: { at: number; servers: RTCIceServer[] } | null = null;
+let iceLoading: Promise<RTCIceServer[]> | null = null;
+export function getIceServers(): Promise<RTCIceServer[]> {
+  if (iceCache && Date.now() - iceCache.at < 60 * 60 * 1000) return Promise.resolve(iceCache.servers);
+  if (iceLoading) return iceLoading;
+  iceLoading = apiFetch("/chat/remote/ice")
+    .then(async (r) => (r.ok ? ((await r.json()).iceServers as RTCIceServer[]) : ICE_SERVERS))
+    .catch(() => ICE_SERVERS)
+    .then((servers) => {
+      iceCache = { at: Date.now(), servers };
+      iceLoading = null;
+      return servers;
+    });
+  return iceLoading;
+}
+
+/** How the two computers ended up connected: directly, or relayed by Syncro's server. */
+export async function connectionRoute(pc: RTCPeerConnection): Promise<"direct" | "relay" | null> {
+  try {
+    const stats = await pc.getStats();
+    let pairId: string | undefined;
+    stats.forEach((s) => { if (s.type === "transport" && s.selectedCandidatePairId) pairId = s.selectedCandidatePairId; });
+    let pair: { localCandidateId?: string; remoteCandidateId?: string } | undefined;
+    stats.forEach((s) => { if ((pairId && s.id === pairId) || (!pairId && s.type === "candidate-pair" && s.nominated && s.state === "succeeded")) pair = s; });
+    if (!pair) return null;
+    const local = pair.localCandidateId ? stats.get(pair.localCandidateId) : undefined;
+    const remote = pair.remoteCandidateId ? stats.get(pair.remoteCandidateId) : undefined;
+    return local?.candidateType === "relay" || remote?.candidateType === "relay" ? "relay" : "direct";
+  } catch {
+    return null;
+  }
+}
 
 /** Up to 30 frames per second and enough bitrate for sharp text. */
 export async function tuneSender(sender: RTCRtpSender) {

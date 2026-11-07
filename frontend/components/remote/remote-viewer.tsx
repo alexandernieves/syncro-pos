@@ -8,7 +8,7 @@ import { connectSocket } from "@/lib/socket";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SyncroAvatar } from "@/components/syncro-avatar";
-import { ICE_SERVERS, type RemoteInput, lowLatency, openMic, playVoice, socketSession } from "@/components/remote/remote-protocol";
+import { type RemoteInput, connectionRoute, getIceServers, lowLatency, openMic, playVoice, socketSession } from "@/components/remote/remote-protocol";
 
 type State = "idle" | "waiting" | "connecting" | "live";
 
@@ -24,6 +24,9 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
   const voiceRef = useRef<HTMLAudioElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  // The connection is created once the ICE servers arrive; signals wait for it
+  const pcWait = useRef<Promise<RTCPeerConnection> | null>(null);
+  const [route, setRoute] = useState<"direct" | "relay" | null>(null);
   const sessionRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
@@ -35,6 +38,7 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
   const cleanup = useCallback(() => {
     pcRef.current?.close();
     pcRef.current = null;
+    pcWait.current = null;
     channels.current = {};
     micRef.current?.getTracks().forEach((t) => t.stop());
     micRef.current = null;
@@ -59,6 +63,7 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
     const socket = connectSocket({ auth: { token } });
     socketRef.current = socket;
     socket.on("connect", () => {
+      void getIceServers();
       socket.emit("remote:request", { businessId }, (r: { sessionId?: string; error?: string }) => {
         if (!r?.sessionId) { toast.error(r?.error || "No se pudo pedir la conexión"); cleanup(); return; }
         sessionRef.current = r.sessionId;
@@ -70,11 +75,16 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
       setControl(c);
       toast(c ? `${businessName} te dio el control` : `${businessName} te quitó el control. Puedes seguir señalando.`);
     });
-    socket.on("remote:started", ({ control: c }: { control: boolean }) => {
+    socket.on("remote:started", async ({ control: c }: { control: boolean }) => {
       setControl(c);
       setState("connecting");
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      setRoute(null);
+      let ready!: (pc: RTCPeerConnection) => void;
+      pcWait.current = new Promise((r) => { ready = r; });
+      const iceServers = await getIceServers();
+      const pc = new RTCPeerConnection({ iceServers });
       pcRef.current = pc;
+      ready(pc);
       pc.ondatachannel = (e) => {
         if (e.channel.label === "pointer" || e.channel.label === "input") channels.current[e.channel.label] = e.channel;
       };
@@ -94,10 +104,13 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
         setTimeout(() => surfaceRef.current?.focus(), 50);
       };
       pc.onicecandidate = (e) => { if (e.candidate && sessionRef.current) socket.emit("remote:signal", { sessionId: sessionRef.current, data: { type: "candidate", candidate: e.candidate.toJSON() } }); };
-      pc.onconnectionstatechange = () => { if (pc.connectionState === "failed") toast.error("No se pudo establecer la conexión de video. Puede ser la red del negocio."); };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "failed") toast.error("No se pudo establecer la conexión de video. Puede ser la red del negocio.");
+        if (pc.connectionState === "connected") void connectionRoute(pc).then(setRoute);
+      };
     });
     socket.on("remote:signal", async ({ data }: { data: { type: string; sdp?: string; candidate?: RTCIceCandidateInit } }) => {
-      const pc = pcRef.current;
+      const pc = pcRef.current ?? (await pcWait.current);
       if (!pc || !sessionRef.current) return;
       try {
         if (data.type === "offer" && data.sdp) {
@@ -198,6 +211,11 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
         <span className={cn("rounded-full px-2.5 py-0.5 text-xs", state === "live" ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-white/70")}>
           {state === "waiting" ? "Esperando que acepte…" : state === "connecting" ? "Conectando…" : "En vivo"}
         </span>
+        {state === "live" && route && (
+          <span title={route === "relay" ? "Las dos redes no se ven directamente: el video pasa cifrado por el servidor de Syncro" : "Conexión directa entre las dos computadoras"} className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs text-white/70">
+            {route === "relay" ? "Por el servidor de Syncro" : "Directa"}
+          </span>
+        )}
         {state === "live" && (
           <span className={cn("flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs", control ? "bg-primary/25 text-orange-200" : "bg-white/10 text-white/70")}>
             <IconPointer size={13} /> {control ? "Tienes el control: clic, rueda y teclado" : "Solo puedes señalar"}

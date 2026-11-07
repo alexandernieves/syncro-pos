@@ -46,6 +46,10 @@ services:
       EVOLUTION_API_URL: http://evolution:8080
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:?Falta EVOLUTION_API_KEY en .env}
       BACKEND_WEBHOOK_URL: http://ebanocontrol-backend:9000/whatsapp/webhook
+      # Remote assistance between different networks: the TURN server below (empty = STUN only)
+      TURN_HOST: ${TURN_HOST:-}
+      TURN_PORT: ${TURN_PORT:-3478}
+      TURN_SECRET: ${TURN_SECRET:-}
     volumes:
       - uploads:/app/uploads
     depends_on:
@@ -86,6 +90,47 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  # TURN for remote assistance: when the business's network and Syncro's can't see each other
+  # (mobile data, strict routers), the video goes through here. It stays encrypted end to end; this
+  # server only forwards it. Credentials are temporary, signed by the backend with TURN_SECRET.
+  # Its own profile, so the rest starts without it:  docker compose --profile turn up -d coturn
+  coturn:
+    image: coturn/coturn:4.18.0
+    profiles: [turn]
+    restart: unless-stopped
+    # Host network: it needs the UDP relay ports below as they are, without Docker's NAT
+    network_mode: host
+    command:
+      - --listening-port=${TURN_PORT:-3478}
+      - --realm=${TURN_HOST:-ebanocontrol.total-net.net}
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SECRET:-}
+      # Public IP, or "public/private" when the server is behind the router's NAT
+      - --external-ip=${TURN_EXTERNAL_IP:-}
+      - --min-port=${TURN_MIN_PORT:-49160}
+      - --max-port=${TURN_MAX_PORT:-49200}
+      - --fingerprint
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+      - --no-multicast-peers
+      - --no-software-attribute
+      - --stale-nonce=600
+      - --user-quota=12
+      - --total-quota=240
+      # Never relay into the server's own network or the local machine
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=100.64.0.0-100.127.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+      # …except its own relay address when it sits behind NAT (two relayed computers meet there)
+      - --allowed-peer-ip=${TURN_PRIVATE_IP:-192.0.2.1}
+      - --log-file=stdout
+      - --simple-log
 
   frontend:
     build:

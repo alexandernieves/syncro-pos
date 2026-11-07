@@ -146,6 +146,47 @@ Después, en el panel: **Chat de WhatsApp → Vincular WhatsApp Web**, y escanea
 
 ---
 
+## 2c. Asistencia remota entre redes distintas (TURN)
+
+Sin esto, la asistencia en vivo funciona cuando las dos computadoras logran verse (casi siempre en redes de casa u oficina). Con datos móviles o routers estrictos no se conectan; el servidor TURN reenvía el video (que sigue cifrado de punta a punta; el servidor no puede verlo).
+
+1. Mira la IP pública y la privada del servidor:
+
+```bash
+curl -4 -s ifconfig.me; echo      # IP pública con la que sale el servidor
+hostname -I                        # IP(s) privadas del servidor
+sudo ss -lunpt | grep -E ':3478\b' || echo "3478 libre"
+```
+
+2. Agrega los datos a `.env` (junto a `docker-compose.yml`):
+
+```bash
+cd ~/ebanocontrol
+echo "TURN_SECRET=$(openssl rand -hex 32)" >> .env
+echo "TURN_HOST=ebanocontrol.total-net.net" >> .env
+# Si la IP pública del paso 1 aparece en hostname -I (el servidor la tiene directamente):
+echo "TURN_EXTERNAL_IP=201.221.112.113" >> .env
+# Si NO aparece (el servidor está detrás del router), en lugar de la línea anterior:
+#   echo "TURN_EXTERNAL_IP=201.221.112.113/IP-PRIVADA" >> .env
+#   echo "TURN_PRIVATE_IP=IP-PRIVADA" >> .env
+```
+
+3. Abre los puertos en el firewall del servidor (y, si está detrás de un router, reenvíalos a la IP privada del servidor): **3478 UDP y TCP** y **49160–49200 UDP**.
+
+```bash
+sudo ufw allow 3478/udp && sudo ufw allow 3478/tcp && sudo ufw allow 49160:49200/udp
+```
+
+4. Levanta el TURN y reinicia el backend para que entregue las credenciales:
+
+```bash
+docker compose --profile turn up -d coturn
+docker compose up -d backend
+docker compose logs --tail 20 coturn
+```
+
+5. Prueba: desde Syncro central inicia una asistencia con una computadora conectada a los datos de un celular. Arriba del video aparece **«Por el servidor de Syncro»** cuando pasa por el TURN, o **«Directa»** cuando no hizo falta.
+
 ## 3. Actualizar
 
 ```bash

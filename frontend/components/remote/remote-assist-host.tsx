@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SyncroAvatar } from "@/components/syncro-avatar";
-import { ICE_SERVERS, type RemoteInput, openMic, playVoice, preferFastCodecs, socketSession, tuneSender } from "@/components/remote/remote-protocol";
+import { type RemoteInput, getIceServers, openMic, playVoice, preferFastCodecs, socketSession, tuneSender } from "@/components/remote/remote-protocol";
 
 type DesktopBridge = { isDesktop?: boolean; remoteInput?: (ev: Record<string, unknown>) => void };
 const desktop = () => (typeof window !== "undefined" ? ((window as unknown as { electron?: DesktopBridge }).electron ?? null) : null);
@@ -218,7 +218,7 @@ export function RemoteAssistHost() {
       return;
     }
     // Voice: the business's microphone, if it agreed to talk
-    const micStream = allowVoice ? await openMic() : null;
+    const [micStream, iceServers] = await Promise.all([allowVoice ? openMic() : Promise.resolve(null), getIceServers()]);
     if (allowVoice && !micStream) toast("No pudimos usar tu micrófono. Igual escucharás a Syncro.");
     const answer: { ok?: boolean; error?: string } = await new Promise((resolve) => socketRef.current?.emit("remote:respond", { sessionId: req.sessionId, accept: true, control: allowControl }, resolve));
     if (!answer?.ok) {
@@ -228,7 +228,7 @@ export function RemoteAssistHost() {
       return;
     }
     streamRef.current = stream;
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers });
     pcRef.current = pc;
     stream.getTracks().forEach((t) => {
       // Keep the frame rate up when the network tightens: it feels live, and the text stays legible
