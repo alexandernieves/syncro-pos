@@ -129,7 +129,12 @@ services:
           --denied-peer-ip=172.16.0.0-172.31.255.255 \
           --denied-peer-ip=192.168.0.0-192.168.255.255 \
           --log-file=stdout --simple-log
-        [ -n "$$TURN_EXTERNAL_IP" ] && set -- "$$@" --external-ip="$$TURN_EXTERNAL_IP"
+        # Relay only on the server's own address (not on Docker's internal networks):
+        # the IP itself, or the private one in "public/private"
+        if [ -n "$$TURN_EXTERNAL_IP" ]; then
+          ADDR=$$(echo "$$TURN_EXTERNAL_IP" | cut -d/ -f2)
+          set -- "$$@" --external-ip="$$TURN_EXTERNAL_IP" --listening-ip="$$ADDR" --relay-ip="$$ADDR"
+        fi
         [ -n "$$TURN_PRIVATE_IP" ] && set -- "$$@" --allowed-peer-ip="$$TURN_PRIVATE_IP"
         exec turnserver "$$@"
 
