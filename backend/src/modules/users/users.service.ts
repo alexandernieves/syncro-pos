@@ -83,6 +83,8 @@ export class UsersService {
     const data = { ...updateData };
     if (data.password) {
       data.password = await bcrypt.hash(data.password, 10);
+      // A new password ends every fingerprint sign-in of this person (they turn it on again)
+      await this.prisma.biometricCredential.deleteMany({ where: { userId: id } });
     }
     
     // Ensure businessId is not changed

@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import { API_URL } from "@/lib/constants"
 import { clearAuthSession } from "@/lib/auth-helpers";
 import { MascotSettingsPanel } from "@/components/mascot/mascot-settings";
+import { BiometricSettings } from "@/components/biometric-settings";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { 
@@ -2099,6 +2100,8 @@ export default function ConfiguracionPage() {
                 </div>
               </CardContent>
             </Card>
+
+            <BiometricSettings />
 
             <Card>
               <CardHeader>

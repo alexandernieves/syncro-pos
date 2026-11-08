@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const pkg = require('../package.json');
 const gymBridge = require('./gym-bridge-host');
+const biometric = require('./biometric');
 
 /**
  * The desktop app is a window on the business's Syncro server: screens update with the web,
@@ -509,6 +510,7 @@ if (!app.requestSingleInstanceLock()) {
     createWindow();
     gymBridge.onChange(updateTray);
     gymBridge.init(isServer);
+    biometric.init(isServer);
     buildMenu();
     checkUpdates(false);
     setInterval(() => checkUpdates(false), UPDATE_EVERY_MS);

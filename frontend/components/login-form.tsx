@@ -25,6 +25,8 @@ import { takeSuspendedMessage } from "@/components/suspended-session-guard"
 import { toast } from "sonner"
 import { Eye, EyeOff, Trash2, ArrowLeft, ChevronRight } from "lucide-react"
 import { adoptAccount } from "@/lib/auth-helpers"
+import { type BioSupport, biometricSupport, hasBiometric, signInWithBiometric } from "@/lib/biometric"
+import { FingerprintScan, type ScanState } from "@/components/fingerprint-scan"
 
 interface SavedProfile {
   email: string
@@ -151,6 +153,54 @@ export function LoginForm({
       })
     } catch {
       // Best-effort — don't block the UX flow
+    }
+  }
+
+  // ── Fingerprint for the selected saved profile ────────────────────────────
+  const [bio, setBio] = useState<{ support: BioSupport; on: boolean }>({ support: null, on: false })
+  const [bioScan, setBioScan] = useState<ScanState>("idle")
+  useEffect(() => {
+    if (viewMode !== "password" || !selectedProfile) return
+    let alive = true
+    setBioScan("idle")
+    Promise.all([biometricSupport(), hasBiometric(selectedProfile.email)]).then(([support, on]) => { if (alive) setBio({ support, on }) })
+    return () => { alive = false }
+  }, [viewMode, selectedProfile])
+
+  /** After any successful sign-in: wipe a previous account, keep the session, go in. */
+  const finishLogin = async (data: { access_token: string; user: any }, targetEmail: string, refreshProfile: boolean) => {
+    const token: string = data.access_token
+    await adoptAccount(data.user)
+    const standalone = window.matchMedia("(display-mode: standalone)").matches
+    if (standalone) {
+      sessionStorage.setItem("token", token)
+      sessionStorage.setItem("user", JSON.stringify(data.user))
+      document.cookie = `token=${token}; path=/; SameSite=Strict; Secure`
+    } else {
+      localStorage.setItem("token", token)
+      localStorage.setItem("user", JSON.stringify(data.user))
+      document.cookie = `token=${token}; path=/; max-age=28800; SameSite=Strict; Secure`
+    }
+    if (refreshProfile) handleLoginSuccess(data.user, targetEmail, token)
+    const p = data.user.permissions || []
+    const isPosOnly = p.includes("pos") && !p.some((perm: string) => perm !== "pos")
+    const targetPath = isPosOnly || data.user.role === "pos" ? "/pos" : standalone ? "/dashboard/soporte" : "/dashboard"
+    setTimeout(() => window.location.assign(targetPath), 500)
+  }
+
+  const bioLogin = async () => {
+    if (!selectedProfile) return
+    setBioScan("scanning")
+    try {
+      const data = await signInWithBiometric(selectedProfile.email)
+      setBioScan("done")
+      toast.success("¡Inicio de sesión exitoso!")
+      await finishLogin(data, selectedProfile.email, true)
+    } catch (e) {
+      setBioScan("error")
+      const msg = (e as Error).message
+      if (msg !== "cancelled") toast.error(msg)
+      setTimeout(() => setBioScan("idle"), 900)
     }
   }
 
@@ -320,6 +370,23 @@ export function LoginForm({
             )}
           </CardHeader>
           <CardContent className="pt-2">
+            {bio.on && bio.support && (
+              <div className="mb-5 flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={bioLogin}
+                  disabled={bioScan === "scanning" || bioScan === "done"}
+                  className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label={`Entrar con ${bio.support.label}`}
+                >
+                  <FingerprintScan state={bioScan} size={92} />
+                </button>
+                <p className="text-sm font-medium">{bioScan === "scanning" ? bio.support.hint : `Entrar con ${bio.support.label}`}</p>
+                <div className="mt-2 flex w-full items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" /> o con tu contraseña <span className="h-px flex-1 bg-border" />
+                </div>
+              </div>
+            )}
             {/* autocomplete=off on form is ignored by modern browsers — we use per-field tricks instead */}
             <form onSubmit={handleSubmit} autoComplete="off" noValidate>
               {/* Decoy field: browsers will fill this instead of the real field */}
@@ -353,7 +420,7 @@ export function LoginForm({
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      autoFocus
+                      autoFocus={!bio.on}
                       className="pr-10"
                       {...noFillProps}
                     />

@@ -21,7 +21,7 @@ const DEVICE_KEYS = new Set([
   "gym-leads-view",
   "theme",
 ]);
-const DEVICE_PREFIXES = ["syncro-finance-tab:"];
+const DEVICE_PREFIXES = ["syncro-finance-tab:", "syncro-bio:"];
 const SESSION_KEEP = new Set(["syncro_suspended_message"]);
 
 const keep = (key: string) => DEVICE_KEYS.has(key) || DEVICE_PREFIXES.some((p) => key.startsWith(p));

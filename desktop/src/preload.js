@@ -35,6 +35,15 @@ contextBridge.exposeInMainWorld('electron', {
       return () => ipcRenderer.removeListener('gym-bridge:status', listener);
     },
   },
+  // Sign in with Touch ID from a saved profile (macOS checks the fingerprint, Syncro never sees it)
+  biometric: {
+    info: () => ipcRenderer.invoke('bio:info'),
+    has: (email) => ipcRenderer.invoke('bio:has', email),
+    verify: (reason) => ipcRenderer.invoke('bio:verify', reason),
+    store: (input) => ipcRenderer.invoke('bio:store', input),
+    unlock: (input) => ipcRenderer.invoke('bio:unlock', input),
+    remove: (email) => ipcRenderer.invoke('bio:remove', email),
+  },
   // Only for the server setup page
   saveServer: (url) => ipcRenderer.invoke('save-server', url),
   retry: () => ipcRenderer.invoke('retry'),

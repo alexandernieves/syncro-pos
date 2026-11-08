@@ -36,6 +36,7 @@
     "@nestjs/throttler": "^6.3.0",
     "@nestjs/websockets": "^11.1.19",
     "@prisma/client": "^6.2.1",
+    "@simplewebauthn/server": "13.3.3",
     "bcrypt": "^6.0.0",
     "cache-manager": "^7.2.8",
     "cache-manager-redis-yet": "^5.1.5",

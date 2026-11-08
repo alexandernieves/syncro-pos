@@ -300,6 +300,7 @@ model User {
   messages          Message[]
   notifications     Notification[]      @relation("UserNotifications")
   pushSubscriptions PushSubscription[]
+  biometrics        BiometricCredential[]
   sales             Sale[]
   returns           SaleReturn[]
   shifts            Shift[]
@@ -2287,4 +2288,27 @@ model MascotThought {
   updatedAt  DateTime @updatedAt
 
   @@index([userId, createdAt])
+}
+
+/// A computer where someone signs in with their fingerprint (Touch ID) or Windows Hello.
+/// Fingerprints never leave the computer: Syncro only keeps a pass tied to it.
+model BiometricCredential {
+  id           String    @id @default(uuid())
+  userId       String
+  /// DEVICE_TOKEN (Syncro desktop app on Mac: Touch ID unlocks a secret kept in the keychain) | PASSKEY (WebAuthn: Touch ID in Chrome, Windows Hello)
+  kind         String
+  deviceName   String
+  platform     String?
+  /// DEVICE_TOKEN: sha256 of the secret kept on that computer
+  secretHash   String?
+  /// PASSKEY: the credential id, its public key (base64url), signature counter and transports
+  credentialId String?   @unique
+  publicKey    String?
+  counter      Int       @default(0)
+  transports   String[]  @default([])
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
