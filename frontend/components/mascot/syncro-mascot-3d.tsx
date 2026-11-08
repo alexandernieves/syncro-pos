@@ -8,7 +8,7 @@ import * as THREE from "three";
 export type MascotPose = "idle" | "wave" | "point" | "think" | "celebrate";
 export type MascotEmotion = "neutral" | "happy" | "angry" | "sad" | "surprised" | "thinking" | "sleepy";
 /** What Syncro wears for the season: nothing, Santa's hat and beard, or a reindeer costume. */
-export type MascotOutfit = "none" | "santa" | "reindeer" | "tree";
+export type MascotOutfit = "none" | "santa" | "reindeer" | "tree" | "elf";
 
 /* ------------------------------------------------------------------------------------------------
  * Pointer: one window listener shared by every mascot on the page, so the eyes can follow the user.
@@ -179,6 +179,52 @@ function starGeometry() {
   g.computeVertexNormals();
   return g;
 }
+/**
+ * An elf hat: tall and slim, its tip curls backwards like a little wave. Same bent-cylinder idea
+ * as the Santa hat, with soft folds.
+ */
+function elfHatGeometry() {
+  const H = 1.7;
+  const g = new THREE.CylinderGeometry(0.06, 0.82, H, 96, 80, true);
+  const pos = g.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const h = (v.y + H / 2) / H;
+    const a = Math.atan2(v.z, v.x);
+    const fold = 1 + h * 0.05 * Math.sin(a * 6 + h * 9);
+    v.x *= fold;
+    v.z *= fold;
+    // Upper part falls to the side and its tip turns back up a little (a soft wave)
+    const bend = Math.max(0, h - 0.4) / 0.6;
+    v.x += 0.95 * bend * bend;
+    v.y -= 0.7 * bend * bend * bend - 0.18 * Math.max(0, bend - 0.75) * 4 * bend;
+    pos.setXYZ(i, v.x, v.y + H / 2, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+/** Where the curled tip of the elf hat ends (for the bell). */
+const ELF_TIP = new THREE.Vector3(0.95, 1.7 - 0.7 + 0.18, 0);
+
+/** A pointy elf ear: a flattened teardrop whose top narrows to a point. */
+function elfEarGeometry() {
+  const g = new THREE.SphereGeometry(1, 48, 36);
+  const pos = g.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const up = Math.max(0, v.y);
+    const narrow = 1 - up * up * 0.9;
+    v.x *= narrow;
+    v.z *= narrow;
+    v.y *= v.y > 0 ? 1.35 : 0.8;
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
 /** How far the star's front face is from its centre (for the eyes). */
 const STAR_FACE = 0.34 / 2 + 0.2;
 
@@ -232,6 +278,13 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotio
       antler: new THREE.MeshPhysicalMaterial({ color: "#8a5530", roughness: 0.14, metalness: 0.04, clearcoat: 1, clearcoatRoughness: 0.03, sheen: 0.3, sheenColor: new THREE.Color("#ffcf9e") }),
       ear: new THREE.MeshPhysicalMaterial({ color: "#c58a52", roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.05 }),
       earInner: new THREE.MeshPhysicalMaterial({ color: "#f3c9a6", roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.08 }),
+      // Elf: glazed green hat with a red band, light-green points, a gold bell and rosy cheeks
+      elfHat: new THREE.MeshPhysicalMaterial({ color: "#07692c", roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.04, sheen: 0.4, sheenColor: new THREE.Color("#9dffbf"), side: THREE.DoubleSide }),
+      elfBand: new THREE.MeshPhysicalMaterial({ color: "#d4202a", roughness: 0.14, clearcoat: 1, clearcoatRoughness: 0.03 }),
+      elfPoint: new THREE.MeshPhysicalMaterial({ color: "#2fae4f", roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.03 }),
+      bell: new THREE.MeshPhysicalMaterial({ color: "#f2b81d", roughness: 0.1, metalness: 0.75, clearcoat: 1, clearcoatRoughness: 0.02 }),
+      elfEarInner: new THREE.MeshPhysicalMaterial({ color: "#ffc4cc", roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.05 }),
+      blush: new THREE.MeshPhysicalMaterial({ color: "#ff8fa3", roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.1, transparent: true, opacity: 0.55, depthWrite: false }),
       // Tree: Syncro as a star (same white glaze, it turns yellow on top), glazed green tiers
       star: new THREE.MeshPhysicalMaterial({ color: "#fbfcfd", roughness: 0.12, metalness: 0.02, clearcoat: 1, clearcoatRoughness: 0.03, emissive: "#000000" }),
       pine: new THREE.MeshPhysicalMaterial({ color: "#0e6633", roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.05, sheen: 0.3, sheenColor: new THREE.Color("#8fffb8") }),
@@ -248,6 +301,11 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotio
   const hat = useRef<THREE.Group>(null);
   const beard = useRef<THREE.Group>(null);
   const reindeer = useRef<THREE.Group>(null);
+  const elf = useRef<THREE.Group>(null);
+  const elfHat = useRef<THREE.Group>(null);
+  const elfHatGeo = useMemo(() => elfHatGeometry(), []);
+  const elfEarGeo = useMemo(() => elfEarGeometry(), []);
+  useEffect(() => () => { elfHatGeo.dispose(); elfEarGeo.dispose(); }, [elfHatGeo, elfEarGeo]);
   const star = useMemo(() => starGeometry(), []);
   useEffect(() => () => star.dispose(), [star]);
   const tree = useMemo(() => treeParts(), []);
@@ -437,7 +495,7 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotio
     mat.star.emissive.copy(yellow).multiplyScalar(light * (0.3 + 0.15 * twinkle) + (1 - light) * c.mix * 0.18);
 
     // Season outfit: each piece pops in and out; the head shrinks a bit so hat or antlers fit
-    const wear: [THREE.Group | null, boolean][] = [[hat.current, outfit === "santa"], [beard.current, outfit === "santa"], [reindeer.current, outfit === "reindeer"]];
+    const wear: [THREE.Group | null, boolean][] = [[hat.current, outfit === "santa"], [beard.current, outfit === "santa"], [reindeer.current, outfit === "reindeer"], [elf.current, outfit === "elf"]];
     for (const [g, on] of wear) {
       if (!g) continue;
       const next = g.scale.x + ((on ? 1 : 0) - g.scale.x) * ease(6);
@@ -449,11 +507,13 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotio
     if (frame.current) {
       // Hat or antlers: the head shrinks a bit; the tree: everything shrinks so the whole tree fits
       const treeFit = THREE.MathUtils.smoothstep(e, 0.7, 1.8);
-      const target = (outfit === "santa" || outfit === "reindeer" ? 0.8 : 1) - treeFit * 0.12;
+      const target = (outfit === "elf" ? 0.72 : outfit === "santa" || outfit === "reindeer" ? 0.8 : 1) - treeFit * 0.12;
       const sc = frame.current.scale.x + (target - frame.current.scale.x) * ease(6);
       frame.current.scale.setScalar(sc);
       frame.current.position.y = (1 - sc) * -0.55 * (1 - treeFit) + treeFit * 0.14;
       if (hat.current) hat.current.rotation.z = -0.12 + (still ? 0 : Math.sin(t * 2.2) * 0.04);
+      // The elf hat's curled tip swings a little, ringing its bell
+      if (elfHat.current) elfHat.current.rotation.z = 0.1 + (still ? 0 : Math.sin(t * 2.6) * 0.05);
     }
 
     // Idle float; bouncier when happy, slow and low when sleepy; a little stretch when surprised
@@ -531,6 +591,49 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotio
           <mesh material={mat.nose} position={[0, -0.16, 0.985]}>
             <sphereGeometry args={[0.19, 48, 36]} />
           </mesh>
+        </group>
+        {/* Elf: tall curled hat with a bell, pointy ears and rosy cheeks */}
+        <group ref={elf} scale={0.001} visible={false}>
+          <group ref={elfHat} position={[0, 0.6, -0.06]} rotation={[-0.22, 0, 0.1]}>
+            <mesh material={mat.elfHat} geometry={elfHatGeo} />
+            {/* Red band */}
+            <mesh material={mat.elfBand} rotation={[Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
+              <torusGeometry args={[0.83, 0.13, 28, 96]} />
+            </mesh>
+            {/* Points hanging from the band: little triangles with round tips */}
+            {Array.from({ length: 12 }, (_, i) => {
+              const a = (i / 12) * Math.PI * 2;
+              return (
+                <group key={`pt${i}`} position={[Math.cos(a) * 0.88, -0.1, Math.sin(a) * 0.88]} rotation={[0, -a, 0]}>
+                  <mesh material={mat.elfPoint} rotation={[0, 0, Math.PI]} position={[0, -0.06, 0]}>
+                    <coneGeometry args={[0.14, 0.24, 28]} />
+                  </mesh>
+                  <mesh material={mat.elfPoint} position={[0, -0.17, 0]}>
+                    <sphereGeometry args={[0.045, 16, 12]} />
+                  </mesh>
+                </group>
+              );
+            })}
+            {/* Gold bell at the curled tip */}
+            <mesh material={mat.bell} position={[ELF_TIP.x + 0.08, ELF_TIP.y - 0.1, ELF_TIP.z]}>
+              <sphereGeometry args={[0.16, 32, 24]} />
+            </mesh>
+            {/* The bell's slit, underneath */}
+            <mesh material={mat.eye} position={[ELF_TIP.x + 0.08, ELF_TIP.y - 0.24, ELF_TIP.z + 0.05]} rotation={[1.2, 0, 0]} scale={[0.1, 0.018, 0.03]}>
+              <sphereGeometry args={[1, 16, 12]} />
+            </mesh>
+          </group>
+          {([-1, 1] as const).map((sd) => (
+            <group key={`elfear${sd}`} position={[1.0 * sd, 0.08, 0.06]} rotation={[0.1, -0.35 * sd, -0.95 * sd]}>
+              <mesh material={mat.skin} geometry={elfEarGeo} scale={[0.2, 0.48, 0.08]} />
+              <mesh material={mat.elfEarInner} geometry={elfEarGeo} position={[0, -0.03, 0.05]} scale={[0.11, 0.32, 0.035]} />
+            </group>
+          ))}
+          {([-1, 1] as const).map((sd) => (
+            <mesh key={`blush${sd}`} material={mat.blush} position={[0.48 * sd, -0.2, 0.84]} rotation={[0, 0.5 * sd, 0]} scale={[0.17, 0.1, 0.04]}>
+              <sphereGeometry args={[1, 24, 16]} />
+            </mesh>
+          ))}
         </group>
         {/* Beard and moustache */}
         <group ref={beard} scale={0.001} visible={false}>
