@@ -58,3 +58,6 @@ backend/backups/
 
 # Server-only compose override
 /docker-compose.override.yml
+
+# Database exports with real customer data: never commit
+buckups/
