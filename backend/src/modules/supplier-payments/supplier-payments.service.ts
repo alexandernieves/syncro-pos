@@ -209,8 +209,8 @@ export class SupplierPaymentsService {
     return result;
   }
 
-  async findAll(supplierId?: string) {
-    const where = supplierId ? { supplierId } : {};
+  async findAll(supplierId?: string, scope: object = {}) {
+    const where = { ...(supplierId ? { supplierId } : {}), ...scope };
     
     return this.prisma.supplierPayment.findMany({
       where,

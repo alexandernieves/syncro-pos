@@ -51,6 +51,7 @@ import { connectSocket } from "@/lib/socket";
 import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { ensurePushSubscription } from "@/hooks/usePushNotifications";
+import { signOutAndReload } from "@/lib/auth-helpers";
 import { PWAInstallButton } from "@/components/pwa-install-button";
 import { VoiceButton, VoiceButtonState } from "@/components/ui/voice-button";
 import { ChatCard } from "@/components/chat/chat-card";
@@ -635,12 +636,7 @@ export default function SupportChatPage() {
   }, [aiMediaStream, speechRecognition]);
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    sessionStorage.removeItem("token");
-    sessionStorage.removeItem("user");
-    document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax";
-    window.location.href = "/";
+    void signOutAndReload("/");
   };
 
   const handleRequestNotificationPermission = async () => {

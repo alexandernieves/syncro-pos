@@ -693,8 +693,9 @@ export class ClientsService {
 
   async payInstallment(installmentId: string, paidAmount: number, businessId?: string) {
     return this.prisma.$transaction(async (tx) => {
-      const installment = await tx.loanInstallment.findUnique({
-        where: { id: installmentId },
+      // Only an installment of a loan from this business
+      const installment = await tx.loanInstallment.findFirst({
+        where: { id: installmentId, ...(businessId ? { loan: { client: { businessId } } } : {}) },
         include: { loan: true },
       });
 
@@ -905,7 +906,7 @@ export class ClientsService {
     await this.findOne(clientId, businessId);
     const result = await this.prisma.$transaction(async (tx) => {
       const client = await tx.client.findUnique({ where: { id: clientId } });
-      const reward = await tx.reward.findUnique({ where: { id: rewardId } });
+      const reward = await tx.reward.findFirst({ where: { id: rewardId, ...(businessId ? { businessId } : {}) } });
 
       if (!client) throw new NotFoundException('Cliente no encontrado');
       if (!reward) throw new NotFoundException('Premio no encontrado');

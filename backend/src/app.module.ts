@@ -3,7 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppThrottlerGuard } from './common/app-throttler.guard';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { TenantScopeInterceptor } from './common/tenant-scope.interceptor';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './modules/users/users.module';
@@ -99,6 +100,11 @@ import { PushModule } from './modules/push/push.module';
     {
       provide: APP_GUARD,
       useClass: AppThrottlerGuard,
+    },
+    // ── No business ever reaches another business's data ──────────────────
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TenantScopeInterceptor,
     },
   ],
 })

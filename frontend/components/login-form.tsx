@@ -24,6 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { takeSuspendedMessage } from "@/components/suspended-session-guard"
 import { toast } from "sonner"
 import { Eye, EyeOff, Trash2, ArrowLeft, ChevronRight } from "lucide-react"
+import { adoptAccount } from "@/lib/auth-helpers"
 
 interface SavedProfile {
   email: string
@@ -58,16 +59,6 @@ function getClientId(): string {
  * Signing in to a different business: forget what belonged to the previous one (its branch
  * above all). Otherwise the screens load with a branch of another business and come out empty.
  */
-const BUSINESS_KEYS = ["currentBranchId", "businessName", "isSyncroVendor", "enabledModules", "syncro_last_visited_dashboard_route"]
-function forgetOtherBusiness(businessId?: string | null) {
-  try {
-    const previous = JSON.parse(localStorage.getItem("user") || sessionStorage.getItem("user") || "null")
-    if (previous?.businessId && previous.businessId !== businessId) BUSINESS_KEYS.forEach((k) => localStorage.removeItem(k))
-  } catch {
-    BUSINESS_KEYS.forEach((k) => localStorage.removeItem(k))
-  }
-}
-
 export function LoginForm({
   className,
   ...props
@@ -187,7 +178,8 @@ export function LoginForm({
       }
 
       const token: string = data.access_token
-      forgetOtherBusiness(data.user?.businessId)
+      // Another account was used on this device: nothing of it may stay
+      await adoptAccount(data.user)
       const isStandalonePwa =
         typeof window !== "undefined" &&
         window.matchMedia("(display-mode: standalone)").matches
@@ -225,7 +217,8 @@ export function LoginForm({
             : window.matchMedia("(display-mode: standalone)").matches
             ? "/dashboard/soporte"
             : "/dashboard"
-        setTimeout(() => router.push(targetPath), 500)
+        // A full load: the new account starts with nothing in memory from the previous one
+        setTimeout(() => window.location.assign(targetPath), 500)
         return "¡Inicio de sesión exitoso!"
       },
       error: (err) => {

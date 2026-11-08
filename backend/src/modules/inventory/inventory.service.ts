@@ -12,8 +12,8 @@ export class InventoryService {
     private productsService: ProductsService,
   ) {}
 
-  async findAll(branchId?: string) {
-    const where = branchId ? { branchId } : {};
+  async findAll(branchId?: string, businessId?: string) {
+    const where = { ...(branchId ? { branchId } : {}), ...(businessId ? { branch: { businessId } } : {}) };
     return this.prisma.inventoryMovement.findMany({
       where,
       include: { variant: { include: { product: true } }, branch: true },
@@ -21,9 +21,9 @@ export class InventoryService {
     });
   }
 
-  async findByVariant(variantId: string) {
+  async findByVariant(variantId: string, businessId?: string) {
     return this.prisma.inventory.findMany({
-      where: { variantId },
+      where: { variantId, ...(businessId ? { branch: { businessId } } : {}) },
       include: { branch: true }
     });
   }
@@ -164,8 +164,9 @@ export class InventoryService {
     }
     const businessId = branch?.businessId;
 
-    // 2. Get all variants
-    const variants = await this.prisma.productVariant.findMany();
+    // 2. Only this business's products (never another business's catalog)
+    if (!businessId) throw new Error('La sucursal no pertenece a ningún negocio.');
+    const variants = await this.prisma.productVariant.findMany({ where: { product: { businessId } } });
 
     const result = await this.prisma.$transaction(async (tx) => {
       let createdCount = 0;

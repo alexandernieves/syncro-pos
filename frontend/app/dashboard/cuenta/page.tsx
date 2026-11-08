@@ -192,6 +192,7 @@ export default function AccountPage() {
     try {
         const res = await fetch(`${API}/uploads`, {
             method: 'POST',
+            headers: { Authorization: `Bearer ${localStorage.getItem("token") || sessionStorage.getItem("token")}` },
             body: formDataUpload
         });
 

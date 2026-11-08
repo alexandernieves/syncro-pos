@@ -11,11 +11,16 @@ import {
 } from '@nestjs/common';
 import { SupplierReturnsService } from './supplier-returns.service';
 import { AuthGuard } from '@nestjs/passport';
+import { assertOwned, ownedBy } from '../../common/ownership';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('supplier-returns')
 @UseGuards(AuthGuard('jwt'))
 export class SupplierReturnsController {
-  constructor(private readonly supplierReturnsService: SupplierReturnsService) {}
+  constructor(
+    private readonly supplierReturnsService: SupplierReturnsService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Post()
   async create(@Req() req: any, @Body() createData: {
@@ -50,7 +55,7 @@ export class SupplierReturnsController {
       throw new BadRequestException('Usuario no autenticado');
     }
 
-    return this.supplierReturnsService.findAll(supplierId, branchId);
+    return this.supplierReturnsService.findAll(supplierId, branchId, ownedBy('supplierReturn', req.user));
   }
 
   @Get(':id')
@@ -59,6 +64,7 @@ export class SupplierReturnsController {
       throw new BadRequestException('Usuario no autenticado');
     }
 
+    await assertOwned(this.prisma, 'supplierReturn', id, req.user);
     return this.supplierReturnsService.findOne(id);
   }
 }
@@ -66,7 +72,10 @@ export class SupplierReturnsController {
 @Controller('suppliers')
 @UseGuards(AuthGuard('jwt'))
 export class SuppliersReturnsController {
-  constructor(private readonly supplierReturnsService: SupplierReturnsService) {}
+  constructor(
+    private readonly supplierReturnsService: SupplierReturnsService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get(':id/returns')
   async getSupplierReturns(
@@ -82,6 +91,7 @@ export class SuppliersReturnsController {
     const start = startDate ? new Date(startDate) : undefined;
     const end = endDate ? new Date(endDate) : undefined;
 
+    await assertOwned(this.prisma, 'supplier', id, req.user);
     return this.supplierReturnsService.getSupplierReturnsSummary(id, start, end);
   }
 }

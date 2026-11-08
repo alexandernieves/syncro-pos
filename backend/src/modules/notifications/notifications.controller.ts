@@ -1,11 +1,16 @@
-import { Controller, Get, Post, Body, Param, Patch, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Query, UseGuards, Request, ForbiddenException } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { assertOwned, ownedBy } from '../../common/ownership';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
 export class NotificationsController {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get()
   findAll(@Request() req: any) {
@@ -15,12 +20,15 @@ export class NotificationsController {
   }
 
   @Post()
-  create(@Body() data: any) {
+  create(@Body() data: any, @Request() req: any) {
+    // Notifications are created by the server itself; from outside only the Syncro team may
+    if (req.user?.role !== 'syncropos') throw new ForbiddenException('No permitido');
     return this.notificationsService.create(data);
   }
 
   @Patch(':id/read')
-  markAsRead(@Param('id') id: string) {
+  async markAsRead(@Param('id') id: string, @Request() req: any) {
+    await assertOwned(this.prisma, 'notification', id, req.user);
     return this.notificationsService.markAsRead(id);
   }
 

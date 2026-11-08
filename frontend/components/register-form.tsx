@@ -18,6 +18,7 @@ import {
   IconMail,
 } from "@tabler/icons-react";
 import { Eye, EyeOff } from "lucide-react";
+import { adoptAccount } from "@/lib/auth-helpers";
 
 const COUNTRIES = ["Venezuela"];
 
@@ -118,6 +119,8 @@ export function RegisterForm() {
         if (loginRes.ok) {
           const loginData = await loginRes.json();
           const token: string = loginData.access_token;
+          // A new account: nothing of whoever used this device before may stay
+          await adoptAccount(loginData.user);
           const isStandalonePwa =
             typeof window !== "undefined" &&
             window.matchMedia("(display-mode: standalone)").matches;
@@ -146,7 +149,7 @@ export function RegisterForm() {
       success: (data) => {
         setLoading(false);
         if (data?.autoLogin) {
-          router.push("/dashboard");
+          window.location.assign("/dashboard");
           return "Espacio configurado. Ya puedes empezar a vender.";
         } else {
           router.push("/login");

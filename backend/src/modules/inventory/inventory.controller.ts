@@ -3,17 +3,18 @@ import { InventoryService } from './inventory.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('inventory')
+@UseGuards(JwtAuthGuard)
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
   @Get('movements')
-  async findAll(@Query('branchId') branchId?: string) {
-    return this.inventoryService.findAll(branchId);
+  async findAll(@Req() req: any, @Query('branchId') branchId?: string) {
+    return this.inventoryService.findAll(branchId, req.user?.role === 'syncropos' ? undefined : req.user?.businessId);
   }
 
   @Get(':variantId')
-  async findByVariant(@Param('variantId') variantId: string) {
-    return this.inventoryService.findByVariant(variantId);
+  async findByVariant(@Req() req: any, @Param('variantId') variantId: string) {
+    return this.inventoryService.findByVariant(variantId, req.user?.role === 'syncropos' ? undefined : req.user?.businessId);
   }
 
   @UseGuards(JwtAuthGuard)

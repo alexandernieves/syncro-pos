@@ -12,11 +12,16 @@ import {
 import { SupplierPaymentsService } from './supplier-payments.service';
 import { AuthGuard } from '@nestjs/passport';
 import { PaymentMethod } from '@prisma/client';
+import { assertOwned, ownedBy } from '../../common/ownership';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('supplier-payments')
 @UseGuards(AuthGuard('jwt'))
 export class SupplierPaymentsController {
-  constructor(private readonly supplierPaymentsService: SupplierPaymentsService) {}
+  constructor(
+    private readonly supplierPaymentsService: SupplierPaymentsService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get()
   async findAll(@Req() req: any, @Query('supplierId') supplierId?: string) {
@@ -24,7 +29,7 @@ export class SupplierPaymentsController {
       throw new BadRequestException('Usuario no autenticado');
     }
 
-    return this.supplierPaymentsService.findAll(supplierId);
+    return this.supplierPaymentsService.findAll(supplierId, ownedBy('supplierPayment', req.user));
   }
 
   @Get(':id')
@@ -33,6 +38,7 @@ export class SupplierPaymentsController {
       throw new BadRequestException('Usuario no autenticado');
     }
 
+    await assertOwned(this.prisma, 'supplierPayment', id, req.user);
     return this.supplierPaymentsService.findOne(id);
   }
 
@@ -67,7 +73,10 @@ export class SupplierPaymentsController {
 @Controller('suppliers')
 @UseGuards(AuthGuard('jwt'))
 export class SuppliersAccountController {
-  constructor(private readonly supplierPaymentsService: SupplierPaymentsService) {}
+  constructor(
+    private readonly supplierPaymentsService: SupplierPaymentsService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get(':id/account')
   async getAccount(@Req() req: any, @Param('id') id: string) {
@@ -75,6 +84,7 @@ export class SuppliersAccountController {
       throw new BadRequestException('Usuario no autenticado');
     }
 
+    await assertOwned(this.prisma, 'supplier', id, req.user);
     return this.supplierPaymentsService.getSupplierAccount(id);
   }
 }

@@ -20,13 +20,6 @@ import { AuthService } from './auth.service';
 export class AuthController {
   constructor(private authService: AuthService) {}
 
-  @Get('debug-db')
-  debugDb() {
-    return {
-      databaseUrl: process.env.DATABASE_URL,
-    };
-  }
-
   // ── Login ─────────────────────────────────────────────────────────────────
   // Strict rate-limit: max 8 attempts per 15 minutes per IP and account
   @Throttle({ default: { limit: 8, ttl: 900000 } })

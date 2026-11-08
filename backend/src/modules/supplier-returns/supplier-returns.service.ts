@@ -112,8 +112,8 @@ export class SupplierReturnsService {
     return result;
   }
 
-  async findAll(supplierId?: string, branchId?: string) {
-    const where: any = {};
+  async findAll(supplierId?: string, branchId?: string, scope: object = {}) {
+    const where: any = { ...scope };
     if (supplierId) where.supplierId = supplierId;
     if (branchId) {
       // Filter by returns from variants that have inventory in this branch

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { clearAuthSession } from "@/lib/auth-helpers"
+import { currentAccountId, signOutAndReload } from "@/lib/auth-helpers"
 
 
 interface SessionMonitorProps {
@@ -15,16 +15,27 @@ export function SessionMonitor({ timeoutMinutes = 30 }: SessionMonitorProps) {
   const timeoutId = useRef<NodeJS.Timeout | null>(null)
   
   const handleLogout = useCallback(async () => {
-    // Limpiar almacenamiento
-    await clearAuthSession()
-    
     toast.error("Sesión cerrada por inactividad", {
       description: "Por seguridad, tu sesión ha sido finalizada tras un periodo de inactividad.",
       duration: 10000,
     })
-    
-    router.replace("/login")
-  }, [router])
+    try { sessionStorage.setItem("syncro_suspended_message", "Tu sesión se cerró por inactividad. Vuelve a iniciar sesión.") } catch { /* ignore */ }
+    // Everything of the account goes, and the app reloads so nothing stays in memory
+    await signOutAndReload("/login")
+  }, [])
+
+  // Another tab signed in as someone else (or signed out): this tab must not keep showing the
+  // previous account's data while the requests now go out with the new one. Reload it.
+  useEffect(() => {
+    const mine = currentAccountId()
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== null && e.key !== "token" && e.key !== "user") return
+      const now = currentAccountId()
+      if (now !== mine) window.location.reload()
+    }
+    window.addEventListener("storage", onStorage)
+    return () => window.removeEventListener("storage", onStorage)
+  }, [])
 
   const resetTimer = useCallback(() => {
     if (timeoutId.current) {

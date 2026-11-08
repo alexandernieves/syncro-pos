@@ -1,10 +1,15 @@
 import { Controller, Post, Body, Get, Req, Param, BadRequestException, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ShiftsService } from './shifts.service';
+import { assertOwned, ownedBy } from '../../common/ownership';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('shifts')
 export class ShiftsController {
-  constructor(private readonly shiftsService: ShiftsService) {}
+  constructor(
+    private readonly shiftsService: ShiftsService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Post('open')
   @UseGuards(AuthGuard('jwt'))
@@ -32,6 +37,7 @@ export class ShiftsController {
   @Post('close/:id')
   @UseGuards(AuthGuard('jwt'))
   async close(
+    @Req() req: any,
     @Param('id') id: string,
     @Body() body: { closingBalance: number; cashBreakdown?: any; declaredDetails?: any; notes?: string; countedCash?: Record<string, number> }
   ) {
@@ -43,6 +49,7 @@ export class ShiftsController {
       throw new BadRequestException('Monto de cierre inválido');
     }
     
+    await assertOwned(this.prisma, 'shift', id, req.user);
     return this.shiftsService.close(
       id,
       body.closingBalance,
@@ -66,7 +73,7 @@ export class ShiftsController {
 
   @Get()
   @UseGuards(AuthGuard('jwt'))
-  async findAll() {
-    return this.shiftsService.findAll();
+  async findAll(@Req() req: any) {
+    return this.shiftsService.findAll(ownedBy('shift', req.user));
   }
 }

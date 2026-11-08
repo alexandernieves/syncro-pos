@@ -14,11 +14,16 @@ import {
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { AuthGuard } from '@nestjs/passport';
 import { PurchaseOrderStatus } from '@prisma/client';
+import { assertOwned, ownedBy } from '../../common/ownership';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('purchase-orders')
 @UseGuards(AuthGuard('jwt'))
 export class PurchaseOrdersController {
-  constructor(private readonly purchaseOrdersService: PurchaseOrdersService) {}
+  constructor(
+    private readonly purchaseOrdersService: PurchaseOrdersService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Post()
   async create(@Req() req: any, @Body() createData: {
@@ -47,7 +52,7 @@ export class PurchaseOrdersController {
       throw new BadRequestException('Usuario no autenticado');
     }
 
-    return this.purchaseOrdersService.findAll(branchId);
+    return this.purchaseOrdersService.findAll(branchId, ownedBy('purchaseOrder', req.user));
   }
 
   @Get(':id')
@@ -56,6 +61,7 @@ export class PurchaseOrdersController {
       throw new BadRequestException('Usuario no autenticado');
     }
 
+    await assertOwned(this.prisma, 'purchaseOrder', id, req.user);
     return this.purchaseOrdersService.findOne(id);
   }
 
@@ -65,6 +71,7 @@ export class PurchaseOrdersController {
       throw new BadRequestException('Usuario no autenticado');
     }
 
+    await assertOwned(this.prisma, 'purchaseOrder', id, req.user);
     return this.purchaseOrdersService.send(id);
   }
 
@@ -74,6 +81,7 @@ export class PurchaseOrdersController {
       throw new BadRequestException('Usuario no autenticado');
     }
 
+    await assertOwned(this.prisma, 'purchaseOrder', id, req.user);
     return this.purchaseOrdersService.receive(id, req.user.id);
   }
 
@@ -91,6 +99,7 @@ export class PurchaseOrdersController {
       throw new BadRequestException('Estado inválido');
     }
 
+    await assertOwned(this.prisma, 'purchaseOrder', id, req.user);
     return this.purchaseOrdersService.updateStatus(id, status);
   }
 
@@ -100,6 +109,7 @@ export class PurchaseOrdersController {
       throw new BadRequestException('Usuario no autenticado');
     }
 
+    await assertOwned(this.prisma, 'purchaseOrder', id, req.user);
     return this.purchaseOrdersService.delete(id);
   }
 }

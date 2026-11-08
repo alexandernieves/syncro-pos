@@ -99,8 +99,8 @@ export class PurchaseOrdersService {
     });
   }
 
-  async findAll(branchId?: string) {
-    const where = branchId ? { branchId } : {};
+  async findAll(branchId?: string, scope: object = {}) {
+    const where = { ...(branchId ? { branchId } : {}), ...scope };
     return this.prisma.purchaseOrder.findMany({
       where,
       include: {

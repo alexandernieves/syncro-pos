@@ -44,11 +44,9 @@ export class NotificationsService {
       businessId = user?.businessId || null;
     }
 
+    // Only that business hears it. Without a business it stays in the database only (never broadcast to everyone)
     if (businessId) {
       this.gateway.server.to(businessId).emit('notification', notification);
-    } else {
-      // Fallback
-      this.gateway.server.emit('notification', notification);
     }
 
     return notification;

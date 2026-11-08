@@ -1,7 +1,6 @@
 import {
   WebSocketGateway,
   WebSocketServer,
-  SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
@@ -29,7 +28,8 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
       try {
         const secret = process.env.JWT_SECRET || 'syncro-pos-secret-key-2025';
         const decoded = jwt.verify(token, secret) as any;
-        if (decoded && decoded.businessId) {
+        // The business's team only: its customers (portal) don't hear internal notices
+        if (decoded && decoded.businessId && decoded.role !== 'client') {
           client.join(decoded.businessId);
           this.logger.log(`Client ${client.id} joined business room: ${decoded.businessId}`);
         }
@@ -45,10 +45,6 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
-  // Example: Client joining a specific room (e.g., their branch or user ID)
-  @SubscribeMessage('joinRoom')
-  handleJoinRoom(client: Socket, room: string) {
-    client.join(room);
-    this.logger.log(`Client ${client.id} joined room: ${room}`);
-  }
+  // No "join any room" message: a socket only ever hears its own business (joined above from the
+  // verified token), so nobody can listen to another business's notifications.
 }

@@ -1,11 +1,16 @@
 import { Controller, Get, Post, Body, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import { ExpensesService } from './expenses.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { assertOwned, ownedBy } from '../../common/ownership';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('expenses')
 @UseGuards(JwtAuthGuard)
 export class ExpensesController {
-  constructor(private readonly expensesService: ExpensesService) {}
+  constructor(
+    private readonly expensesService: ExpensesService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get()
   findAll(@Request() req: any, @Query('branchId') branchId?: string) {
@@ -26,7 +31,8 @@ export class ExpensesController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string, @Request() req: any) {
+    await assertOwned(this.prisma, 'expense', id, req.user);
     return this.expensesService.remove(id);
   }
 }

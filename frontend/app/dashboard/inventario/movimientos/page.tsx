@@ -18,9 +18,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Tabs, TabsContent, TabsList, TabsTrigger 
 } from "@/components/ui/tabs";
-import { 
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger 
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
+import { apiFetch } from "@/lib/api";
 
 const API = API_URL;
 
@@ -51,7 +52,7 @@ export default function MovimientosPage() {
     setLoading(true);
     try {
       const branchId = localStorage.getItem("currentBranchId") || "";
-      const res = await fetch(`${API}/inventory/movements${branchId ? `?branchId=${branchId}` : ""}`);
+      const res = await apiFetch(`/inventory/movements${branchId ? `?branchId=${branchId}` : ""}`);
       const data = await res.json();
       setMovements(Array.isArray(data) ? data : []);
     } catch {

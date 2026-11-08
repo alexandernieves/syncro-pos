@@ -3,12 +3,15 @@ import { ProductsService } from './products.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadsService } from '../uploads/uploads.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { assertOwned, ownedBy } from '../../common/ownership';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('products')
 export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
     private readonly uploadsService: UploadsService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -191,7 +194,8 @@ export class ProductsController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Delete('waitlist/:id') removeFromWaitlist(@Param('id') id: string) {
+  @Delete('waitlist/:id') async removeFromWaitlist(@Param('id') id: string, @Request() req: any) {
+    await assertOwned(this.prisma, 'productWaitlist', id, req.user);
     return this.productsService.removeFromWaitlist(id);
   }
 

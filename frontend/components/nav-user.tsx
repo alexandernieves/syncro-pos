@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { clearAuthSession } from "@/lib/auth-helpers"
+import { signOutAndReload } from "@/lib/auth-helpers"
 
 import {
   IconCreditCard,
@@ -47,9 +47,8 @@ export function NavUser({
   const router = useRouter()
 
   const handleLogout = async () => {
-    await clearAuthSession()
     toast.success("Has cerrado sesión correctamente")
-    router.replace("/login")
+    await signOutAndReload("/login")
   }
 
   return (

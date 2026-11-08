@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { API_URL } from "@/lib/constants";
+import { signOutAndReload } from "@/lib/auth-helpers";
 
 const KEY = "syncro_suspended_message";
 
@@ -25,9 +26,7 @@ export function SuspendedSessionGuard() {
           const message: string | undefined = body?.message;
           if (message && /suspendida/i.test(message)) {
             sessionStorage.setItem(KEY, message);
-            ["token", "user"].forEach((k) => { localStorage.removeItem(k); sessionStorage.removeItem(k); });
-            document.cookie = "token=; path=/; max-age=0";
-            window.location.replace("/login/");
+            await signOutAndReload("/login/");
           }
         }
       } catch {

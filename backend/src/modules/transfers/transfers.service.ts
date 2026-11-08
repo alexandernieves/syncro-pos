@@ -5,14 +5,14 @@ import { PrismaService } from '../prisma/prisma.service';
 export class TransfersService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(branchId?: string) {
+  async findAll(branchId?: string, scope: object = {}) {
     return this.prisma.inventoryTransfer.findMany({
-      where: branchId ? {
-        OR: [
-          { sourceBranchId: branchId },
-          { destinationBranchId: branchId }
-        ]
-      } : {},
+      where: {
+        AND: [
+          branchId ? { OR: [{ sourceBranchId: branchId }, { destinationBranchId: branchId }] } : {},
+          scope,
+        ],
+      },
       include: {
         sourceBranch: true,
         destinationBranch: true,

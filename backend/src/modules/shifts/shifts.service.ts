@@ -162,8 +162,9 @@ export class ShiftsService {
     };
   }
 
-  async findAll() {
+  async findAll(scope: object = {}) {
     return this.prisma.shift.findMany({
+      where: scope,
       include: { user: { select: { id: true, name: true, email: true, role: true, avatar: true } }, branch: true },
       orderBy: { openedAt: 'desc' }
     });
