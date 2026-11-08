@@ -591,13 +591,14 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotio
     // The red nose glows softly, like a little light
     mat.nose.emissiveIntensity = outfit === "reindeer" && !still ? 0.16 + 0.12 * (0.5 + 0.5 * Math.sin(t * 2.6)) : 0.18;
     if (frame.current) {
-      // Hat or antlers: the head shrinks a bit; the tree: everything shrinks so the whole tree fits
+      // The head keeps its size with any outfit (the canvas has room around it for hats and
+      // antlers); only the tall tree and snowman shrink a little so they fit whole
       const treeFit = THREE.MathUtils.smoothstep(e, 0.7, 1.8);
       const snowFit = THREE.MathUtils.smoothstep(sn, 0.1, 1.4);
-      const target = (outfit === "elf" ? 0.72 : outfit === "santa" || outfit === "reindeer" ? 0.8 : 1) - treeFit * 0.12 - snowFit * 0.2;
+      const target = 1 - treeFit * 0.05 - snowFit * 0.08;
       const sc = timeline !== undefined ? target : frame.current.scale.x + (target - frame.current.scale.x) * ease(6);
       frame.current.scale.setScalar(sc);
-      frame.current.position.y = (1 - sc) * -0.55 * (1 - treeFit - snowFit) + treeFit * 0.14 - snowFit * 0.18;
+      frame.current.position.y = treeFit * 0.1 - snowFit * 0.12;
       if (hat.current) hat.current.rotation.z = -0.12 + (still ? 0 : Math.sin(t * 2.2) * 0.04);
       // The elf hat's curled tip swings a little, ringing its bell
       if (elfHat.current) elfHat.current.rotation.z = 0.1 + (still ? 0 : Math.sin(t * 2.6) * 0.05);
@@ -871,6 +872,11 @@ function Studio() {
   );
 }
 
+/** Room around the box for outfits (35% on every side), and the camera distance that keeps the
+ *  head the same size in the box as before, 15% bigger. */
+const ROOM = 0.35;
+const CAMERA_Z = (5 * (1 + 2 * ROOM)) / 1.15;
+
 /**
  * Syncro's head in real 3D. Fills its parent (which sets the size). Without an `emotion` it lives on
  * its own: follows the cursor, smiles when the pointer is over it, gets startled when poked, dozes
@@ -895,16 +901,20 @@ export function SyncroMascot3D({ pose = "idle", emotion, festive = false, outfit
 
   return (
     <div ref={anchor} className="absolute inset-0" onPointerDown={() => { poke.current = performance.now(); }}>
+      {/* The canvas reaches past the box (without taking clicks there), so hats, antlers, the tree
+          or the snowman show whole while the head keeps its size inside the box */}
+      <div className="pointer-events-none absolute" style={{ inset: `-${ROOM * 100}%` }}>
       <Canvas
         frameloop={visible ? "always" : "never"}
         dpr={[1, 2]}
         gl={{ alpha: true, antialias: true, powerPreference: "low-power" }}
-        camera={{ fov: 30, position: [0, 0.15, 5], near: 0.1, far: 50 }}
+        camera={{ fov: 30, position: [0, 0.15, CAMERA_Z], near: 0.1, far: 50 }}
         onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
       >
         <Studio />
         <Head emotion={emotion} pose={pose} still={still} anchor={anchor} poke={poke} outfit={wearing} timeline={timeline} />
       </Canvas>
+      </div>
     </div>
   );
 }
