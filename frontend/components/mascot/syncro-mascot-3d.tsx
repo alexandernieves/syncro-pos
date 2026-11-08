@@ -4,11 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 
 export type MascotPose = "idle" | "wave" | "point" | "think" | "celebrate";
 export type MascotEmotion = "neutral" | "happy" | "angry" | "sad" | "surprised" | "thinking" | "sleepy";
 /** What Syncro wears for the season: nothing, Santa's hat and beard, or a reindeer costume. */
-export type MascotOutfit = "none" | "santa" | "reindeer" | "tree" | "elf";
+export type MascotOutfit = "none" | "santa" | "reindeer" | "tree" | "elf" | "snowman";
 
 /* ------------------------------------------------------------------------------------------------
  * Pointer: one window listener shared by every mascot on the page, so the eyes can follow the user.
@@ -225,6 +226,30 @@ function elfEarGeometry() {
   return g;
 }
 
+/**
+ * One loose end of the snowman's scarf: a soft, flat strip of fabric with round edges that hangs
+ * from the knot, hugging the body as it falls and waving a little. Its top is at the origin.
+ */
+function scarfEndGeometry(length: number, width: number, sway: number) {
+  const g = new RoundedBoxGeometry(width, length, 0.07, 6, 0.03);
+  g.translate(0, -length / 2, 0);
+  const pos = g.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const k = THREE.MathUtils.clamp(-v.y / length, 0, 1); // 0 at the knot, 1 at the bottom
+    // Hugs the body: comes forward a little and then follows the curve back in
+    v.z += 0.09 * Math.sin(k * Math.PI * 0.75);
+    // A soft wave and a slight slant outwards
+    v.x += sway * k + 0.025 * Math.sin(k * Math.PI * 2.2);
+    // The fabric widens a touch towards the end
+    v.x *= 1 + 0.12 * k;
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
 /** How far the star's front face is from its centre (for the eyes). */
 const STAR_FACE = 0.34 / 2 + 0.2;
 
@@ -284,6 +309,12 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotio
       elfPoint: new THREE.MeshPhysicalMaterial({ color: "#2fae4f", roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.03 }),
       bell: new THREE.MeshPhysicalMaterial({ color: "#f2b81d", roughness: 0.1, metalness: 0.75, clearcoat: 1, clearcoatRoughness: 0.02 }),
       elfEarInner: new THREE.MeshPhysicalMaterial({ color: "#ffc4cc", roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.05 }),
+      // Snowman: glossy twig arms, coal buttons, red scarf, carrot nose, black top hat
+      twig: new THREE.MeshPhysicalMaterial({ color: "#6b4226", roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.04 }),
+      coal: new THREE.MeshPhysicalMaterial({ color: "#111214", roughness: 0.08, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.02 }),
+      scarf: new THREE.MeshPhysicalMaterial({ color: "#d2232c", roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.06, sheen: 0.5, sheenColor: new THREE.Color("#ff9a9a") }),
+      carrot: new THREE.MeshPhysicalMaterial({ color: "#f07a12", roughness: 0.14, clearcoat: 1, clearcoatRoughness: 0.03 }),
+      topHat: new THREE.MeshPhysicalMaterial({ color: "#16171a", roughness: 0.1, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.02 }),
       blush: new THREE.MeshPhysicalMaterial({ color: "#ff8fa3", roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.1, transparent: true, opacity: 0.55, depthWrite: false }),
       // Tree: Syncro as a star (same white glaze, it turns yellow on top), glazed green tiers
       star: new THREE.MeshPhysicalMaterial({ color: "#fbfcfd", roughness: 0.12, metalness: 0.02, clearcoat: 1, clearcoatRoughness: 0.03, emissive: "#000000" }),
@@ -317,6 +348,32 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotio
   const starMesh = useRef<THREE.Mesh>(null);
   const treeGroup = useRef<THREE.Group>(null);
   const treeTime = useRef(0);
+  const snowTime = useRef(0);
+  const snowMid = useRef<THREE.Mesh>(null);
+  const snowBottom = useRef<THREE.Mesh>(null);
+  const snowArms = useRef<(THREE.Group | null)[]>([]);
+  const snowButtons = useRef<(THREE.Mesh | null)[]>([]);
+  const snowScarf = useRef<THREE.Group>(null);
+  const snowNose = useRef<THREE.Group>(null);
+  const snowHat = useRef<THREE.Group>(null);
+  const twig = useMemo(() => {
+    const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+    // One arm (the right one; the left is mirrored): a curved branch with two little twigs
+    return [
+      taperedTube([P(0, 0, 0), P(0.28, 0.08, 0.02), P(0.55, 0.22, 0.03), P(0.8, 0.42, 0.02)], 0.055, 0.03),
+      taperedTube([P(0.5, 0.19, 0.03), P(0.6, 0.34, 0.05), P(0.64, 0.48, 0.05)], 0.035, 0.022),
+      taperedTube([P(0.68, 0.32, 0.02), P(0.84, 0.32, 0.03), P(0.96, 0.37, 0.03)], 0.03, 0.02),
+    ];
+  }, []);
+  useEffect(() => () => twig.forEach((t) => t.geometry.dispose()), [twig]);
+  const scarfEnds = useMemo(() => [scarfEndGeometry(0.46, 0.21, 0.05), scarfEndGeometry(0.32, 0.19, 0.11)], []);
+  useEffect(() => () => scarfEnds.forEach((g) => g.dispose()), [scarfEnds]);
+  // Body layout (in the frame, before it is scaled): middle and bottom snowballs
+  const SNOW = { mid: { y: 0.3, r: 0.56, sy: 0.8 }, bottom: { y: -0.6, r: 0.78, sy: 0.86 } };
+  const buttonSpots = useMemo(() => [0.5, 0.31, 0.12].map((y) => {
+    const dy = (y - SNOW.mid.y) / (SNOW.mid.r * SNOW.mid.sy);
+    return new THREE.Vector3(0, y, Math.sqrt(Math.max(0, 1 - dy * dy)) * SNOW.mid.r * 0.98);
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
   const yellow = useMemo(() => new THREE.Color("#ffbf00"), []);
 
   const root = useRef<THREE.Group>(null);
@@ -450,9 +507,14 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotio
 
     // ── Christmas tree: sphere → star, the tree grows, the star climbs to the top and lights up ─
     // treeTime runs forward while the tree is on (and fast backwards when it goes away)
-    if (timeline !== undefined) treeTime.current = timeline;
-    else if (outfit === "tree") treeTime.current = Math.min(4, treeTime.current + Math.min(delta, 0.1));
-    else treeTime.current = Math.max(0, treeTime.current - Math.min(delta, 0.1) * 2.5);
+    const step = Math.min(delta, 0.1);
+    if (timeline !== undefined) {
+      treeTime.current = outfit === "tree" ? timeline : 0;
+      snowTime.current = outfit === "snowman" ? timeline : 0;
+    } else {
+      treeTime.current = outfit === "tree" ? Math.min(4, treeTime.current + step) : Math.max(0, treeTime.current - step * 2.5);
+      snowTime.current = outfit === "snowman" ? Math.min(4, snowTime.current + step) : Math.max(0, snowTime.current - step * 2.5);
+    }
     const e = treeTime.current;
     const span = (from: number, len: number) => THREE.MathUtils.smoothstep(e, from, from + len);
     const backOut = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 + 2.4 * Math.pow(x - 1, 3) + 1.4 * Math.pow(x - 1, 2));
@@ -481,9 +543,33 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotio
       eyes.current.position.y = -morph * 0.03;
       eyes.current.scale.setScalar(shrink);
     }
+    // ── Snowman: two snowballs grow under the head, then arms, buttons, scarf, nose and top hat ─
+    const sn = snowTime.current;
+    const sspan = (from: number, len: number) => THREE.MathUtils.smoothstep(sn, from, from + len);
+    const sback = (from: number, len: number) => backOut(THREE.MathUtils.clamp((sn - from) / len, 0, 1));
+    const headUp = sspan(0, 1.1);
+    const popIn = (m: THREE.Object3D | null | undefined, k: number, base: [number, number, number] = [1, 1, 1]) => {
+      if (!m) return;
+      m.scale.set(Math.max(0.001, k * base[0]), Math.max(0.001, k * base[1]), Math.max(0.001, k * base[2]));
+      m.visible = k > 0.01;
+    };
+    popIn(snowMid.current, sback(0.1, 0.7), [1, SNOW.mid.sy, 1]);
+    popIn(snowBottom.current, sback(0.85, 0.75), [1, SNOW.bottom.sy, 1]);
+    snowArms.current.forEach((a) => popIn(a, sback(1.3, 0.55)));
+    snowButtons.current.forEach((b, i) => popIn(b, sback(1.6 + i * 0.15, 0.35)));
+    popIn(snowScarf.current, sback(2.0, 0.45));
+    popIn(snowNose.current, sback(2.25, 0.4));
+    if (snowHat.current) {
+      // The hat drops in from above and bounces into place
+      const drop = sback(2.45, 0.6);
+      snowHat.current.visible = sn > 2.45;
+      snowHat.current.position.y = 0.8 + (1 - drop) * 1.4;
+      snowHat.current.scale.setScalar(sn > 2.45 ? 1 : 0.001);
+    }
+
     if (perch.current) {
-      perch.current.position.y = rise * 0.66;
-      perch.current.scale.setScalar(1 - rise * 0.62);
+      perch.current.position.y = rise * 0.66 + headUp * 0.98;
+      perch.current.scale.setScalar(1 - rise * 0.62 - headUp * 0.56);
     }
     if (treeGroup.current) {
       treeGroup.current.scale.set(Math.max(0.001, grow), Math.max(0.001, grow), Math.max(0.001, grow));
@@ -507,10 +593,11 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotio
     if (frame.current) {
       // Hat or antlers: the head shrinks a bit; the tree: everything shrinks so the whole tree fits
       const treeFit = THREE.MathUtils.smoothstep(e, 0.7, 1.8);
-      const target = (outfit === "elf" ? 0.72 : outfit === "santa" || outfit === "reindeer" ? 0.8 : 1) - treeFit * 0.12;
-      const sc = frame.current.scale.x + (target - frame.current.scale.x) * ease(6);
+      const snowFit = THREE.MathUtils.smoothstep(sn, 0.1, 1.4);
+      const target = (outfit === "elf" ? 0.72 : outfit === "santa" || outfit === "reindeer" ? 0.8 : 1) - treeFit * 0.12 - snowFit * 0.2;
+      const sc = timeline !== undefined ? target : frame.current.scale.x + (target - frame.current.scale.x) * ease(6);
       frame.current.scale.setScalar(sc);
-      frame.current.position.y = (1 - sc) * -0.55 * (1 - treeFit) + treeFit * 0.14;
+      frame.current.position.y = (1 - sc) * -0.55 * (1 - treeFit - snowFit) + treeFit * 0.14 - snowFit * 0.18;
       if (hat.current) hat.current.rotation.z = -0.12 + (still ? 0 : Math.sin(t * 2.2) * 0.04);
       // The elf hat's curled tip swings a little, ringing its bell
       if (elfHat.current) elfHat.current.rotation.z = 0.1 + (still ? 0 : Math.sin(t * 2.6) * 0.05);
@@ -529,6 +616,62 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotio
   return (
     <group ref={frame}>
     <group ref={root}>
+      {/* Snowman body: a squashed middle snowball and a big bottom one, twig arms, coal buttons, scarf */}
+      <mesh ref={snowMid} material={mat.skin} position={[0, SNOW.mid.y, 0]} scale={0.001} visible={false}>
+        <sphereGeometry args={[SNOW.mid.r, 64, 48]} />
+      </mesh>
+      <mesh ref={snowBottom} material={mat.skin} position={[0, SNOW.bottom.y, 0]} scale={0.001} visible={false}>
+        <sphereGeometry args={[SNOW.bottom.r, 64, 48]} />
+      </mesh>
+      {([-1, 1] as const).map((sd, i) => (
+        <group key={`arm${sd}`} position={[0.5 * sd, 0.36, 0]} scale={[sd, 1, 1]}>
+          <group ref={(g) => { snowArms.current[i] = g; }} scale={0.001} visible={false}>
+            {twig.map((tw, k) => (
+              <group key={k}>
+                <mesh material={mat.twig} geometry={tw.geometry} />
+                <mesh material={mat.twig} position={tw.tip}>
+                  <sphereGeometry args={[tw.r1, 16, 12]} />
+                </mesh>
+              </group>
+            ))}
+          </group>
+        </group>
+      ))}
+      {buttonSpots.map((p, i) => (
+        <mesh key={`btn${i}`} ref={(m) => { snowButtons.current[i] = m; }} material={mat.coal} position={p} scale={0.001} visible={false}>
+          <sphereGeometry args={[0.065, 24, 18]} />
+        </mesh>
+      ))}
+      <group ref={snowScarf} position={[0, 0.62, 0]} scale={0.001} visible={false}>
+        <mesh material={mat.scarf} rotation={[Math.PI / 2 + 0.08, 0, 0]} scale={[1, 1, 1.25]}>
+          <torusGeometry args={[0.36, 0.1, 24, 72]} />
+        </mesh>
+        {/* The knot and two loose ends of fabric hanging over the body, with a little fringe */}
+        <mesh material={mat.scarf} position={[0.17, -0.03, 0.47]} scale={[1.25, 0.95, 0.8]}>
+          <sphereGeometry args={[0.1, 32, 24]} />
+        </mesh>
+        {scarfEnds.map((g, i) => {
+          const at: [number, number, number] = i === 0 ? [0.14, -0.06, 0.5] : [0.24, -0.06, 0.46];
+          const tilt = i === 0 ? 0.08 : 0.3;
+          const len = i === 0 ? 0.46 : 0.32;
+          const width = i === 0 ? 0.21 : 0.19;
+          const sway = i === 0 ? 0.05 : 0.11;
+          return (
+            <group key={`end${i}`} position={at} rotation={[-0.08, 0, tilt]}>
+              <mesh material={mat.scarf} geometry={g} />
+              {Array.from({ length: 4 }, (_, k) => {
+                const x = (k / 3 - 0.5) * width * 0.95 + sway;
+                return (
+                  <mesh key={k} material={mat.scarf} position={[x * 1.12, -len - 0.045, 0.09 * Math.sin(Math.PI * 0.75)]} rotation={[0, 0, (k / 3 - 0.5) * 0.3]}>
+                    <capsuleGeometry args={[0.018, 0.06, 6, 12]} />
+                  </mesh>
+                );
+              })}
+            </group>
+          );
+        })}
+      </group>
+
       {/* Christmas tree (grows under the star) */}
       <group ref={treeGroup} position={[0, -0.18, 0]} scale={0.001} visible={false}>
         <mesh material={mat.trunk} position={[0, -1.02, 0]}>
@@ -657,6 +800,31 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotio
         <mesh ref={sphere} material={mat.skin} scale={HEAD.scale}>
           <sphereGeometry args={[HEAD.r, 64, 48]} />
         </mesh>
+        {/* Snowman: carrot nose and a black top hat */}
+        {/* Carrot: points forward and to the side so its length shows */}
+        <group ref={snowNose} position={[0.02, -0.15, 0.9]} rotation={[0.1, 0.75, 0]} scale={0.001} visible={false}>
+          <group rotation={[Math.PI / 2, 0, 0]}>
+            <mesh material={mat.carrot} position={[0, 0.36, 0]}>
+              <coneGeometry args={[0.16, 0.78, 40]} />
+            </mesh>
+            {[0.12, 0.28, 0.44].map((y, i) => (
+              <mesh key={`ring${i}`} material={mat.carrot} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                <torusGeometry args={[0.16 * (1 - (y + 0.03) / 0.78) + 0.004, 0.014, 8, 32]} />
+              </mesh>
+            ))}
+          </group>
+        </group>
+        <group ref={snowHat} position={[0, 0.92, -0.02]} rotation={[-0.1, 0, 0.08]} scale={0.001} visible={false}>
+          <mesh material={mat.topHat} position={[0, 0.03, 0]}>
+            <cylinderGeometry args={[0.82, 0.82, 0.07, 64]} />
+          </mesh>
+          <mesh material={mat.topHat} position={[0, 0.36, 0]}>
+            <cylinderGeometry args={[0.52, 0.56, 0.62, 64]} />
+          </mesh>
+          <mesh material={mat.scarf} position={[0, 0.14, 0]}>
+            <cylinderGeometry args={[0.565, 0.57, 0.13, 64]} />
+          </mesh>
+        </group>
         {/* Syncro as the star of the tree */}
         <mesh ref={starMesh} material={mat.star} geometry={star} scale={0.001} visible={false} />
         <group ref={eyes}>

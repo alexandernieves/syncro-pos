@@ -102,8 +102,8 @@ export function isChristmasSeason(d = new Date()) {
   return m === 10 || m === 11 || (m === 0 && d.getDate() <= 6);
 }
 
-export type SeasonOutfit = "santa" | "reindeer" | "tree" | "elf";
-const OUTFITS: SeasonOutfit[] = ["santa", "reindeer", "tree", "elf"];
+export type SeasonOutfit = "santa" | "reindeer" | "tree" | "elf" | "snowman";
+const OUTFITS: SeasonOutfit[] = ["santa", "reindeer", "tree", "elf", "snowman"];
 
 /** A number from 0 to 1 that is always the same for the same text (so a choice holds for a while). */
 function seeded(text: string) {
@@ -123,11 +123,11 @@ export function favouriteOutfit(d = new Date(), who = ""): SeasonOutfit {
   const day = d.getDate();
   const bigDay = (m === 11 && (day === 24 || day === 25 || day === 31)) || (m === 0 && day === 1);
   let w: Record<SeasonOutfit, number>;
-  if (bigDay) w = { santa: 0.6, tree: 0.25, elf: 0.15, reindeer: 0 };
+  if (bigDay) w = { santa: 0.55, tree: 0.2, elf: 0.12, snowman: 0.13, reindeer: 0 };
   else if (m === 11 && day < 24) {
-    const santa = 0.25 + (day / 23) * 0.15;
-    w = { santa, tree: 0.25, elf: 0.2, reindeer: 1 - santa - 0.45 };
-  } else w = { santa: 0.2, tree: 0.25, elf: 0.2, reindeer: 0.35 };
+    const santa = 0.22 + (day / 23) * 0.15;
+    w = { santa, tree: 0.2, elf: 0.16, snowman: 0.18, reindeer: 1 - santa - 0.54 };
+  } else w = { santa: 0.16, tree: 0.2, elf: 0.16, snowman: 0.18, reindeer: 0.3 };
   const halfDay = `${d.getFullYear()}-${m}-${day}-${d.getHours() < 13 ? "am" : "pm"}`;
   let x = seeded(`${who}:${halfDay}`);
   for (const o of OUTFITS) {
