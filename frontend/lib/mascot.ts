@@ -102,14 +102,7 @@ export function isChristmasSeason(d = new Date()) {
   return m === 10 || m === 11 || (m === 0 && d.getDate() <= 6);
 }
 
-export type SeasonOutfit = "santa" | "reindeer";
-
-/** The outfit chosen in settings (an old "decorations off" means no outfit). */
-export function outfitMode(s: Pick<MascotSettings, "festive" | "outfit"> | null | undefined): MascotSettings["outfit"] {
-  if (!s) return "none";
-  if (s.festive === false) return "none";
-  return s.outfit ?? "auto";
-}
+export type SeasonOutfit = "santa" | "reindeer" | "tree";
 
 /** A number from 0 to 1 that is always the same for the same text (so a choice holds for a while). */
 function seeded(text: string) {
@@ -119,26 +112,30 @@ function seeded(text: string) {
 }
 
 /**
- * Syncro's own taste for the season. Big days are Santa's; in November it leans to the reindeer,
- * Santa gains ground as Christmas gets closer, and after Christmas the reindeer comes back until
- * Epiphany. Each morning and afternoon it has a favourite, so it doesn't change on a whim.
+ * Syncro's own taste for the season (Nov 1 – Jan 6), standard for every business. In November it
+ * leans to the reindeer; in December Santa gains ground as Christmas gets closer and the tree shows
+ * up often; the big days are Santa's; after Christmas the reindeer comes back until Epiphany.
+ * Each morning and afternoon it has a favourite, so it doesn't change on a whim.
  */
 export function favouriteOutfit(d = new Date(), who = ""): SeasonOutfit {
   const m = d.getMonth();
   const day = d.getDate();
   const bigDay = (m === 11 && (day === 24 || day === 25 || day === 31)) || (m === 0 && day === 1);
-  if (bigDay) return "santa";
   let santa: number;
-  if (m === 10) santa = 0.35;
-  else if (m === 11 && day < 24) santa = 0.45 + (day / 23) * 0.3;
-  else santa = 0.4;
+  let tree: number;
+  if (bigDay) { santa = 0.7; tree = 0.3; }
+  else if (m === 10) { santa = 0.25; tree = 0.3; }
+  else if (m === 11 && day < 24) { santa = 0.3 + (day / 23) * 0.2; tree = 0.32; }
+  else { santa = 0.25; tree = 0.3; }
   const halfDay = `${d.getFullYear()}-${m}-${day}-${d.getHours() < 13 ? "am" : "pm"}`;
-  return seeded(`${who}:${halfDay}`) < santa ? "santa" : "reindeer";
+  const x = seeded(`${who}:${halfDay}`);
+  return x < santa ? "santa" : x < santa + tree ? "tree" : "reindeer";
 }
 
-/** What to put on now: mostly the favourite of this half day, now and then the other one. */
+/** What to put on now: mostly the favourite of this half day, now and then one of the others. */
 export function pickOutfit(d = new Date(), who = ""): SeasonOutfit {
   const fav = favouriteOutfit(d, who);
-  if (Math.random() < 0.75) return fav;
-  return fav === "santa" ? "reindeer" : "santa";
+  if (Math.random() < 0.7) return fav;
+  const others = (["santa", "reindeer", "tree"] as SeasonOutfit[]).filter((o) => o !== fav);
+  return others[Math.random() < 0.5 ? 0 : 1];
 }

@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { SyncroAvatar } from "@/components/syncro-avatar";
-import { type MascotSettings, favouriteOutfit, outfitMode, saveMascotSettings, useMascotSettings } from "@/lib/mascot";
+import { type MascotSettings, favouriteOutfit, isChristmasSeason, saveMascotSettings, useMascotSettings } from "@/lib/mascot";
 
 const LEVELS = [
   { value: "less", label: "Menos" },
@@ -107,7 +107,7 @@ export function MascotSettingsPanel() {
       {/* Who it is */}
       <div className="flex items-center gap-5 rounded-3xl border bg-gradient-to-br from-card to-muted/40 p-5">
         <button type="button" onClick={() => setPreview((p) => !p)} className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary" title="Tócalo">
-          <SyncroAvatar size={110} emotion={preview ? "happy" : undefined} outfit={preview ? (outfitMode(settings) === "auto" ? favouriteOutfit() : outfitMode(settings) === "none" ? "none" : (outfitMode(settings) as "santa" | "reindeer")) : "none"} />
+          <SyncroAvatar size={110} emotion={preview ? "happy" : undefined} outfit={preview && isChristmasSeason() ? favouriteOutfit() : "none"} />
         </button>
         <div className="min-w-0">
           <h2 className="text-xl font-semibold">{name}</h2>
@@ -123,17 +123,6 @@ export function MascotSettingsPanel() {
         </Row>
         <Row title="Que pasee por la pantalla" description="Puedes dejarlo en cualquier parte de la página (se achica entre tarjetas y salta por encima). Apagado, siempre vuelve al marco de la pantalla." htmlFor="m-roam">
           <Switch id="m-roam" checked={settings.roam} disabled={!settings.visible} onCheckedChange={(v) => save({ roam: v })} />
-        </Row>
-        <Row title="Disfraz de temporada" description={`Del 1 de noviembre al 6 de enero. Si eliges que decida ${name}, él escoge cuándo y de qué disfrazarse (Santa o reno) según la fecha y su gusto del día. Tócalo arriba para verlo.`} htmlFor="m-outfit">
-          <Select value={outfitMode(settings)} disabled={!settings.visible} onValueChange={(v) => save({ outfit: v as MascotSettings["outfit"], festive: v !== "none" })}>
-            <SelectTrigger id="m-outfit" className="w-48"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto">Que elija {name}</SelectItem>
-              <SelectItem value="santa">Siempre Santa</SelectItem>
-              <SelectItem value="reindeer">Siempre reno</SelectItem>
-              <SelectItem value="none">Sin disfraz</SelectItem>
-            </SelectContent>
-          </Select>
         </Row>
       </Section>
 

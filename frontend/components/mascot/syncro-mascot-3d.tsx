@@ -8,7 +8,7 @@ import * as THREE from "three";
 export type MascotPose = "idle" | "wave" | "point" | "think" | "celebrate";
 export type MascotEmotion = "neutral" | "happy" | "angry" | "sad" | "surprised" | "thinking" | "sleepy";
 /** What Syncro wears for the season: nothing, Santa's hat and beard, or a reindeer costume. */
-export type MascotOutfit = "none" | "santa" | "reindeer";
+export type MascotOutfit = "none" | "santa" | "reindeer" | "tree";
 
 /* ------------------------------------------------------------------------------------------------
  * Pointer: one window listener shared by every mascot on the page, so the eyes can follow the user.
@@ -147,9 +147,78 @@ function antlerParts() {
   ];
 }
 
+/**
+ * Syncro as a star: a five-pointed star with soft rounded points, thick and fully bevelled so every
+ * edge is round. Same glazed white as the sphere; it faces the camera.
+ */
+function starGeometry() {
+  const shape = new THREE.Shape();
+  const outer = 1;
+  const inner = 0.5;
+  const pts: THREE.Vector2[] = [];
+  for (let i = 0; i < 10; i++) {
+    const a = Math.PI / 2 + (i * Math.PI) / 5;
+    const r = i % 2 === 0 ? outer : inner;
+    pts.push(new THREE.Vector2(Math.cos(a) * r, Math.sin(a) * r));
+  }
+  // Round every corner: walk the outline and bend through each vertex with a curve
+  const round = (i: number) => (i % 2 === 0 ? 0.32 : 0.22);
+  const at = (i: number) => pts[(i + 10) % 10];
+  const toward = (from: THREE.Vector2, to: THREE.Vector2, f: number) => from.clone().lerp(to, f);
+  shape.moveTo(...(toward(at(0), at(1), round(0)).toArray() as [number, number]));
+  for (let i = 1; i <= 10; i++) {
+    const v = at(i);
+    const a = toward(v, at(i - 1), round(i));
+    const b = toward(v, at(i + 1), round(i));
+    shape.lineTo(a.x, a.y);
+    shape.quadraticCurveTo(v.x, v.y, b.x, b.y);
+  }
+  const depth = 0.34;
+  const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: 0.2, bevelSize: 0.14, bevelSegments: 14, curveSegments: 28 });
+  g.translate(0, 0, -depth / 2);
+  g.computeVertexNormals();
+  return g;
+}
+/** How far the star's front face is from its centre (for the eyes). */
+const STAR_FACE = 0.34 / 2 + 0.2;
+
+/** One soft tier of the tree: a rounded skirt that narrows to the next tier. */
+function treeTier(bottom: number, top: number, R: number, r: number) {
+  const P = (x: number, y: number) => new THREE.Vector2(x, y);
+  const curve = new THREE.SplineCurve([P(0.001, bottom + 0.03), P(R * 0.78, bottom), P(R, bottom + 0.07), P(R * 0.86, bottom + (top - bottom) * 0.28), P((R + r) / 2, bottom + (top - bottom) * 0.62), P(r, top)]);
+  const g = new THREE.LatheGeometry(curve.getPoints(48), 72);
+  g.computeVertexNormals();
+  return g;
+}
+
+/** The Christmas tree under the star: three glazed tiers, shiny baubles and a trunk. */
+function treeParts() {
+  const tiers = [
+    { geometry: treeTier(-0.92, -0.18, 0.92, 0.28), bottom: -0.92, top: -0.18, R: 0.92, r: 0.28 },
+    { geometry: treeTier(-0.42, 0.18, 0.74, 0.22), bottom: -0.42, top: 0.18, R: 0.74, r: 0.22 },
+    { geometry: treeTier(-0.06, 0.62, 0.56, 0.02), bottom: -0.06, top: 0.62, R: 0.56, r: 0.02 },
+  ];
+  const colors = ["#e3262d", "#f4c430", "#2f6fe0", "#e3262d", "#f4c430", "#c9d3dc", "#2f6fe0", "#e3262d", "#f4c430", "#c9d3dc", "#e3262d"];
+  const baubles: { pos: THREE.Vector3; color: string; r: number }[] = [];
+  const spots = [
+    [0, 0.25, -0.5], [0, 0.32, 0.15], [0, 0.3, 0.75],
+    [1, 0.3, -0.35], [1, 0.36, 0.35], [1, 0.25, 0.95],
+    [2, 0.3, -0.25], [2, 0.42, 0.35],
+    [0, 0.5, 0.45], [1, 0.55, -0.05], [0, 0.1, 1.3],
+  ];
+  spots.forEach(([ti, f, a], i) => {
+    const t = tiers[ti];
+    const y = t.bottom + (t.top - t.bottom) * f;
+    const rad = (t.R * 0.92 + (t.r - t.R * 0.92) * f) + 0.02;
+    // Angle around the trunk; 0 faces the camera
+    baubles.push({ pos: new THREE.Vector3(Math.sin(a) * rad, y, Math.cos(a) * rad), color: colors[i % colors.length], r: ti === 2 ? 0.075 : 0.095 });
+  });
+  return { tiers, baubles };
+}
+
 type EyeParts = { bead: THREE.Mesh | null; arc: THREE.Mesh | null; brow: THREE.Mesh | null };
 
-function Head({ emotion, pose, still, anchor, poke, outfit }: { emotion?: MascotEmotion; pose: MascotPose; still: boolean; anchor: React.RefObject<HTMLDivElement | null>; poke: React.RefObject<number>; outfit: MascotOutfit }) {
+function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotion?: MascotEmotion; pose: MascotPose; still: boolean; anchor: React.RefObject<HTMLDivElement | null>; poke: React.RefObject<number>; outfit: MascotOutfit; timeline?: number }) {
   // "Polished skin": white glazed ceramic with a clear coat; the emotion only tints it softly
   const mat = useMemo(
     () => ({
@@ -163,6 +232,10 @@ function Head({ emotion, pose, still, anchor, poke, outfit }: { emotion?: Mascot
       antler: new THREE.MeshPhysicalMaterial({ color: "#8a5530", roughness: 0.14, metalness: 0.04, clearcoat: 1, clearcoatRoughness: 0.03, sheen: 0.3, sheenColor: new THREE.Color("#ffcf9e") }),
       ear: new THREE.MeshPhysicalMaterial({ color: "#c58a52", roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.05 }),
       earInner: new THREE.MeshPhysicalMaterial({ color: "#f3c9a6", roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.08 }),
+      // Tree: Syncro as a star (same white glaze, it turns yellow on top), glazed green tiers
+      star: new THREE.MeshPhysicalMaterial({ color: "#fbfcfd", roughness: 0.12, metalness: 0.02, clearcoat: 1, clearcoatRoughness: 0.03, emissive: "#000000" }),
+      pine: new THREE.MeshPhysicalMaterial({ color: "#0e6633", roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.05, sheen: 0.3, sheenColor: new THREE.Color("#8fffb8") }),
+      trunk: new THREE.MeshPhysicalMaterial({ color: "#7a4a28", roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.06 }),
     }),
     [],
   );
@@ -175,6 +248,18 @@ function Head({ emotion, pose, still, anchor, poke, outfit }: { emotion?: Mascot
   const hat = useRef<THREE.Group>(null);
   const beard = useRef<THREE.Group>(null);
   const reindeer = useRef<THREE.Group>(null);
+  const star = useMemo(() => starGeometry(), []);
+  useEffect(() => () => star.dispose(), [star]);
+  const tree = useMemo(() => treeParts(), []);
+  useEffect(() => () => tree.tiers.forEach((t) => t.geometry.dispose()), [tree]);
+  const baubleMats = useMemo(() => tree.baubles.map((b) => new THREE.MeshPhysicalMaterial({ color: b.color, roughness: 0.06, metalness: 0.25, clearcoat: 1, clearcoatRoughness: 0.02 })), [tree]);
+  useEffect(() => () => baubleMats.forEach((m) => m.dispose()), [baubleMats]);
+  const perch = useRef<THREE.Group>(null);
+  const sphere = useRef<THREE.Mesh>(null);
+  const starMesh = useRef<THREE.Mesh>(null);
+  const treeGroup = useRef<THREE.Group>(null);
+  const treeTime = useRef(0);
+  const yellow = useMemo(() => new THREE.Color("#ffbf00"), []);
 
   const root = useRef<THREE.Group>(null);
   const head = useRef<THREE.Group>(null);
@@ -305,6 +390,52 @@ function Head({ emotion, pose, still, anchor, poke, outfit }: { emotion?: Mascot
       eyes.current.rotation.x += (b.ly * 0.1 + b.sy - eyes.current.rotation.x) * ease(22);
     }
 
+    // ── Christmas tree: sphere → star, the tree grows, the star climbs to the top and lights up ─
+    // treeTime runs forward while the tree is on (and fast backwards when it goes away)
+    if (timeline !== undefined) treeTime.current = timeline;
+    else if (outfit === "tree") treeTime.current = Math.min(4, treeTime.current + Math.min(delta, 0.1));
+    else treeTime.current = Math.max(0, treeTime.current - Math.min(delta, 0.1) * 2.5);
+    const e = treeTime.current;
+    const span = (from: number, len: number) => THREE.MathUtils.smoothstep(e, from, from + len);
+    const backOut = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 + 2.4 * Math.pow(x - 1, 3) + 1.4 * Math.pow(x - 1, 2));
+    const morph = span(0, 0.7);
+    const grow = backOut(THREE.MathUtils.clamp((e - 0.7) / 1.1, 0, 1));
+    const rise = span(0.8, 1.1);
+    const light = span(1.9, 0.8);
+    // The sphere melts away while the star blooms out of it, facing the camera (a little pop)
+    const pop = morph < 1 ? Math.sin(morph * Math.PI) * 0.12 : 0;
+    if (sphere.current) {
+      const k = Math.max(0.001, 1 - THREE.MathUtils.smoothstep(morph, 0.25, 1));
+      sphere.current.scale.set(HEAD.scale[0] * k, HEAD.scale[1] * k, HEAD.scale[2] * k);
+      sphere.current.visible = k > 0.01;
+    }
+    if (starMesh.current) {
+      starMesh.current.scale.setScalar(Math.max(0.001, THREE.MathUtils.smoothstep(morph, 0, 0.75) + pop));
+      starMesh.current.visible = morph > 0.01;
+      // A small wiggle while it changes shape, then a gentle sway once it shines
+      starMesh.current.rotation.z = (1 - morph) * Math.sin(morph * Math.PI * 3) * 0.35 + (still ? 0 : Math.sin(t * 1.3) * 0.05 * light);
+    }
+    if (eyes.current) {
+      // The eyes settle on the star's flat face
+      const shrink = 1 - morph * 0.2;
+      const eyeZ = placement[0].pos.z * shrink;
+      eyes.current.position.z = -morph * (eyeZ - (STAR_FACE + 0.02));
+      eyes.current.position.y = -morph * 0.03;
+      eyes.current.scale.setScalar(shrink);
+    }
+    if (perch.current) {
+      perch.current.position.y = rise * 0.66;
+      perch.current.scale.setScalar(1 - rise * 0.62);
+    }
+    if (treeGroup.current) {
+      treeGroup.current.scale.set(Math.max(0.001, grow), Math.max(0.001, grow), Math.max(0.001, grow));
+      treeGroup.current.visible = grow > 0.01;
+    }
+    // On top it lights up yellow, like the emotion tints, and twinkles softly
+    const twinkle = still ? 0 : 0.5 + 0.5 * Math.sin(t * 3.1);
+    mat.star.color.copy(mat.skin.color).lerp(yellow, light * 0.9);
+    mat.star.emissive.copy(yellow).multiplyScalar(light * (0.3 + 0.15 * twinkle) + (1 - light) * c.mix * 0.18);
+
     // Season outfit: each piece pops in and out; the head shrinks a bit so hat or antlers fit
     const wear: [THREE.Group | null, boolean][] = [[hat.current, outfit === "santa"], [beard.current, outfit === "santa"], [reindeer.current, outfit === "reindeer"]];
     for (const [g, on] of wear) {
@@ -316,10 +447,12 @@ function Head({ emotion, pose, still, anchor, poke, outfit }: { emotion?: Mascot
     // The red nose glows softly, like a little light
     mat.nose.emissiveIntensity = outfit === "reindeer" && !still ? 0.16 + 0.12 * (0.5 + 0.5 * Math.sin(t * 2.6)) : 0.18;
     if (frame.current) {
-      const target = outfit === "none" ? 1 : 0.8;
+      // Hat or antlers: the head shrinks a bit; the tree: everything shrinks so the whole tree fits
+      const treeFit = THREE.MathUtils.smoothstep(e, 0.7, 1.8);
+      const target = (outfit === "santa" || outfit === "reindeer" ? 0.8 : 1) - treeFit * 0.12;
       const sc = frame.current.scale.x + (target - frame.current.scale.x) * ease(6);
       frame.current.scale.setScalar(sc);
-      frame.current.position.y = (1 - sc) * -0.55;
+      frame.current.position.y = (1 - sc) * -0.55 * (1 - treeFit) + treeFit * 0.14;
       if (hat.current) hat.current.rotation.z = -0.12 + (still ? 0 : Math.sin(t * 2.2) * 0.04);
     }
 
@@ -336,6 +469,21 @@ function Head({ emotion, pose, still, anchor, poke, outfit }: { emotion?: Mascot
   return (
     <group ref={frame}>
     <group ref={root}>
+      {/* Christmas tree (grows under the star) */}
+      <group ref={treeGroup} position={[0, -0.18, 0]} scale={0.001} visible={false}>
+        <mesh material={mat.trunk} position={[0, -1.02, 0]}>
+          <cylinderGeometry args={[0.15, 0.18, 0.26, 32]} />
+        </mesh>
+        {tree.tiers.map((tier, i) => (
+          <mesh key={i} material={mat.pine} geometry={tier.geometry} />
+        ))}
+        {tree.baubles.map((b, i) => (
+          <mesh key={`b${i}`} material={baubleMats[i]} position={b.pos}>
+            <sphereGeometry args={[b.r, 24, 18]} />
+          </mesh>
+        ))}
+      </group>
+      <group ref={perch}>
       <group ref={head}>
         {/* Santa hat: brim, cone leaning to one side and a pompom */}
         <group ref={hat} position={[0, 0.6, -0.04]} rotation={[-0.16, 0, -0.12]} scale={0.001} visible={false}>
@@ -403,9 +551,11 @@ function Head({ emotion, pose, still, anchor, poke, outfit }: { emotion?: Mascot
             </mesh>
           ))}
         </group>
-        <mesh material={mat.skin} scale={HEAD.scale}>
+        <mesh ref={sphere} material={mat.skin} scale={HEAD.scale}>
           <sphereGeometry args={[HEAD.r, 64, 48]} />
         </mesh>
+        {/* Syncro as the star of the tree */}
+        <mesh ref={starMesh} material={mat.star} geometry={star} scale={0.001} visible={false} />
         <group ref={eyes}>
           {placement.map((e, i) => (
             <group key={i} position={e.pos} quaternion={e.quat}>
@@ -424,6 +574,7 @@ function Head({ emotion, pose, still, anchor, poke, outfit }: { emotion?: Mascot
             </group>
           ))}
         </group>
+      </group>
       </group>
     </group>
     </group>
@@ -454,7 +605,7 @@ function Studio() {
  * its own: follows the cursor, smiles when the pointer is over it, gets startled when poked, dozes
  * off when nobody moves the mouse for a while, and shows a short mood now and then.
  */
-export function SyncroMascot3D({ pose = "idle", emotion, festive = false, outfit }: { pose?: MascotPose; emotion?: MascotEmotion; festive?: boolean; outfit?: MascotOutfit }) {
+export function SyncroMascot3D({ pose = "idle", emotion, festive = false, outfit, timeline }: { pose?: MascotPose; emotion?: MascotEmotion; festive?: boolean; outfit?: MascotOutfit; /** Freezes the tree animation at this second (previews) */ timeline?: number }) {
   // `festive` is the older switch: Santa's outfit
   const wearing: MascotOutfit = outfit ?? (festive ? "santa" : "none");
   const anchor = useRef<HTMLDivElement>(null);
@@ -481,7 +632,7 @@ export function SyncroMascot3D({ pose = "idle", emotion, festive = false, outfit
         onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
       >
         <Studio />
-        <Head emotion={emotion} pose={pose} still={still} anchor={anchor} poke={poke} outfit={wearing} />
+        <Head emotion={emotion} pose={pose} still={still} anchor={anchor} poke={poke} outfit={wearing} timeline={timeline} />
       </Canvas>
     </div>
   );

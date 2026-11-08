@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 import { SyncroAvatar, type AvatarEmotion } from "@/components/syncro-avatar";
 import { useSupportUnread } from "@/components/support-notifier";
-import { isChristmasSeason, outfitMode, pickOutfit, type MascotThought, useMascotSettings } from "@/lib/mascot";
+import { isChristmasSeason, pickOutfit, type MascotThought, useMascotSettings } from "@/lib/mascot";
 import { currentAccountId } from "@/lib/auth-helpers";
 import type { MascotOutfit } from "@/components/mascot/syncro-mascot-3d";
 
@@ -563,11 +563,9 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
     toast.success(next ? "Guardado en tus ideas. Lo encuentras en el chat de soporte." : "Quitado de tus ideas guardadas");
   };
 
-  // ── Season outfit (Nov 1 – Jan 6): a fixed one, or Syncro decides when and which ──────────
-  const outfitChoice = outfitMode(settings);
+  // ── Season outfit (Nov 1 – Jan 6): standard for every business, Syncro decides when and which ─
   useEffect(() => {
-    if (!visible || outfitChoice === "none" || !isChristmasSeason()) { setOutfit("none"); return; }
-    if (outfitChoice === "santa" || outfitChoice === "reindeer") { setOutfit(outfitChoice); return; }
+    if (!visible || !isChristmasSeason()) { setOutfit("none"); return; }
     // Its own taste: puts on the favourite of this half day (now and then the other one) for a
     // few minutes, takes it off for a while, and so on
     const who = currentAccountId() ?? "";
@@ -580,7 +578,7 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
     };
     schedule(true);
     return () => window.clearTimeout(timer);
-  }, [visible, outfitChoice]);
+  }, [visible]);
 
   if (!visible) return null;
 
