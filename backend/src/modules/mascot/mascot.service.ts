@@ -11,7 +11,10 @@ export const MASCOT_DEFAULTS = {
   ideas: true,
   /** few | normal | many */
   frequency: 'normal',
+  /** Season decorations on (older switch; `outfit: 'none'` is the same as off) */
   festive: true,
+  /** Season outfit: auto (Syncro picks) | santa | reindeer | none */
+  outfit: 'auto',
   /** default | professional | friendly | direct | playful */
   tone: 'default',
   /** less | default | more */
@@ -29,6 +32,7 @@ export type MascotSettings = typeof MASCOT_DEFAULTS;
 
 const CHOICES: Partial<Record<keyof MascotSettings, string[]>> = {
   frequency: ['few', 'normal', 'many'],
+  outfit: ['auto', 'santa', 'reindeer', 'none'],
   tone: ['default', 'professional', 'friendly', 'direct', 'playful'],
   warmth: ['less', 'default', 'more'],
   enthusiasm: ['less', 'default', 'more'],

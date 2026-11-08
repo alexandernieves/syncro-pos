@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useId, useState } from "react";
 import { cn } from "@/lib/utils";
-import type { MascotEmotion, MascotPose } from "@/components/mascot/syncro-mascot-3d";
+import type { MascotEmotion, MascotOutfit, MascotPose } from "@/components/mascot/syncro-mascot-3d";
 
 export type AvatarPose = MascotPose;
 export type AvatarEmotion = MascotEmotion;
@@ -33,6 +33,7 @@ export function SyncroAvatar({
   size = 64,
   emotion,
   festive,
+  outfit,
   className,
   title = "Syncro",
 }: {
@@ -40,8 +41,10 @@ export function SyncroAvatar({
   size?: number;
   /** Fixed feeling; without it Syncro reacts on its own (hover, clicks, idle). */
   emotion?: AvatarEmotion;
-  /** Santa hat and beard */
+  /** Santa hat and beard (older switch; `outfit` wins) */
   festive?: boolean;
+  /** Season outfit: none, Santa or reindeer */
+  outfit?: MascotOutfit;
   className?: string;
   title?: string;
 }) {
@@ -51,7 +54,7 @@ export function SyncroAvatar({
   return (
     <div role="img" aria-label={title} className={cn("relative shrink-0", className)} style={{ width: size, height: size }}>
       {webgl ? (
-        <SyncroMascot3D pose={pose} emotion={emotion} festive={festive} />
+        <SyncroMascot3D pose={pose} emotion={emotion} festive={festive} outfit={outfit} />
       ) : webgl === false ? (
         <SyncroFace className="absolute inset-x-0 bottom-0 m-auto" size={size} />
       ) : null}

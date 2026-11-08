@@ -7,6 +7,8 @@ import * as THREE from "three";
 
 export type MascotPose = "idle" | "wave" | "point" | "think" | "celebrate";
 export type MascotEmotion = "neutral" | "happy" | "angry" | "sad" | "surprised" | "thinking" | "sleepy";
+/** What Syncro wears for the season: nothing, Santa's hat and beard, or a reindeer costume. */
+export type MascotOutfit = "none" | "santa" | "reindeer";
 
 /* ------------------------------------------------------------------------------------------------
  * Pointer: one window listener shared by every mascot on the page, so the eyes can follow the user.
@@ -98,9 +100,56 @@ function santaHatGeometry() {
 /** Where the bent tip ends up (for the pompom). */
 const HAT_TIP = new THREE.Vector3(0.95, 1.4 - 0.72, 0);
 
+/**
+ * A tube that thins towards its tip (antler beams and tines). The radius goes from r0 at the
+ * start of the curve to r1 at the end.
+ */
+function taperedTube(points: THREE.Vector3[], r0: number, r1: number) {
+  const curve = new THREE.CatmullRomCurve3(points);
+  const seg = 64;
+  const radial = 28;
+  const g = new THREE.TubeGeometry(curve, seg, 1, radial, false);
+  const pos = g.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i <= seg; i++) {
+    const u = i / seg;
+    const center = curve.getPointAt(u);
+    // Chunky most of the way, thinning gently near the tip
+    const r = r0 + (r1 - r0) * Math.pow(u, 1.4);
+    for (let j = 0; j <= radial; j++) {
+      const k = i * (radial + 1) + j;
+      v.fromBufferAttribute(pos, k).sub(center).multiplyScalar(r).add(center);
+      pos.setXYZ(k, v.x, v.y, v.z);
+    }
+  }
+  g.computeVertexNormals();
+  return { geometry: g, tip: curve.getPointAt(1), base: curve.getPointAt(0), r0, r1 };
+}
+
+/**
+ * One reindeer antler (the right one; the left is mirrored), soft and rounded like a plush toy:
+ * a chunky curved beam and four rounded tines, all curves, no corners or straight runs.
+ * Every tine starts inside the beam and ends in a round tip, so the joints look moulded in one piece.
+ */
+function antlerParts() {
+  const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  return [
+    // Main beam: thick, rises leaning out and curls back up at the top
+    taperedTube([P(0, -0.05, 0), P(0.06, 0.28, 0.01), P(0.17, 0.62, -0.01), P(0.2, 0.96, -0.03), P(0.12, 1.3, -0.03)], 0.17, 0.12),
+    // Low tine: long, almost flat outwards, lifting at the end like a finger
+    taperedTube([P(0.07, 0.22, 0.01), P(0.3, 0.24, 0.03), P(0.52, 0.3, 0.04), P(0.68, 0.46, 0.04)], 0.13, 0.1),
+    // Inner tine: towards the middle, then up
+    taperedTube([P(0.09, 0.42, 0.01), P(-0.06, 0.55, 0.03), P(-0.16, 0.72, 0.04), P(-0.17, 0.9, 0.03)], 0.12, 0.095),
+    // Middle tine: outwards and up, well apart from the low one
+    taperedTube([P(0.17, 0.66, -0.01), P(0.38, 0.74, 0), P(0.56, 0.88, 0.01), P(0.64, 1.06, 0.01)], 0.12, 0.095),
+    // Upper tine: short, up and a bit out
+    taperedTube([P(0.2, 0.98, -0.03), P(0.33, 1.07, -0.02), P(0.42, 1.2, -0.01), P(0.44, 1.34, -0.01)], 0.11, 0.09),
+  ];
+}
+
 type EyeParts = { bead: THREE.Mesh | null; arc: THREE.Mesh | null; brow: THREE.Mesh | null };
 
-function Head({ emotion, pose, still, anchor, poke, festive }: { emotion?: MascotEmotion; pose: MascotPose; still: boolean; anchor: React.RefObject<HTMLDivElement | null>; poke: React.RefObject<number>; festive: boolean }) {
+function Head({ emotion, pose, still, anchor, poke, outfit }: { emotion?: MascotEmotion; pose: MascotPose; still: boolean; anchor: React.RefObject<HTMLDivElement | null>; poke: React.RefObject<number>; outfit: MascotOutfit }) {
   // "Polished skin": white glazed ceramic with a clear coat; the emotion only tints it softly
   const mat = useMemo(
     () => ({
@@ -109,15 +158,23 @@ function Head({ emotion, pose, still, anchor, poke, festive }: { emotion?: Masco
       // Christmas: glazed red hat, white trim and a soft white beard
       hat: new THREE.MeshPhysicalMaterial({ color: "#c81e24", roughness: 0.32, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.06, sheen: 0.6, sheenRoughness: 0.4, sheenColor: new THREE.Color("#ff6b6b"), side: THREE.DoubleSide }),
       fluff: new THREE.MeshPhysicalMaterial({ color: "#ffffff", roughness: 0.55, clearcoat: 0.5, clearcoatRoughness: 0.25, sheen: 1, sheenRoughness: 0.6, sheenColor: new THREE.Color("#ffffff") }),
+      // Reindeer: a round, lacquered red nose that glows a little, and glazed caramel antlers
+      nose: new THREE.MeshPhysicalMaterial({ color: "#e0141c", roughness: 0.08, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.02, emissive: "#ff1a1a", emissiveIntensity: 0.18 }),
+      antler: new THREE.MeshPhysicalMaterial({ color: "#8a5530", roughness: 0.14, metalness: 0.04, clearcoat: 1, clearcoatRoughness: 0.03, sheen: 0.3, sheenColor: new THREE.Color("#ffcf9e") }),
+      ear: new THREE.MeshPhysicalMaterial({ color: "#c58a52", roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.05 }),
+      earInner: new THREE.MeshPhysicalMaterial({ color: "#f3c9a6", roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.08 }),
     }),
     [],
   );
   useEffect(() => () => { Object.values(mat).forEach((m) => m.dispose()); }, [mat]);
   const hatGeometry = useMemo(() => santaHatGeometry(), []);
   useEffect(() => () => hatGeometry.dispose(), [hatGeometry]);
+  const antler = useMemo(() => antlerParts(), []);
+  useEffect(() => () => antler.forEach((a) => a.geometry.dispose()), [antler]);
   const frame = useRef<THREE.Group>(null);
   const hat = useRef<THREE.Group>(null);
   const beard = useRef<THREE.Group>(null);
+  const reindeer = useRef<THREE.Group>(null);
 
   const root = useRef<THREE.Group>(null);
   const head = useRef<THREE.Group>(null);
@@ -248,16 +305,18 @@ function Head({ emotion, pose, still, anchor, poke, festive }: { emotion?: Masco
       eyes.current.rotation.x += (b.ly * 0.1 + b.sy - eyes.current.rotation.x) * ease(22);
     }
 
-    // Christmas outfit: pops in and out; the head shrinks a bit so the hat fits
-    const dress = festive ? 1 : 0;
-    for (const g of [hat.current, beard.current]) {
+    // Season outfit: each piece pops in and out; the head shrinks a bit so hat or antlers fit
+    const wear: [THREE.Group | null, boolean][] = [[hat.current, outfit === "santa"], [beard.current, outfit === "santa"], [reindeer.current, outfit === "reindeer"]];
+    for (const [g, on] of wear) {
       if (!g) continue;
-      const next = g.scale.x + (dress - g.scale.x) * ease(6);
+      const next = g.scale.x + ((on ? 1 : 0) - g.scale.x) * ease(6);
       g.scale.setScalar(Math.max(0.001, next));
       g.visible = next > 0.02;
     }
+    // The red nose glows softly, like a little light
+    mat.nose.emissiveIntensity = outfit === "reindeer" && !still ? 0.16 + 0.12 * (0.5 + 0.5 * Math.sin(t * 2.6)) : 0.18;
     if (frame.current) {
-      const target = festive ? 0.8 : 1;
+      const target = outfit === "none" ? 1 : 0.8;
       const sc = frame.current.scale.x + (target - frame.current.scale.x) * ease(6);
       frame.current.scale.setScalar(sc);
       frame.current.position.y = (1 - sc) * -0.55;
@@ -291,6 +350,38 @@ function Head({ emotion, pose, still, anchor, poke, festive }: { emotion?: Masco
           {/* Pompom hanging from the drooping tip */}
           <mesh material={mat.fluff} position={[HAT_TIP.x + 0.06, HAT_TIP.y - 0.1, HAT_TIP.z]}>
             <sphereGeometry args={[0.21, 40, 32]} />
+          </mesh>
+        </group>
+        {/* Reindeer: antlers, little ears and a round red nose */}
+        <group ref={reindeer} scale={0.001} visible={false}>
+          {([-1, 1] as const).map((sd) => (
+            <group key={`antler${sd}`} position={[0.42 * sd, 0.72, -0.1]} rotation={[-0.14, 0.15 * sd, -0.3 * sd]} scale={[0.82 * sd, 0.82, 0.82]}>
+              {antler.map((a, i) => (
+                <group key={i}>
+                  <mesh material={mat.antler} geometry={a.geometry} />
+                  {/* Round tip and a soft joint where it grows from the beam */}
+                  <mesh material={mat.antler} position={a.tip}>
+                    <sphereGeometry args={[a.r1, 32, 24]} />
+                  </mesh>
+                  <mesh material={mat.antler} position={a.base}>
+                    <sphereGeometry args={[a.r0 * 1.02, 32, 24]} />
+                  </mesh>
+                </group>
+              ))}
+            </group>
+          ))}
+          {([-1, 1] as const).map((sd) => (
+            <group key={`ear${sd}`} position={[0.9 * sd, 0.36, 0.02]} rotation={[0.25, 0.35 * sd, -1.25 * sd]}>
+              <mesh material={mat.ear} scale={[0.17, 0.36, 0.08]}>
+                <sphereGeometry args={[1, 32, 24]} />
+              </mesh>
+              <mesh material={mat.earInner} position={[0, 0.02, 0.06]} scale={[0.1, 0.25, 0.03]}>
+                <sphereGeometry args={[1, 24, 16]} />
+              </mesh>
+            </group>
+          ))}
+          <mesh material={mat.nose} position={[0, -0.16, 0.985]}>
+            <sphereGeometry args={[0.19, 48, 36]} />
           </mesh>
         </group>
         {/* Beard and moustache */}
@@ -363,7 +454,9 @@ function Studio() {
  * its own: follows the cursor, smiles when the pointer is over it, gets startled when poked, dozes
  * off when nobody moves the mouse for a while, and shows a short mood now and then.
  */
-export function SyncroMascot3D({ pose = "idle", emotion, festive = false }: { pose?: MascotPose; emotion?: MascotEmotion; festive?: boolean }) {
+export function SyncroMascot3D({ pose = "idle", emotion, festive = false, outfit }: { pose?: MascotPose; emotion?: MascotEmotion; festive?: boolean; outfit?: MascotOutfit }) {
+  // `festive` is the older switch: Santa's outfit
+  const wearing: MascotOutfit = outfit ?? (festive ? "santa" : "none");
   const anchor = useRef<HTMLDivElement>(null);
   const poke = useRef(0);
   const [visible, setVisible] = useState(true);
@@ -388,7 +481,7 @@ export function SyncroMascot3D({ pose = "idle", emotion, festive = false }: { po
         onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
       >
         <Studio />
-        <Head emotion={emotion} pose={pose} still={still} anchor={anchor} poke={poke} festive={festive} />
+        <Head emotion={emotion} pose={pose} still={still} anchor={anchor} poke={poke} outfit={wearing} />
       </Canvas>
     </div>
   );

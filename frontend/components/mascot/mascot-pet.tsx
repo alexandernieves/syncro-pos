@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 import { SyncroAvatar, type AvatarEmotion } from "@/components/syncro-avatar";
 import { useSupportUnread } from "@/components/support-notifier";
-import { isChristmasSeason, type MascotThought, useMascotSettings } from "@/lib/mascot";
+import { isChristmasSeason, outfitMode, pickOutfit, type MascotThought, useMascotSettings } from "@/lib/mascot";
+import { currentAccountId } from "@/lib/auth-helpers";
+import type { MascotOutfit } from "@/components/mascot/syncro-mascot-3d";
 
 /** Size of the head on screen. */
 const SIZE = 96;
@@ -112,7 +114,7 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
   const [busy, setBusy] = useState(false);
   const [mood, setMood] = useState<AvatarEmotion | undefined>(undefined);
   const [bulbOut, setBulbOut] = useState(false);
-  const [festive, setFestive] = useState(false);
+  const [outfit, setOutfit] = useState<MascotOutfit>("none");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const thoughtRef = useRef<MascotThought | null>(null);
@@ -561,19 +563,24 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
     toast.success(next ? "Guardado en tus ideas. Lo encuentras en el chat de soporte." : "Quitado de tus ideas guardadas");
   };
 
-  // ── Christmas: now and then the Santa hat and beard ───────────────────────────────────────
+  // ── Season outfit (Nov 1 – Jan 6): a fixed one, or Syncro decides when and which ──────────
+  const outfitChoice = outfitMode(settings);
   useEffect(() => {
-    if (!visible || !settings?.festive || !isChristmasSeason()) return;
+    if (!visible || outfitChoice === "none" || !isChristmasSeason()) { setOutfit("none"); return; }
+    if (outfitChoice === "santa" || outfitChoice === "reindeer") { setOutfit(outfitChoice); return; }
+    // Its own taste: puts on the favourite of this half day (now and then the other one) for a
+    // few minutes, takes it off for a while, and so on
+    const who = currentAccountId() ?? "";
     let timer = 0;
     const schedule = (first: boolean) => {
       timer = window.setTimeout(() => {
-        setFestive(true);
-        timer = window.setTimeout(() => { setFestive(false); schedule(false); }, 25_000 + Math.random() * 20_000);
-      }, first ? 30_000 + Math.random() * 30_000 : 3 * 60_000 + Math.random() * 6 * 60_000);
+        setOutfit(pickOutfit(new Date(), who));
+        timer = window.setTimeout(() => { setOutfit("none"); schedule(false); }, 2 * 60_000 + Math.random() * 3 * 60_000);
+      }, first ? 15_000 + Math.random() * 25_000 : 2 * 60_000 + Math.random() * 4 * 60_000);
     };
     schedule(true);
     return () => window.clearTimeout(timer);
-  }, [visible, settings?.festive]);
+  }, [visible, outfitChoice]);
 
   if (!visible) return null;
 
@@ -610,7 +617,7 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
           style={{ width: SIZE, height: SIZE }}
         >
           <span ref={bodyRef} className="block will-change-transform" style={{ transformOrigin: "50% 60%" }}>
-            <SyncroAvatar size={SIZE} title="" emotion={mood ?? (asleep ? "sleepy" : unread ? "surprised" : undefined)} festive={festive} />
+            <SyncroAvatar size={SIZE} title="" emotion={mood ?? (asleep ? "sleepy" : unread ? "surprised" : undefined)} outfit={outfit} />
           </span>
           {unread > 0 && (
             <span className={cn("absolute bottom-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold tabular-nums text-primary-foreground ring-2 ring-background", onRight ? "left-0" : "right-0")}>
