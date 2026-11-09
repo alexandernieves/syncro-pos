@@ -13,8 +13,7 @@ const STARS: [number, number, number][] = [[18, 14, 1.2], [44, 30, 0.9], [150, 1
 
 /**
  * The Christmas corner of the menu: snowy ground, a tree with twinkling lights and a star,
- * presents, and Santa waving with his sack. It fills the free space of the menu and hides
- * itself when there is too little room.
+ * and presents. It fills the free space of the menu and hides itself when there is too little room.
  */
 export function XmasScene({ className }: { className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -53,6 +52,8 @@ export function XmasScene({ className }: { className?: string }) {
           <ellipse cx="178" cy="176" rx="78" ry="42" fill="#CFE1D6" opacity="0.5" />
           <ellipse cx="130" cy="184" rx="128" ry="36" fill="#F2F7F3" />
 
+          {/* Tree and presents, in the middle */}
+          <g transform="translate(45 0)">
           {/* Tree */}
           <rect x="79" y="134" width="12" height="14" rx="2" fill="#6B4226" />
           <path d="M85 74 L127 136 Q85 145 43 136 Z" fill="url(#xs-tree)" />
@@ -75,6 +76,8 @@ export function XmasScene({ className }: { className?: string }) {
           <path d="M85 20 L88 27.5 L96 28 L90 33 L92 41 L85 36.5 L78 41 L80 33 L74 28 L82 27.5 Z" fill="#FFD166" stroke="#F2B53A" strokeWidth="0.8" strokeLinejoin="round" />
 
           {/* Presents */}
+          <rect x="132" y="146" width="15" height="10" rx="1.2" fill="#C8262C" />
+          <rect x="138" y="146" width="3" height="10" fill="#F4F6F9" />
           <rect x="46" y="140" width="20" height="15" rx="1.5" fill="#C8262C" />
           <rect x="54" y="140" width="4" height="15" fill="#FFD166" />
           <path d="M56 140 q-6 -7 -8 -1 q3 2 8 1 q6 -7 8 -1 q-3 2 -8 1" fill="#FFD166" />
@@ -83,44 +86,6 @@ export function XmasScene({ className }: { className?: string }) {
           <rect x="116" y="146" width="12" height="9" rx="1.2" fill="#2E8B57" />
           <rect x="121" y="146" width="2.6" height="9" fill="#FFD166" />
 
-          {/* Santa */}
-          <g>
-            {/* Sack */}
-            <path d="M146 150 q-10 -2 -8 -18 q2 -12 12 -14 q-3 -4 2 -6 q4 1 3 6 q11 4 10 17 q-1 14 -12 15 z" fill="#8C5A3C" />
-            <path d="M149 118 q3 2 6 0" stroke="#5E3A26" strokeWidth="1.6" fill="none" />
-            {/* Boots */}
-            <rect x="172" y="146" width="15" height="8" rx="3.5" fill="#2B2422" />
-            <rect x="191" y="146" width="15" height="8" rx="3.5" fill="#2B2422" />
-            {/* Body */}
-            <ellipse cx="189" cy="124" rx="23" ry="24" fill="#D42F2F" />
-            <rect x="186" y="101" width="6.5" height="44" rx="3" fill="#FFF8EE" />
-            <rect x="166.5" y="139" width="45" height="7.5" rx="3.75" fill="#FFF8EE" />
-            <rect x="166.5" y="121" width="45" height="7" fill="#2B2422" />
-            <rect x="184" y="119.5" width="10.5" height="10" rx="1.5" fill="none" stroke="#FFD166" strokeWidth="2" />
-            {/* Arm holding the sack */}
-            <path d="M171 106 Q 162 116 158 124" stroke="#D42F2F" strokeWidth="8.5" strokeLinecap="round" fill="none" />
-            <circle cx="157" cy="126" r="4.6" fill="#2B2422" />
-            {/* Waving arm */}
-            <g className="xmas-wave" style={{ transformOrigin: "206px 106px" }}>
-              <path d="M206 106 Q 216 96 220 84" stroke="#D42F2F" strokeWidth="8.5" strokeLinecap="round" fill="none" />
-              <rect x="214.5" y="83" width="11" height="4.5" rx="2.2" fill="#FFF8EE" transform="rotate(-20 220 85)" />
-              <circle cx="221.5" cy="78.5" r="4.8" fill="#2B2422" />
-            </g>
-            {/* Head */}
-            <circle cx="189" cy="87" r="13" fill="#F6C9A6" />
-            <circle cx="181" cy="90" r="2.6" fill="#F29B9B" opacity="0.7" />
-            <circle cx="197" cy="90" r="2.6" fill="#F29B9B" opacity="0.7" />
-            <circle cx="184.5" cy="84.5" r="1.5" fill="#2B1B17" />
-            <circle cx="193.5" cy="84.5" r="1.5" fill="#2B1B17" />
-            {/* Beard and moustache */}
-            <path d="M175 90 q-1 14 8 19 q6 4 12 0 q9 -5 8 -19 q-4 6 -14 6 q-10 0 -14 -6z" fill="#FFFFFF" />
-            <ellipse cx="185" cy="93" rx="5" ry="2.8" fill="#FFFFFF" />
-            <ellipse cx="193" cy="93" rx="5" ry="2.8" fill="#FFFFFF" />
-            <circle cx="189" cy="90.5" r="2.6" fill="#E8907A" />
-            {/* Hat */}
-            <path d="M176 80 Q 177 64 192 61 Q 206 59 213 70 L207 74 Q 202 68 196 70 Q 202 75 203 80 Z" fill="#D42F2F" />
-            <rect x="174.5" y="76.5" width="29" height="7" rx="3.5" fill="#FFF8EE" />
-            <circle cx="211" cy="72.5" r="4.6" fill="#FFF8EE" />
           </g>
         </svg>
       )}

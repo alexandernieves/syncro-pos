@@ -52,7 +52,7 @@ export const THEMES: SyncroTheme[] = [
   {
     id: "santa",
     name: "Santa",
-    description: "Nieve cayendo, el árbol, Santa y su trineo en el menú, y bambalinas arriba. Los datos quedan sobre fondo claro.",
+    description: "Nieve cayendo, el árbol de Navidad y el trineo de Santa en el menú, y bambalinas arriba. Los datos quedan sobre fondo claro.",
     mode: "light",
     seasonal: true,
     preview: { shell: "#0F3324", background: "#FBF7EF", card: "#FFFDF8", text: "#2B1B17", muted: "#A9C4B4", primary: "#C8262C" },
