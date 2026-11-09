@@ -65,6 +65,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { DesktopVersion } from "@/components/desktop-update-badge";
 import { useMyModules } from "@/lib/modules";
+import { useSyncroTheme } from "@/components/theme-sync";
+import { XmasScene } from "@/components/xmas/xmas-scene";
+import { XmasSnow } from "@/components/xmas/xmas-snow";
 import { FeatureRequestDialog } from "@/components/feature-request-dialog";
 import { IconSparkles } from "@tabler/icons-react";
 
@@ -245,6 +248,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [mounted, setMounted] = React.useState(false);
   const pathname = usePathname() || "";
   const gymMode = pathname.startsWith("/dashboard/gimnasio");
+  // Santa theme: snow, the sleigh and the Christmas corner live in the menu, never over the data
+  const { theme: colourTheme } = useSyncroTheme();
+  const santa = colourTheme.id === "santa";
   // Inside the gym, show only the parts of the module this business has turned on
   const myModules = useMyModules();
   const gymModule = myModules?.find((m) => m.code === "gym");
@@ -431,6 +437,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <>
       <Sidebar collapsible="icon" {...props}>
+        {santa && (
+          <div aria-hidden className="xmas-layer pointer-events-none absolute inset-0 overflow-hidden">
+            <XmasSnow className="absolute inset-0 h-full w-full" />
+          </div>
+        )}
         {gymMode ? (
           <SidebarHeader className="gap-0 p-0">
             <div className="px-3 pb-1 pt-3">
@@ -530,6 +541,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             )}
           </div>
 
+          {santa && <XmasScene className="mx-2 group-data-[collapsible=icon]:hidden" />}
           <NavSecondary items={filteredNavSecondary} className="mt-auto" />
         </SidebarContent>
         <SidebarFooter>

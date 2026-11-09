@@ -1,4 +1,6 @@
 import { Separator } from "@/components/ui/separator";
+import { useSyncroTheme } from "@/components/theme-sync";
+import { XmasGarland } from "@/components/xmas/xmas-garland";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { BranchSwitcher } from "./branch-switcher";
 import { NotificationBell } from "./notification-bell";
@@ -28,6 +30,8 @@ export function SiteHeader() {
     console.error("Error parsing user from localStorage", e);
   }
   const isSyncro = user?.role === "syncropos";
+  const { theme: colourTheme } = useSyncroTheme();
+  const santa = colourTheme.id === "santa";
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -58,6 +62,9 @@ export function SiteHeader() {
            {/* Removed incorrect system name */}
         </div>
       </div>
+
+      {/* Santa theme: baubles hanging in the free space of the bar */}
+      {santa && <XmasGarland className="mx-4 flex-1 self-stretch" />}
 
       <div className="flex items-center gap-3">
         {/* FECHA VALOR STACKED (AS REQUESTED) */}

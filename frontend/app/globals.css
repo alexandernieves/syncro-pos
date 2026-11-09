@@ -242,6 +242,90 @@ html[data-syncro-theme="navidad"] {
   --sidebar-ring: #C3302C;
 }
 
+/* Santa (temporada): los datos sobre fondo claro, como en Navidad, y un marco
+   de noche navideña en verde pino con nieve, el arbol, Santa y su trineo en el
+   menu, y bambalinas en la barra de arriba (components/xmas). */
+html[data-syncro-theme="santa"] {
+  color-scheme: light;
+  --shell: #0D2C20;
+  --shell-surface: #EFE7DA;
+  --background: #FBF7EF;
+  --foreground: #2B1B17;
+  --card: #FFFDF8;
+  --card-foreground: #2B1B17;
+  --popover: #FFFDF8;
+  --popover-foreground: #2B1B17;
+  --primary: #C8262C;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F4EDE1;
+  --secondary-foreground: #2B1B17;
+  --muted: #F4EDE1;
+  --muted-foreground: #6B5B50;
+  --accent: #E8F0E6;
+  --accent-foreground: #1F3A2B;
+  --destructive: #9A1C1C;
+  --border: #E7DCC9;
+  --input: #E7DCC9;
+  --ring: #C8262C;
+
+  --chart-1: #C8262C;
+  --chart-2: #2E7A4E;
+  --chart-3: #CF9F33;
+  --chart-4: #3A7FC0;
+  --chart-5: #8A5CC2;
+
+  --sidebar: #0F3324;
+  --sidebar-foreground: #F6EFE2;
+  --sidebar-primary: #D93035;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1C4A37;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #1E4838;
+  --sidebar-ring: #D93035;
+}
+/* El menu es de noche: sus textos y lineas se aclaran (solo dentro del menu). */
+html[data-syncro-theme="santa"] [data-slot="sidebar"] {
+  --foreground: #F6EFE2;
+  --muted-foreground: #A9C4B4;
+  --border: #24533F;
+  --accent: #1C4A37;
+  --accent-foreground: #FFFFFF;
+  --card: #123A2B;
+  --muted: #1C4A37;
+  --secondary: #1C4A37;
+  --secondary-foreground: #F6EFE2;
+  --primary: #D93035;
+}
+html[data-syncro-theme="santa"] [data-slot="sidebar-inner"] {
+  background: linear-gradient(180deg, #0B2419 0%, #0F3324 55%, #134030 100%);
+}
+/* La nieve va detras del menu: sus textos quedan por encima. */
+html[data-syncro-theme="santa"] [data-slot="sidebar-inner"] > :not(.xmas-layer) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Animaciones navideñas (las usa components/xmas). */
+@keyframes xmas-swing { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+@keyframes xmas-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes xmas-light { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes xmas-wave { 0%, 60%, 100% { transform: rotate(0deg); } 70% { transform: rotate(-14deg); } 80% { transform: rotate(8deg); } 90% { transform: rotate(-10deg); } }
+@keyframes xmas-sleigh {
+  0% { transform: translate(-140px, 18px); opacity: 0; }
+  2% { opacity: 0.55; }
+  22% { transform: translate(340px, -4px); opacity: 0.55; }
+  23%, 100% { transform: translate(340px, -4px); opacity: 0; }
+}
+.xmas-bauble { transform-origin: 50% 0; animation: xmas-swing 3.6s ease-in-out infinite; }
+.xmas-twinkle { animation: xmas-twinkle 2.8s ease-in-out infinite; }
+.xmas-light { animation: xmas-light 1.6s ease-in-out infinite; }
+.xmas-wave { animation: xmas-wave 4.5s ease-in-out infinite; }
+.xmas-sleigh { left: 0; animation: xmas-sleigh 38s linear infinite; animation-delay: 4s; opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .xmas-bauble, .xmas-twinkle, .xmas-light, .xmas-wave { animation: none; }
+  .xmas-sleigh { display: none; }
+}
+
 /* Ajustes a mano de los temas oscuros (lo generado vive en theme-dark.css). */
 
 /* Avisos (sonner): sus colores son propios, en blanco. Siguen al tema. */
@@ -546,7 +630,7 @@ html {
 [data-slot="sidebar-wrapper"] [class*="bg-[#121110]"],
 [data-slot="sidebar-wrapper"] [class*="bg-[#050505]"],
 [data-slot="sidebar-wrapper"] [class*="bg-[#0a0a0a]"] {
-  background-color: var(--shell);
+  background-color: var(--shell-surface, var(--shell));
 }
 
 /* Texto blanco -> tinta oscura, salvo cuando va sobre un fondo de color

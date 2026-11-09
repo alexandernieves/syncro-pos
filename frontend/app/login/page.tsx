@@ -35,7 +35,7 @@ export default function LoginPage() {
   // Follows the theme picked in Configuración → Temas (on this computer)
   const { theme } = useSyncroTheme()
   const isDark = mounted && (theme.mode === "dark" || resolvedTheme === "dark")
-  const festive = mounted && theme.id === "navidad"
+  const festive = mounted && (theme.id === "navidad" || theme.id === "santa")
 
   return (
     <div
@@ -62,6 +62,7 @@ export default function LoginPage() {
         .login-bg { background: radial-gradient(ellipse 90% 70% at 15% 0%, #fdebe4 0%, #f7eae4 42%, #f6f5f2 100%); }
         html[data-mode="dark"] .login-bg { background: radial-gradient(ellipse 90% 70% at 15% 0%, #351a10 0%, #22120b 38%, #0f0906 100%); }
         html[data-syncro-theme="atardecer"] .login-bg { background: radial-gradient(ellipse 90% 70% at 15% 0%, #4a2a1c 0%, #362720 40%, #25221f 100%); }
+        html[data-syncro-theme="santa"] .login-bg,
         html[data-syncro-theme="navidad"] .login-bg { background: radial-gradient(ellipse 90% 70% at 15% 0%, #fbe1dc 0%, #f6ece2 42%, #eef3ea 100%); }
         html:root:not([data-syncro-theme]), html:root.dark:not([data-syncro-theme]), html:root:not([data-syncro-theme]) body, html:root:not([data-syncro-theme]) body[class*="theme-"] {
           color-scheme: light !important;

@@ -69,6 +69,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { useSyncroTheme } from "@/components/theme-sync";
+import { XmasGarland } from "@/components/xmas/xmas-garland";
 import { db } from "@/lib/db";
 import { useSync } from "@/hooks/useSync";
 import { useCurrency } from "@/context/CurrencyContext";
@@ -552,6 +554,8 @@ export default function POSPage() {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [processing, setProcessing] = useState(false);
+  const { theme: colourTheme } = useSyncroTheme();
+  const santaTheme = colourTheme.id === "santa";
   const isProcessingRef = useRef(false);
   const [taxRate, setTaxRate] = useState(16);
   const [isSaleSuccessModalOpen, setIsSaleSuccessModalOpen] = useState(false);
@@ -2801,6 +2805,9 @@ export default function POSPage() {
             )}
           </div>
         </div>
+
+        {/* Santa theme: baubles in the free space of the bar, away from products and ticket */}
+        {santaTheme && <XmasGarland className="mx-4 hidden flex-1 self-stretch md:block" />}
 
         <div className="flex items-center gap-2">
           {/* Base Currency Select Dropdown */}
