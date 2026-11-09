@@ -358,7 +358,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           return isSyncroVendor;
         }
         // Packaged modules follow what Syncro central turned on (fresh), not the saved list
-        if (item.moduleId === "gym" && myModules) return !!myModules.find((m) => m.code === "gym")?.usable;
+        // Hidden while it isn't known yet: it must never flash for a business without it
+        if (item.moduleId === "gym") return !!myModules?.find((m) => m.code === "gym")?.usable;
         if (!item.moduleId || item.moduleId === "dashboard") return true;
         if (enabledModules && enabledModules.length > 0) {
           return enabledModules.includes(item.moduleId);

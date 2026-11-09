@@ -64,6 +64,7 @@ import {
   IconHexagon,
   IconChevronDown,
   IconAlertTriangle,
+  IconLoader2,
   IconEye,
   IconEyeOff,
   IconBrandWhatsapp,
@@ -795,6 +796,12 @@ export default function ConfiguracionPage() {
     { id: "gimnasio", label: "Gimnasio" },
   ];
 
+  const [userToDelete, setUserToDelete] = useState<any | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
+  const [myUserId, setMyUserId] = useState<string | null>(null);
+  useEffect(() => {
+    try { setMyUserId(JSON.parse(localStorage.getItem("user") || sessionStorage.getItem("user") || "null")?.id ?? null); } catch { /* ignore */ }
+  }, []);
   const fetchUsers = async () => {
     try {
       const usersRes = await fetch(`${API}/users`, {
@@ -1794,20 +1801,9 @@ export default function ConfiguracionPage() {
                       });
                       setEditUserOpen(true);
                     }}><IconPencil size={14}/></Button>
-                    <Button size="icon" variant="ghost" className="text-destructive" onClick={async () => {
-                      if(confirm("¿Eliminar usuario?")) {
-                        try {
-                          const res = await fetch(`${API}/users/${u.id}`, { 
-                            method: "DELETE",
-                            headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
-                          });
-                          if(res.ok) {
-                            toast.success("Usuario eliminado");
-                            fetchUsers();
-                          } else toast.error("Error al eliminar");
-                        } catch(e) { toast.error("Error de conexión"); }
-                      }
-                    }}><IconTrash size={14}/></Button>
+                    {u.role !== "ownerpos" && u.id !== myUserId && (
+                      <Button size="icon" variant="ghost" className="text-destructive" aria-label={`Eliminar a ${u.name || u.email}`} onClick={() => setUserToDelete(u)}><IconTrash size={14}/></Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -3186,6 +3182,49 @@ export default function ConfiguracionPage() {
         )}
 
       </main>
+
+      {/* Remove someone from the team */}
+      <AlertDialog open={!!userToDelete} onOpenChange={(o) => { if (!o && !deletingUser) setUserToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <IconAlertTriangle size={20} /> ¿Eliminar a {userToDelete?.name || userToDelete?.email}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Ya no podrá entrar a Syncro con <strong>{userToDelete?.email}</strong> y su sesión abierta se cerrará.
+              Si hizo ventas o abrió turnos, ese historial se conserva con su nombre.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingUser}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              data-kbd-primary
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={deletingUser}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!userToDelete) return;
+                setDeletingUser(true);
+                try {
+                  const res = await fetch(`${API}/users/${userToDelete.id}`, {
+                    method: "DELETE",
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                  });
+                  const body = await res.json().catch(() => ({}));
+                  if (res.ok) {
+                    toast.success(body.historyKept ? `${userToDelete.name || "Usuario"} eliminado. Su historial de ventas se conserva.` : `${userToDelete.name || "Usuario"} eliminado`);
+                    setUserToDelete(null);
+                    fetchUsers();
+                  } else toast.error(body.message || "No se pudo eliminar el usuario");
+                } catch { toast.error("Error de conexión"); }
+                finally { setDeletingUser(false); }
+              }}
+            >
+              {deletingUser ? <IconLoader2 size={16} className="animate-spin" /> : <IconTrash size={16} />} Sí, eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ALERT DIALOG DE ELIMINACION DE SUCURSAL */}
       <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>

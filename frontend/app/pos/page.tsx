@@ -22,6 +22,7 @@ import {
   Card, CardContent, CardHeader, CardTitle, CardDescription
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { ModeSwitcher } from "@/components/mode-switcher";
@@ -1207,6 +1208,15 @@ export default function POSPage() {
   };
 
   const clientMissingData = selectedClientId !== "consumidor-final" && clientIsMissingData(selectedClient);
+  // Why the pay button is off, shown in a tooltip over it
+  const payBlockedReason = (() => {
+    if (cart.length === 0 || processing || !clientMissingData) return null;
+    const noPhone = !selectedClient?.phone?.trim();
+    const noDoc = !selectedClient?.documentId?.trim();
+    if (noPhone && noDoc) return "Agrega el WhatsApp y la cédula del cliente para procesar el pago";
+    if (noPhone) return "Agrega el número de WhatsApp del cliente para procesar el pago";
+    return "Agrega la cédula o RIF del cliente para procesar el pago";
+  })();
 
   const handleClientDataSaved = (patch: { phone?: string; documentId?: string }, updated: any) => {
     setClients(prev => prev.map(c => ((c.id || (c as any)._id) === selectedClientId ? { ...c, ...updated, ...patch } : c)));
@@ -3492,18 +3502,25 @@ export default function POSPage() {
               </div>
               <span className="text-2xl font-black tracking-tight text-[#16140F] tabular-nums">${updatedTotal.toFixed(2)}</span>
             </div>
-            <Button
-              size="lg"
-              className="w-full h-12 font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md relative group overflow-hidden transition-all duration-200 rounded-xl"
-              onClick={() => openPaymentModal("CASH")}
-              disabled={cart.length === 0 || processing || clientMissingData}
-              title={clientMissingData ? "Completa los datos del cliente para continuar" : undefined}
-            >
-              <span className="relative flex items-center justify-center gap-2">
-                <IconCash className="size-5" />
-                Procesar pago
-              </span>
-            </Button>
+            {/* A disabled button gets no hover, so the explanation hangs from a wrapper around it */}
+            <Tooltip open={payBlockedReason ? undefined : false}>
+              <TooltipTrigger asChild>
+                <span className="block w-full" tabIndex={payBlockedReason ? 0 : -1}>
+                  <Button
+                    size="lg"
+                    className={cn("w-full h-12 font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md relative group overflow-hidden transition-all duration-200 rounded-xl", payBlockedReason && "pointer-events-none")}
+                    onClick={() => openPaymentModal("CASH")}
+                    disabled={cart.length === 0 || processing || clientMissingData}
+                  >
+                    <span className="relative flex items-center justify-center gap-2">
+                      <IconCash className="size-5" />
+                      Procesar pago
+                    </span>
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs text-center">{payBlockedReason}</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>

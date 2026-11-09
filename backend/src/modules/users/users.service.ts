@@ -1,6 +1,8 @@
-import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
+import { forgetUser } from '../auth/closed-accounts';
 
 @Injectable()
 export class UsersService {
@@ -56,7 +58,8 @@ export class UsersService {
 
   async findAll(businessId: string) {
     return this.prisma.user.findMany({
-      where: { businessId },
+      // Closed accounts (removed people who had sales or shifts) don't show up
+      where: { businessId, role: { not: 'deleted' } },
       select: {
         id: true,
         email: true,
@@ -96,11 +99,45 @@ export class UsersService {
     });
   }
 
-  async remove(id: string, businessId: string) {
+  /**
+   * Removes a person from the business. Someone who never sold or worked a shift is deleted for
+   * good. Someone with history (sales, shifts, expenses…) can't be erased without breaking those
+   * records, so the account is closed instead: they can no longer sign in, they leave the list,
+   * and their name stays on the sales they made. Their email is freed to be used again.
+   */
+  async remove(id: string, businessId: string, actor: { id: string; role: string }) {
+    if (!['ownerpos', 'admin'].includes(actor.role)) throw new ForbiddenException('Solo el dueño o un administrador puede eliminar usuarios');
     const user = await this.findOneById(id, businessId);
-    if (!user) throw new NotFoundException('Usuario no encontrado');
+    if (!user || user.role === 'deleted') throw new NotFoundException('Usuario no encontrado');
+    if (user.id === actor.id) throw new BadRequestException('No puedes eliminar tu propio usuario');
+    if (user.role === 'ownerpos') throw new BadRequestException('El dueño del negocio no se puede eliminar');
 
-    return this.prisma.user.delete({ where: { id } });
+    // What belongs only to the person: their devices, fingerprints and saved profiles
+    await this.prisma.$transaction([
+      this.prisma.pushSubscription.deleteMany({ where: { userId: id } }),
+      this.prisma.biometricCredential.deleteMany({ where: { userId: id } }),
+      this.prisma.savedProfile.deleteMany({ where: { email: user.email } }),
+    ]);
+
+    try {
+      await this.prisma.user.delete({ where: { id } });
+      return { deleted: true, historyKept: false };
+    } catch (e: any) {
+      // Referenced by sales, shifts… (foreign key): close the account and keep the history
+      if (e?.code !== 'P2003' && e?.code !== 'P2014') throw e;
+    }
+    await this.prisma.user.update({
+      where: { id },
+      data: {
+        role: 'deleted',
+        email: `eliminado-${id}@usuarios.syncro.invalid`,
+        password: await bcrypt.hash(randomBytes(32).toString('hex'), 10),
+        permissions: [],
+        branchIds: [],
+      },
+    });
+    forgetUser(id);
+    return { deleted: true, historyKept: true };
   }
 
   async ensureOwnerExists() {

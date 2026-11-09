@@ -33,7 +33,7 @@ export class UsersController {
   async remove(@Param('id') id: string, @Request() req: any) {
     if (!req.user) throw new UnauthorizedException('No user context');
     const businessId = req.user.businessId;
-    return this.usersService.remove(id, businessId);
+    return this.usersService.remove(id, businessId, { id: req.user.id, role: req.user.role });
   }
 
   @Patch(':id')

@@ -31,6 +31,14 @@ async function saveProfileHere(token: string, user: { email?: string; name?: str
     clientId = crypto.randomUUID();
     localStorage.setItem("syncro_cid", clientId);
   }
+  // Also remembered on this computer, so the login shows it even if the server is slow
+  try {
+    const list = JSON.parse(localStorage.getItem("syncro-saved-profiles") || "[]") as { email: string }[]
+    const me = { email: user.email, name: user.name || user.email?.split("@")[0], role: user.role || "Usuario", businessName, lastLogin: new Date().toISOString() }
+    localStorage.setItem("syncro-saved-profiles", JSON.stringify([me, ...list.filter((p) => p.email?.toLowerCase() !== user.email?.toLowerCase())]))
+  } catch {
+    // storage blocked
+  }
   await fetch(`${API_URL}/auth/saved-profiles`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

@@ -4,6 +4,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { suspendedMessage, suspensionOf } from '../syncro-admin/suspension';
 import { ConfigService } from '@nestjs/config';
+import { accountOpen } from './closed-accounts';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -21,6 +22,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       const s = await suspensionOf(payload.businessId, (id) => this.prisma.business.findUnique({ where: { id }, select: { status: true, suspendedReason: true } }));
       if (s.suspended) throw new UnauthorizedException(suspendedMessage(s.reason));
     }
+    // Someone removed from the business can't keep using an old session
+    if (payload.sub && payload.role !== 'client' && !(await accountOpen(payload.sub, (id) => this.prisma.user.findUnique({ where: { id }, select: { role: true } }))))
+      throw new UnauthorizedException('Tu usuario fue eliminado de este negocio');
     return { id: payload.sub, email: payload.email, role: payload.role, name: payload.name, businessId: payload.businessId };
   }
 }

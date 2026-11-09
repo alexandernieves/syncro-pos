@@ -12,6 +12,7 @@ import { db } from "./db";
 /** What belongs to the computer, not to whoever is signed in. */
 const DEVICE_KEYS = new Set([
   "syncro_cid", // this device's id for the saved profiles on the login screen
+  "syncro-saved-profiles", // the saved profiles shown on the login screen of this computer
   "syncro_last_account", // who was signed in last (to notice a different account)
   "syncro-receipt-sound",
   "syncro-scanner-always-on",

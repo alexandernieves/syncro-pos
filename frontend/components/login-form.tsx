@@ -36,6 +36,26 @@ interface SavedProfile {
   lastLogin: string
 }
 
+// ── Saved profiles kept on this device too ───────────────────────────────────
+// The list also lives in this computer, so the login shows it right away even when the server
+// answers slowly or not at all; the server copy refreshes it.
+const PROFILES_KEY = "syncro-saved-profiles"
+function cachedProfiles(): SavedProfile[] {
+  try {
+    const list = JSON.parse(localStorage.getItem(PROFILES_KEY) || "[]")
+    return Array.isArray(list) ? list.filter((p) => p && typeof p.email === "string") : []
+  } catch {
+    return []
+  }
+}
+function cacheProfiles(list: SavedProfile[]) {
+  try {
+    localStorage.setItem(PROFILES_KEY, JSON.stringify(list))
+  } catch {
+    // storage blocked
+  }
+}
+
 // ── Helper: get stored token regardless of PWA/browser mode ──────────────────
 function getStoredToken(): string | null {
   if (typeof window === "undefined") return null
@@ -109,23 +129,35 @@ export function LoginForm({
   }, [])
 
   // ── Load Saved Profiles ───────────────────────────────────────────────────
-  const loadSavedProfiles = async () => {
-    try {
-      const clientId = getClientId()
-      if (!clientId) return
+  const showProfiles = (profiles: SavedProfile[]) => {
+    setSavedProfiles(profiles)
+    if (profiles.length > 0) setViewMode((v) => (v === "classic" ? "profiles" : v))
+  }
 
-      const response = await fetch(
-        `${API_URL}/auth/saved-profiles?clientId=${clientId}`
-      )
-      if (response.ok) {
+  // First the copy on this computer (instant), then the server's, retrying while it doesn't answer
+  const loadSavedProfiles = async () => {
+    const clientId = getClientId()
+    if (!clientId) return
+    const local = cachedProfiles()
+    if (local.length) showProfiles(local)
+    for (const wait of [0, 1500, 4000, 8000, 15000]) {
+      if (wait) await new Promise((r) => setTimeout(r, wait))
+      try {
+        const response = await fetch(`${API_URL}/auth/saved-profiles?clientId=${clientId}`, { cache: "no-store" })
+        if (!response.ok) continue
         const profiles = (await response.json()) as SavedProfile[]
-        setSavedProfiles(profiles)
-        if (profiles.length > 0 && viewMode === "classic") {
-          setViewMode("profiles")
+        if (!Array.isArray(profiles)) continue
+        // The server lost them (or never got them): put back the ones this computer remembers
+        if (profiles.length === 0 && local.length) {
+          showProfiles(local)
+          return
         }
+        cacheProfiles(profiles)
+        showProfiles(profiles)
+        return
+      } catch {
+        // offline or server waking up: try again
       }
-    } catch (e) {
-      // Silently swallow — don't reveal internals
     }
   }
 
@@ -135,10 +167,21 @@ export function LoginForm({
     emailAddress: string,
     token: string,
   ) => {
+    const profile: SavedProfile = {
+      email: emailAddress,
+      name: user.name || user.username || emailAddress.split("@")[0],
+      role: user.role || "Usuario",
+      businessName: user.business?.name || user.businessName || undefined,
+      lastLogin: new Date().toISOString(),
+    }
+    // Remembered here first: the page moves on right after signing in
+    cacheProfiles([profile, ...cachedProfiles().filter((p) => p.email.toLowerCase() !== emailAddress.toLowerCase())])
     try {
       const clientId = getClientId()
       await fetch(`${API_URL}/auth/saved-profiles`, {
         method: "POST",
+        // keepalive: the request finishes even though the app reloads into the dashboard
+        keepalive: true,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -300,6 +343,7 @@ export function LoginForm({
           (p) => p.email.toLowerCase() !== emailToDelete.toLowerCase(),
         )
         setSavedProfiles(updated)
+        cacheProfiles(updated)
         if (updated.length === 0) setViewMode("classic")
         else if (
           viewMode === "password" &&
