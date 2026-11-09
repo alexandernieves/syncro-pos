@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { IconCheck, IconPalette } from "@tabler/icons-react";
+import { IconCheck, IconChristmasTree, IconPalette } from "@tabler/icons-react";
 import { availableThemes, type SyncroTheme } from "@/lib/themes";
 import { useSyncroTheme } from "@/components/theme-sync";
 import { cn } from "@/lib/utils";
@@ -44,6 +44,11 @@ function ThemePreview({ t }: { t: SyncroTheme }) {
 export function ThemeSettings() {
   const { theme, setTheme } = useSyncroTheme();
   const themes = availableThemes();
+  // Free-choice themes first; the Christmas ones in their own group while the season lasts
+  const groups = [
+    { key: "all", title: "", note: "", items: themes.filter((t) => !t.seasonal) },
+    { key: "season", title: "Temporada navideña", note: "Disponibles hasta el 6 de enero. Después, quien tenga uno puesto vuelve solo al tema Syncro.", items: themes.filter((t) => t.seasonal) },
+  ].filter((g) => g.items.length);
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Arrows move between themes and pick them, like any radio group
@@ -63,41 +68,54 @@ export function ThemeSettings() {
         <p className="text-sm text-muted-foreground">Elige los colores de Syncro en esta computadora. El cambio se ve al instante y no afecta a las demás.</p>
       </div>
 
-      <div role="radiogroup" aria-label="Tema de colores" className="grid gap-4 sm:grid-cols-2">
-        {themes.map((t, i) => {
-          const active = theme.id === t.id;
-          return (
-            <button
-              key={t.id}
-              ref={(el) => { refs.current[i] = el; }}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              tabIndex={active ? 0 : -1}
-              onClick={() => setTheme(t.id)}
-              onKeyDown={(e) => onKey(e, i)}
-              className={cn(
-                "group flex flex-col gap-3 rounded-xl border bg-card p-3 text-left transition-all outline-none",
-                "hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring",
-                active ? "border-primary ring-1 ring-primary" : "border-border",
-              )}
-            >
-              <ThemePreview t={t} />
-              <div className="flex items-start gap-2 px-0.5">
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 text-sm font-semibold">
-                    {t.name}
-                    {t.id === "syncro" && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Por defecto</span>}
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{t.description}</p>
-                </div>
-                <span className={cn("grid size-5 shrink-0 place-items-center rounded-full border transition-colors", active ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
-                  {active && <IconCheck size={12} stroke={3} />}
-                </span>
+      <div role="radiogroup" aria-label="Tema de colores" className="flex flex-col gap-6">
+        {groups.map((g) => (
+          <section key={g.key} className="flex flex-col gap-3">
+            {g.title && (
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-semibold"><IconChristmasTree size={16} className="text-primary" /> {g.title}</h3>
+                <p className="text-xs text-muted-foreground">{g.note}</p>
               </div>
-            </button>
-          );
-        })}
+            )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              {g.items.map((t) => {
+                const i = themes.indexOf(t);
+                  const active = theme.id === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      ref={(el) => { refs.current[i] = el; }}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      tabIndex={active ? 0 : -1}
+                      onClick={() => setTheme(t.id)}
+                      onKeyDown={(e) => onKey(e, i)}
+                      className={cn(
+                        "group flex flex-col gap-3 rounded-xl border bg-card p-3 text-left transition-all outline-none",
+                        "hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring",
+                        active ? "border-primary ring-1 ring-primary" : "border-border",
+                      )}
+                    >
+                      <ThemePreview t={t} />
+                      <div className="flex items-start gap-2 px-0.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="flex items-center gap-2 text-sm font-semibold">
+                            {t.name}
+                            {t.id === "syncro" && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Por defecto</span>}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">{t.description}</p>
+                        </div>
+                        <span className={cn("grid size-5 shrink-0 place-items-center rounded-full border transition-colors", active ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
+                          {active && <IconCheck size={12} stroke={3} />}
+                        </span>
+                      </div>
+                    </button>
+                  );
+              })}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );

@@ -6,7 +6,7 @@
  *
  * The choice belongs to the computer (like a screen brightness), so it survives signing out.
  */
-export type ThemeId = "syncro" | "oscuro" | "atardecer";
+export type ThemeId = "syncro" | "oscuro" | "atardecer" | "navidad";
 
 export type SyncroTheme = {
   id: ThemeId;
@@ -40,6 +40,14 @@ export const THEMES: SyncroTheme[] = [
     description: "Oscuro suave en grises cálidos, con menos contraste que Noche.",
     mode: "dark",
     preview: { shell: "#25221F", background: "#2D2A26", card: "#35312D", text: "#F2EEE7", muted: "#B5AEA2", primary: "#F47A4A" },
+  },
+  {
+    id: "navidad",
+    name: "Navidad",
+    description: "Crema y rojo navideño con toques de verde pino.",
+    mode: "light",
+    seasonal: true,
+    preview: { shell: "#ECE4D6", background: "#FAF6EE", card: "#FFFCF6", text: "#2B1B17", muted: "#2E7A4E", primary: "#C3302C" },
   },
 ];
 

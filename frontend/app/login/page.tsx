@@ -35,6 +35,7 @@ export default function LoginPage() {
   // Follows the theme picked in Configuración → Temas (on this computer)
   const { theme } = useSyncroTheme()
   const isDark = mounted && (theme.mode === "dark" || resolvedTheme === "dark")
+  const festive = mounted && theme.id === "navidad"
 
   return (
     <div
@@ -49,9 +50,9 @@ export default function LoginPage() {
           bulgeOnly
           bulgeStrength={85}
           glowRadius={240}
-          gradientFrom={isDark ? "rgba(242, 107, 58, 0.7)" : "rgba(230, 95, 45, 0.55)"}
-          gradientTo={isDark ? "rgba(242, 107, 58, 0.4)" : "rgba(210, 80, 35, 0.35)"}
-          glowColor={isDark ? "#4d2215" : "#fcd8c9"}
+          gradientFrom={festive ? "rgba(195, 48, 44, 0.55)" : isDark ? "rgba(242, 107, 58, 0.7)" : "rgba(230, 95, 45, 0.55)"}
+          gradientTo={festive ? "rgba(46, 122, 78, 0.45)" : isDark ? "rgba(242, 107, 58, 0.4)" : "rgba(210, 80, 35, 0.35)"}
+          glowColor={festive ? "#f6d3cf" : isDark ? "#4d2215" : "#fcd8c9"}
         />
       </div>
 
@@ -61,7 +62,8 @@ export default function LoginPage() {
         .login-bg { background: radial-gradient(ellipse 90% 70% at 15% 0%, #fdebe4 0%, #f7eae4 42%, #f6f5f2 100%); }
         html[data-mode="dark"] .login-bg { background: radial-gradient(ellipse 90% 70% at 15% 0%, #351a10 0%, #22120b 38%, #0f0906 100%); }
         html[data-syncro-theme="atardecer"] .login-bg { background: radial-gradient(ellipse 90% 70% at 15% 0%, #4a2a1c 0%, #362720 40%, #25221f 100%); }
-        html:root:not([data-mode="dark"]), html:root.dark:not([data-mode="dark"]), html:root:not([data-mode="dark"]) body, html:root:not([data-mode="dark"]) body[class*="theme-"] {
+        html[data-syncro-theme="navidad"] .login-bg { background: radial-gradient(ellipse 90% 70% at 15% 0%, #fbe1dc 0%, #f6ece2 42%, #eef3ea 100%); }
+        html:root:not([data-syncro-theme]), html:root.dark:not([data-syncro-theme]), html:root:not([data-syncro-theme]) body, html:root:not([data-syncro-theme]) body[class*="theme-"] {
           color-scheme: light !important;
           --background: #F6F5F2;
           --foreground: #16140F;

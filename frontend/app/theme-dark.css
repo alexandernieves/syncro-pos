@@ -390,3 +390,11 @@ html[data-mode="dark"] [class~="via-[#fefce8]"]:not([data-paper], [data-paper] *
 html[data-mode="dark"] [class~="via-[#fffbeb]"]:not([data-paper], [data-paper] *) { --tw-gradient-via: var(--muted); }
 html[data-mode="dark"] [class~="via-white"]:not([data-paper], [data-paper] *) { --tw-gradient-via: var(--card); }
 html[data-mode="dark"] [class~="via-zinc-100"]:not([data-paper], [data-paper] *) { --tw-gradient-via: var(--muted); }
+
+/* Syncro's orange written by hand → the theme's main colour (every theme but the default). */
+html[data-syncro-theme] [class~="bg-[#F26B3A]"]:not([data-paper], [data-paper] *) { background-color: var(--primary); }
+html[data-syncro-theme] [class~="bg-[#F26B3A]/12"]:not([data-paper], [data-paper] *) { background-color: color-mix(in oklab, var(--primary) 12%, transparent); }
+html[data-syncro-theme] [class~="hover:border-[#F26B3A]/30"]:not([data-paper], [data-paper] *):hover { border-color: color-mix(in oklab, var(--primary) 30%, transparent); }
+html[data-syncro-theme] [class~="text-[#F26B3A]"]:not([data-paper], [data-paper] *) { color: var(--primary); }
+html[data-syncro-theme] [class~="text-[#F26B3A]/90"]:not([data-paper], [data-paper] *) { color: color-mix(in oklab, var(--primary) 90%, transparent); }
+html[data-syncro-theme] [class~="to-[#EE6A3C]"]:not([data-paper], [data-paper] *) { --tw-gradient-to: var(--primary); }

@@ -200,6 +200,48 @@ html[data-syncro-theme="atardecer"] {
   --wa-wallpaper: #302C28;
 }
 
+/* Navidad (temporada, del 1 de noviembre al 6 de enero): claro y crema, con
+   rojo navideño como color principal, verde pino en los acentos y dorado en
+   las graficas. Lo destructivo va en un carmesi mas oscuro para no
+   confundirse con el rojo principal. */
+html[data-syncro-theme="navidad"] {
+  color-scheme: light;
+  --shell: #ECE4D6;
+  --background: #FAF6EE;
+  --foreground: #2B1B17;
+  --card: #FFFCF6;
+  --card-foreground: #2B1B17;
+  --popover: #FFFCF6;
+  --popover-foreground: #2B1B17;
+  --primary: #C3302C;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F3ECE0;
+  --secondary-foreground: #2B1B17;
+  --muted: #F3ECE0;
+  --muted-foreground: #6B5B50;
+  --accent: #E9F0E6;
+  --accent-foreground: #1F3A2B;
+  --destructive: #9A1C1C;
+  --border: #E5DAC8;
+  --input: #E5DAC8;
+  --ring: #C3302C;
+
+  --chart-1: #C3302C;
+  --chart-2: #2E7A4E;
+  --chart-3: #CF9F33;
+  --chart-4: #3A7FC0;
+  --chart-5: #8A5CC2;
+
+  --sidebar: var(--shell);
+  --sidebar-foreground: #2B1B17;
+  --sidebar-primary: #C3302C;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #DFE8DB;
+  --sidebar-accent-foreground: #1F3A2B;
+  --sidebar-border: #DCD0BC;
+  --sidebar-ring: #C3302C;
+}
+
 /* Ajustes a mano de los temas oscuros (lo generado vive en theme-dark.css). */
 
 /* Avisos (sonner): sus colores son propios, en blanco. Siguen al tema. */
@@ -322,8 +364,9 @@ body {
   }
 }
 
-.theme-default,
-.theme-default-scaled {
+/* Solo en el tema por defecto: los demas temas traen su propio color principal. */
+html:not([data-syncro-theme]) .theme-default,
+html:not([data-syncro-theme]) .theme-default-scaled {
   --primary: #F26B3A;
   --primary-foreground: #FFFFFF;
 }
