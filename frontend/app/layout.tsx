@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { ActiveThemeProvider } from "@/components/active-theme";
+import { ThemeSync } from "@/components/theme-sync";
+import { THEME_BOOT_SCRIPT } from "@/lib/themes";
 import { KeyboardNav } from "@/components/keyboard-nav";
 import { Toaster } from "sonner";
 import { CurrencyProvider } from "@/context/CurrencyContext";
@@ -65,6 +67,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" translate="no" className={cn("notranslate", inter.variable, quicksand.variable, caveat.variable)} suppressHydrationWarning>
+      <head>
+        {/* The chosen colour theme, before the first paint (no flash of the default one) */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body
         suppressHydrationWarning
         className={cn(
@@ -125,6 +131,7 @@ export default function RootLayout({
             <CurrencyProvider>
               <ActiveThemeProvider>
                 {children}
+                <ThemeSync />
                 <SessionMonitor timeoutMinutes={15} />
                 <DesktopUpdateBadge />
                 <KeyboardNav />

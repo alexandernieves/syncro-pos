@@ -231,7 +231,7 @@ export function InvoiceDesigner() {
               )}
             >
               <div className="relative h-40 overflow-hidden border-b bg-[#F1EFEA]">
-                <div className="absolute left-1/2 top-3 -translate-x-1/2 bg-white shadow-sm" style={{ width: thumb.paper === "a4" ? 720 : 302, zoom: thumb.paper === "a4" ? 0.2 : 0.42, padding: thumb.paper === "a4" ? 24 : 12 }}>
+                <div data-paper className="absolute left-1/2 top-3 -translate-x-1/2 bg-white shadow-sm" style={{ width: thumb.paper === "a4" ? 720 : 302, zoom: thumb.paper === "a4" ? 0.2 : 0.42, padding: thumb.paper === "a4" ? 24 : 12 }}>
                   <InvoiceDocument data={{ ...sample, businessName: business.name }} design={thumb} business={business} ink={thumb.paper === "a4" ? "color" : "thermal"} />
                 </div>
               </div>
@@ -421,6 +421,7 @@ export function InvoiceDesigner() {
             </div>
             <div className="flex max-h-[calc(100vh-var(--header-height)-120px)] justify-center overflow-auto rounded-xl py-4">
               <div
+                data-paper
                 className="h-fit bg-white shadow-[0_20px_40px_-20px_rgba(0,0,0,.35)]"
                 style={{
                   width: PREVIEW_WIDTH[design.paper],

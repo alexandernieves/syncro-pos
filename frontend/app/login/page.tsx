@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
+import { useSyncroTheme } from "@/components/theme-sync"
 import { LoginForm } from "@/components/login-form"
 import { DotField } from "@/components/reactbits/dot-field"
 
@@ -31,16 +32,13 @@ export default function LoginPage() {
     else if (clientToken) router.push("/portal")
   }, [router])
 
-  const isDark = mounted && resolvedTheme === "dark"
+  // Follows the theme picked in Configuración → Temas (on this computer)
+  const { theme } = useSyncroTheme()
+  const isDark = mounted && (theme.mode === "dark" || resolvedTheme === "dark")
 
   return (
     <div
-      className="relative flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10 overflow-hidden selection:bg-primary/20"
-      style={{
-        background: isDark
-          ? "radial-gradient(ellipse 90% 70% at 15% 0%, #351a10 0%, #22120b 38%, #0f0906 100%)"
-          : "radial-gradient(ellipse 90% 70% at 15% 0%, #fdebe4 0%, #f7eae4 42%, #f6f5f2 100%)",
-      }}
+      className="login-bg relative flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10 overflow-hidden selection:bg-primary/20"
     >
       {/* Ambient background — warm orange brand gradient with interactive dot field */}
       <div className="fixed inset-0 pointer-events-none z-0">
@@ -57,8 +55,12 @@ export default function LoginPage() {
         />
       </div>
 
+      {/* The default palette is fixed here; a dark theme (Configuración → Temas) brings its own.
+          Decided by CSS from the attribute the theme sets before painting, so nothing flashes. */}
       <style>{`
-        html:root, html:root.dark, html:root body, html:root body[class*="theme-"] {
+        .login-bg { background: radial-gradient(ellipse 90% 70% at 15% 0%, #fdebe4 0%, #f7eae4 42%, #f6f5f2 100%); }
+        html[data-mode="dark"] .login-bg { background: radial-gradient(ellipse 90% 70% at 15% 0%, #351a10 0%, #22120b 38%, #0f0906 100%); }
+        html:root:not([data-mode="dark"]), html:root.dark:not([data-mode="dark"]), html:root:not([data-mode="dark"]) body, html:root:not([data-mode="dark"]) body[class*="theme-"] {
           color-scheme: light !important;
           --background: #F6F5F2;
           --foreground: #16140F;

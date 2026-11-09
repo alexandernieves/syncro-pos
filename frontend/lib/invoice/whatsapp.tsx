@@ -25,7 +25,7 @@ export async function renderInvoiceImage(data: InvoiceData, design: InvoiceDesig
   try {
     flushSync(() =>
       root.render(
-        <div style={{ width, padding, background: "#fff" }}>
+        <div data-paper style={{ width, padding, background: "#fff" }}>
           <InvoiceDocument data={data} design={design} business={business} ink="color" />
         </div>,
       ),

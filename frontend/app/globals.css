@@ -1,5 +1,6 @@
 @import "tailwindcss" source(none);
 @import "tw-animate-css";
+@import "./theme-dark.css";
 
 @source "./**/*.{js,ts,jsx,tsx,mdx}";
 @source "../components/**/*.{js,ts,jsx,tsx,mdx}";
@@ -109,6 +110,87 @@
   --sidebar-accent-foreground: #1A1815;
   --sidebar-border: #DAD5CC;
   --sidebar-ring: #F26B3A;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Temas (Configuración → Temas). El naranja de :root es el tema por defecto
+   y no lleva atributo, asi que nunca cambia. Cada tema redefine aqui solo
+   sus colores; los temas oscuros ademas activan theme-dark.css.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Noche: oscuro y calido. El armazon se hunde (mas oscuro) y la vista y las
+   tarjetas suben un escalon cada una, igual que en el tema claro. */
+html[data-syncro-theme="oscuro"] {
+  color-scheme: dark;
+  --shell: #121110;
+  --background: #1A1917;
+  --foreground: #EEEAE3;
+  --card: #22201D;
+  --card-foreground: #EEEAE3;
+  --popover: #262420;
+  --popover-foreground: #EEEAE3;
+  --primary: #F26B3A;
+  --primary-foreground: #FFFFFF;
+  --secondary: #2A2824;
+  --secondary-foreground: #EEEAE3;
+  --muted: #2A2824;
+  --muted-foreground: #A29C91;
+  --accent: #302D29;
+  --accent-foreground: #EEEAE3;
+  --destructive: #E5574A;
+  --border: #35322D;
+  --input: #3A3631;
+  --ring: #F26B3A;
+
+  --chart-1: #F26B3A;
+  --chart-2: #4FA7EE;
+  --chart-3: #3BC27A;
+  --chart-4: #EDB23F;
+  --chart-5: #8C70F3;
+
+  --sidebar: var(--shell);
+  --sidebar-foreground: #EEEAE3;
+  --sidebar-primary: #F26B3A;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #26231F;
+  --sidebar-accent-foreground: #EEEAE3;
+  --sidebar-border: #2A2724;
+  --sidebar-ring: #F26B3A;
+}
+
+/* Ajustes a mano de los temas oscuros (lo generado vive en theme-dark.css). */
+
+/* Avisos (sonner): sus colores son propios, en blanco. Siguen al tema. */
+html[data-mode="dark"] [data-sonner-toaster][data-sonner-theme] {
+  --normal-bg: var(--popover);
+  --normal-border: var(--border);
+  --normal-text: var(--popover-foreground);
+  --success-bg: color-mix(in oklab, #2FB36D 14%, var(--popover));
+  --success-border: color-mix(in oklab, #2FB36D 35%, var(--popover));
+  --success-text: #6EE7A8;
+  --info-bg: color-mix(in oklab, #3B9AE8 14%, var(--popover));
+  --info-border: color-mix(in oklab, #3B9AE8 35%, var(--popover));
+  --info-text: #8CC8F7;
+  --warning-bg: color-mix(in oklab, #E8A72B 14%, var(--popover));
+  --warning-border: color-mix(in oklab, #E8A72B 35%, var(--popover));
+  --warning-text: #F5C66B;
+  --error-bg: color-mix(in oklab, #D64535 16%, var(--popover));
+  --error-border: color-mix(in oklab, #D64535 38%, var(--popover));
+  --error-text: #F59A8F;
+}
+html[data-mode="dark"] [data-sonner-toaster] [data-description] {
+  color: var(--muted-foreground);
+}
+
+/* Fondo del chat de WhatsApp: oscuro, con los dibujitos apenas marcados. */
+html[data-mode="dark"] {
+  --wa-wallpaper: #1D1B18;
+  --wa-blend: multiply;
+}
+
+/* El logo es un cuadro negro: sobre el armazon oscuro lleva un borde fino para no perderse. */
+html[data-mode="dark"] img[src="/syncro.png"] {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 16%, transparent);
 }
 
 /* El modo oscuro se retiro: .dark hereda la paleta unica de :root. */

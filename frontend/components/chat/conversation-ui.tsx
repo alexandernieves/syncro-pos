@@ -27,8 +27,10 @@ const DOODLE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='240' height='
 <path d='M186 210h18a5 5 0 0 0 0-10 8 8 0 0 0-15-2 6 6 0 0 0-3 12z'/>
 </svg>`;
 
+// Dark themes darken it through the two variables (globals.css); the default stays beige
 export const WA_WALLPAPER: React.CSSProperties = {
-  backgroundColor: "#EFEAE2",
+  backgroundColor: "var(--wa-wallpaper, #EFEAE2)",
+  backgroundBlendMode: "var(--wa-blend, normal)" as React.CSSProperties["backgroundBlendMode"],
   backgroundImage: `url("data:image/svg+xml;utf8,${DOODLE_SVG.replace(/\n/g, "").replace(/#/g, "%23").replace(/%23C9BFAE/g, "%23C9BFAE")}")`,
   backgroundSize: "240px 240px",
 };

@@ -331,6 +331,7 @@ export function InvoiceDocument({ data, design, business, ink = "color" }: Invoi
 
   return (
     <div
+      data-paper
       className={`syi syi-t-${tpl} syi-p-${design.paper} syi-f-${design.font} syi-ink-${ink}`}
       style={{ ["--syi-accent" as string]: design.accentColor }}
     >

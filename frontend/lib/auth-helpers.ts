@@ -21,6 +21,7 @@ const DEVICE_KEYS = new Set([
   "syncro-push-prompt-snooze",
   "gym-leads-view",
   "theme",
+  "syncro-theme", // the colour theme picked in Configuración → Temas
 ]);
 const DEVICE_PREFIXES = ["syncro-finance-tab:", "syncro-bio:"];
 const SESSION_KEEP = new Set(["syncro_suspended_message"]);

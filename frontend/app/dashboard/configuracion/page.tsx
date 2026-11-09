@@ -4,6 +4,7 @@ import { API_URL } from "@/lib/constants"
 import { clearAuthSession } from "@/lib/auth-helpers";
 import { MascotSettingsPanel } from "@/components/mascot/mascot-settings";
 import { BiometricSettings } from "@/components/biometric-settings";
+import { ThemeSettings } from "@/components/theme-settings";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { 
@@ -171,6 +172,7 @@ const SECTIONS = [
   { id: "usuarios", label: "Usuarios y roles", icon: IconShieldLock },
   { id: "sucursales", label: "Sucursales", icon: IconMapPin },
   { id: "sesiones", label: "Sesión y seguridad", icon: IconFingerprint },
+  { id: "temas", label: "Temas", icon: IconPalette },
   { id: "mascota", label: "Mascota", icon: IconMoodSmile },
   { id: "whatsapp", label: "WhatsApp bot", icon: IconBrandWhatsapp },
   { id: "ads_copilot", label: "Entrenamiento ads IA", icon: IconHexagon },
@@ -2847,6 +2849,7 @@ export default function ConfiguracionPage() {
         )}
 
         {/* ─── ADS COPILOT TRAINING ─── */}
+        {activeSection === "temas" && <ThemeSettings />}
         {activeSection === "mascota" && <MascotSettingsPanel />}
 
         {activeSection === "ads_copilot" && (

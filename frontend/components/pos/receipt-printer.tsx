@@ -158,7 +158,7 @@ export function ReceiptPrinter({ receipt, design, business, onDone, doneLabel = 
         <div className="relative z-30 -mt-[11px] overflow-hidden px-5 pb-3">
           {/* Shadow the slot casts on the paper */}
           <div className="pointer-events-none absolute inset-x-5 top-0 z-10 h-5 bg-gradient-to-b from-black/35 via-black/10 to-transparent" />
-          <div className={`${animate ? "rp-paper " : ""}relative bg-white px-6 pb-8 pt-8 text-[11px] leading-relaxed text-zinc-900 shadow-[0_26px_40px_-20px_rgba(50,50,120,.45),0_2px_8px_rgba(50,50,120,.12)]`}>
+          <div data-paper className={`${animate ? "rp-paper " : ""}relative bg-white px-6 pb-8 pt-8 text-[11px] leading-relaxed text-zinc-900 shadow-[0_26px_40px_-20px_rgba(50,50,120,.45),0_2px_8px_rgba(50,50,120,.12)]`}>
             <div className="flex flex-col items-center gap-1 text-center">
               <IconCircleCheckFilled className="size-9 text-emerald-500" />
               <p className="font-sans text-base font-black tracking-tight">{receipt.pending ? "Venta guardada" : "¡Venta registrada!"}</p>
