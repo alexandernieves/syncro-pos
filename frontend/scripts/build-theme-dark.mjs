@@ -125,9 +125,11 @@ function remap(kind, colour) {
     if (kind === "text") return l < 0.3 ? "var(--foreground)" : l < 0.66 ? "var(--muted-foreground)" : null;
     if (kind === "border") return l >= 0.7 ? "var(--border)" : l >= 0.3 ? STRONG_BORDER : null;
   } else {
-    if (kind === "bg") return l >= 0.85 ? hsl(h, Math.min(s, 0.45), 0.17) : null;
+    // Tints are mixed into the theme's card, so they sit right in every dark theme
+    const hue = hsl(h, Math.min(s, 0.7), 0.5);
+    if (kind === "bg") return l >= 0.85 ? mix(hue, 14) : null;
     if (kind === "text") return l < 0.42 ? hsl(h, Math.min(s, 0.75), 0.72) : null;
-    if (kind === "border") return l >= 0.75 ? hsl(h, Math.min(s, 0.4), 0.3) : null;
+    if (kind === "border") return l >= 0.75 ? mix(hue, 30) : null;
   }
   return null;
 }

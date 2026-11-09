@@ -6,7 +6,7 @@
  *
  * The choice belongs to the computer (like a screen brightness), so it survives signing out.
  */
-export type ThemeId = "syncro" | "oscuro";
+export type ThemeId = "syncro" | "oscuro" | "atardecer";
 
 export type SyncroTheme = {
   id: ThemeId;
@@ -33,6 +33,13 @@ export const THEMES: SyncroTheme[] = [
     description: "Oscuro y cálido, descansa la vista en jornadas largas o de noche.",
     mode: "dark",
     preview: { shell: "#121110", background: "#1A1917", card: "#22201D", text: "#EEEAE3", muted: "#A29C91", primary: "#F26B3A" },
+  },
+  {
+    id: "atardecer",
+    name: "Atardecer",
+    description: "Oscuro suave en grises cálidos, con menos contraste que Noche.",
+    mode: "dark",
+    preview: { shell: "#25221F", background: "#2D2A26", card: "#35312D", text: "#F2EEE7", muted: "#B5AEA2", primary: "#F47A4A" },
   },
 ];
 

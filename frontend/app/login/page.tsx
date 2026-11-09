@@ -60,6 +60,7 @@ export default function LoginPage() {
       <style>{`
         .login-bg { background: radial-gradient(ellipse 90% 70% at 15% 0%, #fdebe4 0%, #f7eae4 42%, #f6f5f2 100%); }
         html[data-mode="dark"] .login-bg { background: radial-gradient(ellipse 90% 70% at 15% 0%, #351a10 0%, #22120b 38%, #0f0906 100%); }
+        html[data-syncro-theme="atardecer"] .login-bg { background: radial-gradient(ellipse 90% 70% at 15% 0%, #4a2a1c 0%, #362720 40%, #25221f 100%); }
         html:root:not([data-mode="dark"]), html:root.dark:not([data-mode="dark"]), html:root:not([data-mode="dark"]) body, html:root:not([data-mode="dark"]) body[class*="theme-"] {
           color-scheme: light !important;
           --background: #F6F5F2;

@@ -15,12 +15,12 @@ html[data-mode="dark"] [data-paper] {
 }
 
 html[data-mode="dark"] [class~="active:bg-zinc-100"]:not([data-paper], [data-paper] *):active { background-color: var(--muted); }
-html[data-mode="dark"] [class~="bg-[#D6EAF8]"]:not([data-paper], [data-paper] *) { background-color: hsl(205 45% 17%); }
+html[data-mode="dark"] [class~="bg-[#D6EAF8]"]:not([data-paper], [data-paper] *) { background-color: color-mix(in oklab, hsl(205 70% 50%) 14%, var(--card)); }
 html[data-mode="dark"] [class~="bg-[#D7F5F2]"]:not([data-paper], [data-paper] *) { background-color: var(--muted); }
-html[data-mode="dark"] [class~="bg-[#D9FDD3]"]:not([data-paper], [data-paper] *) { background-color: hsl(111 45% 17%); }
+html[data-mode="dark"] [class~="bg-[#D9FDD3]"]:not([data-paper], [data-paper] *) { background-color: color-mix(in oklab, hsl(111 70% 50%) 14%, var(--card)); }
 html[data-mode="dark"] [class~="bg-[#DAD5CC]"]:not([data-paper], [data-paper] *) { background-color: var(--border); }
 html[data-mode="dark"] [class~="bg-[#DEDBD3]/60"]:not([data-paper], [data-paper] *) { background-color: color-mix(in oklab, var(--accent) 60%, transparent); }
-html[data-mode="dark"] [class~="bg-[#E6DEFF]"]:not([data-paper], [data-paper] *) { background-color: hsl(255 45% 17%); }
+html[data-mode="dark"] [class~="bg-[#E6DEFF]"]:not([data-paper], [data-paper] *) { background-color: color-mix(in oklab, hsl(255 70% 50%) 14%, var(--card)); }
 html[data-mode="dark"] [class~="bg-[#E7F8EE]"]:not([data-paper], [data-paper] *) { background-color: var(--muted); }
 html[data-mode="dark"] [class~="bg-[#E8E4DC]"]:not([data-paper], [data-paper] *) { background-color: var(--border); }
 html[data-mode="dark"] [class~="bg-[#E8E6E0]"]:not([data-paper], [data-paper] *) { background-color: var(--accent); }
@@ -42,14 +42,14 @@ html[data-mode="dark"] [class~="bg-[#f8f9fb]"]:not([data-paper], [data-paper] *)
 html[data-mode="dark"] [class~="bg-[#FAF7F2]"]:not([data-paper], [data-paper] *) { background-color: var(--card); }
 html[data-mode="dark"] [class~="bg-[#faf9f5]"]:not([data-paper], [data-paper] *) { background-color: var(--card); }
 html[data-mode="dark"] [class~="bg-[#fdfdfd]"]:not([data-paper], [data-paper] *) { background-color: var(--card); }
-html[data-mode="dark"] [class~="bg-[#fef3c7]"]:not([data-paper], [data-paper] *) { background-color: hsl(48 45% 17%); }
-html[data-mode="dark"] [class~="bg-[#fef3c7]/20"]:not([data-paper], [data-paper] *) { background-color: color-mix(in oklab, hsl(48 45% 17%) 20%, transparent); }
-html[data-mode="dark"] [class~="bg-[#FFD9DE]"]:not([data-paper], [data-paper] *) { background-color: hsl(352 45% 17%); }
+html[data-mode="dark"] [class~="bg-[#fef3c7]"]:not([data-paper], [data-paper] *) { background-color: color-mix(in oklab, hsl(48 70% 50%) 14%, var(--card)); }
+html[data-mode="dark"] [class~="bg-[#fef3c7]/20"]:not([data-paper], [data-paper] *) { background-color: color-mix(in oklab, color-mix(in oklab, hsl(48 70% 50%) 14%, var(--card)) 20%, transparent); }
+html[data-mode="dark"] [class~="bg-[#FFD9DE]"]:not([data-paper], [data-paper] *) { background-color: color-mix(in oklab, hsl(352 70% 50%) 14%, var(--card)); }
 html[data-mode="dark"] [class~="bg-[#FFE5E9]"]:not([data-paper], [data-paper] *) { background-color: var(--muted); }
-html[data-mode="dark"] [class~="bg-[#FFE9C7]"]:not([data-paper], [data-paper] *) { background-color: hsl(36 45% 17%); }
-html[data-mode="dark"] [class~="bg-[#FFEECD]"]:not([data-paper], [data-paper] *) { background-color: hsl(40 45% 17%); }
+html[data-mode="dark"] [class~="bg-[#FFE9C7]"]:not([data-paper], [data-paper] *) { background-color: color-mix(in oklab, hsl(36 70% 50%) 14%, var(--card)); }
+html[data-mode="dark"] [class~="bg-[#FFEECD]"]:not([data-paper], [data-paper] *) { background-color: color-mix(in oklab, hsl(40 70% 50%) 14%, var(--card)); }
 html[data-mode="dark"] [class~="bg-[#FFF0F2]"]:not([data-paper], [data-paper] *) { background-color: var(--card); }
-html[data-mode="dark"] [class~="bg-[#FFF1D6]"]:not([data-paper], [data-paper] *) { background-color: hsl(40 45% 17%); }
+html[data-mode="dark"] [class~="bg-[#FFF1D6]"]:not([data-paper], [data-paper] *) { background-color: color-mix(in oklab, hsl(40 70% 50%) 14%, var(--card)); }
 html[data-mode="dark"] [class~="bg-[#FFF8EA]"]:not([data-paper], [data-paper] *) { background-color: var(--muted); }
 html[data-mode="dark"] [class~="bg-[#fffbeb]"]:not([data-paper], [data-paper] *) { background-color: var(--muted); }
 html[data-mode="dark"] [class~="bg-[#fffdf4]"]:not([data-paper], [data-paper] *) { background-color: var(--card); }
@@ -116,7 +116,7 @@ html[data-mode="dark"] [class~="border-[#79716b]/5"]:not([data-paper], [data-pap
 html[data-mode="dark"] [class~="border-[#79716b]/50"]:not([data-paper], [data-paper] *) { border-color: color-mix(in oklab, color-mix(in oklab, var(--foreground) 22%, transparent) 50%, transparent); }
 html[data-mode="dark"] [class~="border-[#D1D7DB]"]:not([data-paper], [data-paper] *) { border-color: var(--border); }
 html[data-mode="dark"] [class~="border-[#D8D4CB]"]:not([data-paper], [data-paper] *) { border-color: var(--border); }
-html[data-mode="dark"] [class~="border-[#D9FDD3]"]:not([data-paper], [data-paper] *) { border-color: hsl(111 40% 30%); }
+html[data-mode="dark"] [class~="border-[#D9FDD3]"]:not([data-paper], [data-paper] *) { border-color: color-mix(in oklab, hsl(111 70% 50%) 30%, var(--card)); }
 html[data-mode="dark"] [class~="border-[#DAD5CC]"]:not([data-paper], [data-paper] *) { border-color: var(--border); }
 html[data-mode="dark"] [class~="border-[#DAD5CC]/60"]:not([data-paper], [data-paper] *) { border-color: color-mix(in oklab, var(--border) 60%, transparent); }
 html[data-mode="dark"] [class~="border-[#E2DED5]"]:not([data-paper], [data-paper] *) { border-color: var(--border); }

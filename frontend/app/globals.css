@@ -158,6 +158,48 @@ html[data-syncro-theme="oscuro"] {
   --sidebar-ring: #F26B3A;
 }
 
+/* Atardecer: el mismo calor que Noche, un par de escalones mas claro y con
+   menos contraste. El naranja sube un poco para no apagarse sobre gris. */
+html[data-syncro-theme="atardecer"] {
+  color-scheme: dark;
+  --shell: #25221F;
+  --background: #2D2A26;
+  --foreground: #F2EEE7;
+  --card: #35312D;
+  --card-foreground: #F2EEE7;
+  --popover: #3A3631;
+  --popover-foreground: #F2EEE7;
+  --primary: #F47A4A;
+  --primary-foreground: #FFFFFF;
+  --secondary: #3D3934;
+  --secondary-foreground: #F2EEE7;
+  --muted: #3D3934;
+  --muted-foreground: #B5AEA2;
+  --accent: #443F39;
+  --accent-foreground: #F2EEE7;
+  --destructive: #EB6657;
+  --border: #4A453F;
+  --input: #504A43;
+  --ring: #F47A4A;
+
+  --chart-1: #F47A4A;
+  --chart-2: #5BAEF0;
+  --chart-3: #46C784;
+  --chart-4: #F0B84A;
+  --chart-5: #957BF4;
+
+  --sidebar: var(--shell);
+  --sidebar-foreground: #F2EEE7;
+  --sidebar-primary: #F47A4A;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #322E2A;
+  --sidebar-accent-foreground: #F2EEE7;
+  --sidebar-border: #37332E;
+  --sidebar-ring: #F47A4A;
+
+  --wa-wallpaper: #302C28;
+}
+
 /* Ajustes a mano de los temas oscuros (lo generado vive en theme-dark.css). */
 
 /* Avisos (sonner): sus colores son propios, en blanco. Siguen al tema. */
@@ -183,8 +225,10 @@ html[data-mode="dark"] [data-sonner-toaster] [data-description] {
 }
 
 /* Fondo del chat de WhatsApp: oscuro, con los dibujitos apenas marcados. */
-html[data-mode="dark"] {
+html[data-mode="dark"]:not([data-syncro-theme="atardecer"]) {
   --wa-wallpaper: #1D1B18;
+}
+html[data-mode="dark"] {
   --wa-blend: multiply;
 }
 
