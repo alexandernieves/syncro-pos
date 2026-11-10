@@ -353,7 +353,7 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
     if (!g) return;
     if (!g.moved) {
       mode.current = "follow";
-      window.dispatchEvent(new Event("support-chat:open"));
+      window.dispatchEvent(new CustomEvent("support-chat:open", { detail: { from: "mascot" } }));
       return;
     }
     const first = g.trail[0];
@@ -610,7 +610,7 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={() => { grab.current = null; mode.current = "follow"; }}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); window.dispatchEvent(new Event("support-chat:open")); } }}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); window.dispatchEvent(new CustomEvent("support-chat:open", { detail: { from: "mascot" } })); } }}
           className={cn("pointer-events-auto relative block touch-none select-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2", frozen ? "cursor-default" : "cursor-grab active:cursor-grabbing")}
           style={{ width: SIZE, height: SIZE }}
         >

@@ -88,6 +88,8 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const dragStart = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const [open, setOpen] = useState(false);
+  /** Opened from the mascot (bottom-left) rather than from the side tab */
+  const [fromMascot, setFromMascot] = useState(false);
   // "ideas": the history of thoughts saved with the mascot, in place of the support chat
   const [view, setView] = useState<"chat" | "ideas">("chat");
   const [ideas, setIdeas] = useState<MascotThought[] | null>(null);
@@ -195,7 +197,11 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
 
   // The pop-up notice ("Ver") and other screens open it with an event
   useEffect(() => {
-    const show = () => setOpen(true);
+    const show = (e: Event) => {
+      // Opened by tapping the mascot: the panel goes to the bottom-left corner
+      setFromMascot((e as CustomEvent).detail?.from === "mascot");
+      setOpen(true);
+    };
     window.addEventListener("support-chat:open", show);
     return () => window.removeEventListener("support-chat:open", show);
   }, []);
@@ -290,7 +296,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
   const onPointerUp = (e: React.PointerEvent) => {
     const s = dragStart.current;
     dragStart.current = null;
-    if (!s?.moved) { setOpen((o) => !o); setDrag(null); return; }
+    if (!s?.moved) { setFromMascot(false); setOpen((o) => !o); setDrag(null); return; }
     const next: Dock = { side: e.clientX < window.innerWidth / 2 ? "left" : "right", top: Math.min(88, Math.max(12, (e.clientY / window.innerHeight) * 100)) };
     setDock(next);
     setDrag(null);
@@ -314,7 +320,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((o) => !o); } }}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFromMascot(false); setOpen((o) => !o); } }}
         style={tabStyle}
         className={cn(
           "group fixed z-40 flex touch-none select-none flex-col items-center gap-1.5 border bg-background/95 py-2.5 shadow-sm outline-none backdrop-blur transition-[padding,opacity,color,box-shadow] duration-200 hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
@@ -345,7 +351,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
           <div className="flex items-start gap-2.5">
             <SyncroAvatar pose="wave" size={56} />
             <div>
-              <p className="font-medium">¡Hola! Soy Syncro</p>
+              <p className="font-medium">¡Hola! Soy {mascot?.name || "Nubi"}</p>
               <p className="mt-0.5 text-muted-foreground">Escríbeme desde aquí, en cualquier pantalla. Arrastra la pestaña si te estorba.</p>
             </div>
           </div>
@@ -361,17 +367,17 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
         role="dialog"
         aria-label="Chat con Equipo Syncro"
         data-state={open ? "open" : "closed"}
-        style={{ top: `clamp(12px, calc(${dock.top}vh - 260px), calc(100vh - min(80vh, 640px) - 12px))`, [side]: 16 }}
+        style={fromMascot ? { bottom: 16, left: 16 } : { top: `clamp(12px, calc(${dock.top}vh - 260px), calc(100vh - min(80vh, 640px) - 12px))`, [side]: 16 }}
         className={cn(
           "fixed z-50 flex h-[min(80vh,640px)] w-[calc(100vw-2rem)] max-w-[400px] flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl transition-all duration-300 ease-out motion-reduce:transition-none",
-          side === "left" ? "origin-left" : "origin-right",
-          open ? "translate-x-0 scale-100 opacity-100" : cn("pointer-events-none scale-95 opacity-0", side === "left" ? "-translate-x-6" : "translate-x-6"),
+          fromMascot ? "origin-bottom-left" : side === "left" ? "origin-left" : "origin-right",
+          open ? "translate-x-0 scale-100 opacity-100" : cn("pointer-events-none scale-95 opacity-0", fromMascot || side === "left" ? "-translate-x-6" : "translate-x-6"),
         )}
       >
         <div className="flex items-center gap-3 border-b px-4 py-3">
           <SyncroBadge size={38} online={online} />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">Syncro <span className="font-normal text-muted-foreground">· Equipo Syncro</span></p>
+            <p className="text-sm font-semibold">{mascot?.name || "Nubi"} <span className="font-normal text-muted-foreground">· Equipo Syncro</span></p>
             <p className="truncate text-xs text-muted-foreground">{typing ? "Escribiendo…" : online ? "En línea ahora" : "Te respondemos lun – vie, 8 a. m. a 6 p. m."}</p>
           </div>
           {mascotOn && (
@@ -438,7 +444,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
               <div className="flex items-end gap-3">
                 <SyncroAvatar pose="wave" size={88} />
                 <div className="rounded-2xl rounded-bl-sm border border-primary/30 bg-primary/10 p-3.5 text-sm">
-                  <p className="font-semibold">¡Hola! Soy Syncro 👋</p>
+                  <p className="font-semibold">¡Hola! Soy {mascot?.name || "Nubi"} 👋</p>
                   <p className="mt-1 text-muted-foreground">Junto al equipo te ayudo con lo que necesites: una duda, algo que no funciona o una idea para tu negocio. Puedes mandar fotos.</p>
                 </div>
               </div>
