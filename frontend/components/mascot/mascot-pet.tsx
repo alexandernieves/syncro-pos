@@ -127,7 +127,8 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
 
   const visible = merchant && !!settings?.visible;
   const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const roam = !forceDocked && !!settings?.roam && !reduced;
+  // "Pasear" wins everywhere (POS included); `docked` is only where it rests when it doesn't roam
+  const roam = !!settings?.roam && !reduced;
   const frozen = !!cloud;
   const frozenRef = useRef(false);
   useEffect(() => { frozenRef.current = frozen; }, [frozen]);
@@ -179,8 +180,8 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
     const maxX = vw - SIZE - MARGIN;
     const minY = MARGIN;
     const maxY = vh - SIZE - MARGIN;
-    if (forceDocked) return { x: side === "right" ? maxX - 4 : minX + 4, y: (vh * top) / 100 - HALF };
     if (roam) return { x: p.x, y: p.y };
+    if (forceDocked) return { x: side === "right" ? maxX - 4 : minX + 4, y: (vh * top) / 100 - HALF };
     const dl = p.x - minX;
     const dr = maxX - p.x;
     const dt = p.y - minY;
