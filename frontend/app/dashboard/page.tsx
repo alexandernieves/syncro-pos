@@ -782,15 +782,15 @@ export default function Page() {
                   <CardTitle className="text-sm font-semibold flex items-center justify-between">
                     Meta de ventas del mes
                     <span className="text-xs font-mono text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full">
-                      {Math.min(Math.round(((stats?.revenue || 0) / (stats?.settings?.salesGoal || 10000)) * 100), 100)}%
+                      {Math.min(Math.round(((stats?.monthRevenue ?? stats?.revenue ?? 0) / (stats?.settings?.salesGoal || 10000)) * 100), 100)}%
                     </span>
                   </CardTitle>
                   <CardDescription className="text-xs">Progreso hacia el objetivo de {formatPrice(stats?.settings?.salesGoal || 10000)}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <Progress value={Math.min(((stats?.revenue || 0) / (stats?.settings?.salesGoal || 10000)) * 100, 100)} className="h-2 bg-blue-500/10" indicatorColor="bg-blue-500" />
+                  <Progress value={Math.min(((stats?.monthRevenue ?? stats?.revenue ?? 0) / (stats?.settings?.salesGoal || 10000)) * 100, 100)} className="h-2 bg-blue-500/10" indicatorColor="bg-blue-500" />
                   <div className="flex justify-between text-xs font-medium tabular-nums">
-                    <span className="text-muted-foreground">{formatPrice(stats?.revenue || 0)}</span>
+                    <span className="text-muted-foreground">{formatPrice(stats?.monthRevenue ?? stats?.revenue ?? 0)}</span>
                     <span className="text-blue-600 font-bold">{formatPrice(stats?.settings?.salesGoal || 10000)}</span>
                   </div>
                 </CardContent>

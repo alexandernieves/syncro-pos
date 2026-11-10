@@ -306,8 +306,16 @@ export class SuppliersAlertsService {
 
   async getAlertsSummary(businessId?: string) {
     const alerts = await this.getAllAlerts(businessId);
-    
+    // What the business still owes its suppliers (the "Pasivos totales" card)
+    const owed = await this.prisma.supplierInvoice.aggregate({
+      where: { status: { not: InvoiceStatus.PAID }, supplier: { businessId: businessId ?? '__none__' } },
+      _sum: { balance: true },
+      _count: true,
+    });
+
     const summary = {
+      totalBalance: Math.round((owed._sum.balance ?? 0) * 100) / 100,
+      pendingInvoices: owed._count,
       total: alerts.length,
       critical: alerts.filter(a => a.priority === 'critical').length,
       high: alerts.filter(a => a.priority === 'high').length,

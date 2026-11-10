@@ -170,6 +170,14 @@ export class DashboardService {
     ));
     const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
+    // The monthly goal compares this month's sales (Venezuela time), not every sale ever made
+    const startOfMonth = new Date(Date.UTC(localTime.getUTCFullYear(), localTime.getUTCMonth(), 1, 4));
+    const startOfNextMonth = new Date(Date.UTC(localTime.getUTCFullYear(), localTime.getUTCMonth() + 1, 1, 4));
+    const monthRevenue = await this.prisma.sale.aggregate({
+      where: { ...whereClause, createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
+      _sum: { total: true },
+    });
+
     // Get all sales for the selected day in this business/branch
     const daySales = await this.prisma.sale.findMany({
       where: {
@@ -214,6 +222,7 @@ export class DashboardService {
 
     const result = {
       revenue: revenueValue,
+      monthRevenue: monthRevenue._sum.total || 0,
       salesCount: totalSales,
       clientsCount: totalClients, 
       productsCount,
