@@ -1,10 +1,33 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CashByCurrency, Currency, Rates, branchCurrencies, cashToUsd, cleanCash, isCurrency, ratesFrom, round2 } from '../../common/currency';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ShiftsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private notificationsService: NotificationsService) {}
+
+  /** The till was closed: a summary for the owner (bell, and WhatsApp if turned on) */
+  private async notifyClosed(shiftId: string, counted: number, expected: number, difference: number) {
+    try {
+      const shift = await this.prisma.shift.findUnique({
+        where: { id: shiftId },
+        select: { branchId: true, user: { select: { name: true } }, sales: { where: { status: { not: 'CANCELLED' } }, select: { total: true } } },
+      });
+      if (!shift) return;
+      const sold = round2(shift.sales.reduce((s, x) => s + x.total, 0));
+      const gap = Math.abs(difference) < 0.01 ? 'La caja cuadró exacta.' : difference < 0 ? `Faltaron $${Math.abs(difference).toFixed(2)}.` : `Sobraron $${difference.toFixed(2)}.`;
+      await this.notificationsService.create({
+        type: 'SHIFT_CLOSED',
+        title: 'Cierre de caja',
+        message: `${shift.user?.name ?? 'El cajero'} cerró la caja: ${shift.sales.length} ventas por $${sold.toFixed(2)}. Efectivo esperado $${expected.toFixed(2)}, contado $${counted.toFixed(2)}. ${gap}`,
+        branchId: shift.branchId,
+        data: { amount: sold, sales: shift.sales.length, difference },
+      });
+    } catch {
+      // the close itself already worked
+    }
+  }
 
   private async branchContext(branchId: string) {
     const branch = await this.prisma.branch.findUnique({ where: { id: branchId }, select: { id: true, state: true, businessId: true } });
@@ -120,7 +143,7 @@ export class ShiftsService {
     const counted = perCurrency ? cashToUsd(countedCash, rates) : Number(closingBalance);
     const difference = round2(counted - expectedCashUsd);
 
-    return this.prisma.shift.update({
+    const closed = await this.prisma.shift.update({
       where: { id },
       data: {
         closingBalance: counted,
@@ -135,6 +158,8 @@ export class ShiftsService {
         closedAt: new Date()
       }
     });
+    await this.notifyClosed(id, counted, expectedCashUsd, difference);
+    return closed;
   }
 
   async getActive(userId: string) {

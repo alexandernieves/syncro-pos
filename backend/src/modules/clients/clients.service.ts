@@ -380,6 +380,25 @@ export class ClientsService {
 
       return updatedClientVal;
     });
+
+    // The owner hears about the payment (bell, and WhatsApp if turned on)
+    try {
+      const branch = updatedClient.businessId
+        ? (await this.prisma.branch.findFirst({ where: { businessId: updatedClient.businessId, isMain: true } })) ?? (await this.prisma.branch.findFirst({ where: { businessId: updatedClient.businessId } }))
+        : null;
+      if (branch) {
+        const left = updatedClient.currentDebt;
+        await this.notificationsService.create({
+          type: 'CREDIT_PAYMENT',
+          title: 'Abono recibido',
+          message: `${updatedClient.name} abonó $${Number(data.amount).toFixed(2)}${data.paidCurrency && data.paidCurrency !== 'USD' && data.paidAmount ? ` (${Number(data.paidAmount).toLocaleString('es-VE')} ${data.paidCurrency})` : ''}. ${left > 0.01 ? `Le quedan $${left.toFixed(2)}.` : 'Ya no debe nada.'}`,
+          branchId: branch.id,
+          data: { amount: Number(data.amount), client: updatedClient.name, debt: left },
+        });
+      }
+    } catch (e) {
+      this.logger.error('Error creating payment notification', e);
+    }
     return this.sanitizeClient(updatedClient);
   }
 

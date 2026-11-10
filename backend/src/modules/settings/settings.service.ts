@@ -3,6 +3,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { PrismaService } from '../prisma/prisma.service';
+import { normalizeAlerts } from '../whatsapp/whatsapp-alerts.config';
 
 @Injectable()
 export class SettingsService {
@@ -87,7 +88,7 @@ export class SettingsService {
       'exchangeRate', 'exchangeRateEur', 'bcvUpdateDate',
       'exchangeRateDashboard', 'exchangeRateDashboardEur', 'bcvUpdateDateDashboard',
       'exchangeRateCop', 'copRateManual', 'copUpdateDate',
-      'whatsappBotEnabled', 'whatsappAuthorizedPhones',
+      'whatsappBotEnabled', 'whatsappAuthorizedPhones', 'whatsappAlerts',
       'businessType', 'enabledModules', 'sidebarOrder',
       'blindShiftClose',
       'isSyncroVendor', 'syncroVendorStoreName', 'syncroVendorCategory',
@@ -102,6 +103,9 @@ export class SettingsService {
         filteredData[key] = updateData[key];
       }
     }
+
+    // Avisos por WhatsApp: only a valid configuration is stored
+    if (filteredData.whatsappAlerts !== undefined) filteredData.whatsappAlerts = normalizeAlerts(filteredData.whatsappAlerts);
 
     // Packaged modules (gym…) are turned on from Syncro central, never from the business's own switches
     if (Array.isArray(filteredData.enabledModules)) {

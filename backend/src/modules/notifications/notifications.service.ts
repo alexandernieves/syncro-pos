@@ -15,6 +15,8 @@ export class NotificationsService {
     message: string;
     branchId?: string;
     userId?: string;
+    /** Details for the WhatsApp alerts (amount, client, method…) */
+    data?: Record<string, unknown>;
   }) {
     // 1. Persist in DB
     const notification = await this.prisma.notification.create({
@@ -24,6 +26,7 @@ export class NotificationsService {
         message: data.message,
         branchId: data.branchId,
         userId: data.userId,
+        ...(data.data && { data: data.data as any }),
       },
     });
 

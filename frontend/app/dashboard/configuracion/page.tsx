@@ -1,4 +1,5 @@
 "use client";
+import { WhatsAppAlertsSettings, DEFAULT_WHATSAPP_ALERTS, readWhatsAppAlerts, type WhatsAppAlerts } from "@/components/whatsapp-alerts-settings";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { API_URL } from "@/lib/constants"
 import { clearAuthSession } from "@/lib/auth-helpers";
@@ -270,6 +271,7 @@ export default function ConfiguracionPage() {
 
   const [whatsappBotEnabled, setWhatsappBotEnabled] = useState(false);
   const [whatsappAuthorizedPhones, setWhatsappAuthorizedPhones] = useState<string[]>([]);
+  const [whatsappAlerts, setWhatsappAlerts] = useState<WhatsAppAlerts>(DEFAULT_WHATSAPP_ALERTS);
   const [newPhoneInput, setNewPhoneInput] = useState("");
 
   // WhatsApp connection state
@@ -885,6 +887,7 @@ export default function ConfiguracionPage() {
             setSyncroCreditLimits({ initial: data.syncroCreditInitialLimit ?? 30, max: data.syncroCreditMaxLimit ?? 200, step: data.syncroCreditLimitStep ?? 10 });
             setWhatsappBotEnabled(data.whatsappBotEnabled || false);
             setWhatsappAuthorizedPhones(data.whatsappAuthorizedPhones || []);
+            setWhatsappAlerts(readWhatsAppAlerts(data.whatsappAlerts));
             setDashboardConfig({
               salesGoal: String(data.salesGoal || "10000"),
               showSalesGoal: data.showSalesGoal !== undefined ? data.showSalesGoal : true,
@@ -1052,6 +1055,7 @@ export default function ConfiguracionPage() {
         payload = {
           whatsappBotEnabled,
           whatsappAuthorizedPhones,
+          whatsappAlerts,
         };
       } else {
         // General settings payload (all non-WhatsApp fields)
@@ -2841,6 +2845,8 @@ export default function ConfiguracionPage() {
                 </div>
               </CardContent>
             </Card>
+
+            <WhatsAppAlertsSettings value={whatsappAlerts} onChange={setWhatsappAlerts} authorizedPhones={whatsappAuthorizedPhones} />
 
             <Button className="self-start gap-2" onClick={() => handleSave("WhatsApp")}>
               <IconDeviceFloppy size={16}/> Guardar configuración de WhatsApp

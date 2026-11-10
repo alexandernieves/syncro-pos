@@ -434,12 +434,29 @@ export class SalesService {
       }
 
       try {
+        const pays = (result.sale.payments ?? []) as { method: string; amount: number }[];
+        const credit = Math.round(pays.filter((p) => p.method === 'CREDIT').reduce((sum, p) => sum + Number(p.amount || 0), 0) * 100) / 100;
         await this.notificationsService.create({
           type: 'SALE',
           title: 'Nueva Venta Procesada',
           message: `El cajero ${result.user?.name || 'Cajero'} ha procesado una venta por $${result.total.toFixed(2)} en ${result.branch?.name || 'Sucursal'}.`,
           branchId,
+          data: { amount: result.total, methods: [...new Set(pays.map((p) => p.method))], cashier: result.user?.name ?? null, creditOnly: credit > 0 && credit >= result.total - 0.01 },
         });
+        // Fiado: its own notice, with who owes and until when
+        if (credit > 0 && clientId) {
+          const client = await this.prisma.client.findUnique({ where: { id: clientId }, select: { name: true, currentDebt: true, nextPaymentDate: true } });
+          if (client) {
+            const due = client.nextPaymentDate ? client.nextPaymentDate.toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'America/Caracas' }) : null;
+            await this.notificationsService.create({
+              type: 'CREDIT',
+              title: 'Nuevo fiado',
+              message: `Le fiaste $${credit.toFixed(2)} a ${client.name}. Ahora debe $${client.currentDebt.toFixed(2)}${due ? ` y paga el ${due}` : ''}.`,
+              branchId,
+              data: { amount: credit, client: client.name, debt: client.currentDebt },
+            });
+          }
+        }
       } catch (e) {
         this.logger.error('Error triggering websocket notification:', e);
       }

@@ -1,11 +1,12 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request, UseGuards, BadRequestException, ConflictException } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { WhatsAppService } from './whatsapp.service';
+import { WhatsAppAlertsService } from './whatsapp-alerts.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('whatsapp')
 export class WhatsAppController {
-  constructor(private readonly whatsappService: WhatsAppService) {}
+  constructor(private readonly whatsappService: WhatsAppService, private readonly alerts: WhatsAppAlertsService) {}
 
   // ─────────────────────────────────────────────────────────────────────────
   // 1. Chat Webhook (Public) — customer messages for the Chat module
@@ -236,6 +237,15 @@ export class WhatsAppController {
   @Get('bot-status')
   async getBotStatus(@Request() req: any) {
     return this.whatsappService.getBotStatus(req.user.businessId);
+  }
+
+  // "Avisos por WhatsApp": a test message with what is on the screen
+  @UseGuards(JwtAuthGuard)
+  @Post('alerts/test')
+  async testAlerts(@Body() body: any, @Request() req: any) {
+    if (!req.user?.businessId) throw new BadRequestException('Sin negocio');
+    if (req.user.role === 'pos') throw new BadRequestException('Solo el dueño o un administrador puede hacerlo');
+    return this.alerts.sendTest(req.user.businessId, body);
   }
 
   // Logout/disconnect the AI Bot instance

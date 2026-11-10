@@ -439,6 +439,10 @@ model Setting {
   syncroCreditLimitStep       Float     @default(10)
   whatsappAuthorizedPhones    String[]  @default([])
   whatsappBotEnabled          Boolean   @default(false)
+  /// Notifications forwarded to WhatsApp through the bot's connection: who gets them, which ones, quiet hours
+  whatsappAlerts              Json?
+  /// Up to when notifications were already forwarded to WhatsApp
+  whatsappAlertsSentAt        DateTime?
   businessType                String?   @default("GENERAL")
   enabledModules              Json?
   sidebarOrder                Json?
@@ -833,9 +837,13 @@ model Notification {
   branchId  String?
   userId    String?
   isRead    Boolean  @default(false)
+  /// Details for WhatsApp alerts (amount, client, payment method…)
+  data      Json?
   createdAt DateTime @default(now())
   branch    Branch?  @relation("BranchNotifications", fields: [branchId], references: [id])
   user      User?    @relation("UserNotifications", fields: [userId], references: [id])
+
+  @@index([createdAt])
 }
 
 model SavedProfile {

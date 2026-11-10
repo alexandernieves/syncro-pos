@@ -160,6 +160,12 @@ export class WhatsAppService {
     }
   }
 
+  /** Whether the bot's WhatsApp is connected, and the number that scanned its QR. */
+  async botConnection(businessId: string): Promise<{ connected: boolean; phone: string | null }> {
+    const status = await this.getBotStatus(businessId);
+    return { connected: !!status.connected, phone: this.botPhones.get(businessId) ?? null };
+  }
+
   async getBotQrCode(businessId: string) {
     const { url, apiKey, instance } = this.getBotUrlAndKey(businessId);
     try {
