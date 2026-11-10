@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   IconUser, IconHistory, IconCash, IconAlertCircle, IconCheck, IconSearch,
   IconCreditCard, IconInfoCircle, IconArrowLeft, IconCalendar,
-  IconReceipt, IconShoppingCart, IconSettings
+  IconReceipt, IconShoppingCart, IconSettings, IconArrowsSort
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { format } from "date-fns";
+import { format, formatDistanceToNowStrict } from "date-fns";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { es } from "date-fns/locale";
 import {
   PolarGrid, PolarRadiusAxis, RadialBar, RadialBarChart, Label as RechartsLabel
@@ -108,11 +109,64 @@ function CreditRadialCard({ client }: { client: any }) {
   );
 }
 
+/** How the fiado list can be ordered; the most recent fiado first by default */
+const CREDIT_SORTS = [
+  ["recent", "Fiado más reciente"],
+  ["oldest", "Fiado más antiguo"],
+  ["most", "Debe más"],
+  ["least", "Debe menos"],
+  ["overdue", "Más atrasado"],
+  ["nopay", "Más tiempo sin abonar"],
+  ["limit", "Más cerca del límite"],
+  ["name", "Nombre (A–Z)"],
+] as const;
+type CreditSort = (typeof CREDIT_SORTS)[number][0];
+const CREDIT_FILTERS = [
+  ["all", "Todos"],
+  ["late", "Atrasados"],
+  ["ontime", "Al día"],
+  ["week", "Vencen esta semana"],
+  ["over", "Pasados del límite"],
+] as const;
+type CreditFilter = (typeof CREDIT_FILTERS)[number][0];
+const SORT_KEY = "syncro-creditos-sort";
+const FILTER_KEY = "syncro-creditos-filter";
+const ms = (d?: string | null) => (d ? new Date(d).getTime() : NaN);
+/** Ascending, with the clients that have no date at the end (or at the start) */
+const byDate = (a: number, b: number, emptyFirst = false) => {
+  if (isNaN(a) && isNaN(b)) return 0;
+  if (isNaN(a)) return emptyFirst ? -1 : 1;
+  if (isNaN(b)) return emptyFirst ? 1 : -1;
+  return a - b;
+};
+const creditStatus = (c: any, now: number) => {
+  const due = ms(c.nextPaymentDate);
+  return {
+    late: !isNaN(due) && due < now,
+    week: !isNaN(due) && due >= now && due <= now + 7 * 86400000,
+    over: (c.creditLimit || 0) > 0 && c.currentDebt > c.creditLimit,
+  };
+};
+
 export default function CreditosPage() {
   const [clients, setClients] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState<CreditSort>("recent");
+  const [statusFilter, setStatusFilter] = useState<CreditFilter>("all");
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem(SORT_KEY) as CreditSort | null;
+      if (s && CREDIT_SORTS.some(([k]) => k === s)) setSortBy(s);
+      const f = localStorage.getItem(FILTER_KEY) as CreditFilter | null;
+      if (f && CREDIT_FILTERS.some(([k]) => k === f)) setStatusFilter(f);
+    } catch {
+      // storage blocked: defaults
+    }
+  }, []);
+  const chooseSort = (v: CreditSort) => { setSortBy(v); setClientsPage(1); try { localStorage.setItem(SORT_KEY, v); } catch {} };
+  const chooseFilter = (v: CreditFilter) => { setStatusFilter(v); setClientsPage(1); try { localStorage.setItem(FILTER_KEY, v); } catch {} };
 
   // Abono Modal
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -199,15 +253,43 @@ export default function CreditosPage() {
   }, [paymentCurrency, paidAmountRaw, customRate, paymentOpen, settings]);
 
   // Only show clients with active debt (outstanding balance)
-  const filteredClients = clients.filter(c => {
-    const hasCredit = c.currentDebt > 0;
-    if (!hasCredit) return false;
-    if (searchTerm.trim() === "") return true;
-    return (
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.documentId?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  });
+  const now = Date.now();
+  const owing = clients.filter((c) => c.currentDebt > 0);
+  const filterCounts: Record<CreditFilter, number> = {
+    all: owing.length,
+    late: owing.filter((c) => creditStatus(c, now).late).length,
+    ontime: owing.filter((c) => !creditStatus(c, now).late).length,
+    week: owing.filter((c) => creditStatus(c, now).week).length,
+    over: owing.filter((c) => creditStatus(c, now).over).length,
+  };
+  const filteredClients = owing
+    .filter((c) => {
+      const st = creditStatus(c, now);
+      if (statusFilter === "late" && !st.late) return false;
+      if (statusFilter === "ontime" && st.late) return false;
+      if (statusFilter === "week" && !st.week) return false;
+      if (statusFilter === "over" && !st.over) return false;
+      if (searchTerm.trim() === "") return true;
+      return (
+        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.documentId?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case "recent": return -byDate(ms(a.lastDebtAt), ms(b.lastDebtAt), true) || b.currentDebt - a.currentDebt;
+        case "oldest": return byDate(ms(a.lastDebtAt), ms(b.lastDebtAt));
+        case "most": return b.currentDebt - a.currentDebt;
+        case "least": return a.currentDebt - b.currentDebt;
+        case "overdue": return byDate(ms(a.nextPaymentDate), ms(b.nextPaymentDate)) || b.currentDebt - a.currentDebt;
+        case "nopay": return byDate(ms(a.lastPaymentDate), ms(b.lastPaymentDate), true) || byDate(ms(a.lastDebtAt), ms(b.lastDebtAt));
+        case "limit": {
+          const r = (c: any) => ((c.creditLimit || 0) > 0 ? c.currentDebt / c.creditLimit : -1);
+          return r(b) - r(a) || b.currentDebt - a.currentDebt;
+        }
+        case "name": return a.name.localeCompare(b.name, "es");
+      }
+    });
 
   const totalClientsPages = Math.max(1, Math.ceil(filteredClients.length / clientsPageSize));
 
@@ -496,6 +578,41 @@ export default function CreditosPage() {
         </div>
       </div>
 
+      {/* Filter by status and choose the order (remembered on this computer) */}
+      {!loading && owing.length > 0 && (
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div role="group" aria-label="Filtrar clientes" className="flex flex-wrap gap-2">
+            {CREDIT_FILTERS.map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={statusFilter === key}
+                onClick={() => chooseFilter(key)}
+                className={`h-9 rounded-xl border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                  statusFilter === key
+                    ? key === "late" ? "border-rose-500 bg-rose-500 text-white" : "border-primary bg-primary text-primary-foreground"
+                    : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-300"
+                }`}
+              >
+                {label} <span className="ml-1 tabular-nums opacity-70">{filterCounts[key]}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <IconArrowsSort size={16} className="text-zinc-400" />
+            <span className="text-xs font-medium text-zinc-500">Ordenar por</span>
+            <Select value={sortBy} onValueChange={(v) => chooseSort(v as CreditSort)}>
+              <SelectTrigger className="h-9 w-[210px] rounded-xl text-xs font-semibold" aria-label="Ordenar por">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CREDIT_SORTS.map(([key, label]) => <SelectItem key={key} value={key} className="text-xs">{label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="text-center py-24 text-zinc-400 animate-pulse text-sm font-semibold">Cargando libreta digital...</div>
       ) : filteredClients.length === 0 ? (
@@ -504,8 +621,8 @@ export default function CreditosPage() {
             <div className="size-14 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 mb-6">
               <IconCheck size={28} />
             </div>
-            <h3 className="text-lg font-bold text-zinc-800 dark:text-zinc-200">¡Todo al día!</h3>
-            <p className="max-w-xs text-sm text-zinc-500 mt-2">No hay clientes con crédito activo actualmente.</p>
+            <h3 className="text-lg font-bold text-zinc-800 dark:text-zinc-200">{owing.length ? "Nadie en este filtro" : "¡Todo al día!"}</h3>
+            <p className="max-w-xs text-sm text-zinc-500 mt-2">{owing.length ? "Prueba con otro filtro o búsqueda." : "No hay clientes con crédito activo actualmente."}</p>
           </CardContent>
         </Card>
       ) : (
@@ -556,7 +673,10 @@ export default function CreditosPage() {
                               </Badge>
                             )}
                           </div>
-                          <CardDescription className="text-[11px] text-zinc-400 font-mono mt-0.5">{c.documentId || "Cédula S/D"}</CardDescription>
+                          <CardDescription className="text-[11px] text-zinc-400 mt-0.5">
+                            <span className="font-mono">{c.documentId || "Cédula S/D"}</span>
+                            {c.lastDebtAt && <span> · fió hace {formatDistanceToNowStrict(new Date(c.lastDebtAt), { locale: es })}</span>}
+                          </CardDescription>
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1.5">

@@ -58,7 +58,13 @@ export class ClientsService {
       },
       orderBy: { createdAt: 'desc' }
     });
-    return clients.map(c => this.sanitizeClient(c));
+    // When each client was last given fiado (Cuentas por cobrar sorts by it)
+    const ids = clients.filter((c) => c.currentDebt > 0).map((c) => c.id);
+    const lastDebts = ids.length
+      ? await this.prisma.creditTransaction.groupBy({ by: ['clientId'], where: { clientId: { in: ids }, type: 'DEBT' }, _max: { createdAt: true } })
+      : [];
+    const lastDebtAt = new Map(lastDebts.map((d) => [d.clientId, d._max.createdAt]));
+    return clients.map(c => ({ ...this.sanitizeClient(c), lastDebtAt: lastDebtAt.get(c.id) ?? null }));
   }
 
   /**
