@@ -121,6 +121,7 @@ const ACTION_LABEL: Record<string, string> = {
   LOGIN_FAILED: "Intento de inicio de sesión fallido",
   CREATE_PRODUCT: "Creó un producto",
   UPDATE_PRODUCT: "Editó un producto",
+  LINK_BARCODE: "Vinculó un código de barras nuevo a un producto",
   DELETE_PRODUCT: "Eliminó un producto",
   CREATE_SALE: "Registró una venta",
   SYNCRO_STATUS_CHANGE: "Syncro cambió el estado del negocio",

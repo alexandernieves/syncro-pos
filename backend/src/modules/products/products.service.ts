@@ -630,6 +630,47 @@ export class ProductsService {
     };
   }
 
+  /**
+   * A new barcode for a product the shop already has (the same toothpaste, a new box with
+   * another code). The code is added to the variant's codes, so the stock stays one: any of its
+   * codes sells from the same units. Done from the till, so the scanner keeps working.
+   */
+  async linkBarcode(variantId: string, rawCode: string, user: { id?: string; businessId?: string | null }) {
+    const code = String(rawCode ?? '').trim();
+    if (!user?.businessId) throw new NotFoundException('Producto no encontrado');
+    if (!code || code.length > 64 || /\s/.test(code)) throw new BadRequestException('Código de barras no válido');
+    const variant = await this.prisma.productVariant.findFirst({
+      where: { id: variantId, product: { businessId: user.businessId } },
+      include: { product: { select: { id: true, name: true } } },
+    });
+    if (!variant) throw new NotFoundException('Producto no encontrado');
+    if (variant.barcode === code || variant.secondaryBarcodes.includes(code)) return variant;
+    // Only inside this business: another shop may sell the same item with the same code
+    const taken = await this.prisma.productVariant.findFirst({
+      where: { id: { not: variantId }, product: { businessId: user.businessId }, OR: [{ barcode: code }, { secondaryBarcodes: { has: code } }] },
+      include: { product: { select: { name: true } } },
+    });
+    if (taken) throw new BadRequestException(`Ese código ya es de "${taken.product.name}"`);
+    const updated = await this.prisma.productVariant.update({
+      where: { id: variantId },
+      data: { secondaryBarcodes: { push: code } },
+      include: { product: { select: { id: true, name: true } } },
+    });
+    try {
+      await this.historyService.logAction({
+        userId: user.id!,
+        action: 'LINK_BARCODE',
+        entity: 'PRODUCT',
+        entityId: variant.product.id,
+        details: { name: variant.product.name, variant: variant.name, barcode: code },
+      });
+    } catch (e) {
+      console.error('[ProductsService] Failed to log LINK_BARCODE:', e);
+    }
+    await this.invalidateProductsCache(user.businessId, variant.product.id);
+    return updated;
+  }
+
   async validateBarcode(barcode: string, businessId?: string) {
     const where: any = {
       OR: [

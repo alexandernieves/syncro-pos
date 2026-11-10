@@ -166,6 +166,13 @@ export class ProductsController {
     };
   }
 
+  /** Links a new barcode to a product the shop already has (from the till's scanner) */
+  @UseGuards(JwtAuthGuard)
+  @Post('variants/:variantId/barcodes')
+  linkBarcode(@Param('variantId') variantId: string, @Body() body: { barcode?: string }, @Request() req: any) {
+    return this.productsService.linkBarcode(variantId, body?.barcode ?? '', { id: req.user?.id || req.user?.sub, businessId: req.user?.businessId });
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('validate-barcode/:barcode') validateBarcode(@Param('barcode') barcode: string, @Request() req: any) {
     const businessId = req.user?.businessId;

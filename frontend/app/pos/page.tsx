@@ -4,6 +4,7 @@ import { ClientPicker, type DirectoryClient } from "@/components/pos/client-pick
 import { verifySupervisorPin } from "@/lib/supervisor-pin";
 import { ClientDataPrompt, clientIsMissingData } from "@/components/pos/client-data-prompt";
 import { CreditLimitOverride } from "@/components/pos/credit-limit-override";
+import { LinkBarcodeDialog } from "@/components/pos/link-barcode-dialog";
 import { ReceiptPrinter, type ReceiptData } from "@/components/pos/receipt-printer";
 import { normalizeInvoiceDesign } from "@/lib/invoice/design";
 import { resolveInvoiceBusiness } from "@/lib/invoice/render";
@@ -746,6 +747,8 @@ export default function POSPage() {
   const [useCamera, setUseCamera] = useState(false);
   const [isDetected, setIsDetected] = useState(false);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
+  /** A code the scanner read that no product has: the cashier links it to one (or creates it) */
+  const [linkCode, setLinkCode] = useState<string | null>(null);
   const [waitlistData, setWaitlistData] = useState({ name: "", price: "", stock: "1", barcode: "" });
   const [savingWaitlist, setSavingWaitlist] = useState(false);
 
@@ -915,21 +918,26 @@ export default function POSPage() {
     return false;
   };
 
-  const handleNumpadEnter = (code: string) => {
-    const product = products.find(p =>
-      p.variants?.some(v =>
+  /** The product and the exact variant a code belongs to (any of its codes, or its SKU) */
+  const findByCode = (code: string) => {
+    for (const p of products) {
+      const v = p.variants?.find(v =>
         matchBarcodes(v.barcode, code) ||
         v.sku === code ||
         v.secondaryBarcodes?.some(sb => matchBarcodes(sb, code))
-      )
-    );
-    if (product) {
-      // addToCart is declared later, we will handle it in a useEffect or ensure it's available. 
-      // Actually addToCart is defined below in the file, we can call it here because of hoisting or closure behavior in React components.
-      addToCart(product);
-      toast.success(`Agregado al carrito: ${product.name}`);
+      );
+      if (v) return { product: p, variantId: v.id };
+    }
+    return null;
+  };
+
+  const handleNumpadEnter = (code: string) => {
+    const found = findByCode(code);
+    if (found) {
+      addToCart(found.product, undefined, found.variantId);
+      toast.success(`Agregado al carrito: ${found.product.name}`);
     } else {
-      toast.error(`Producto no encontrado con el código: ${code}`);
+      setLinkCode(code);
     }
   };
 
@@ -1478,20 +1486,14 @@ export default function POSPage() {
 
   const processBarcode = (code: string) => {
     console.log("Processing Barcode:", code);
-    const found = products.find(p =>
-      p.variants?.some(v =>
-        matchBarcodes(v.barcode, code) ||
-        v.sku === code ||
-        v.secondaryBarcodes?.some(sb => matchBarcodes(sb, code))
-      )
-    );
+    if (linkCode) return; // already asking which product the last unknown code is
+    const found = findByCode(code);
     if (found) {
-      addToCart(found);
-      toast.success(`Leído: ${found.name}`, { icon: '🔍' });
+      addToCart(found.product, undefined, found.variantId);
+      toast.success(`Leído: ${found.product.name}`, { icon: '🔍' });
     } else {
-      toast.error(`Producto no encontrado (${code})`);
-      setWaitlistData(prev => ({ ...prev, barcode: code }));
-      setWaitlistOpen(true);
+      // Usually the same product in a new box with another code: ask which one it is
+      setLinkCode(code);
     }
   };
 
@@ -1670,7 +1672,7 @@ export default function POSPage() {
     }
   };
 
-  const addToCart = (product: Product, customQuantity?: number) => {
+  const addToCart = (product: Product, customQuantity?: number, variantId?: string) => {
     if (product.isWeighable && customQuantity === undefined) {
       setWeighableProduct(product);
       setWeightValue("");
@@ -1678,7 +1680,8 @@ export default function POSPage() {
       return;
     }
 
-    const variant = product.variants?.[0]; // Default to first variant for now
+    // The variant whose code was scanned; otherwise the first one
+    const variant = (variantId && product.variants?.find(v => v.id === variantId)) || product.variants?.[0];
     const qtyToAdd = customQuantity || 1;
 
     if (!variant || variant.stock < qtyToAdd) {
@@ -5138,6 +5141,30 @@ export default function POSPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* DIALOG: a code nobody has → link it to an existing product (or create it) */}
+      <LinkBarcodeDialog
+        code={linkCode}
+        products={products as any}
+        onClose={() => setLinkCode(null)}
+        onNewProduct={(code) => {
+          setLinkCode(null);
+          setWaitlistData(prev => ({ ...prev, barcode: code }));
+          setWaitlistOpen(true);
+        }}
+        onLinked={(productId, variantId, code) => {
+          setLinkCode(null);
+          const withCode = (p: Product): Product => p.id !== productId ? p : {
+            ...p,
+            variants: p.variants.map(v => v.id !== variantId ? v : { ...v, secondaryBarcodes: [...(v.secondaryBarcodes ?? []), code] }),
+          };
+          setProducts(prev => prev.map(withCode));
+          // The offline copy too, so the scanner knows it even without internet
+          db.products.get(productId).then((p: any) => p && db.products.put({ ...p, ...withCode(p) })).catch(() => {});
+          const product = products.find(p => p.id === productId);
+          if (product) addToCart(withCode(product), undefined, variantId);
+        }}
+      />
 
       {/* DIALOG: PRODUCT WAITLIST (FOR NON-EXISTING PRODUCTS) */}
       <Dialog open={waitlistOpen} onOpenChange={setWaitlistOpen}>

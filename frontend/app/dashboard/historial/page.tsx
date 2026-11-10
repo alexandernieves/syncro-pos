@@ -206,6 +206,10 @@ export default function HistorialPage() {
                   actionLabel = "Producto Actualizado";
                   subDetail = details.name ? `Nombre: ${details.name}` : "";
               }
+              else if (row.original.action === 'LINK_BARCODE') {
+                  actionLabel = "Código de barras vinculado";
+                  subDetail = details.name ? `${details.name} · ${details.barcode ?? ""}` : "";
+              }
               else if (row.original.action === 'LOGIN') {
                   actionLabel = "Inicio de Sesión";
                   subDetail = "Sesión iniciada correctamente";
