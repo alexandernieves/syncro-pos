@@ -109,6 +109,7 @@ const data = {
       moduleId: "inventory",
       items: [
         { title: "Almacén", url: "/dashboard/inventario/almacen" },
+        { title: "Ingreso de mercancía", url: "/dashboard/inventario/ingreso" },
         { title: "Compras (oc)", url: "/dashboard/inventario/compras" },
         { title: "Traslados", url: "/dashboard/inventario/traslados" },
         { title: "Alertas de stock", url: "/dashboard/inventario/alertas" },

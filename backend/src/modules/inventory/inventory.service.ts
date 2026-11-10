@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MovementType } from '@prisma/client';
 import { HistoryService } from '../history/history.service';
@@ -26,6 +26,65 @@ export class InventoryService {
       where: { variantId, ...(businessId ? { branch: { businessId } } : {}) },
       include: { branch: true }
     });
+  }
+
+  /**
+   * The branch and every product must be of the user's own business (golden rule: a business
+   * never touches another's stock). Answers "not found" so other ids can't be probed.
+   */
+  async assertOwned(user: { role?: string; businessId?: string | null } | undefined, branchId: string | undefined, variantIds: (string | undefined)[]) {
+    if (user?.role === 'syncropos') return;
+    const businessId = user?.businessId;
+    if (!businessId || !branchId || typeof branchId !== 'string') throw new NotFoundException('Sucursal no encontrada');
+    const branch = await this.prisma.branch.findFirst({ where: { id: branchId, businessId }, select: { id: true } });
+    if (!branch) throw new NotFoundException('Sucursal no encontrada');
+    const ids = [...new Set(variantIds)];
+    if (ids.some((v) => !v || typeof v !== 'string')) throw new NotFoundException('Producto no encontrado');
+    if (!ids.length) return;
+    const found = await this.prisma.productVariant.count({ where: { id: { in: ids as string[] }, product: { businessId } } });
+    if (found !== ids.length) throw new NotFoundException('Producto no encontrado');
+  }
+
+  /** Merchandise that arrived without a purchase order: adds the stock of several products at once. */
+  async restockMany(branchId: string, rawItems: { variantId: string, quantity: number }[], userId?: string) {
+    const merged = new Map<string, number>();
+    for (const i of rawItems) {
+      const q = Number(i?.quantity);
+      if (!Number.isFinite(q) || q <= 0 || q > 100000) throw new BadRequestException('Cantidad no válida');
+      merged.set(i.variantId, (merged.get(i.variantId) ?? 0) + q);
+    }
+    if (!merged.size) throw new BadRequestException('No hay productos para ingresar');
+    const branch = await this.prisma.branch.findUnique({ where: { id: branchId }, select: { businessId: true } });
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const [variantId, quantity] of merged) {
+        const inventory = await tx.inventory.upsert({
+          where: { variantId_branchId: { variantId, branchId } },
+          update: { quantity: { increment: quantity } },
+          create: { variantId, branchId, quantity },
+        });
+        await tx.inventoryMovement.create({
+          data: { variantId, branchId, type: MovementType.IN, quantity, reason: 'Ingreso de mercancía', previousStock: Math.round(inventory.quantity - quantity), newStock: Math.round(inventory.quantity) },
+        });
+        await tx.productVariant.update({ where: { id: variantId }, data: { stock: { increment: quantity } } });
+      }
+    });
+
+    if (userId) {
+      try {
+        await this.historyService.logAction({
+          userId,
+          action: 'RESTOCK_PRODUCT',
+          entity: 'INVENTORY',
+          entityId: branchId,
+          details: { quantity: [...merged.values()].reduce((s, q) => s + q, 0), products: merged.size, branchId },
+        });
+      } catch (e) {
+        console.error('[InventoryService] Failed to log RESTOCK_PRODUCT:', e);
+      }
+    }
+    if (branch?.businessId) await this.productsService.invalidateProductsCache(branch.businessId);
+    return { products: merged.size, units: [...merged.values()].reduce((s, q) => s + q, 0) };
   }
 
   async restock(data: { variantId: string, branchId: string, quantity: number }, userId?: string) {

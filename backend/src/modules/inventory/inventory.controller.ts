@@ -21,13 +21,24 @@ export class InventoryController {
   @Post('restock')
   async restock(@Body() data: { variantId: string, branchId: string, quantity: number }, @Req() req: any) {
     const userId = req.user?.id || req.user?.sub;
+    await this.inventoryService.assertOwned(req.user, data?.branchId, [data?.variantId]);
     return this.inventoryService.restock(data, userId);
+  }
+
+  /** Several products arriving at once (the "Ingreso de mercancía" screen, scanner first) */
+  @Post('restock-bulk')
+  async restockBulk(@Body() data: { branchId: string, items: { variantId: string, quantity: number }[] }, @Req() req: any) {
+    const userId = req.user?.id || req.user?.sub;
+    const items = Array.isArray(data?.items) ? data.items : [];
+    await this.inventoryService.assertOwned(req.user, data?.branchId, items.map((i) => i?.variantId));
+    return this.inventoryService.restockMany(data.branchId, items, userId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('reconcile')
   async reconcile(@Body() data: { branchId: string, items: { variantId: string, quantity: number }[] }, @Req() req: any) {
     const userId = req.user?.id || req.user?.sub;
+    await this.inventoryService.assertOwned(req.user, data?.branchId, (data?.items ?? []).map((i) => i?.variantId));
     return this.inventoryService.reconcile(data, userId);
   }
 
@@ -35,6 +46,7 @@ export class InventoryController {
   @Post('sync-master')
   async syncMaster(@Body() data: { branchId: string }, @Req() req: any) {
     const userId = req.user?.id || req.user?.sub;
+    await this.inventoryService.assertOwned(req.user, data?.branchId, []);
     return this.inventoryService.syncMaster(data.branchId, userId);
   }
 }
