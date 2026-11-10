@@ -25,7 +25,7 @@ const CLOUD_W = 330;
 
 type Rect = { l: number; t: number; r: number; b: number };
 
-/** Nobody moved the mouse or typed for this long: Syncro dozes off. */
+/** Nobody moved the mouse or typed for this long: Nubi dozes off. */
 const SLEEP_AFTER_MS = 30_000;
 
 /** A glossy, rounded "Z" like a blue candy: one thick round stroke, a lighter core and white shine. */
@@ -75,7 +75,7 @@ function session() {
 }
 
 /**
- * Syncro living on the screen. By default it slides along the frame of the screen, staying close to
+ * Nubi living on the screen. By default it slides along the frame of the screen, staying close to
  * where the person points or types (without covering it). With "roam" on it follows the pointer
  * across the page, squeezing through gaps and hopping over cards. It can be grabbed and thrown: it
  * bounces off the edges like a rubber ball. Ideas show as a glowing bulb and a glossy thought cloud
@@ -563,7 +563,7 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
     toast.success(next ? "Guardado en tus ideas. Lo encuentras en el chat de soporte." : "Quitado de tus ideas guardadas");
   };
 
-  // ── Season outfit (Nov 1 – Jan 6): standard for every business, Syncro decides when and which ─
+  // ── Season outfit (Nov 1 – Jan 6): standard for every business, Nubi decides when and which ─
   useEffect(() => {
     if (!visible || !isChristmasSeason()) { setOutfit("none"); return; }
     // Its own taste: puts on the favourite of this half day (now and then the other one) for a
@@ -583,7 +583,7 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
   if (!visible) return null;
 
   const showBulb = !!thought && !cloud;
-  const name = settings?.name || "Syncro";
+  const name = settings?.name || "Nubi";
   const cloudW = typeof window !== "undefined" ? Math.min(CLOUD_W, window.innerWidth - 32) : CLOUD_W;
 
   return (

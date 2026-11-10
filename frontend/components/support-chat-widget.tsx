@@ -380,7 +380,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
               onClick={() => (view === "ideas" ? setView("chat") : void showIdeas())}
               className={cn("rounded-md p-1.5 hover:bg-muted hover:text-foreground", view === "ideas" ? "bg-primary/10 text-primary" : "text-muted-foreground")}
               aria-label={view === "ideas" ? "Volver al chat" : "Ideas guardadas"}
-              title={view === "ideas" ? "Volver al chat" : `Ideas guardadas con ${mascot?.name || "Syncro"}`}
+              title={view === "ideas" ? "Volver al chat" : `Ideas guardadas con ${mascot?.name || "Nubi"}`}
             >
               {view === "ideas" ? <IconArrowLeft size={16} /> : <IconBookmark size={16} />}
             </button>
@@ -397,7 +397,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
             ) : !ideas.length ? (
               <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
                 <GlossyBulb size={40} lit={false} />
-                <p className="text-sm text-muted-foreground">Aún no guardas ideas. Cuando {mascot?.name || "Syncro"} piense algo útil, toca el marcador en su nube para guardarlo aquí.</p>
+                <p className="text-sm text-muted-foreground">Aún no guardas ideas. Cuando {mascot?.name || "Nubi"} piense algo útil, toca el marcador en su nube para guardarlo aquí.</p>
               </div>
             ) : (
               <ul className="space-y-2">
@@ -408,7 +408,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
                     <li key={t.id} className="rounded-2xl border bg-background p-3 text-sm shadow-sm">
                       <button type="button" onClick={() => setExpanded(open ? null : t.id)} className="w-full text-left">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-                          {t.topic === "user" ? "Tu pensamiento" : `${mascot?.name || "Syncro"} pensó`} · {new Date(t.updatedAt ?? t.createdAt).toLocaleDateString("es-VE", { day: "numeric", month: "short" })}
+                          {t.topic === "user" ? "Tu pensamiento" : `${mascot?.name || "Nubi"} pensó`} · {new Date(t.updatedAt ?? t.createdAt).toLocaleDateString("es-VE", { day: "numeric", month: "short" })}
                         </p>
                         <p className={cn("mt-1 leading-relaxed", !open && "line-clamp-2")}>{t.text}</p>
                       </button>
@@ -502,8 +502,8 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
             <button
               type="button"
               onClick={shareThought}
-              aria-label={`Compartirle un pensamiento a ${mascot?.name || "Syncro"}`}
-              title={`¿No es para soporte? Compártele un pensamiento a ${mascot?.name || "Syncro"}`}
+              aria-label={`Compartirle un pensamiento a ${mascot?.name || "Nubi"}`}
+              title={`¿No es para soporte? Compártele un pensamiento a ${mascot?.name || "Nubi"}`}
               className="-my-1 flex h-11 w-9 shrink-0 items-center justify-center rounded-md outline-none transition hover:scale-110 focus-visible:ring-2 focus-visible:ring-amber-400"
             >
               <GlossyBulb size={30} />

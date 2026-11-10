@@ -13,7 +13,7 @@ export const MASCOT_DEFAULTS = {
   frequency: 'normal',
   /** Season decorations on (older switch; `outfit: 'none'` is the same as off) */
   festive: true,
-  /** Season outfit: auto (Syncro picks) | santa | reindeer | none */
+  /** Season outfit: auto (Nubi picks) | santa | reindeer | none */
   outfit: 'auto',
   /** default | professional | friendly | direct | playful */
   tone: 'default',
@@ -23,7 +23,7 @@ export const MASCOT_DEFAULTS = {
   emoji: 'default',
   /** short | default | detailed */
   length: 'default',
-  name: 'Syncro',
+  name: 'Nubi',
   instructions: '',
   aboutMe: '',
   memory: true,
@@ -70,7 +70,10 @@ export class MascotService {
 
   async settings(user: AuthUser): Promise<MascotSettings> {
     const row = await this.prisma.mascotProfile.findUnique({ where: { userId: user.id } });
-    return { ...MASCOT_DEFAULTS, ...((row?.settings as Partial<MascotSettings>) ?? {}) };
+    const saved = { ...MASCOT_DEFAULTS, ...((row?.settings as Partial<MascotSettings>) ?? {}) };
+    // "Syncro" was the mascot's name until it became Nubi: whoever never renamed it meets Nubi
+    if (saved.name === 'Syncro') saved.name = MASCOT_DEFAULTS.name;
+    return saved;
   }
 
   async updateSettings(user: AuthUser, body: Partial<MascotSettings>) {
@@ -83,7 +86,7 @@ export class MascotService {
       if (typeof def === 'boolean') (next as any)[key] = !!value;
       else if (CHOICES[key]) {
         if (CHOICES[key]!.includes(String(value))) (next as any)[key] = String(value);
-      } else (next as any)[key] = String(value ?? '').slice(0, key === 'name' ? 24 : 1500).trim() || (key === 'name' ? 'Syncro' : '');
+      } else (next as any)[key] = String(value ?? '').slice(0, key === 'name' ? 24 : 1500).trim() || (key === 'name' ? 'Nubi' : '');
     }
     await this.prisma.mascotProfile.upsert({ where: { userId: user.id }, create: { userId: user.id, settings: next }, update: { settings: next } });
     return next;

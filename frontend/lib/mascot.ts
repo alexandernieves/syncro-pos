@@ -34,7 +34,7 @@ export const MASCOT_DEFAULTS: MascotSettings = {
   enthusiasm: "default",
   emoji: "default",
   length: "default",
-  name: "Syncro",
+  name: "Nubi",
   instructions: "",
   aboutMe: "",
   memory: true,

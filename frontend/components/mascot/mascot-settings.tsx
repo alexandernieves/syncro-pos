@@ -53,7 +53,7 @@ function Choice({ id, value, options, onChange }: { id: string; value: string; o
 }
 
 /**
- * Configuración → Mascota: show or hide Syncro, let it roam, its ideas and how often, its
+ * Configuración → Mascota: show or hide Nubi, let it roam, its ideas and how often, its
  * personality (like ChatGPT's personalization), custom instructions and its memory.
  */
 export function MascotSettingsPanel() {
@@ -90,7 +90,7 @@ export function MascotSettingsPanel() {
   const textsChanged = texts.name !== settings.name || texts.instructions !== settings.instructions || texts.aboutMe !== settings.aboutMe;
   const saveTexts = async () => {
     setSavingTexts(true);
-    await save({ name: texts.name.trim() || "Syncro", instructions: texts.instructions, aboutMe: texts.aboutMe }, "Listo, ya lo tengo en cuenta");
+    await save({ name: texts.name.trim() || "Nubi", instructions: texts.instructions, aboutMe: texts.aboutMe }, "Listo, ya lo tengo en cuenta");
     setSavingTexts(false);
   };
 
@@ -100,7 +100,7 @@ export function MascotSettingsPanel() {
     if (res?.ok) { setMemory([]); toast.success("Memoria borrada"); } else toast.error("No se pudo borrar");
   };
 
-  const name = settings.name || "Syncro";
+  const name = settings.name || "Nubi";
 
   return (
     <div className="mx-auto max-w-3xl space-y-8 pb-10">

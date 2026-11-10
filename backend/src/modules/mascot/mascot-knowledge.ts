@@ -1,7 +1,7 @@
 import { MODULE_CATALOG } from '../business-modules/catalog';
 
 /**
- * What Syncro the mascot knows about the software itself: every screen, what it's for and where it
+ * What Nubi the mascot knows about the software itself: every screen, what it's for and where it
  * is. It is part of the mascot's prompt, so it can point the merchant to the right place.
  * Keep it in sync when screens are added or renamed.
  */

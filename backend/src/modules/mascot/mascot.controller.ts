@@ -3,7 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { MascotService } from './mascot.service';
 
-/** Syncro the mascot: its settings, its ideas (the light bulb) and the replies to them. */
+/** Nubi the mascot: its settings, its ideas (the light bulb) and the replies to them. */
 @Controller('mascot')
 @UseGuards(JwtAuthGuard)
 export class MascotController {
