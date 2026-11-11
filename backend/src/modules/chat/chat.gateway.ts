@@ -212,11 +212,30 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { event: 'joined', conversationId };
   }
 
+  /** conversationId → businessId, so typing (many events) doesn't hit the database every time */
+  private convBusiness = new Map<string, string | null>();
+
+  /**
+   * "Escribiendo…": to the other side of the conversation, and, when a business is typing, to the
+   * whole support inbox (it shows in the list too). Senders repeat it every few seconds while
+   * typing; screens drop it on their own if it stops arriving.
+   */
   @SubscribeMessage('typing')
-  handleTyping(@ConnectedSocket() client: Socket, @MessageBody() data: { conversationId: string; isTyping: boolean }) {
+  async handleTyping(@ConnectedSocket() client: Socket, @MessageBody() data: { conversationId: string; isTyping: boolean }) {
     const auth = client.data as AuthedSocketData | undefined;
-    if (!auth) return;
-    client.to(`conv_${data.conversationId}`).emit('userTyping', { userId: auth.userId, isTyping: data.isTyping });
+    const conversationId = String(data?.conversationId ?? '');
+    if (!auth || !conversationId) return;
+    if (!this.convBusiness.has(conversationId)) {
+      const c = await this.prisma.conversation.findUnique({ where: { id: conversationId }, select: { businessId: true } }).catch(() => null);
+      if (!c) return;
+      this.convBusiness.set(conversationId, c.businessId);
+    }
+    const businessId = this.convBusiness.get(conversationId);
+    // A business only types in its own conversation
+    if (auth.role !== 'syncropos' && businessId !== auth.businessId) return;
+    const isTyping = !!data.isTyping;
+    client.to(`conv_${conversationId}`).emit('userTyping', { conversationId, userId: auth.userId, isTyping, bySupport: auth.role === 'syncropos' });
+    if (auth.role !== 'syncropos') client.to('support').emit('conversationTyping', { conversationId, isTyping });
   }
 
   /**

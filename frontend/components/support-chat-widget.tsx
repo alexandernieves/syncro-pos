@@ -1,6 +1,7 @@
 "use client";
 
 import { MessageTicks, withDelivered } from "@/components/chat/message-ticks";
+import { createTypingReader, createTypingSender } from "@/lib/typing";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -103,6 +104,9 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
   const [uploading, setUploading] = useState(false);
   const [online, setOnline] = useState(false);
   const [typing, setTyping] = useState(false);
+  /** Syncro typing: switches itself off if it stops arriving */
+  const readTyping = useRef(createTypingReader(setTyping)).current;
+  const typingSender = useRef<{ update: (hasText: boolean) => void; stop: () => void } | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const openRef = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -179,7 +183,8 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
         socket.on("messagesDelivered", ({ conversationId, ids, at }: { conversationId: string; ids: string[]; at: string }) => {
           if (conversationId === data.id) setMessages((prev) => (prev ? withDelivered(prev, ids, at) : prev));
         });
-        socket.on("userTyping", ({ isTyping }: { isTyping: boolean }) => setTyping(isTyping));
+        socket.on("userTyping", ({ isTyping, bySupport }: { isTyping: boolean; bySupport?: boolean }) => { if (bySupport !== false) readTyping(isTyping); });
+        typingSender.current = createTypingSender((isTyping) => socket.emit("typing", { conversationId: data.id, isTyping }));
       } catch {
         setMessages([]);
         toast.error("No se pudo abrir el chat de soporte");
@@ -263,7 +268,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
     if (!t) return;
     send({ text: t, type: "TEXT" });
     setText("");
-    socketRef.current?.emit("typing", { conversationId, isTyping: false });
+    typingSender.current?.stop();
   };
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -526,7 +531,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
             value={text}
             onChange={(e) => {
               setText(e.target.value);
-              if (conversationId) socketRef.current?.emit("typing", { conversationId, isTyping: !!e.target.value });
+              typingSender.current?.update(!!e.target.value.trim());
             }}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); } }}
             placeholder="Escribe tu mensaje…"

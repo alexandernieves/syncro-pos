@@ -1,6 +1,7 @@
 "use client";
 
 import { MessageTicks, withDelivered } from "@/components/chat/message-ticks";
+import { createTypingReader } from "@/lib/typing";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { API_URL } from "@/lib/constants"
 import {
@@ -1662,10 +1663,10 @@ export default function SupportChatPage() {
     readOnVisible.current = () => { if (!document.hidden) socketRef.current?.emit("markAsRead", { conversationId: convId }); };
     document.addEventListener("visibilitychange", readOnVisible.current);
 
+    // Syncro typing: switches itself off if it stops arriving (the other side closed or paused)
+    const readTyping = createTypingReader(setIsOtherTyping);
     socketRef.current.on("userTyping", ({ userId, isTyping }: { userId: string, isTyping: boolean }) => {
-      if (userId !== storedUser.id) {
-        setIsOtherTyping(isTyping);
-      }
+      if (userId !== storedUser.id) readTyping(isTyping);
     });
 
     // Whether someone from the Syncro team is connected, straight from the server

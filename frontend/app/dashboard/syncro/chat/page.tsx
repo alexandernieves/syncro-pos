@@ -1,6 +1,7 @@
 "use client";
 
 import { MessageTicks, withDelivered } from "@/components/chat/message-ticks";
+import { createTypingReader, createTypingSender } from "@/lib/typing";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   IconBuilding,
@@ -131,6 +132,10 @@ export default function SyncroAdminChatPage() {
   const [profileOf, setProfileOf] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const activeRef = useRef<Conv | null>(null);
+  /** Conversations whose business is typing right now ("Escribiendo…" in the list and the header) */
+  const [typingIn, setTypingIn] = useState<Set<string>>(new Set());
+  const typingReaders = useRef(new Map<string, (on: boolean) => void>());
+  const typingSender = useRef<{ update: (hasText: boolean) => void; stop: () => void } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -183,6 +188,22 @@ export default function SyncroAdminChatPage() {
     socket.on("messagesDelivered", ({ conversationId, ids, at }: { conversationId: string; ids: string[]; at: string }) => {
       if (activeRef.current?.id === conversationId) setMessages((prev) => withDelivered(prev, ids, at));
     });
+    // A business typing (it reaches the whole inbox, so the list shows it too)
+    socket.on("conversationTyping", ({ conversationId, isTyping }: { conversationId: string; isTyping: boolean }) => {
+      let read = typingReaders.current.get(conversationId);
+      if (!read) {
+        read = createTypingReader((on) => setTypingIn((prev) => {
+          if (on === prev.has(conversationId)) return prev;
+          const next = new Set(prev);
+          if (on) next.add(conversationId); else next.delete(conversationId);
+          return next;
+        }));
+        typingReaders.current.set(conversationId, read);
+      }
+      read(isTyping);
+    });
+    // A message arrived: whoever wrote it stopped typing
+    socket.on("conversationUpdated", ({ conversationId }: { conversationId?: string }) => { if (conversationId) typingReaders.current.get(conversationId)?.(false); });
     // Who is connected now (and whenever someone signs in or closes Syncro)
     const askOnline = () => socket.emit("onlineBusinesses", (r: { businessIds?: string[] }) => setOnline(new Set(r?.businessIds ?? [])));
     socket.on("connect", askOnline);
@@ -221,6 +242,8 @@ export default function SyncroAdminChatPage() {
   }, [active?.id]);
 
   const open = async (conv: Conv) => {
+    typingSender.current?.stop();
+    typingSender.current = createTypingSender((isTyping) => socketRef.current?.emit("typing", { conversationId: conv.id, isTyping }));
     setActive(conv);
     setMessages([]);
     setLoadingMsgs(true);
@@ -255,7 +278,7 @@ export default function SyncroAdminChatPage() {
     if (!t) return;
     send({ text: t, type: "TEXT" });
     setText("");
-    if (active) socketRef.current?.emit("typing", { conversationId: active.id, isTyping: false });
+    typingSender.current?.stop();
   };
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -377,7 +400,9 @@ export default function SyncroAdminChatPage() {
                         <span className={cn("shrink-0 text-[11px]", c.unread ? "font-medium text-primary" : "text-muted-foreground")}>{when(c.lastMessageAt)}</span>
                       </div>
                       <div className="mt-0.5 flex items-center justify-between gap-2">
-                        <p className={cn("truncate text-xs", c.unread ? "text-foreground" : "text-muted-foreground")}>{c.lastMessage ?? "Sin mensajes todavía"}</p>
+                        {typingIn.has(c.id)
+                          ? <p className="truncate text-xs font-medium italic text-primary">Escribiendo…</p>
+                          : <p className={cn("truncate text-xs", c.unread ? "text-foreground" : "text-muted-foreground")}>{c.lastMessage ?? "Sin mensajes todavía"}</p>}
                         {c.unread > 0 && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">{c.unread}</span>}
                       </div>
                     </div>
@@ -406,7 +431,9 @@ export default function SyncroAdminChatPage() {
                 {active.business?.status && active.business.status !== "ACTIVE" && <Badge variant="outline" className={cn("text-[10px]", STATUS_CLASS[active.business.status])}>{STATUS_LABEL[active.business.status]}</Badge>}
               </div>
               <p className="truncate text-xs text-muted-foreground">
-                {online.has(active.businessId)
+                {typingIn.has(active.id)
+                  ? <span className="animate-pulse font-medium text-primary">Escribiendo…</span>
+                  : online.has(active.businessId)
                   ? <span className="inline-flex items-center gap-1 font-medium text-emerald-600"><span className="size-1.5 rounded-full bg-emerald-500" /> En línea ahora</span>
                   : seenAgo(seenNow[active.businessId] ?? active.lastSeen)}
                 {[active.business?.email, active.business?.phone].filter(Boolean).length ? ` · ${[active.business?.email, active.business?.phone].filter(Boolean).join(" · ")}` : ""}
@@ -474,7 +501,7 @@ export default function SyncroAdminChatPage() {
                 onChange={(e) => {
                   setText(e.target.value);
                   // The business sees "Escribiendo…"
-                  if (active) socketRef.current?.emit("typing", { conversationId: active.id, isTyping: !!e.target.value });
+                  typingSender.current?.update(!!e.target.value.trim());
                 }}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); } }}
                 disabled={uploading}
