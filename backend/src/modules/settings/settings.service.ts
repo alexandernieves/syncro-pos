@@ -95,7 +95,7 @@ export class SettingsService {
       'isSyncroVendor', 'syncroVendorStoreName', 'syncroVendorCategory',
       'syncroVendorPhone', 'syncroVendorBio', 'syncroAutoSync',
       'syncroShopSectionTitle', 'syncroShopLocation',
-      'invoiceDesign', 'gymSettings'
+      'invoiceDesign', 'gymSettings', 'autoBag'
     ];
 
     const filteredData: any = {};
@@ -107,6 +107,9 @@ export class SettingsService {
 
     // Avisos por WhatsApp: only a valid configuration is stored
     if (filteredData.whatsappAlerts !== undefined) filteredData.whatsappAlerts = normalizeAlerts(filteredData.whatsappAlerts);
+
+    // Automatic bag: only a product of this business
+    if (filteredData.autoBag !== undefined) filteredData.autoBag = await this.normalizeAutoBag(filteredData.autoBag, businessId);
 
     // Packaged modules (gym…) are turned on from Syncro central, never from the business's own switches
     if (Array.isArray(filteredData.enabledModules)) {
@@ -130,6 +133,20 @@ export class SettingsService {
       console.error("ERROR AL ACTUALIZAR CONFIGURACIÓN:", error);
       throw error;
     }
+  }
+
+  /** POS automatic bag: { enabled, variantId, productId, name } with a variant that belongs to the business. */
+  private async normalizeAutoBag(raw: any, businessId: string) {
+    const enabled = raw?.enabled === true;
+    const variantId = typeof raw?.variantId === 'string' ? raw.variantId : null;
+    if (!variantId) return { enabled: false, variantId: null, productId: null, name: null };
+    const v = await this.prisma.productVariant.findFirst({
+      where: { id: variantId, product: { businessId } },
+      select: { id: true, name: true, productId: true, product: { select: { name: true } } },
+    });
+    if (!v) throw new BadRequestException('Ese producto no es de tu negocio');
+    const name = v.product.name + (v.name && !['Principal', 'Única', 'Unica', 'Default'].includes(v.name) ? ` (${v.name})` : '');
+    return { enabled, variantId: v.id, productId: v.productId, name };
   }
 
   /**

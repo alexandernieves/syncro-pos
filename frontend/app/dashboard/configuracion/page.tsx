@@ -6,6 +6,7 @@ import { clearAuthSession } from "@/lib/auth-helpers";
 import { MascotSettingsPanel } from "@/components/mascot/mascot-settings";
 import { BiometricSettings } from "@/components/biometric-settings";
 import { ThemeSettings } from "@/components/theme-settings";
+import { AutoBagSettings, NO_AUTO_BAG, readAutoBag, type AutoBag } from "@/components/auto-bag-settings";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { 
@@ -258,6 +259,8 @@ export default function ConfiguracionPage() {
     allowNegativeStock: false,
     blindShiftClose: true,
   });
+  /** The customer's bag, added by itself to every ticket */
+  const [autoBag, setAutoBag] = useState<AutoBag>(NO_AUTO_BAG);
 
   const [syncroCreditMaxInstallments, setSyncroCreditMaxInstallments] = useState(3);
   const [syncroCreditFrequencyDays, setSyncroCreditFrequencyDays] = useState(15);
@@ -854,6 +857,7 @@ export default function ConfiguracionPage() {
               allowNegativeStock: data.allowNegativeStock || false,
               blindShiftClose: data.blindShiftClose !== false,
             });
+            setAutoBag(readAutoBag(data.autoBag));
             setPrintConfig({
               defaultPrinter: data.defaultPrinter || "",
               paperWidth: String(data.paperWidth || "80"),
@@ -1079,6 +1083,7 @@ export default function ConfiguracionPage() {
           lowStockAlert: Number(posConfig.lowStockAlert) || 5,
           allowNegativeStock: posConfig.allowNegativeStock,
           blindShiftClose: posConfig.blindShiftClose,
+          autoBag: autoBag.variantId ? autoBag : NO_AUTO_BAG,
           pagoMovilBank: pagoMovil.bank,
           pagoMovilId: pagoMovil.id,
           pagoMovilPhone: pagoMovil.phone,
@@ -1638,6 +1643,7 @@ export default function ConfiguracionPage() {
                     </button>
                   </div>
                 ))}
+                <AutoBagSettings value={autoBag} onChange={setAutoBag} />
                 <div className="flex justify-between items-center py-4">
                   <div><p className="font-medium text-sm">Alerta de stock mínimo</p><p className="text-xs text-muted-foreground">Avisa cuando el stock baje de este número</p></div>
                   <Input type="number" value={posConfig.lowStockAlert} onChange={e => setPosConfig(p => ({ ...p, lowStockAlert: e.target.value }))} className="w-20 text-center" />

@@ -445,6 +445,8 @@ model Setting {
   whatsappAlertsSentAt        DateTime?
   /// Colour themes saved from Configuración → Temas: { business, branches: {branchId: id}, pos: {userId: id} }
   themes                      Json?
+  /// POS: product added by itself to every ticket (the customer's bag): { enabled, variantId, productId, name }
+  autoBag                     Json?
   businessType                String?   @default("GENERAL")
   enabledModules              Json?
   sidebarOrder                Json?

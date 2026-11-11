@@ -1730,9 +1730,51 @@ export default function POSPage() {
   };
 
 
+  // ── Automatic bag (Configuración → Punto de venta): 1 unit as soon as the ticket gets its first
+  // product. The cashier can raise or lower it; if they remove it, it isn't added again on that ticket.
+  const bagRemoved = useRef(false);
+  const bagAuto = useRef(false);
+  const autoBag = settings?.autoBag?.enabled && settings.autoBag.variantId ? (settings.autoBag as { variantId: string; productId: string }) : null;
+
   const removeFromCart = (id: string) => {
+    if (autoBag && id === autoBag.productId) bagRemoved.current = true;
     setCart(prev => prev.filter(item => item.product.id !== id));
   };
+
+  useEffect(() => {
+    if (!autoBag) return;
+    if (cart.length === 0) { bagRemoved.current = false; bagAuto.current = false; return; }
+    const hasBag = cart.some(i => i.product.variantId === autoBag.variantId);
+    const hasOthers = cart.some(i => i.product.variantId !== autoBag.variantId);
+    // Only the bag left (the rest was removed): it goes too, it was there for those products
+    if (hasBag && !hasOthers) {
+      if (bagAuto.current) { bagAuto.current = false; setCart(prev => prev.filter(i => i.product.variantId !== autoBag.variantId)); }
+      return;
+    }
+    if (hasBag || !hasOthers || bagRemoved.current) return;
+    const product = products.find(p => p.variants?.some(v => v.id === autoBag.variantId));
+    const variant = product?.variants?.find(v => v.id === autoBag.variantId);
+    if (!product || !variant) return;
+    if (variant.stock < 1 && !settings?.allowNegativeStock) {
+      bagRemoved.current = true;
+      toast.warning("No quedan bolsas en el inventario", { description: "El ticket sigue sin bolsa. Haz el ingreso de bolsas cuando puedas." });
+      return;
+    }
+    bagAuto.current = true;
+    setCart(prev => prev.some(i => i.product.variantId === variant.id) ? prev : [...prev, {
+      product: {
+        id: product.id,
+        variantId: variant.id,
+        name: product.name + (variant.name !== 'Principal' ? ` (${variant.name})` : ''),
+        price: variant.price,
+        stock: Math.max(variant.stock, 1),
+        sku: variant.sku,
+        barcode: variant.barcode,
+      },
+      quantity: 1,
+    }]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, autoBag?.variantId, products]);
 
   const openPaymentModal = (method: "CASH" | "CARD") => {
     if (clientMissingData) return toast.error("Completa los datos del cliente para procesar el pago");
