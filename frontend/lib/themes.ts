@@ -4,7 +4,10 @@
  * stays exactly as it always was. Dark themes also set html[data-mode="dark"], which turns on
  * theme-dark.css: it re-colours the light colours written by hand in older screens.
  *
- * The choice belongs to the computer (like a screen brightness), so it survives signing out.
+ * The owner saves the theme on the server for the whole business or for one branch; a cashier
+ * can pick one of their own that only changes the POS. The browser keeps a copy (THEME_KEY and
+ * POS_THEME_KEY) so the page paints with it before anything loads, and the app theme survives
+ * signing out (the login screen keeps the last one).
  */
 export type ThemeId = "syncro" | "oscuro" | "atardecer" | "navidad" | "santa";
 
@@ -61,7 +64,15 @@ export const THEMES: SyncroTheme[] = [
 
 export const DEFAULT_THEME: ThemeId = "syncro";
 export const THEME_KEY = "syncro-theme";
+/** A cashier's own POS theme (cleared when they sign out) */
+export const POS_THEME_KEY = "syncro-theme-pos";
 export const THEME_EVENT = "syncro-theme-change";
+
+/** What the server keeps in Setting.themes */
+export type SavedThemes = { business: ThemeId | null; branches: Record<string, ThemeId>; pos: Record<string, ThemeId> };
+
+const OWNER_ROLES = ["ownerpos", "owner", "admin", "superadmin"];
+export const isOwnerRole = (role?: string | null) => OWNER_ROLES.includes(String(role || "").toLowerCase());
 
 export function isChristmasSeason(d = new Date()) {
   const m = d.getMonth();
@@ -74,15 +85,64 @@ export function availableThemes(d = new Date()) {
   return THEMES.filter((t) => !t.seasonal || season);
 }
 
-/** The theme in use: the saved one if it still exists and is in season, else the default. */
-export function storedTheme(): SyncroTheme {
-  let id: string | null = null;
+const read = (key: string) => {
   try {
-    id = localStorage.getItem(THEME_KEY);
+    return localStorage.getItem(key);
   } catch {
-    id = null;
+    return null;
   }
-  return availableThemes().find((t) => t.id === id) ?? THEMES[0];
+};
+const write = (key: string, id: string | null) => {
+  try {
+    if (id && id !== DEFAULT_THEME) localStorage.setItem(key, id);
+    else localStorage.removeItem(key);
+  } catch {
+    // storage blocked: still applied for this visit
+  }
+};
+const find = (id: string | null) => availableThemes().find((t) => t.id === id) ?? null;
+
+/** The business's theme (dashboard and POS), as last known on this computer. */
+export function storedTheme(): SyncroTheme {
+  return find(read(THEME_KEY)) ?? THEMES[0];
+}
+
+/** A theme being tried in Temas before "Guardar" (only on this screen, never stored) */
+let previewing: ThemeId | null = null;
+
+/** The theme of a page: in the POS a cashier's own one wins. */
+export function themeFor(path: string): SyncroTheme {
+  if (previewing) return find(previewing) ?? THEMES[0];
+  if (path.startsWith("/pos")) {
+    const own = find(read(POS_THEME_KEY));
+    if (own) return own;
+  }
+  return storedTheme();
+}
+
+/** A cashier's own POS theme, if they picked one. */
+export const storedPosTheme = () => find(read(POS_THEME_KEY));
+
+/**
+ * Takes what the server says (after signing in or when it changes): the branch's theme, else the
+ * business's; and for a cashier, their own POS theme. If the owner never saved one, the copy on
+ * this computer stays as it was.
+ */
+export function adoptServerThemes(saved: SavedThemes | null | undefined, who: { userId?: string; role?: string; branchId?: string | null }) {
+  if (saved) {
+    const app = (who.branchId && saved.branches?.[who.branchId]) || saved.business;
+    if (app) write(THEME_KEY, app);
+    write(POS_THEME_KEY, !isOwnerRole(who.role) && who.userId ? saved.pos?.[who.userId] ?? null : null);
+  }
+  if (themedPath(window.location.pathname)) applyTheme(themeFor(window.location.pathname));
+  window.dispatchEvent(new CustomEvent(THEME_EVENT));
+}
+
+/** Remembers a theme just saved on the server, so this computer shows it right away. */
+export function rememberTheme(kind: "app" | "pos", id: ThemeId | null) {
+  write(kind === "app" ? THEME_KEY : POS_THEME_KEY, id);
+  if (themedPath(window.location.pathname)) applyTheme(themeFor(window.location.pathname));
+  window.dispatchEvent(new CustomEvent(THEME_EVENT));
 }
 
 /** Puts the theme on the page right away (no reload). */
@@ -94,16 +154,11 @@ export function applyTheme(theme: SyncroTheme) {
   else html.removeAttribute("data-mode");
 }
 
-export function setTheme(id: ThemeId) {
-  const theme = availableThemes().find((t) => t.id === id) ?? THEMES[0];
-  try {
-    if (theme.id === DEFAULT_THEME) localStorage.removeItem(THEME_KEY);
-    else localStorage.setItem(THEME_KEY, theme.id);
-  } catch {
-    // storage blocked: still applied for this visit
-  }
-  applyTheme(theme);
-  window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: theme.id }));
+/** Shows a theme on screen without saving it (Temas, before "Guardar"); null goes back to the saved one. */
+export function previewTheme(id: ThemeId | null) {
+  previewing = id;
+  applyTheme(themeFor(window.location.pathname));
+  window.dispatchEvent(new CustomEvent(THEME_EVENT));
 }
 
 /**
@@ -114,7 +169,7 @@ export function setTheme(id: ThemeId) {
 export const THEME_BOOT_SCRIPT = `(function(){try{
 var p=location.pathname;
 if(!(p.indexOf('/dashboard')===0||p.indexOf('/pos')===0||p.indexOf('/login')===0))return;
-var id=localStorage.getItem('${THEME_KEY}');if(!id||id==='${DEFAULT_THEME}')return;
+var id=(p.indexOf('/pos')===0&&localStorage.getItem('${POS_THEME_KEY}'))||localStorage.getItem('${THEME_KEY}');if(!id||id==='${DEFAULT_THEME}')return;
 var themes=${JSON.stringify(Object.fromEntries(THEMES.map((t) => [t.id, { mode: t.mode, seasonal: !!t.seasonal }])))};
 var t=themes[id];if(!t)return;
 var d=new Date(),m=d.getMonth();if(t.seasonal&&!(m===10||m===11||(m===0&&d.getDate()<=6)))return;

@@ -80,6 +80,8 @@ import { SupportChatWidget } from "@/components/support-chat-widget";
 import { SupportNotifier } from "@/components/support-notifier";
 import { RemoteAssistHost } from "@/components/remote/remote-assist-host";
 import { MascotPet } from "@/components/mascot/mascot-pet";
+import { PosAccountMenu } from "@/components/pos/pos-account-menu";
+import { signOutAndReload } from "@/lib/auth-helpers";
 import { type Currency as CashCurrency, CURRENCY_META, cashChange, cashDue, formatMoney, fromUsd, toUsd } from "@/lib/currency";
 
 const API = API_URL;
@@ -2746,8 +2748,8 @@ export default function POSPage() {
                       className="w-full h-9 text-destructive hover:bg-destructive/5 rounded-xl"
                       onClick={() => {
                         toast.info("Sesión cerrada");
-                        localStorage.clear();
-                        router.push("/login");
+                        // Keeps this computer's saved profiles and theme (only the account's data goes)
+                        void signOutAndReload("/login");
                       }}
                     >
                       <IconLogout className="size-4 mr-2" /> Cerrar sesión
@@ -2841,19 +2843,29 @@ export default function POSPage() {
 
           <BranchSwitcher disabled={!!activeShift} />
 
-          {/* Larger Cerrar Turno Button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 px-3 gap-1.5 font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-lg shadow-xs transition-all ml-1"
-            onClick={() => {
-              checkShift();
-              setIsClosingShift(true);
-            }}
-          >
-            <IconCash size={15} />
-            <span>Cerrar turno</span>
-          </Button>
+          {/* Staff: their own POS theme, and one menu with Cerrar turno / Cerrar sesión */}
+          {!isOwnerUser ? (
+            <PosAccountMenu
+              shiftOpen={!!activeShift}
+              onCloseShift={() => {
+                checkShift();
+                setIsClosingShift(true);
+              }}
+            />
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 px-3 gap-1.5 font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-lg shadow-xs transition-all ml-1"
+              onClick={() => {
+                checkShift();
+                setIsClosingShift(true);
+              }}
+            >
+              <IconCash size={15} />
+              <span>Cerrar turno</span>
+            </Button>
+          )}
         </div>
       </header>
 

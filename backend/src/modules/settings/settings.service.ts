@@ -1,9 +1,10 @@
 import { CATALOG_CODES, USABLE_STATUSES } from '../business-modules/catalog';
-import { Injectable, Inject } from '@nestjs/common';
+import { BadRequestException, Injectable, Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizeAlerts } from '../whatsapp/whatsapp-alerts.config';
+import { isTheme, normalizeThemes, type ThemeId } from './themes';
 
 @Injectable()
 export class SettingsService {
@@ -129,6 +130,39 @@ export class SettingsService {
       console.error("ERROR AL ACTUALIZAR CONFIGURACIÓN:", error);
       throw error;
     }
+  }
+
+  /**
+   * Configuración → Temas "Guardar" (whole business or one branch, owners only) and the POS's
+   * own theme button (only that person's POS). `theme: null` removes the override.
+   */
+  async saveTheme(businessId: string, userId: string, body: { scope?: string; branchId?: string; theme?: string | null }) {
+    if (!businessId) throw new BadRequestException('Business ID is required');
+    const scope = body?.scope;
+    const theme: ThemeId | null = body?.theme == null ? null : isTheme(body.theme) ? body.theme : null;
+    if (body?.theme != null && !theme) throw new BadRequestException('Ese tema no existe');
+
+    let settings = await this.prisma.setting.findFirst({ where: { businessId }, select: { id: true, themes: true } });
+    if (!settings) settings = await this.prisma.setting.create({ data: { businessId }, select: { id: true, themes: true } });
+    const themes = normalizeThemes(settings.themes);
+
+    if (scope === 'business') {
+      themes.business = theme;
+    } else if (scope === 'branch') {
+      const branch = body.branchId ? await this.prisma.branch.findFirst({ where: { id: body.branchId, businessId }, select: { id: true } }) : null;
+      if (!branch) throw new BadRequestException('Esa sucursal no es de tu negocio');
+      if (theme) themes.branches[branch.id] = theme;
+      else delete themes.branches[branch.id];
+    } else if (scope === 'pos') {
+      if (theme) themes.pos[userId] = theme;
+      else delete themes.pos[userId];
+    } else {
+      throw new BadRequestException('Indica dónde guardar el tema');
+    }
+
+    await this.prisma.setting.update({ where: { id: settings.id }, data: { themes } });
+    await this.invalidateSettingsCache(businessId);
+    return themes;
   }
 
   async applyPreset(presetName: string, businessId: string) {

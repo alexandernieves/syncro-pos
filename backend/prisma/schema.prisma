@@ -443,6 +443,8 @@ model Setting {
   whatsappAlerts              Json?
   /// Up to when notifications were already forwarded to WhatsApp
   whatsappAlertsSentAt        DateTime?
+  /// Colour themes saved from Configuración → Temas: { business, branches: {branchId: id}, pos: {userId: id} }
+  themes                      Json?
   businessType                String?   @default("GENERAL")
   enabledModules              Json?
   sidebarOrder                Json?

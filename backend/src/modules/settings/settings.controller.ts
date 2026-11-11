@@ -44,6 +44,16 @@ export class SettingsController {
     return withoutPin(await this.settingsService.updateSettings(data, businessId));
   }
 
+  /** Saves a colour theme: for the business or a branch (owners), or for my own POS (anyone). */
+  @Put('theme')
+  async saveTheme(@Body() body: any, @Request() req: any) {
+    if (!req.user) throw new UnauthorizedException('No user context');
+    if (body?.scope !== 'pos' && !MANAGER_ROLES.includes(String(req.user.role || '').toLowerCase())) {
+      throw new ForbiddenException('Solo el dueño cambia el tema del negocio');
+    }
+    return this.settingsService.saveTheme(req.user.businessId, req.user.id, body);
+  }
+
   /** Checks a supervisor PIN typed in the POS without ever sending the PIN to the browser. */
   @Post('verify-pin')
   @HttpCode(200)
