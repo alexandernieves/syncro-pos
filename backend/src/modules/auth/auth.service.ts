@@ -321,38 +321,59 @@ export class AuthService {
   // ── Saved Profiles ─────────────────────────────────────────────────────────
   // Scoped to a specific clientId AND the authenticated user's own email
   async getSavedProfiles(clientId: string, userId?: string) {
+    const select = {
+      // Never return the clientId itself in the response
+      id:           true,
+      email:        true,
+      name:         true,
+      role:         true,
+      businessName: true,
+      lastLogin:    true,
+    } as const;
     // If userId provided, only return profiles belonging to that user's email
     if (userId) {
       const user = await this.prisma.user.findUnique({ where: { id: userId } });
       if (user) {
-        return this.prisma.savedProfile.findMany({
-          where: { clientId, email: user.email },
-          orderBy: { lastLogin: 'desc' },
-          select: {
-            // Never return the clientId itself in the response
-            id:           true,
-            email:        true,
-            name:         true,
-            role:         true,
-            businessName: true,
-            lastLogin:    true,
-          },
-        });
+        return this.withUnread(await this.prisma.savedProfile.findMany({ where: { clientId, email: user.email }, orderBy: { lastLogin: 'desc' }, select }));
       }
     }
+    return this.withUnread(await this.prisma.savedProfile.findMany({ where: { clientId }, orderBy: { lastLogin: 'desc' }, select }));
+  }
 
-    return this.prisma.savedProfile.findMany({
-      where: { clientId },
-      orderBy: { lastLogin: 'desc' },
-      select: {
-        id:           true,
-        email:        true,
-        name:         true,
-        role:         true,
-        businessName: true,
-        lastLogin:    true,
-      },
-    });
+  /**
+   * Unread support messages of each saved profile, for the little number on the login screen:
+   * a business sees what the Syncro team wrote and it hasn't read; the Syncro team what businesses
+   * wrote. Only a count, never the messages.
+   */
+  private async withUnread<T extends { email: string }>(profiles: T[]): Promise<(T & { unread: number })[]> {
+    if (!profiles.length) return [];
+    try {
+      const users = await this.prisma.user.findMany({
+        where: { OR: profiles.map((p) => ({ email: { equals: p.email, mode: 'insensitive' as const } })) },
+        select: { email: true, role: true, businessId: true },
+      });
+      const byEmail = new Map(users.map((u) => [u.email.toLowerCase(), u]));
+      let supportUnread: number | null = null;
+      const businessUnread = new Map<string, number>();
+      const out: (T & { unread: number })[] = [];
+      for (const p of profiles) {
+        const u = byEmail.get(p.email.toLowerCase());
+        let unread = 0;
+        if (u?.role === 'syncropos') {
+          supportUnread ??= await this.prisma.message.count({ where: { isRead: false, sender: { role: { not: 'syncropos' } } } });
+          unread = supportUnread;
+        } else if (u?.businessId && u.role !== 'client') {
+          if (!businessUnread.has(u.businessId)) {
+            businessUnread.set(u.businessId, await this.prisma.message.count({ where: { isRead: false, sender: { role: 'syncropos' }, conversation: { businessId: u.businessId } } }));
+          }
+          unread = businessUnread.get(u.businessId) ?? 0;
+        }
+        out.push({ ...p, unread });
+      }
+      return out;
+    } catch {
+      return profiles.map((p) => ({ ...p, unread: 0 }));
+    }
   }
 
   async saveProfile(data: {

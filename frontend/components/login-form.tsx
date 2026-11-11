@@ -34,6 +34,8 @@ interface SavedProfile {
   role?: string
   businessName?: string
   lastLogin: string
+  /** Support messages this profile hasn't read (from the server; only the number) */
+  unread?: number
 }
 
 // ── Saved profiles kept on this device too ───────────────────────────────────
@@ -127,6 +129,26 @@ export function LoginForm({
       setPassword("")
     }
   }, [])
+
+  // While the profiles are on screen, their unread message numbers stay fresh
+  useEffect(() => {
+    if (viewMode !== "profiles") return
+    const refresh = async () => {
+      try {
+        const response = await fetch(`${API_URL}/auth/saved-profiles?clientId=${getClientId()}`, { cache: "no-store" })
+        if (!response.ok) return
+        const fresh = (await response.json()) as SavedProfile[]
+        if (!Array.isArray(fresh)) return
+        const counts = new Map(fresh.map((p) => [p.email.toLowerCase(), p.unread ?? 0]))
+        setSavedProfiles((list) => list.map((p) => (counts.has(p.email.toLowerCase()) ? { ...p, unread: counts.get(p.email.toLowerCase()) } : p)))
+      } catch {
+        // offline: keep the last numbers
+      }
+    }
+    const id = window.setInterval(refresh, 30_000)
+    window.addEventListener("focus", refresh)
+    return () => { window.clearInterval(id); window.removeEventListener("focus", refresh) }
+  }, [viewMode])
 
   // ── Load Saved Profiles ───────────────────────────────────────────────────
   const showProfiles = (profiles: SavedProfile[]) => {
@@ -523,8 +545,17 @@ export function LoginForm({
                   className="group relative flex items-center justify-between p-3 rounded-xl border border-border/50 hover:border-primary/40 bg-muted/10 hover:bg-primary/5 transition-all duration-300 cursor-pointer shadow-sm hover:shadow-md"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="size-10 rounded-full bg-primary/10 group-hover:bg-primary/20 text-primary flex items-center justify-center font-bold text-xs transition-colors shadow-inner select-none">
+                    <div className="relative size-10 shrink-0 rounded-full bg-primary/10 group-hover:bg-primary/20 text-primary flex items-center justify-center font-bold text-xs transition-colors shadow-inner select-none">
                       {getInitials(profile.name)}
+                      {!!profile.unread && (
+                        <span
+                          className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-white ring-2 ring-background"
+                          aria-label={`${profile.unread} ${profile.unread === 1 ? "mensaje" : "mensajes"} sin leer`}
+                          title={`${profile.unread} ${profile.unread === 1 ? "mensaje" : "mensajes"} sin leer`}
+                        >
+                          {profile.unread > 99 ? "99+" : profile.unread}
+                        </span>
+                      )}
                     </div>
                     <div className="flex flex-col text-left max-w-[170px]">
                       <span className="font-bold text-sm tracking-tight group-hover:text-primary transition-colors truncate">
