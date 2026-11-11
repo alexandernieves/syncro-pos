@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IconDeviceDesktop, IconLoader2, IconMicrophone, IconMicrophoneOff, IconPointer, IconX } from "@tabler/icons-react";
+import { IconAppWindow, IconChevronDown, IconDeviceDesktop, IconLoader2, IconMicrophone, IconMicrophoneOff, IconPointer, IconX } from "@tabler/icons-react";
 import type { Socket } from "socket.io-client";
 import { toast } from "sonner";
 import { connectSocket } from "@/lib/socket";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SyncroAvatar } from "@/components/syncro-avatar";
 import { type RemoteInput, connectionRoute, getIceServers, lowLatency, openMic, playVoice, socketSession } from "@/components/remote/remote-protocol";
 
@@ -19,6 +20,8 @@ type State = "idle" | "waiting" | "connecting" | "live";
 export function RemoteViewer({ businessId, businessName }: { businessId: string; businessName: string }) {
   const [state, setState] = useState<State>("idle");
   const [control, setControl] = useState(false);
+  /** What is being shared: Syncro's window or the whole computer */
+  const [scope, setScope] = useState<"window" | "screen">("window");
   const [mic, setMic] = useState<"on" | "off" | "none">("none");
   const micRef = useRef<MediaStream | null>(null);
   const voiceRef = useRef<HTMLAudioElement>(null);
@@ -56,15 +59,16 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
     cleanup();
   }, [cleanup]);
 
-  const start = () => {
+  const start = (want: "window" | "screen") => {
     const { token } = socketSession();
     if (!token) return;
+    setScope(want);
     setState("waiting");
     const socket = connectSocket({ auth: { token } });
     socketRef.current = socket;
     socket.on("connect", () => {
       void getIceServers();
-      socket.emit("remote:request", { businessId }, (r: { sessionId?: string; error?: string }) => {
+      socket.emit("remote:request", { businessId, scope: want }, (r: { sessionId?: string; error?: string }) => {
         if (!r?.sessionId) { toast.error(r?.error || "No se pudo pedir la conexión"); cleanup(); return; }
         sessionRef.current = r.sessionId;
       });
@@ -75,8 +79,11 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
       setControl(c);
       toast(c ? `${businessName} te dio el control` : `${businessName} te quitó el control. Puedes seguir señalando.`);
     });
-    socket.on("remote:started", async ({ control: c }: { control: boolean }) => {
+    socket.on("remote:started", async ({ control: c, scope: got }: { control: boolean; scope?: "window" | "screen" }) => {
       setControl(c);
+      const shared = got === "screen" ? "screen" : "window";
+      if (want === "screen" && shared === "window") toast(`${businessName} compartió solo Syncro (necesita la app de escritorio para compartir toda la computadora)`);
+      setScope(shared);
       setState("connecting");
       setRoute(null);
       let ready!: (pc: RTCPeerConnection) => void;
@@ -197,9 +204,23 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
 
   if (state === "idle") {
     return (
-      <Button variant="outline" size="sm" onClick={start} title="Ver la pantalla del negocio y ayudarle en vivo">
-        <IconDeviceDesktop size={16} /> Ver pantalla
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" title="Ver la pantalla del negocio y ayudarle en vivo">
+            <IconDeviceDesktop size={16} /> Ver pantalla <IconChevronDown size={14} />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-72">
+          <DropdownMenuItem onSelect={() => start("window")} className="items-start gap-2 py-2">
+            <IconAppWindow size={18} className="mt-0.5 text-primary" />
+            <span><span className="block font-medium">Solo Syncro</span><span className="block text-xs text-muted-foreground">Su ventana de Syncro. Funciona en el navegador y en la app.</span></span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => start("screen")} className="items-start gap-2 py-2">
+            <IconDeviceDesktop size={18} className="mt-0.5 text-primary" />
+            <span><span className="block font-medium">Toda la computadora</span><span className="block text-xs text-muted-foreground">Ver y controlar cualquier programa, como AnyDesk. Necesita la app de escritorio.</span></span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
   }
 
@@ -211,6 +232,7 @@ export function RemoteViewer({ businessId, businessName }: { businessId: string;
         <span className={cn("rounded-full px-2.5 py-0.5 text-xs", state === "live" ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-white/70")}>
           {state === "waiting" ? "Esperando que acepte…" : state === "connecting" ? "Conectando…" : "En vivo"}
         </span>
+        {state === "live" && <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs text-white/70">{scope === "screen" ? "Toda la computadora" : "Solo Syncro"}</span>}
         {state === "live" && route && (
           <span title={route === "relay" ? "Las dos redes no se ven directamente: el video pasa cifrado por el servidor de Syncro" : "Conexión directa entre las dos computadoras"} className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs text-white/70">
             {route === "relay" ? "Por el servidor de Syncro" : "Directa"}

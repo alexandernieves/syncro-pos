@@ -47,6 +47,20 @@ contextBridge.exposeInMainWorld('electron', {
     unlock: (input) => ipcRenderer.invoke('bio:unlock', input),
     remove: (email) => ipcRenderer.invoke('bio:remove', email),
   },
+  // Help over the whole computer (only after the person accepts it, every session)
+  remoteDesktop: {
+    status: () => ipcRenderer.invoke('remote-desktop:status'),
+    permissions: (which) => ipcRenderer.invoke('remote-desktop:permissions', which),
+    start: (opts) => ipcRenderer.invoke('remote-desktop:start', opts),
+    control: (on) => ipcRenderer.send('remote-desktop:control', on),
+    input: (ev) => ipcRenderer.send('remote-desktop:input', ev),
+    stop: () => ipcRenderer.send('remote-desktop:stop'),
+    onStopped: (callback) => {
+      const listener = () => callback();
+      ipcRenderer.on('remote-desktop:stopped', listener);
+      return () => ipcRenderer.removeListener('remote-desktop:stopped', listener);
+    },
+  },
   // Only for the server setup page
   saveServer: (url) => ipcRenderer.invoke('save-server', url),
   retry: () => ipcRenderer.invoke('retry'),

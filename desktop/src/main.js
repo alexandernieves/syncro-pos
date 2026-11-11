@@ -7,6 +7,7 @@ const path = require('path');
 const pkg = require('../package.json');
 const gymBridge = require('./gym-bridge-host');
 const biometric = require('./biometric');
+const remoteDesktop = require('./remote-desktop');
 
 /**
  * The desktop app is a window on the business's Syncro server: screens update with the web,
@@ -168,6 +169,11 @@ function allowOwnWindowCapture() {
   session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
     try {
       if (!isServer(request.frame?.url || request.securityOrigin || '')) return callback({});
+      // The person accepted help over the whole computer: the main screen
+      if (remoteDesktop.active()) {
+        const screenSrc = await remoteDesktop.screenSource();
+        return callback(screenSrc ? { video: screenSrc } : {});
+      }
       const sources = await desktopCapturer.getSources({ types: ['window'] });
       const own = win && !win.isDestroyed() ? sources.find((s) => s.id === win.getMediaSourceId()) : null;
       callback(own ? { video: own } : {});
@@ -525,7 +531,7 @@ if (!app.requestSingleInstanceLock()) {
   // Windows only shows an app's notifications when it knows the app's id
   if (process.platform === 'win32') app.setAppUserModelId('com.syncro.pos');
 
-  app.on('before-quit', () => { quitting = true; });
+  app.on('before-quit', () => { quitting = true; remoteDesktop.stop(); });
 
   app.whenReady().then(() => {
     allowOwnWindowCapture();
@@ -534,6 +540,7 @@ if (!app.requestSingleInstanceLock()) {
     gymBridge.init(isServer);
     updateTray();
     biometric.init(isServer);
+    remoteDesktop.init(isServer, () => win);
     buildMenu();
     checkUpdates(false);
     setInterval(() => checkUpdates(false), UPDATE_EVERY_MS);

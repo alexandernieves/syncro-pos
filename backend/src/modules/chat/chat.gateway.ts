@@ -33,6 +33,10 @@ interface RemoteSession {
   businessUserId?: string;
   status: 'PENDING' | 'ACTIVE' | 'ENDED';
   control: boolean;
+  /** What Syncro asked to see: Syncro's window, or the whole computer (desktop app only) */
+  requested: 'window' | 'screen';
+  /** What the business accepted */
+  scope: 'window' | 'screen';
   createdAt: number;
   startedAt?: number;
 }
@@ -365,17 +369,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /** Syncro asks a business for a live session. The business needs Syncro open right now. */
   @SubscribeMessage('remote:request')
-  async remoteRequest(@ConnectedSocket() client: Socket, @MessageBody() data: { businessId: string }) {
+  async remoteRequest(@ConnectedSocket() client: Socket, @MessageBody() data: { businessId: string; scope?: string }) {
     const auth = client.data as AuthedSocketData | undefined;
     if (auth?.role !== 'syncropos' || !data?.businessId) return { error: 'No autorizado' };
     const screens = await this.server.in(`business_${data.businessId}`).fetchSockets();
     if (!screens.length) return { error: 'Este negocio no tiene Syncro abierto ahora. Pídele por el chat que lo abra.' };
     const admin = await this.prisma.user.findUnique({ where: { id: auth.userId }, select: { name: true } });
-    const r: RemoteSession = { id: randomUUID(), businessId: data.businessId, adminUserId: auth.userId, adminName: admin?.name || 'Equipo Syncro', adminSocketId: client.id, status: 'PENDING', control: false, createdAt: Date.now() };
+    const r: RemoteSession = { id: randomUUID(), businessId: data.businessId, adminUserId: auth.userId, adminName: admin?.name || 'Equipo Syncro', adminSocketId: client.id, status: 'PENDING', control: false, requested: data.scope === 'screen' ? 'screen' : 'window', scope: 'window', createdAt: Date.now() };
     this.remote.set(r.id, r);
-    this.server.to(`business_${r.businessId}`).emit('remote:incoming', { sessionId: r.id, adminName: r.adminName });
-    await this.audit(auth.userId, r.businessId, 'REMOTE_SESSION_REQUEST', { sessionId: r.id });
-    await this.notifyBusiness(r.businessId, auth.userId, 'Te pedimos permiso para conectarnos a tu pantalla y ayudarte en vivo.', {
+    this.server.to(`business_${r.businessId}`).emit('remote:incoming', { sessionId: r.id, adminName: r.adminName, scope: r.requested });
+    await this.audit(auth.userId, r.businessId, 'REMOTE_SESSION_REQUEST', { sessionId: r.id, scope: r.requested });
+    await this.notifyBusiness(r.businessId, auth.userId, r.requested === 'screen' ? 'Te pedimos permiso para conectarnos a tu computadora y ayudarte en vivo.' : 'Te pedimos permiso para conectarnos a tu pantalla y ayudarte en vivo.', {
       type: 'CARD',
       meta: { card: 'remote', status: 'PENDING', sessionId: r.id },
     }).catch(() => undefined);
@@ -386,7 +390,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /** The business answers on one of its screens; that screen becomes the one shared. */
   @SubscribeMessage('remote:respond')
-  async remoteRespond(@ConnectedSocket() client: Socket, @MessageBody() data: { sessionId: string; accept: boolean; control?: boolean }) {
+  async remoteRespond(@ConnectedSocket() client: Socket, @MessageBody() data: { sessionId: string; accept: boolean; control?: boolean; scope?: string }) {
     const auth = client.data as AuthedSocketData | undefined;
     const r = this.remote.get(String(data?.sessionId ?? ''));
     if (!auth || !r || r.status !== 'PENDING' || auth.businessId !== r.businessId || auth.role === 'syncropos') return { error: 'La solicitud ya no está disponible' };
@@ -401,11 +405,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     r.businessSocketId = client.id;
     r.businessUserId = auth.userId;
     r.control = !!data.control;
+    // The whole computer only if Syncro asked for it and the business accepted it (desktop app)
+    r.scope = r.requested === 'screen' && data.scope === 'screen' ? 'screen' : 'window';
     r.startedAt = Date.now();
-    this.server.to(r.adminSocketId).emit('remote:started', { sessionId: r.id, control: r.control });
+    this.server.to(r.adminSocketId).emit('remote:started', { sessionId: r.id, control: r.control, scope: r.scope });
     // Other screens of the business close their prompt
     client.to(`business_${r.businessId}`).emit('remote:closed', { sessionId: r.id });
-    await this.audit(auth.userId, r.businessId, 'REMOTE_SESSION_START', { sessionId: r.id, control: r.control, by: r.adminName });
+    await this.audit(auth.userId, r.businessId, 'REMOTE_SESSION_START', { sessionId: r.id, control: r.control, scope: r.scope, by: r.adminName });
     return { ok: true, adminName: r.adminName };
   }
 

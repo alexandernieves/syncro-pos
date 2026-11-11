@@ -1,7 +1,7 @@
 {
   "name": "syncro-desktop",
   "productName": "Syncro POS",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Syncro desktop app: opens the business's Syncro server and prints tickets directly",
   "author": "Syncro",
   "private": true,
@@ -79,7 +79,8 @@
       "icon": "build/icon.png",
       "category": "public.app-category.business",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Syncro usa el micrófono para hablar con el equipo de Syncro durante la asistencia en vivo."
+        "NSMicrophoneUsageDescription": "Syncro usa el micrófono para hablar con el equipo de Syncro durante la asistencia en vivo.",
+        "NSAppleEventsUsageDescription": "Durante la asistencia en vivo que tú aceptas, Syncro usa System Events para escribir en tu computadora por el equipo de Syncro."
       },
       "artifactName": "Syncro-POS-${version}-${arch}.${ext}",
       "target": [
