@@ -22,7 +22,13 @@ export class ChatService {
       }),
     ]);
     const unreadBy = new Map(unread.map((u) => [u.conversationId, u._count]));
-    return conversations.map((c) => ({ ...c, unread: unreadBy.get(c.id) ?? 0, lastMessageAt: c.messages[0]?.createdAt ?? null }));
+    // When someone of each business was last connected ("visto hace…" in the inbox)
+    const ids = [...new Set(conversations.map((c) => c.businessId).filter(Boolean))] as string[];
+    const seen = ids.length
+      ? await this.prisma.user.groupBy({ by: ['businessId'], where: { businessId: { in: ids }, role: { notIn: ['syncropos', 'client'] } }, _max: { lastSeen: true } })
+      : [];
+    const seenBy = new Map(seen.map((u) => [u.businessId, u._max.lastSeen]));
+    return conversations.map((c) => ({ ...c, unread: unreadBy.get(c.id) ?? 0, lastMessageAt: c.messages[0]?.createdAt ?? null, lastSeen: (c.businessId && seenBy.get(c.businessId)) || null }));
   }
 
   async getAllBusinessesForSupport() {

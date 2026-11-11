@@ -51,6 +51,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger('ChatGateway');
   /** Open sockets of the Syncro team, to tell businesses whether someone is there */
   private supportSockets = 0;
+  /** Open screens per business (someone signed in with Syncro open), for "En línea" in the support inbox */
+  private businessSockets = new Map<string, number>();
   private remote = new Map<string, RemoteSession>();
 
   constructor(
@@ -91,6 +93,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     } else if (auth.businessId && auth.role !== 'client') {
       // Every screen of the business hears about new support messages (not its customers' portal)
       client.join(`business_${auth.businessId}`);
+      const n = (this.businessSockets.get(auth.businessId) ?? 0) + 1;
+      this.businessSockets.set(auth.businessId, n);
+      if (n === 1) this.server.to('support').emit('businessPresence', { businessId: auth.businessId, online: true });
     }
     await this.prisma.user.update({ where: { id: auth.userId }, data: { lastSeen: new Date() } }).catch(() => undefined);
   }
@@ -102,12 +107,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     for (const r of this.remote.values()) {
       if (r.status !== 'ENDED' && (r.adminSocketId === client.id || r.businessSocketId === client.id)) await this.endRemote(r, 'Se cerró la conexión');
     }
+    if (auth.role !== 'syncropos' && auth.role !== 'client' && auth.businessId) {
+      const n = Math.max(0, (this.businessSockets.get(auth.businessId) ?? 0) - 1);
+      if (n) this.businessSockets.set(auth.businessId, n);
+      else {
+        this.businessSockets.delete(auth.businessId);
+        this.server.to('support').emit('businessPresence', { businessId: auth.businessId, online: false, lastSeen: new Date() });
+      }
+    }
     if (auth.role === 'syncropos') {
       this.supportSockets = Math.max(0, this.supportSockets - 1);
       if (this.supportSockets === 0) this.server.emit('supportPresence', { online: false });
     }
     await this.prisma.user.update({ where: { id: auth.userId }, data: { lastSeen: new Date() } }).catch(() => undefined);
     this.server.emit('userPresence', { userId: auth.userId, status: 'offline', lastSeen: new Date() });
+  }
+
+  /** Support inbox: which businesses have someone signed in with Syncro open right now. */
+  @SubscribeMessage('onlineBusinesses')
+  handleOnlineBusinesses(@ConnectedSocket() client: Socket) {
+    const auth = client.data as AuthedSocketData | undefined;
+    if (auth?.role !== 'syncropos') return { businessIds: [] };
+    return { businessIds: [...this.businessSockets.keys()] };
   }
 
   /** Is anyone from Syncro connected right now? */

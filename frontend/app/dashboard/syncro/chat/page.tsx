@@ -40,6 +40,8 @@ type Conv = {
   updatedAt: string;
   lastMessageAt: string | null;
   unread: number;
+  /** Last time someone of the business was connected */
+  lastSeen?: string | null;
   business: { id: string; name: string; email: string | null; phone: string | null; status: string } | null;
 };
 type Msg = {
@@ -65,6 +67,18 @@ const getToken = () => {
 const initials = (name?: string | null) => (name ?? "??").trim().slice(0, 2).toUpperCase();
 
 /** "10:24 a. m." today, "ayer", or "3 nov." */
+/** "visto hace 5 min", "visto ayer"… for a business that isn't connected now */
+function seenAgo(d: string | null | undefined) {
+  if (!d) return "Sin conexión reciente";
+  const min = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
+  if (min < 1) return "Visto hace un momento";
+  if (min < 60) return `Visto hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `Visto hace ${h} h`;
+  const days = Math.floor(h / 24);
+  return days === 1 ? "Visto ayer" : `Visto hace ${days} días`;
+}
+
 function when(d: string | null | undefined) {
   if (!d) return "";
   const date = new Date(d);
@@ -108,7 +122,10 @@ export default function SyncroAdminChatPage() {
   const [uploading, setUploading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [onlyUnread, setOnlyUnread] = useState(false);
+  const [onlyUnread, setOnlyUnread] = useState<false | true | "online">(false);
+  /** Businesses with someone signed in and Syncro open right now */
+  const [online, setOnline] = useState<Set<string>>(new Set());
+  const [seenNow, setSeenNow] = useState<Record<string, string>>({});
   const [profileOf, setProfileOf] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const activeRef = useRef<Conv | null>(null);
@@ -160,6 +177,13 @@ export default function SyncroAdminChatPage() {
       if (!bySupport && activeRef.current?.id === conversationId) setMessages((prev) => prev.map((m) => (m.sender?.role === "syncropos" ? { ...m, isRead: true } : m)));
     });
     socket.on("conversationUpdated", () => fetchConversations());
+    // Who is connected now (and whenever someone signs in or closes Syncro)
+    const askOnline = () => socket.emit("onlineBusinesses", (r: { businessIds?: string[] }) => setOnline(new Set(r?.businessIds ?? [])));
+    socket.on("connect", askOnline);
+    socket.on("businessPresence", ({ businessId, online: on, lastSeen }: { businessId: string; online: boolean; lastSeen?: string }) => {
+      setOnline((prev) => { const next = new Set(prev); if (on) next.add(businessId); else next.delete(businessId); return next; });
+      if (!on && lastSeen) setSeenNow((prev) => ({ ...prev, [businessId]: lastSeen }));
+    });
     // Rejoin the open conversation after a reconnect
     socket.on("connect", () => { if (activeRef.current) socket.emit("joinConversation", activeRef.current.id); });
     return () => { socket.disconnect(); socketRef.current = null; };
@@ -289,10 +313,11 @@ export default function SyncroAdminChatPage() {
   };
 
   const list = (conversations ?? [])
-    .filter((c) => !onlyUnread || c.unread > 0)
+    .filter((c) => !onlyUnread || (onlyUnread === "online" ? online.has(c.businessId) : c.unread > 0))
     .filter((c) => `${c.business?.name ?? ""} ${c.business?.email ?? ""}`.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => new Date(b.lastMessageAt ?? 0).getTime() - new Date(a.lastMessageAt ?? 0).getTime() || (a.business?.name ?? "").localeCompare(b.business?.name ?? ""));
   const unreadTotal = (conversations ?? []).reduce((s, c) => s + c.unread, 0);
+  const onlineCount = (conversations ?? []).filter((c) => online.has(c.businessId)).length;
 
   return (
     <div className="flex h-[calc(100dvh-var(--header-height)-1rem)] min-h-[32rem] overflow-hidden bg-background">
@@ -311,7 +336,7 @@ export default function SyncroAdminChatPage() {
             <Input placeholder="Buscar negocio…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </label>
           <div className="flex rounded-lg border bg-muted/40 p-0.5 text-sm">
-            {[{ k: false, l: "Todas" }, { k: true, l: `Sin leer${unreadTotal ? ` · ${unreadTotal}` : ""}` }].map((o) => (
+            {[{ k: false as const, l: "Todas" }, { k: true as const, l: `Sin leer${unreadTotal ? ` · ${unreadTotal}` : ""}` }, { k: "online" as const, l: `En línea${onlineCount ? ` · ${onlineCount}` : ""}` }].map((o) => (
               <button key={String(o.k)} type="button" onClick={() => setOnlyUnread(o.k)} className={cn("flex-1 rounded-md px-3 py-1.5 transition", onlyUnread === o.k ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground")}>{o.l}</button>
             ))}
           </div>
@@ -323,7 +348,7 @@ export default function SyncroAdminChatPage() {
           ) : !list.length ? (
             <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
               <IconMessageCircle size={22} className="text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">{onlyUnread ? "No hay mensajes sin leer." : "No hay conversaciones."}</p>
+              <p className="text-sm text-muted-foreground">{onlyUnread === "online" ? "Ningún negocio tiene Syncro abierto ahora." : onlyUnread ? "No hay mensajes sin leer." : "No hay conversaciones."}</p>
             </div>
           ) : (
             <div className="space-y-1">
@@ -336,7 +361,10 @@ export default function SyncroAdminChatPage() {
                     onClick={() => open(c)}
                     className={cn("flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left outline-none transition focus-visible:ring-2 focus-visible:ring-ring", isActive ? "bg-muted" : "hover:bg-muted/60")}
                   >
-                    <Avatar className="size-10"><AvatarFallback className="text-xs font-semibold">{initials(c.business?.name)}</AvatarFallback></Avatar>
+                    <span className="relative shrink-0">
+                      <Avatar className="size-10"><AvatarFallback className="text-xs font-semibold">{initials(c.business?.name)}</AvatarFallback></Avatar>
+                      {online.has(c.businessId) && <span className="absolute bottom-0 right-0 size-3 rounded-full bg-emerald-500 ring-2 ring-background" aria-label="En línea" title="En línea ahora" />}
+                    </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <span className={cn("truncate text-sm", c.unread ? "font-semibold" : "font-medium")}>{c.business?.name ?? "Sin nombre"}</span>
@@ -368,9 +396,15 @@ export default function SyncroAdminChatPage() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <p className="truncate text-sm font-semibold">{active.business?.name ?? "Negocio"}</p>
-                {active.business?.status && <Badge variant="outline" className={cn("text-[10px]", STATUS_CLASS[active.business.status])}>{STATUS_LABEL[active.business.status]}</Badge>}
+                {/* The plan only when it needs attention (in trial, suspended); "Activo" was confused with being online */}
+                {active.business?.status && active.business.status !== "ACTIVE" && <Badge variant="outline" className={cn("text-[10px]", STATUS_CLASS[active.business.status])}>{STATUS_LABEL[active.business.status]}</Badge>}
               </div>
-              <p className="truncate text-xs text-muted-foreground">{[active.business?.email, active.business?.phone].filter(Boolean).join(" · ") || "Sin datos de contacto"}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {online.has(active.businessId)
+                  ? <span className="inline-flex items-center gap-1 font-medium text-emerald-600"><span className="size-1.5 rounded-full bg-emerald-500" /> En línea ahora</span>
+                  : seenAgo(seenNow[active.businessId] ?? active.lastSeen)}
+                {[active.business?.email, active.business?.phone].filter(Boolean).length ? ` · ${[active.business?.email, active.business?.phone].filter(Boolean).join(" · ")}` : ""}
+              </p>
             </div>
             <RemoteViewer key={active.businessId} businessId={active.businessId} businessName={active.business?.name ?? "el negocio"} />
             <Button variant="outline" size="sm" onClick={() => setProfileOf(active.businessId)}><IconUserCircle size={16} /> Ver negocio</Button>
