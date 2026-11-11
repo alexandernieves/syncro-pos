@@ -37,7 +37,14 @@ export const pushSupported = () =>
   typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window && !isDesktopApp();
 
 let inFlight: Promise<PushState> | null = null;
-export type PushState = "on" | "denied" | "default" | "unsupported" | "off-server" | "error";
+/**
+ * "push-service": the browser couldn't reach its own push service (Google's for Chrome/Edge,
+ * Apple's for Safari). Not Syncro's server: usually a VPN, an ad-blocking DNS or a network that
+ * blocks it.
+ */
+export type PushState = "on" | "denied" | "default" | "unsupported" | "off-server" | "push-service" | "error";
+/** The last error, to show it in "Notificaciones de este dispositivo" */
+export let lastPushError = "";
 
 /** The subscription this device has right now, if any. */
 export async function currentSubscription() {
@@ -92,7 +99,9 @@ export function ensurePushSubscription({ ask = false }: { ask?: boolean } = {}):
   })()
     .catch((err) => {
       console.warn("Push registration failed (non-critical):", err);
-      return "error" as PushState;
+      lastPushError = String(err?.message || err || "");
+      // Chrome: "Registration failed - push service error"
+      return (/push service/i.test(lastPushError) || err?.name === "AbortError" ? "push-service" : "error") as PushState;
     })
     .finally(() => {
       setTimeout(() => { inFlight = null; }, 0);
@@ -120,6 +129,7 @@ function promptToEnable() {
         const state = await ensurePushSubscription({ ask: true });
         if (state === "on") toast.success("Listo: las notificaciones están activas en esta computadora.");
         else if (state === "denied") blockedNotice();
+        else if (state === "push-service") toast.error("Chrome no pudo conectarse a su servicio de notificaciones", { description: "Abre tu menú de usuario → Notificaciones de este dispositivo para ver cómo resolverlo." });
         else if (state === "error" || state === "off-server") toast.error("No se pudieron activar. Intenta de nuevo en un momento.");
       },
     },

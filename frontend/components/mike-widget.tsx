@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { io, Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
+import { connectSocket } from "@/lib/socket";
 import { apiFetch } from "@/lib/api";
 import { API_URL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -82,7 +83,7 @@ export function MikeWidget() {
       setMessages(conv.messages || []);
 
       const token = localStorage.getItem("token");
-      const socket = io(API_URL, { auth: { token } });
+      const socket = connectSocket({ auth: { token } });
       socketRef.current = socket;
 
       socket.on("connect", () => {

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { IconBell, IconBellOff, IconCheck, IconDeviceDesktop, IconDeviceMobile, IconLoader2, IconSend, IconShare2 } from "@tabler/icons-react";
 import { apiFetch } from "@/lib/api";
-import { ensurePushSubscription, isDesktopApp, pushSupported, type PushState } from "@/hooks/usePushNotifications";
+import { ensurePushSubscription, isDesktopApp, lastPushError, pushSupported, type PushState } from "@/hooks/usePushNotifications";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -26,6 +26,7 @@ const STATUS: Record<PushState, { text: string; ok: boolean }> = {
   denied: { text: "Las notificaciones están bloqueadas en este navegador.", ok: false },
   unsupported: { text: "Este navegador no puede recibir notificaciones.", ok: false },
   "off-server": { text: "El servidor no tiene las notificaciones configuradas.", ok: false },
+  "push-service": { text: "El navegador no pudo conectarse a su servicio de notificaciones (no es Syncro: es el servicio de Google o Apple que entrega los avisos).", ok: false },
   error: { text: "No se pudo comprobar. Revisa tu conexión e intenta de nuevo.", ok: false },
 };
 
@@ -137,6 +138,19 @@ export function PushDeviceDialog({ open, onOpenChange }: { open: boolean; onOpen
               <div>
                 <p className="font-semibold">{state ? (status!.ok ? "Activadas" : "Desactivadas") : "Comprobando…"}</p>
                 {status && <p className="text-muted-foreground">{status.text}</p>}
+                {state === "push-service" && (
+                  <div className="mt-2 flex flex-col gap-1.5 text-xs text-muted-foreground">
+                    <p className="font-medium text-foreground">Cómo resolverlo:</p>
+                    <ol className="list-decimal space-y-1 pl-4">
+                      <li>Si usas una <b>VPN</b>, un bloqueador de anuncios por DNS (NextDNS, AdGuard, Pi-hole) o la red de una empresa, desactívalo un momento y presiona <b>Activar</b> otra vez.</li>
+                      <li>Cierra Chrome por completo (Cmd + Q), ábrelo de nuevo y vuelve a intentar.</li>
+                      <li>En Chrome escribe <code className="rounded bg-muted px-1">chrome://gcm-internals</code> en la barra: en <b>Connection State</b> debe decir <b>CONNECTED</b>. Si no, tu red está bloqueando el servicio de Google (mtalk.google.com).</li>
+                      <li>Mientras tanto, en la Mac puedes usar <b>Safari</b>: allí los avisos los entrega Apple y suele funcionar.</li>
+                    </ol>
+                    {lastPushError && <p className="mt-1 font-mono text-[10px] opacity-70">Detalle: {lastPushError}</p>}
+                  </div>
+                )}
+                {state === "error" && lastPushError && <p className="mt-1 font-mono text-[10px] text-muted-foreground opacity-70">Detalle: {lastPushError}</p>}
                 {state === "denied" && (
                   <p className="mt-1 text-xs text-muted-foreground">Haz clic en el ícono a la izquierda de la dirección (el candado), entra en Notificaciones, elige Permitir y recarga la página.</p>
                 )}

@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { API_URL } from "@/lib/constants"
-import { io, Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
+import { connectSocket } from "@/lib/socket";
 import { toast } from "sonner";
 
 const API = API_URL;
@@ -66,9 +67,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
     fetchNotifications();
 
-    const newSocket = io(API, {
-      auth: { token }
-    });
+    // Through connectSocket: with the API under /api the socket must use /api/socket.io
+    const newSocket = connectSocket({ auth: { token } });
 
     newSocket.on("notification", (notification) => {
       setNotifications(prev => [notification, ...prev]);
