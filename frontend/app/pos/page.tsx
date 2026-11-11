@@ -3612,10 +3612,10 @@ export default function POSPage() {
 
                 {/* Total Display */}
                 <div className="p-6 rounded-lg bg-primary/5 border border-primary/20 flex flex-col gap-3">
-                  <p className="text-xs font-semibold text-primary/70 tracking-tight">Monto total a pagar</p>
+                  <p className="text-xs font-semibold text-primary/90 tracking-tight">Monto total a pagar</p>
                   <div className="flex flex-wrap items-baseline gap-x-8 gap-y-1">
                     <p className="text-4xl font-bold tracking-tight text-primary">${finalTotalWithIgtf.toFixed(2)}</p>
-                    <p className="text-3xl font-bold tracking-tight text-primary/50 tabular-nums">Bs {(finalTotalWithIgtf * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <p className="text-3xl font-bold tracking-tight text-primary/80 tabular-nums">Bs {(finalTotalWithIgtf * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                   {igtfAmount > 0 && <p className="text-[11px] font-semibold text-emerald-600 bg-emerald-500/10 self-start px-2 py-0.5 rounded">+ IGTF (3%) incluido</p>}
                 </div>
@@ -4016,7 +4016,7 @@ export default function POSPage() {
                             Bs {(remainingToPay * currentExchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                           {branchCurrencyList.includes("COP") && cashRates.COP > 0 && (
-                            <span className="text-2xl font-bold text-amber-500/60 tabular-nums tracking-tighter leading-none">
+                            <span className="text-2xl font-bold text-amber-600 tabular-nums tracking-tighter leading-none">
                               ~ {formatMoney(cashDue(fromUsd(remainingToPay, "COP", cashRates), "COP"), "COP")} <span className="text-xs font-semibold">en efectivo</span>
                             </span>
                           )}

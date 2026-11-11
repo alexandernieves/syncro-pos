@@ -528,7 +528,7 @@ export default function NewPurchaseOrderPage() {
           </Card>
           <div className="p-4 rounded-lg bg-blue-500/5 border border-blue-500/10 flex gap-3 items-start">
              <IconInfoCircle className="text-blue-500 mt-1" size={16} />
-             <p className="text-[10px] text-blue-500/80 font-medium leading-relaxed">Los costos unitarios son editables. El sistema registrará el último costo para futuras sugerencias.</p>
+             <p className="text-[10px] text-blue-700 font-medium leading-relaxed">Los costos unitarios son editables. El sistema registrará el último costo para futuras sugerencias.</p>
           </div>
         </div>
       </div>

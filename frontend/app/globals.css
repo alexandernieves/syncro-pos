@@ -169,7 +169,7 @@ html[data-syncro-theme="atardecer"] {
   --card-foreground: #F2EEE7;
   --popover: #3A3631;
   --popover-foreground: #F2EEE7;
-  --primary: #F47A4A;
+  --primary: #EA6838;
   --primary-foreground: #FFFFFF;
   --secondary: #3D3934;
   --secondary-foreground: #F2EEE7;
@@ -177,12 +177,12 @@ html[data-syncro-theme="atardecer"] {
   --muted-foreground: #B5AEA2;
   --accent: #443F39;
   --accent-foreground: #F2EEE7;
-  --destructive: #EB6657;
+  --destructive: #E5574A;
   --border: #4A453F;
   --input: #504A43;
-  --ring: #F47A4A;
+  --ring: #EA6838;
 
-  --chart-1: #F47A4A;
+  --chart-1: #EA6838;
   --chart-2: #5BAEF0;
   --chart-3: #46C784;
   --chart-4: #F0B84A;
@@ -190,12 +190,12 @@ html[data-syncro-theme="atardecer"] {
 
   --sidebar: var(--shell);
   --sidebar-foreground: #F2EEE7;
-  --sidebar-primary: #F47A4A;
+  --sidebar-primary: #EA6838;
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #322E2A;
   --sidebar-accent-foreground: #F2EEE7;
   --sidebar-border: #37332E;
-  --sidebar-ring: #F47A4A;
+  --sidebar-ring: #EA6838;
 
   --wa-wallpaper: #302C28;
 }

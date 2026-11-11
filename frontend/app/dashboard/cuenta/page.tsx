@@ -248,7 +248,7 @@ export default function AccountPage() {
                                         console.log("Avatar image failed to load, showing fallback");
                                     }}
                                 />
-                                <AvatarFallback className="bg-primary/5 text-2xl font-black text-primary/30">
+                                <AvatarFallback className="bg-primary/5 text-2xl font-black text-primary/70">
                                     {formData.name?.split(' ').map(word => word.charAt(0)).join('').substring(0,2).toUpperCase() || 'Ad'}
                                 </AvatarFallback>
                             </Avatar>

@@ -42,7 +42,7 @@ export const THEMES: SyncroTheme[] = [
     name: "Atardecer",
     description: "Oscuro suave en grises cálidos, con menos contraste que Noche.",
     mode: "dark",
-    preview: { shell: "#25221F", background: "#2D2A26", card: "#35312D", text: "#F2EEE7", muted: "#B5AEA2", primary: "#F47A4A" },
+    preview: { shell: "#25221F", background: "#2D2A26", card: "#35312D", text: "#F2EEE7", muted: "#B5AEA2", primary: "#EA6838" },
   },
   {
     id: "navidad",

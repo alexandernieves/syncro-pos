@@ -556,7 +556,7 @@ export default function AccountingPage() {
                       <div className="h-px bg-primary/10 w-full" />
                       <div className="flex justify-between items-center text-xs font-black">
                          <span>Salud del negocio</span>
-                         <Badge className={(stats?.profitability.netProfit || 0) > 0 ? "bg-emerald-500" : "bg-rose-500"}>
+                         <Badge className={(stats?.profitability.netProfit || 0) > 0 ? "bg-emerald-700" : "bg-rose-600"}>
                            {(stats?.profitability.netMarginPercentage || 0).toFixed(1)}% roi
                          </Badge>
                       </div>

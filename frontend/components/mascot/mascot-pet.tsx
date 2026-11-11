@@ -677,6 +677,7 @@ export function MascotPet({ docked: forceDocked = false, side = "right", top = 3
             <div
               role="dialog"
               aria-label={`Idea de ${name}`}
+              data-paper // a glossy white cloud in every theme: dark themes don't re-colour it
               onKeyDown={(e) => { if (e.key === "Escape") closeCloud(); }}
               className="syncro-pop pointer-events-auto absolute"
               style={{
