@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld('electron', {
   // Remote assistance: real mouse and keyboard events, only inside this window
   remoteInput: (event) => ipcRenderer.send('remote-input', event),
   checkUpdates: () => ipcRenderer.send('check-updates'),
+  // Notices: bring the window back (even if it was closed) and the unread count on the Dock icon
+  showWindow: () => ipcRenderer.send('app:show'),
+  setBadge: (count) => ipcRenderer.send('app:badge', count),
   // Face reader bridge running in this app (Gimnasio → Control de acceso)
   gymBridge: {
     get: () => ipcRenderer.invoke('gym-bridge:get'),

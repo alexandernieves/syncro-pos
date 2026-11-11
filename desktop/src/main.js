@@ -91,19 +91,29 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Hidden or behind other windows it keeps listening (support messages, notices)
+      backgroundThrottling: false,
     },
   });
   win.maximize();
   win.once('ready-to-show', () => win.show());
 
-  // With the face reader bridge on, closing the window keeps the app (and the bridge) running
+  // Closing the window hides it: Syncro keeps running so support messages and notices still arrive
+  // (and the face reader bridge keeps syncing). It comes back from the Dock / the icon by the clock.
+  // Cmd+Q (or "Salir") really quits.
   win.on('close', (e) => {
-    if (quitting || !gymBridge.running()) return;
+    if (quitting) return;
     e.preventDefault();
     win.hide();
     if (!hiddenHintShown && process.platform === 'win32' && tray) {
       hiddenHintShown = true;
-      tray.displayBalloon({ title: 'Syncro sigue abierto', content: 'El lector facial sigue conectado. Para volver a Syncro, haz clic en este ícono junto al reloj.', iconType: 'info' });
+      tray.displayBalloon({
+        title: 'Syncro sigue abierto',
+        content: gymBridge.running()
+          ? 'El lector facial sigue conectado y te avisaremos de mensajes nuevos. Para volver, haz clic en este ícono junto al reloj.'
+          : 'Te avisaremos de mensajes nuevos. Para volver a Syncro, haz clic en este ícono junto al reloj.',
+        iconType: 'info',
+      });
     }
   });
 
@@ -255,7 +265,7 @@ autoUpdater.on('download-progress', (p) => {
 autoUpdater.on('update-downloaded', (info) => {
   // Windows: installs silently and opens the app again
   setUpdate({ state: 'installing', version: info.version });
-  setTimeout(() => autoUpdater.quitAndInstall(true, true), 1200);
+  setTimeout(() => { quitting = true; autoUpdater.quitAndInstall(true, true); }, 1200);
 });
 autoUpdater.on('error', (e) => {
   logUpdate(`error ${e?.message || e}`);
@@ -338,7 +348,7 @@ function swapMac(current, newApp) {
     stdio: 'ignore',
     env: { ...process.env, OLD_PID: String(process.pid), APP: current, NEW: newApp },
   }).unref();
-  setTimeout(() => app.quit(), 800);
+  setTimeout(() => { quitting = true; app.quit(); }, 800);
 }
 
 /** The badge's click: download, install and reopen. */
@@ -363,6 +373,14 @@ async function startUpdate() {
 
 ipcMain.on('install-update', (e) => {
   if (isServer(e.senderFrame.url)) startUpdate();
+});
+// A notice was clicked: bring Syncro to the front even if its window was closed (hidden)
+ipcMain.on('app:show', (e) => { if (isServer(e.senderFrame.url)) showWindow(); });
+// Unread support messages on the Dock icon (macOS) / taskbar (Linux)
+ipcMain.on('app:badge', (e, count) => {
+  if (!isServer(e.senderFrame.url)) return;
+  const n = Math.max(0, Math.min(999, Number(count) || 0));
+  try { app.setBadgeCount(n); } catch { /* not supported here */ }
 });
 ipcMain.handle('update-status', (e) => (isServer(e.senderFrame.url) ? { ...update, current: app.getVersion() } : null));
 ipcMain.on('check-updates', (e) => {
@@ -456,6 +474,10 @@ function showWindow() {
 }
 
 async function confirmQuit() {
+  if (!gymBridge.running()) {
+    quitting = true;
+    return app.quit();
+  }
   const { response } = await dialog.showMessageBox({
     type: 'warning',
     buttons: ['Salir', 'Cancelar'],
@@ -471,7 +493,8 @@ async function confirmQuit() {
 }
 
 function updateTray() {
-  if (!gymBridge.running()) {
+  // Windows: always by the clock (closing the window keeps Syncro running). macOS has the Dock.
+  if (!gymBridge.running() && process.platform !== 'win32') {
     tray?.destroy();
     tray = null;
     return;
@@ -479,12 +502,11 @@ function updateTray() {
   if (!tray) {
     const icon = nativeImage.createFromPath(path.join(__dirname, '../build/icon.png')).resize({ width: 18, height: 18 });
     tray = new Tray(icon);
-    tray.setToolTip('Syncro POS · lector facial');
+    tray.setToolTip(gymBridge.running() ? 'Syncro POS · lector facial' : 'Syncro POS');
     tray.on('click', showWindow);
   }
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: gymBridge.label(), enabled: false },
-    { type: 'separator' },
+    ...(gymBridge.running() ? [{ label: gymBridge.label(), enabled: false }, { type: 'separator' }] : []),
     { label: 'Abrir Syncro', click: showWindow },
     { label: 'Salir de Syncro', click: confirmQuit },
   ]));
@@ -510,6 +532,7 @@ if (!app.requestSingleInstanceLock()) {
     createWindow();
     gymBridge.onChange(updateTray);
     gymBridge.init(isServer);
+    updateTray();
     biometric.init(isServer);
     buildMenu();
     checkUpdates(false);

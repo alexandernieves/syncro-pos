@@ -1,11 +1,14 @@
 "use client"
 
+import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { PushDeviceDialog } from "@/components/push-device-dialog"
 import { signOutAndReload } from "@/lib/auth-helpers"
 
 import {
   IconCreditCard,
   IconDotsVertical,
+  IconBell,
   IconLogout,
   IconNotification,
   IconUserCircle,
@@ -45,6 +48,7 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar()
   const router = useRouter()
+  const [pushOpen, setPushOpen] = useState(false)
 
   const handleLogout = async () => {
     toast.success("Has cerrado sesión correctamente")
@@ -111,6 +115,10 @@ export function NavUser({
                   </DropdownMenuItem>
                 </>
               )}
+              <DropdownMenuItem onClick={() => setPushOpen(true)} className="cursor-pointer">
+                <IconBell />
+                Notificaciones de este dispositivo
+              </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
@@ -119,6 +127,7 @@ export function NavUser({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <PushDeviceDialog open={pushOpen} onOpenChange={setPushOpen} />
       </SidebarMenuItem>
     </SidebarMenu>
   )

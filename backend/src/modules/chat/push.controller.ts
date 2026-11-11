@@ -27,6 +27,24 @@ export class PushController {
     return this.pushService.subscribe(req.user.id ?? req.user.sub, sub, req.headers?.['user-agent']);
   }
 
+  /**
+   * "Enviar prueba" from the device panel: a push to every device of the signed-in user.
+   * Returns how many devices accepted it (0 = this account has no device signed up).
+   */
+  @Post('test')
+  @UseGuards(JwtAuthGuard)
+  async test(@Req() req: any) {
+    const userId = req.user.id ?? req.user.sub;
+    const devices = await this.pushService.sendToUser(userId, {
+      title: '🔔 Prueba de Syncro',
+      body: 'Así te llegarán los mensajes de soporte y los avisos, aunque Syncro esté cerrado.',
+      url: req.user.role === 'syncropos' ? '/dashboard/syncro/chat' : '/dashboard/soporte',
+      tag: 'push-test',
+    });
+    const registered = await this.pushService.deviceCount(userId);
+    return { configured: this.pushService.configured, devices, registered };
+  }
+
   @Delete('unsubscribe')
   @UseGuards(JwtAuthGuard)
   async unsubscribe(@Req() req: any, @Body() body: { endpoint: string }) {

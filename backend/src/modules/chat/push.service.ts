@@ -58,6 +58,11 @@ export class PushService {
     return this.prisma.pushSubscription.deleteMany({ where: { endpoint, userId } });
   }
 
+  /** How many devices this user has signed up for push. */
+  deviceCount(userId: string) {
+    return this.prisma.pushSubscription.count({ where: { userId } });
+  }
+
   /** Sends to every device of a user. Returns how many devices accepted it. */
   async sendToUser(userId: string, payload: PushPayload): Promise<number> {
     if (!this.enabled) return 0;

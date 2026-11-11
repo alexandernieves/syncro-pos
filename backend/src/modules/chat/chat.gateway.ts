@@ -168,8 +168,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         : await this.prisma.user.findMany({ where: { role: 'syncropos' }, select: { id: true } });
       for (const u of to) {
         await this.pushService.sendToUser(u.id, fromSupport
-          ? { title: '💬 Equipo Syncro', body: preview.slice(0, 140), url: '/dashboard/soporte' }
-          : { title: `💬 ${business?.name ?? 'Cliente'}`, body: preview.slice(0, 140), url: '/dashboard/syncro/chat' });
+          ? { title: '💬 Equipo Syncro', body: preview.slice(0, 140), url: '/dashboard/soporte', tag: `chat-${conversationId}` }
+          : { title: `💬 ${business?.name ?? 'Cliente'}`, body: preview.slice(0, 140), url: '/dashboard/syncro/chat', tag: `chat-${conversationId}` });
       }
     } catch {
       // push is best-effort

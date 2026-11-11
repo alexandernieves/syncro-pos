@@ -49,7 +49,12 @@ async function systemNotice(title: string, body: string, tag: string, onClick: (
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   try {
     const notification = new Notification(title, { body, icon: "/syncro.png", tag });
-    notification.onclick = () => { window.focus(); onClick(); notification.close(); };
+    notification.onclick = () => {
+      (window as unknown as { electron?: { showWindow?: () => void } }).electron?.showWindow?.();
+      window.focus();
+      onClick();
+      notification.close();
+    };
   } catch {
     const reg = await navigator.serviceWorker?.getRegistration().catch(() => undefined);
     await reg?.showNotification(title, { body, icon: "/syncro.png", tag, data: { url: "/dashboard" } }).catch(() => undefined);
@@ -77,6 +82,11 @@ export function SupportNotifier() {
         const { count } = await res.json();
         setUnread(Number(count) || 0);
         document.title = count > 0 ? `(${count}) ${baseTitle}` : baseTitle;
+        // The count on the Dock icon (desktop app) or the installed app's icon (phone / PWA)
+        (window as unknown as { electron?: { setBadge?: (n: number) => void } }).electron?.setBadge?.(Number(count) || 0);
+        const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+        if (count > 0) nav.setAppBadge?.(Number(count)).catch(() => undefined);
+        else nav.clearAppBadge?.().catch(() => undefined);
       } catch {
         // offline: keep the last count
       }
@@ -85,7 +95,7 @@ export function SupportNotifier() {
     const socket: Socket = connectSocket({ auth: { token }, reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 2000 });
     socket.on("connect", refresh);
     socket.on("unreadChanged", refresh);
-    socket.on("supportMessage", (n: Notice) => {
+    socket.on("supportMessage", async (n: Notice) => {
       refresh();
       const onChat = pathRef.current?.replace(/\/+$/, "") === chatPath;
       const widgetOpen = !!(window as unknown as Record<string, boolean>).__syncroChatWidgetOpen;
@@ -98,7 +108,12 @@ export function SupportNotifier() {
         else router.push(chatPath);
       };
       toast(title, { description: body, duration: 8000, action: { label: "Ver", onClick: view } });
-      if (document.hidden) void systemNotice(title, body, n.conversationId, view);
+      // Not looking at Syncro (minimised, behind other windows, window closed in the desktop app):
+      // a system notification. In a browser signed up for push, the service worker already shows it.
+      if (document.hidden || !document.hasFocus()) {
+        const viaPush = !!(await currentSubscription().catch(() => null));
+        if (!viaPush) void systemNotice(title, body, `chat-${n.conversationId}`, view);
+      }
     });
     // Notifications from Syncro central and the automations (welcome, reminders…)
     socket.on("syncroPush", async (n: SyncroPush) => {
