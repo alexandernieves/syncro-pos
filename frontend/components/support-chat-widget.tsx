@@ -1,5 +1,6 @@
 "use client";
 
+import { MessageTicks, withDelivered } from "@/components/chat/message-ticks";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -24,6 +25,7 @@ type Msg = {
   type: string;
   fileUrl?: string | null;
   isRead?: boolean;
+  deliveredAt?: string | null;
   meta?: CardMeta | null;
   createdAt: string;
   sender?: { name: string | null; role: string } | null;
@@ -173,6 +175,9 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
         });
         socket.on("messagesRead", ({ bySupport }: { bySupport?: boolean }) => {
           if (bySupport) setMessages((prev) => prev?.map((m) => (m.sender?.role !== "syncropos" ? { ...m, isRead: true } : m)) ?? prev);
+        });
+        socket.on("messagesDelivered", ({ conversationId, ids, at }: { conversationId: string; ids: string[]; at: string }) => {
+          if (conversationId === data.id) setMessages((prev) => (prev ? withDelivered(prev, ids, at) : prev));
         });
         socket.on("userTyping", ({ isTyping }: { isTyping: boolean }) => setTyping(isTyping));
       } catch {
@@ -480,7 +485,7 @@ export function SupportChatWidget({ placement = "right", defaultTop = 38 }: { pl
                         )}
                         <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
                           {time(m.createdAt)}
-                          {!syncro && (m.isRead ? <IconChecks size={12} className="text-sky-500" /> : <IconCheck size={12} />)}
+                          {!syncro && <MessageTicks read={m.isRead} delivered={m.deliveredAt} />}
                         </p>
                       </div>
                     </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { MessageTicks, withDelivered } from "@/components/chat/message-ticks";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { API_URL } from "@/lib/constants"
 import {
@@ -1653,6 +1654,10 @@ export default function SupportChatPage() {
       setMessages((prev) => prev.map((m) => (m.sender?.role !== "syncropos" ? { ...m, isRead: true } : m)));
     });
 
+    socketRef.current.on("messagesDelivered", ({ conversationId, ids, at }: { conversationId: string; ids: string[]; at: string }) => {
+      if (conversationId === convId) setMessages((prev: any[]) => withDelivered(prev, ids, at));
+    });
+
     if (readOnVisible.current) document.removeEventListener("visibilitychange", readOnVisible.current);
     readOnVisible.current = () => { if (!document.hidden) socketRef.current?.emit("markAsRead", { conversationId: convId }); };
     document.addEventListener("visibilitychange", readOnVisible.current);
@@ -2667,7 +2672,7 @@ export default function SupportChatPage() {
                                     return "";
                                   }
                                 })()}
-                                {isMe && chatType === "human" && <IconChecks size={12} className={msg.isRead ? "text-sky-500" : "text-muted-foreground/60"} />}
+                                {isMe && chatType === "human" && <MessageTicks read={msg.isRead} delivered={msg.deliveredAt} className={msg.isRead ? undefined : "text-muted-foreground"} />}
                               </div>
                             )}
                           </div>

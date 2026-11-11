@@ -101,6 +101,8 @@ model Message {
   type           String       @default("TEXT")
   fileUrl        String?
   isRead         Boolean      @default(false)
+  /// Reached a device of the other side (open Syncro or a notification): gray double check
+  deliveredAt    DateTime?
   createdAt      DateTime     @default(now())
   /// Card messages (type CARD): what the card shows, e.g. a module offer or a request update
   meta           Json?

@@ -16,6 +16,23 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
+// Where the API is (the pages tell it; kept in the cache so it survives the worker restarting)
+const CONFIG = 'syncro-config';
+self.addEventListener('message', (event) => {
+  const d = event.data;
+  if (d && d.type === 'syncro-api' && typeof d.api === 'string') {
+    event.waitUntil(caches.open(CONFIG).then((c) => c.put('/__api', new Response(d.api))));
+  }
+});
+async function apiBase() {
+  try {
+    const r = await (await caches.open(CONFIG)).match('/__api');
+    return r ? (await r.text()).replace(/\/+$/, '') : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 self.addEventListener('push', (event) => {
   let data = { title: 'Syncro', body: 'Nueva notificación' };
   if (event.data) {
@@ -37,7 +54,12 @@ self.addEventListener('push', (event) => {
     data: { url: data.url || '/dashboard' },
   };
 
-  event.waitUntil(self.registration.showNotification(data.title || 'Syncro', options));
+  const tasks = [self.registration.showNotification(data.title || 'Syncro', options)];
+  // A support message reached this device: the sender sees the gray double check
+  if (data.ack) {
+    tasks.push(apiBase().then((base) => base && fetch(base + '/chat-delivery/' + encodeURIComponent(data.ack), { method: 'POST' })).catch(() => undefined));
+  }
+  event.waitUntil(Promise.all(tasks));
 });
 
 self.addEventListener('notificationclick', (event) => {

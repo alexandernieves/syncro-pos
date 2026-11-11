@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import * as webpush from 'web-push';
 
-export type PushPayload = { title: string; body: string; icon?: string; url?: string; tag?: string };
+export type PushPayload = { title: string; body: string; icon?: string; url?: string; tag?: string; ack?: string };
 
 /** Notifications that wait for someone to turn them on are delivered for this long. */
 const PENDING_DAYS = 7;

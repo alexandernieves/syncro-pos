@@ -46,6 +46,12 @@ export type PushState = "on" | "denied" | "default" | "unsupported" | "off-serve
 /** The last error, to show it in "Notificaciones de este dispositivo" */
 export let lastPushError = "";
 
+/** Tells the service worker where the API is (it confirms delivered messages there). */
+export function tellServiceWorkerApi() {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator) || isDesktopApp()) return;
+  navigator.serviceWorker.ready.then((r) => r.active?.postMessage({ type: "syncro-api", api: API_URL })).catch(() => undefined);
+}
+
 /** The subscription this device has right now, if any. */
 export async function currentSubscription() {
   if (!pushSupported()) return null;
@@ -153,6 +159,7 @@ function blockedNotice() {
 export function usePushNotifications() {
   useEffect(() => {
     if (typeof window === "undefined" || !token()) return;
+    tellServiceWorkerApi();
     let cancelled = false;
     const t = setTimeout(async () => {
       const state = await ensurePushSubscription();

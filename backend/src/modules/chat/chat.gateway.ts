@@ -10,7 +10,8 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
-import { randomUUID } from 'crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { ChatService } from './chat.service';
 import { PushService } from './push.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -37,6 +38,18 @@ interface RemoteSession {
 }
 
 /** Card messages (module offers, request updates) carry this alongside the plain text. */
+const ackSecret = () => process.env.JWT_SECRET || 'syncro-pos-secret-key-2025';
+const ackSig = (messageId: string) => createHmac('sha256', `delivery:${ackSecret()}`).update(messageId).digest('base64url').slice(0, 32);
+/** Token the service worker sends back when a notification reached the device (no login needed). */
+export const deliveryToken = (messageId: string) => `${messageId}.${ackSig(messageId)}`;
+export function readDeliveryToken(token: string): string | null {
+  const [id, sig] = String(token || '').split('.');
+  if (!id || !sig) return null;
+  const want = Buffer.from(ackSig(id));
+  const got = Buffer.from(sig);
+  return want.length === got.length && timingSafeEqual(want, got) ? id : null;
+}
+
 export type ChatExtra = { meta?: Record<string, unknown>; requestId?: string | null; type?: string };
 
 @WebSocketGateway({
@@ -98,6 +111,48 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (n === 1) this.server.to('support').emit('businessPresence', { businessId: auth.businessId, online: true });
     }
     await this.prisma.user.update({ where: { id: auth.userId }, data: { lastSeen: new Date() } }).catch(() => undefined);
+    // Opening Syncro receives what was waiting (like a phone coming back online)
+    if (auth.role === 'syncropos') void this.markDelivered({ sender: { role: { not: 'syncropos' } } });
+    else if (auth.businessId && auth.role !== 'client') void this.markDelivered({ sender: { role: 'syncropos' }, conversation: { businessId: auth.businessId } });
+  }
+
+  /**
+   * Messages that reached a device of the other side: gray double check on the sender's screen.
+   * Both sides hear it (the conversation, the support inbox and the business's screens).
+   */
+  async markDelivered(where: Prisma.MessageWhereInput) {
+    try {
+      const rows = await this.prisma.message.findMany({
+        where: { ...where, deliveredAt: null },
+        select: { id: true, conversationId: true, conversation: { select: { businessId: true } } },
+        take: 500,
+      });
+      if (!rows.length) return;
+      const at = new Date();
+      await this.prisma.message.updateMany({ where: { id: { in: rows.map((r) => r.id) } }, data: { deliveredAt: at } });
+      const by = new Map<string, { businessId: string | null; ids: string[] }>();
+      for (const r of rows) {
+        const g = by.get(r.conversationId) ?? { businessId: r.conversation.businessId, ids: [] };
+        g.ids.push(r.id);
+        by.set(r.conversationId, g);
+      }
+      for (const [conversationId, g] of by) {
+        let target = this.server.to(`conv_${conversationId}`).to('support');
+        if (g.businessId) target = target.to(`business_${g.businessId}`);
+        target.emit('messagesDelivered', { conversationId, ids: g.ids, at });
+      }
+    } catch (e: any) {
+      this.logger.warn(`markDelivered: ${e.message}`);
+    }
+  }
+
+  /** A screen of the other side got a message live (support notice): it's delivered. */
+  @SubscribeMessage('delivered')
+  async handleDelivered(@ConnectedSocket() client: Socket, @MessageBody() data: { messageId?: string }) {
+    const auth = client.data as AuthedSocketData | undefined;
+    if (!auth || typeof data?.messageId !== 'string') return;
+    if (auth.role === 'syncropos') await this.markDelivered({ id: data.messageId, sender: { role: { not: 'syncropos' } } });
+    else if (auth.businessId && auth.role !== 'client') await this.markDelivered({ id: data.messageId, sender: { role: 'syncropos' }, conversation: { businessId: auth.businessId } });
   }
 
   async handleDisconnect(client: Socket) {
@@ -189,8 +244,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         : await this.prisma.user.findMany({ where: { role: 'syncropos' }, select: { id: true } });
       for (const u of to) {
         await this.pushService.sendToUser(u.id, fromSupport
-          ? { title: '💬 Equipo Syncro', body: preview.slice(0, 140), url: '/dashboard/soporte', tag: `chat-${conversationId}` }
-          : { title: `💬 ${business?.name ?? 'Cliente'}`, body: preview.slice(0, 140), url: '/dashboard/syncro/chat', tag: `chat-${conversationId}` });
+          ? { title: '💬 Equipo Syncro', body: preview.slice(0, 140), url: '/dashboard/soporte', tag: `chat-${conversationId}`, ack: deliveryToken(message.id) }
+          : { title: `💬 ${business?.name ?? 'Cliente'}`, body: preview.slice(0, 140), url: '/dashboard/syncro/chat', tag: `chat-${conversationId}`, ack: deliveryToken(message.id) });
       }
     } catch {
       // push is best-effort
@@ -250,7 +305,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const conversation = await this.prisma.conversation.findUnique({ where: { id: data.conversationId }, select: { businessId: true } });
     if (!conversation || (auth.role !== 'syncropos' && conversation.businessId !== auth.businessId)) return;
     try {
-      // Each side reads what the other side wrote
+      // Each side reads what the other side wrote (and what is read was delivered)
+      await this.markDelivered({ conversationId: data.conversationId, isRead: false, sender: auth.role === 'syncropos' ? { role: { not: 'syncropos' } } : { role: 'syncropos' } });
       await this.chatService.markAsRead(data.conversationId, auth.role === 'syncropos');
       this.server.to(`conv_${data.conversationId}`).emit('messagesRead', { conversationId: data.conversationId, readBy: auth.userId, bySupport: auth.role === 'syncropos' });
       this.emitUnread(conversation.businessId);

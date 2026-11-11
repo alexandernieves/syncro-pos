@@ -1,5 +1,6 @@
 "use client";
 
+import { MessageTicks, withDelivered } from "@/components/chat/message-ticks";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   IconBuilding,
@@ -52,6 +53,7 @@ type Msg = {
   type: string;
   fileUrl?: string | null;
   isRead?: boolean;
+  deliveredAt?: string | null;
   createdAt: string;
   sender?: { id: string; name: string | null; role: string } | null;
   meta?: Record<string, unknown> | null;
@@ -177,6 +179,10 @@ export default function SyncroAdminChatPage() {
       if (!bySupport && activeRef.current?.id === conversationId) setMessages((prev) => prev.map((m) => (m.sender?.role === "syncropos" ? { ...m, isRead: true } : m)));
     });
     socket.on("conversationUpdated", () => fetchConversations());
+    // Gray double check: the business got it (Syncro open or the notification arrived)
+    socket.on("messagesDelivered", ({ conversationId, ids, at }: { conversationId: string; ids: string[]; at: string }) => {
+      if (activeRef.current?.id === conversationId) setMessages((prev) => withDelivered(prev, ids, at));
+    });
     // Who is connected now (and whenever someone signs in or closes Syncro)
     const askOnline = () => socket.emit("onlineBusinesses", (r: { businessIds?: string[] }) => setOnline(new Set(r?.businessIds ?? [])));
     socket.on("connect", askOnline);
@@ -434,7 +440,7 @@ export default function SyncroAdminChatPage() {
                           {m.type !== "AUDIO" && m.type !== "audio" && (
                             <div className={cn("mt-1 flex items-center gap-1 text-[10px]", isMe ? "justify-end text-muted-foreground" : "text-muted-foreground")}>
                               {new Date(m.createdAt).toLocaleTimeString("es-VE", { hour: "numeric", minute: "2-digit" })}
-                              {isMe && (m.isRead ? <IconChecks size={12} className="text-sky-500" /> : <IconCheck size={12} />)}
+                              {isMe && <MessageTicks read={m.isRead} delivered={m.deliveredAt} />}
                             </div>
                           )}
                         </div>

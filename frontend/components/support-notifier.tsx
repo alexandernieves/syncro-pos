@@ -29,7 +29,7 @@ export function useSupportUnread() {
   );
 }
 
-type Notice = { conversationId: string; businessId: string | null; businessName: string | null; text: string; requestId: string | null; fromSupport: boolean };
+type Notice = { conversationId: string; businessId: string | null; businessName: string | null; text: string; messageId?: string; requestId: string | null; fromSupport: boolean };
 
 function session() {
   try {
@@ -96,6 +96,8 @@ export function SupportNotifier() {
     socket.on("connect", refresh);
     socket.on("unreadChanged", refresh);
     socket.on("supportMessage", async (n: Notice) => {
+      // It reached this screen: the sender sees the gray double check
+      if (n.messageId) socket.emit("delivered", { messageId: n.messageId });
       refresh();
       const onChat = pathRef.current?.replace(/\/+$/, "") === chatPath;
       const widgetOpen = !!(window as unknown as Record<string, boolean>).__syncroChatWidgetOpen;
