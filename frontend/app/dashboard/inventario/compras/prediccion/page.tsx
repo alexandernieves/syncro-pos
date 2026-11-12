@@ -152,12 +152,12 @@ export default function PredictivePurchasesPage() {
           <Skeleton className="h-96 w-full rounded-2xl" />
         </div>
       ) : predictions.length === 0 ? (
-        <Card className="border-[#79716b]/20 bg-zinc-950/40 backdrop-blur-md p-8 text-center flex flex-col items-center justify-center gap-4">
+        <Card className="border-border p-8 text-center flex flex-col items-center justify-center gap-4">
           <div className="size-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
             <IconPackage size={24} />
           </div>
           <div>
-            <CardTitle className="text-lg font-bold text-white">¡Inventario perfectamente abastecido!</CardTitle>
+            <CardTitle className="text-lg font-bold text-foreground">¡Inventario perfectamente abastecido!</CardTitle>
             <CardDescription className="text-sm max-w-md mx-auto mt-1">
               La IA no detecta ningún producto con stock crítico o velocidad de venta insatisfecha para los próximos 14 días. ¡Excelente gestión de inventario!
             </CardDescription>
@@ -175,7 +175,7 @@ export default function PredictivePurchasesPage() {
             <Card className="bg-gradient-to-t from-violet-600/5 to-card border-violet-500/10 shadow-lg backdrop-blur-xs">
               <CardHeader className="pb-2">
                 <CardDescription className="text-[10px] font-black text-violet-400 opacity-80">Presupuesto estimado</CardDescription>
-                <CardTitle className="text-2xl font-black text-white tabular-nums mt-1">
+                <CardTitle className="text-2xl font-black text-foreground tabular-nums mt-1">
                   {formatPrice(kpis.totalInvestment)}
                 </CardTitle>
               </CardHeader>
@@ -187,7 +187,7 @@ export default function PredictivePurchasesPage() {
             <Card className="bg-gradient-to-t from-indigo-600/5 to-card border-indigo-500/10 shadow-lg backdrop-blur-xs">
               <CardHeader className="pb-2">
                 <CardDescription className="text-[10px] font-black text-indigo-400 opacity-80">Volumen sugerido</CardDescription>
-                <CardTitle className="text-2xl font-black text-white tabular-nums mt-1">
+                <CardTitle className="text-2xl font-black text-foreground tabular-nums mt-1">
                   {kpis.totalItems} unidades
                 </CardTitle>
               </CardHeader>
@@ -199,7 +199,7 @@ export default function PredictivePurchasesPage() {
             <Card className="bg-gradient-to-t from-amber-600/5 to-card border-amber-500/10 shadow-lg backdrop-blur-xs">
               <CardHeader className="pb-2">
                 <CardDescription className="text-[10px] font-black text-amber-400 opacity-80">Proveedores involucrados</CardDescription>
-                <CardTitle className="text-2xl font-black text-white tabular-nums mt-1">
+                <CardTitle className="text-2xl font-black text-foreground tabular-nums mt-1">
                   {kpis.suppliersCount} proveedores
                 </CardTitle>
               </CardHeader>
@@ -225,16 +225,16 @@ export default function PredictivePurchasesPage() {
             {predictions.map((group) => {
               const isSupplierValid = group.supplierId !== 'no-supplier';
               return (
-                <Card key={group.supplierId} className="border-[#79716b]/20 bg-zinc-950/30 backdrop-blur-sm shadow-xl overflow-hidden">
+                <Card key={group.supplierId} className="border-border shadow-sm overflow-hidden">
                   
                   {/* Card Header for Supplier Group */}
-                  <div className="p-4 border-b border-[#79716b]/10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-zinc-950/40">
+                  <div className="p-4 border-b border-border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="flex items-center gap-3">
                       <div className="size-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/10">
                         <IconBuildingStore size={16} />
                       </div>
                       <div>
-                        <h3 className="text-sm font-extrabold text-white tracking-tight">{group.supplierName}</h3>
+                        <h3 className="text-sm font-extrabold text-foreground tracking-tight">{group.supplierName}</h3>
                         <p className="text-[10px] text-muted-foreground font-bold">
                           {group.items.length} {group.items.length === 1 ? 'Producto sugerido' : 'Productos sugeridos'}
                         </p>
@@ -244,7 +244,7 @@ export default function PredictivePurchasesPage() {
                     <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
                       <div className="text-right">
                         <span className="text-[10px] text-muted-foreground font-black block leading-none">Costo total sugerido</span>
-                        <span className="text-sm font-black text-white tabular-nums mt-0.5 block">{formatPrice(group.totalCost)}</span>
+                        <span className="text-sm font-black text-foreground tabular-nums mt-0.5 block">{formatPrice(group.totalCost)}</span>
                       </div>
                       
                       {isSupplierValid ? (
@@ -274,25 +274,25 @@ export default function PredictivePurchasesPage() {
                   {/* Suggested Items Table */}
                   <div className="overflow-x-auto">
                     <Table>
-                      <TableHeader className="bg-zinc-950/20 border-b border-[#79716b]/10">
-                        <TableRow className="border-[#79716b]/10 hover:bg-transparent">
-                          <TableHead className="text-[10px] font-black text-white h-10">Producto</TableHead>
-                          <TableHead className="text-[10px] font-black text-white h-10 text-center">SKU</TableHead>
-                          <TableHead className="text-[10px] font-black text-white h-10 text-center">Stock actual</TableHead>
-                          <TableHead className="text-[10px] font-black text-white h-10 text-center">Ritmo ventas (día)</TableHead>
-                          <TableHead className="text-[10px] font-black text-white h-10 text-center">Cobertura (días)</TableHead>
-                          <TableHead className="text-[10px] font-black text-white h-10 text-center bg-violet-600/5">Cantidad IA</TableHead>
-                          <TableHead className="text-[10px] font-black text-white h-10 text-right">Costo unit.</TableHead>
-                          <TableHead className="text-[10px] font-black text-white h-10 text-right">Inversión est.</TableHead>
+                      <TableHeader className="border-b border-border">
+                        <TableRow className="border-border hover:bg-transparent">
+                          <TableHead className="text-[10px] font-black text-foreground h-10">Producto</TableHead>
+                          <TableHead className="text-[10px] font-black text-foreground h-10 text-center">SKU</TableHead>
+                          <TableHead className="text-[10px] font-black text-foreground h-10 text-center">Stock actual</TableHead>
+                          <TableHead className="text-[10px] font-black text-foreground h-10 text-center">Ritmo ventas (día)</TableHead>
+                          <TableHead className="text-[10px] font-black text-foreground h-10 text-center">Cobertura (días)</TableHead>
+                          <TableHead className="text-[10px] font-black text-foreground h-10 text-center bg-violet-600/5">Cantidad IA</TableHead>
+                          <TableHead className="text-[10px] font-black text-foreground h-10 text-right">Costo unit.</TableHead>
+                          <TableHead className="text-[10px] font-black text-foreground h-10 text-right">Inversión est.</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {group.items.map((item: any) => (
-                          <TableRow key={item.variantId} className="border-[#79716b]/10 hover:bg-white/2 bg-transparent transition-colors">
+                          <TableRow key={item.variantId} className="border-border hover:bg-muted/40 bg-transparent transition-colors">
                             
                             {/* Product & Variant */}
                             <TableCell className="py-3">
-                              <p className="text-xs font-bold text-white leading-tight">{item.productName}</p>
+                              <p className="text-xs font-bold text-foreground leading-tight">{item.productName}</p>
                               <p className="text-[10px] text-muted-foreground font-semibold mt-0.5">{item.variantName}</p>
                             </TableCell>
 
@@ -301,7 +301,7 @@ export default function PredictivePurchasesPage() {
 
                             {/* Stock vs Min */}
                             <TableCell className="text-center">
-                              <span className={`text-xs font-bold ${item.currentStock <= item.minStock ? 'text-red-500 font-extrabold animate-pulse' : 'text-white'}`}>
+                              <span className={`text-xs font-bold ${item.currentStock <= item.minStock ? 'text-red-500 font-extrabold animate-pulse' : 'text-foreground'}`}>
                                 {item.currentStock}
                               </span>
                               <span className="text-[10px] text-muted-foreground font-semibold"> / {item.minStock} mín</span>
@@ -323,7 +323,7 @@ export default function PredictivePurchasesPage() {
                               {item.daysOfStockRemaining === 'N/A' ? (
                                 <span className="text-[10px] font-black text-muted-foreground">Estable</span>
                               ) : (
-                                <span className={`text-xs font-extrabold px-1.5 py-0.5 rounded-md ${item.daysOfStockRemaining <= 3 ? 'bg-red-500/10 text-red-500 border border-red-500/20' : item.daysOfStockRemaining <= 7 ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'text-white'}`}>
+                                <span className={`text-xs font-extrabold px-1.5 py-0.5 rounded-md ${item.daysOfStockRemaining <= 3 ? 'bg-red-500/10 text-red-500 border border-red-500/20' : item.daysOfStockRemaining <= 7 ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'text-foreground'}`}>
                                   {item.daysOfStockRemaining} días
                                 </span>
                               )}
@@ -340,7 +340,7 @@ export default function PredictivePurchasesPage() {
                             </TableCell>
 
                             {/* Total Cost */}
-                            <TableCell className="text-right font-extrabold text-xs tabular-nums text-white">
+                            <TableCell className="text-right font-extrabold text-xs tabular-nums text-foreground">
                               {formatPrice(item.totalCost)}
                             </TableCell>
                           </TableRow>

@@ -58,6 +58,7 @@ import {
 } from "@tanstack/react-table";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { z } from "zod";
 
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -131,7 +132,7 @@ function DragHandle({ id }: { id: string }) {
       {...listeners}
       variant="ghost"
       size="icon"
-      className="size-7 text-muted-foreground/50 hover:bg-white/5 hover:text-white transition-colors"
+      className="size-7 text-muted-foreground/50 hover:bg-muted hover:text-foreground transition-colors"
     >
       <IconGripVertical className="size-3" />
       <span className="sr-only">Drag to reorder</span>
@@ -149,7 +150,7 @@ function DraggableRow({ row }: { row: Row<OrderItem> }) {
       data-state={row.getIsSelected() && "selected"}
       data-dragging={isDragging}
       ref={setNodeRef}
-      className="relative z-0 data-[dragging=true]:z-10 data-[dragging=true]:opacity-80 bg-transparent border-b border-[#79716b]/30 hover:bg-[#79716b]/5 transition-colors group"
+      className="relative z-0 data-[dragging=true]:z-10 data-[dragging=true]:opacity-80 border-b hover:bg-muted/40 transition-colors group"
       style={{
         transform: CSS.Transform.toString(transform),
         transition: transition,
@@ -176,8 +177,11 @@ export default function NewPurchaseOrderPage() {
   const [items, setItems] = React.useState<OrderItem[]>([]);
   const [loading, setLoading] = React.useState(false);
   
-  // Modal State
+  // Catalog (large window)
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [catalogOpen, setCatalogOpen] = React.useState(false);
+  const [activeCard, setActiveCard] = React.useState(0);
+  const catalogRef = React.useRef<HTMLDivElement>(null);
 
   // Table State
   const [rowSelection, setRowSelection] = React.useState({});
@@ -230,6 +234,36 @@ export default function NewPurchaseOrderPage() {
     }]);
   };
 
+  /** Adds from the catalog; a product already in the order gets one more unit */
+  const addFromCatalog = (p: any) => {
+    const existing = items.find((i) => i.variantId === p.id);
+    if (existing) {
+      updateItem(p.id, "quantity", existing.quantity + 1);
+      toast.success(`${p.productName}: ${existing.quantity + 1} en la orden`);
+    } else {
+      addItem(p.id);
+      toast.success(`${p.productName} añadido`);
+    }
+  };
+
+  /** Arrows move through the cards (as many per row as fit), Enter adds the selected one */
+  const onCatalogKey = (e: React.KeyboardEvent) => {
+    const grid = catalogRef.current?.querySelector(".grid") as HTMLElement | null;
+    const cols = grid ? Math.max(1, getComputedStyle(grid).gridTemplateColumns.split(" ").filter(Boolean).length) : 1;
+    const last = filteredProducts.length - 1;
+    const move = (to: number) => {
+      e.preventDefault();
+      const next = Math.max(0, Math.min(last, to));
+      setActiveCard(next);
+      catalogRef.current?.querySelector(`[data-card="${next}"]`)?.scrollIntoView({ block: "nearest" });
+    };
+    if (e.key === "ArrowDown") move(activeCard + cols);
+    else if (e.key === "ArrowUp") move(activeCard - cols);
+    else if (e.key === "ArrowRight") move(activeCard + 1);
+    else if (e.key === "ArrowLeft") move(activeCard - 1);
+    else if (e.key === "Enter" && filteredProducts[activeCard]) { e.preventDefault(); addFromCatalog(filteredProducts[activeCard]); }
+  };
+
   const removeItem = (vId: string) => setItems(items.filter(i => i.variantId !== vId));
   const updateItem = (vId: string, field: keyof OrderItem, val: any) => 
     setItems(items.map(i => i.variantId === vId ? { ...i, [field]: val } : i));
@@ -252,7 +286,7 @@ export default function NewPurchaseOrderPage() {
       cell: ({ row }) => (
         <div className="flex flex-col">
           <span className="text-[13px] font-medium text-foreground leading-none mb-1">{row.original.productName}</span>
-          <span className="text-[10px] text-muted-foreground font-medium tracking-tight border border-[#79716b]/30 w-fit px-1.5 py-0.5 rounded bg-transparent">{row.original.variantName}</span>
+          <span className="text-[10px] text-muted-foreground font-medium tracking-tight border w-fit px-1.5 py-0.5 rounded">{row.original.variantName}</span>
         </div>
       ),
     },
@@ -334,73 +368,107 @@ export default function NewPurchaseOrderPage() {
   const { subtotal, tax, total } = calculateTotals();
 
   return (
-    <div className="flex flex-col gap-6 py-4 md:gap-8 md:py-6 max-w-7xl mx-auto px-4 lg:px-6 font-sans text-white">
+    <div className="flex flex-col gap-6 py-4 md:gap-8 md:py-6 max-w-7xl mx-auto px-4 lg:px-6 font-sans">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" onClick={() => router.back()} className="h-9 shadow-none border-[#79716b]/30 bg-card">
+          <Button variant="outline" size="sm" onClick={() => router.back()} className="h-9 shadow-none">
             <IconArrowLeft size={16} className="mr-2" /> Volver
           </Button>
           <div className="flex flex-col">
             <h1 className="text-2xl font-bold tracking-tight">Generar orden de compra</h1>
-            <Badge variant="outline" className="w-fit text-[9px] font-black border-[#79716b]/50 text-[#79716b] mt-1">Procura e inventario</Badge>
+            <Badge variant="outline" className="mt-1 w-fit text-[10px] font-semibold text-muted-foreground">Procura e inventario</Badge>
           </div>
         </div>
         
         <div className="flex items-center gap-2">
-          <Dialog>
+          <Dialog open={catalogOpen} onOpenChange={(o) => { setCatalogOpen(o); if (o) { setSearchQuery(""); setActiveCard(0); } }}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="h-9 gap-2 border-[#79716b]/30 bg-card text-white hover:bg-muted/50 transition-colors">
+              <Button variant="outline" size="sm" className="h-9 gap-2">
                 <IconPlus size={16} /> Añadir productos
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl bg-zinc-950 border-[#79716b]/30 text-white max-h-[80vh] flex flex-col p-0 overflow-hidden">
-              <DialogHeader className="p-6 pb-0">
-                <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                  <IconPackage className="text-[#79716b]" /> Catálogo de productos
+            <DialogContent className="flex h-[88vh] w-[95vw] max-w-6xl flex-col gap-0 overflow-hidden p-0 sm:max-w-6xl">
+              <DialogHeader className="border-b px-6 pb-4 pt-5 text-left">
+                <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+                  <IconPackage size={20} className="text-primary" /> Catálogo de productos
+                  {items.length > 0 && <Badge variant="secondary" className="ml-1 font-semibold">{items.length} en la orden</Badge>}
                 </DialogTitle>
-                <div className="relative mt-4">
-                  <IconSearch className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    placeholder="Filtrar por nombre, SKU o categoría..." 
-                    className="pl-10 h-10 bg-muted/20 border-[#79716b]/30 focus-visible:ring-1 focus-visible:ring-[#79716b]/50"
+                <div className="relative mt-3">
+                  <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    autoFocus
+                    placeholder="Buscar por nombre, presentación o SKU…"
+                    className="h-11 pl-10 text-base"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => { setSearchQuery(e.target.value); setActiveCard(0); }}
+                    onKeyDown={onCatalogKey}
+                    aria-label="Buscar productos"
                   />
                 </div>
+                <p className="mt-2 text-xs text-muted-foreground">Clic o Enter para añadir · ↑ ↓ ← → para moverte · Esc para cerrar</p>
               </DialogHeader>
-              <div className="flex-1 overflow-y-auto p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredProducts.map(p => (
-                    <div 
-                      key={p.id} 
-                      onClick={() => {
-                        addItem(p.id);
-                        toast.success(`${p.productName} añadido`);
-                      }}
-                      className="p-4 rounded-xl border border-[#79716b]/20 bg-muted/10 hover:bg-[#79716b]/10 hover:border-[#79716b]/40 cursor-pointer transition-all group"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="size-8 rounded-lg bg-muted flex items-center justify-center text-[#79716b]">
-                          <IconBuildingStore size={18} />
-                        </div>
-                        <Badge variant="outline" className="text-[9px] font-bold border-[#79716b]/30 text-[#79716b]">{p.sku || 'S/N'}</Badge>
-                      </div>
-                      <h3 className="text-sm font-bold leading-tight line-clamp-1">{p.productName}</h3>
-                      <p className="text-[11px] text-muted-foreground mt-1">{p.name}</p>
-                      <div className="mt-4 flex justify-between items-center px-1">
-                        <span className="text-xs font-black text-emerald-400">USD {p.cost?.toFixed(2) || '0.00'}</span>
-                        <div className="size-6 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <IconPlus size={14} />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {filteredProducts.length === 0 && (
-                    <div className="col-span-full py-12 text-center text-muted-foreground opacity-50 italic">
-                      No se encontraron productos que coincidan con la búsqueda.
-                    </div>
-                  )}
-                </div>
+              <div ref={catalogRef} className="flex-1 overflow-y-auto bg-muted/30 p-5">
+                {filteredProducts.length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-muted-foreground">
+                    <IconPackage size={28} className="opacity-50" />
+                    <p className="text-sm">No hay productos con «{searchQuery}».</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {filteredProducts.map((p, i) => {
+                      const inOrder = items.find((it) => it.variantId === p.id);
+                      const variant = p.name && !["Única", "Unica", "Principal", "Default"].includes(p.name) ? p.name : null;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          data-card={i}
+                          onClick={() => addFromCatalog(p)}
+                          onMouseEnter={() => setActiveCard(i)}
+                          className={cn(
+                            "group flex flex-col gap-3 rounded-xl border bg-card p-4 text-left shadow-xs transition-all outline-none",
+                            "hover:border-primary/50 hover:shadow-md",
+                            i === activeCard && "border-primary ring-2 ring-primary/30",
+                            inOrder && "border-emerald-500/50 bg-emerald-500/5",
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                              <IconPackage size={18} />
+                            </div>
+                            <span className="rounded-md border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{p.sku || "S/SKU"}</span>
+                          </div>
+                          <div className="min-h-[2.5rem]">
+                            <p className="line-clamp-2 text-sm font-semibold leading-snug">{p.productName}</p>
+                            {variant && <p className="mt-0.5 text-xs text-muted-foreground">{variant}</p>}
+                          </div>
+                          <div className="mt-auto flex items-end justify-between gap-2">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Costo</p>
+                              <p className="text-base font-bold tabular-nums">${Number(p.cost || 0).toFixed(2)}</p>
+                              <p className={cn("text-[11px]", Number(p.stock) <= Number(p.minStock || 0) ? "font-semibold text-destructive" : "text-muted-foreground")}>
+                                Stock: {Number(p.stock ?? 0)}
+                              </p>
+                            </div>
+                            {inOrder ? (
+                              <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                                <IconCheck size={13} /> {inOrder.quantity} en la orden
+                              </span>
+                            ) : (
+                              <span className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground opacity-80 transition-opacity group-hover:opacity-100">
+                                <IconPlus size={16} />
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t px-6 py-3">
+                <p className="text-sm text-muted-foreground">{items.length ? `${items.length} producto${items.length === 1 ? "" : "s"} en la orden` : "Aún no añades productos"}</p>
+                <Button onClick={() => setCatalogOpen(false)}>Listo</Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -413,35 +481,35 @@ export default function NewPurchaseOrderPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3 space-y-6">
-          <Card className="border-[#79716b]/20 shadow-sm bg-card/30 overflow-hidden">
-            <CardHeader className="bg-muted h-12 flex items-center justify-start py-0 border-b border-[#79716b]/30 px-4">
-              <CardTitle className="text-[11px] font-normal text-white flex items-center gap-2">
+          <Card className="overflow-hidden shadow-sm">
+            <CardHeader className="border-b">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                 <IconTruck size={14} className="opacity-70" /> Información del proveedor y destino
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6">
-              <div className="space-y-2 text-white">
-                <Label className="text-[10px] font-bold text-muted-foreground opacity-60">Socio comercial (proveedor)</Label>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-muted-foreground">Socio comercial (proveedor)</Label>
                 <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
-                  <SelectTrigger className="h-10 bg-muted/20 border-[#79716b]/30 shadow-none text-white">
-                    <SelectValue placeholder="Seleccione un proveedor" className="text-white"/>
+                  <SelectTrigger className="h-10 w-full shadow-none">
+                    <SelectValue placeholder="Seleccione un proveedor" />
                   </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-[#79716b]/30">
+                  <SelectContent>
                     {suppliers.map(s => (
-                      <SelectItem key={s.id} value={s.id} className="text-white">{s.name} ({s.taxId})</SelectItem>
+                      <SelectItem key={s.id} value={s.id} >{s.name} ({s.taxId})</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-bold text-muted-foreground opacity-60">Sucursal de recepción</Label>
+                <Label className="text-xs font-medium text-muted-foreground">Sucursal de recepción</Label>
                 <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
-                  <SelectTrigger className="h-10 bg-muted/20 border-[#79716b]/30 shadow-none text-white">
+                  <SelectTrigger className="h-10 w-full shadow-none">
                     <SelectValue placeholder="Sucursal de entrega" />
                   </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-[#79716b]/30">
+                  <SelectContent>
                     {branches.map(b => (
-                      <SelectItem key={b.id} value={b.id} className="text-white">{b.name}</SelectItem>
+                      <SelectItem key={b.id} value={b.id} >{b.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -452,20 +520,20 @@ export default function NewPurchaseOrderPage() {
           {/* ITEM TABLE (DASHBOARD UI REUSE) */}
           <Tabs defaultValue="items" className="w-full flex-col justify-start gap-6">
             <div className="flex items-center justify-between px-0">
-               <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex border-[#79716b]/30 bg-card/30">
-                  <TabsTrigger value="items" className="text-white">Items de la orden</TabsTrigger>
+               <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex">
+                  <TabsTrigger value="items">Items de la orden</TabsTrigger>
                </TabsList>
             </div>
 
             <TabsContent value="items" className="relative flex flex-col gap-4">
-               <div className="overflow-hidden rounded-lg border border-[#79716b]/30">
+               <div className="overflow-hidden rounded-lg border bg-card">
                   <DndContext collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis]} onDragEnd={handleDragEnd} sensors={sensors} id={sortableId}>
                     <Table>
-                      <TableHeader className="bg-muted sticky top-0 z-10">
+                      <TableHeader className="sticky top-0 z-10 bg-muted/60">
                         {table.getHeaderGroups().map((headerGroup) => (
                           <TableRow key={headerGroup.id} className="hover:bg-transparent border-none">
                             {headerGroup.headers.map((header) => (
-                              <TableHead key={header.id} className="text-white font-normal text-[10px] py-4">
+                              <TableHead key={header.id} className="py-3 text-xs font-medium text-muted-foreground">
                                 {flexRender(header.column.columnDef.header, header.getContext())}
                               </TableHead>
                             ))}
@@ -489,8 +557,8 @@ export default function NewPurchaseOrderPage() {
                <div className="flex items-center justify-between px-2">
                   <div className="text-muted-foreground text-[10px] font-medium">{items.length} item(s) cargados</div>
                   <div className="flex items-center gap-2">
-                     <Button variant="outline" size="sm" className="h-8 w-8 p-0 border-[#79716b]/20" disabled><IconChevronLeft size={14} /></Button>
-                     <Button variant="outline" size="sm" className="h-8 w-8 p-0 border-[#79716b]/20" disabled><IconChevronRight size={14} /></Button>
+                     <Button variant="outline" size="sm" className="h-8 w-8 p-0" disabled><IconChevronLeft size={14} /></Button>
+                     <Button variant="outline" size="sm" className="h-8 w-8 p-0" disabled><IconChevronRight size={14} /></Button>
                   </div>
                </div>
             </TabsContent>
@@ -498,28 +566,28 @@ export default function NewPurchaseOrderPage() {
         </div>
 
         <div className="space-y-6">
-          <Card className="border-[#79716b]/20 shadow-sm bg-card/50 overflow-hidden">
-            <CardHeader className="bg-muted h-12 flex items-center justify-start py-0 border-b border-[#79716b]/30 px-4">
-              <CardTitle className="text-[11px] font-normal text-white flex items-center gap-2"><IconFileText size={14} className="opacity-70" /> Resumen de inversión</CardTitle>
+          <Card className="overflow-hidden shadow-sm">
+            <CardHeader className="border-b">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold"><IconFileText size={14} className="opacity-70" /> Resumen de inversión</CardTitle>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
               <div className="flex justify-between items-center text-xs">
                  <span className="text-muted-foreground font-medium tracking-tight">Imponible</span>
-                 <span className="font-bold tabular-nums text-white">USD {subtotal.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                 <span className="font-bold tabular-nums">USD {subtotal.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                  <span className="text-muted-foreground font-medium tracking-tight">IVA (16%)</span>
-                 <span className="font-bold tabular-nums text-white">USD {tax.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                 <span className="font-bold tabular-nums">USD {tax.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
               </div>
-              <Separator className="bg-[#79716b]/30" />
+              <Separator />
               <div className="flex justify-between items-center py-1">
-                 <span className="text-sm font-black tracking-tighter text-white">Total orden</span>
-                 <span className="text-xl font-black tabular-nums text-emerald-400">USD {total.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                 <span className="text-sm font-bold">Total orden</span>
+                 <span className="text-xl font-black tabular-nums text-primary">USD {total.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="pt-4 space-y-2">
-                  <Label className="text-[10px] font-bold text-muted-foreground opacity-60">Observaciones</Label>
+                  <Label className="text-xs font-medium text-muted-foreground">Observaciones</Label>
                   <textarea 
-                    className="w-full bg-muted/10 border border-[#79716b]/30 rounded-lg p-3 text-xs text-white min-h-[90px] focus:outline-none focus:border-[#79716b]/80 transition-all resize-none"
+                    className="min-h-[90px] w-full resize-none rounded-lg border bg-background p-3 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20"
                     placeholder="Instrucciones para el proveedor..."
                     value={notes} onChange={(e) => setNotes(e.target.value)}
                   />

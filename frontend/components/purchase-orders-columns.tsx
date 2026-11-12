@@ -173,18 +173,18 @@ export const getPurchaseOrdersColumns = (actions: {
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-[#79716b]/10 hover:text-white">
+            <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-muted hover:text-foreground">
               <span className="sr-only">Abrir menú</span>
               <IconDotsVertical className="h-4 w-4" stroke={1.5} />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 bg-zinc-950 border-[#79716b]/30 text-white shadow-2xl">
-            <DropdownMenuItem onClick={() => router.push(`/dashboard/inventario/compras/detalle?id=${row.original.id}`)} className="cursor-pointer focus:bg-[#79716b]/20 focus:text-white">
+          <DropdownMenuContent align="end" className="w-56 border-border text-foreground shadow-sm">
+            <DropdownMenuItem onClick={() => router.push(`/dashboard/inventario/compras/detalle?id=${row.original.id}`)} className="cursor-pointer focus:bg-accent focus:text-accent-foreground">
               <IconExternalLink className="mr-2 h-4 w-4" />
               Ver detalles / tracking
             </DropdownMenuItem>
             
-            <DropdownMenuSeparator className="bg-[#79716b]/20" />
+            <DropdownMenuSeparator className="bg-border" />
 
             {(status === "SENT" || status === "DRAFT") && (
               <DropdownMenuItem onClick={() => actions.onReceive(row.original.id)} className="text-emerald-400 focus:text-emerald-400 focus:bg-emerald-500/10 cursor-pointer">
@@ -199,7 +199,7 @@ export const getPurchaseOrdersColumns = (actions: {
                   <IconTruck className="mr-2 h-4 w-4" />
                   Marcar como enviada
                 </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-[#79716b]/20" />
+                <DropdownMenuSeparator className="bg-border" />
                 <DropdownMenuItem className="text-rose-400 focus:text-rose-400 focus:bg-rose-500/10 cursor-pointer" onClick={() => actions.onDelete(row.original.id)}>
                   <IconBan className="mr-2 h-4 w-4" />
                   Anular orden
@@ -207,8 +207,8 @@ export const getPurchaseOrdersColumns = (actions: {
               </>
             )}
 
-            <DropdownMenuItem onClick={() => window.print()} className="group cursor-pointer focus:bg-[#79716b]/20 focus:text-white">
-              <IconFileText className="mr-2 h-4 w-4 text-muted-foreground group-hover:text-white" />
+            <DropdownMenuItem onClick={() => window.print()} className="group cursor-pointer focus:bg-accent focus:text-accent-foreground">
+              <IconFileText className="mr-2 h-4 w-4 text-muted-foreground group-hover:text-foreground" />
               Imprimir / PDF
             </DropdownMenuItem>
           </DropdownMenuContent>

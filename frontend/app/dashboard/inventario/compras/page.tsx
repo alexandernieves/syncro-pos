@@ -308,7 +308,7 @@ export default function PurchaseOrdersPage() {
         )}
       </div>
       <Dialog open={!!selectedOrderForReception} onOpenChange={(open) => !open && setSelectedOrderForReception(null)}>
-        <DialogContent className="max-w-2xl bg-zinc-950 border-[#79716b]/30 text-white shadow-2xl">
+        <DialogContent className="max-w-2xl border-border text-foreground shadow-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl font-bold">
               <IconBox size={20} className="text-emerald-500" /> Confirmar recepción
@@ -316,31 +316,31 @@ export default function PurchaseOrdersPage() {
             <div className="flex items-center gap-4 mt-2 p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/10 mb-4">
                <div>
                   <p className="text-[10px] font-black text-muted-foreground">Orden de compra</p>
-                  <p className="text-sm font-bold text-white">{selectedOrderForReception?.number}</p>
+                  <p className="text-sm font-bold text-foreground">{selectedOrderForReception?.number}</p>
                </div>
-               <div className="h-6 w-px bg-[#79716b]/30" />
+               <div className="h-6 w-px bg-border" />
                <div>
                   <p className="text-[10px] font-black text-muted-foreground">Sucursal destino</p>
-                  <p className="text-sm font-bold text-white">{selectedOrderForReception?.branch?.name}</p>
+                  <p className="text-sm font-bold text-foreground">{selectedOrderForReception?.branch?.name}</p>
                </div>
             </div>
           </DialogHeader>
           
           <div className="space-y-4">
-            <div className="max-h-[300px] overflow-y-auto rounded-lg border border-[#79716b]/20">
+            <div className="max-h-[300px] overflow-y-auto rounded-lg border border-border">
               <Table>
                 <TableHeader className="bg-muted sticky top-0 z-10">
-                  <TableRow className="border-[#79716b]/20">
-                    <TableHead className="text-[10px] font-bold text-white h-10">Producto</TableHead>
-                    <TableHead className="text-[10px] font-bold text-white h-10 text-center">Cantidad</TableHead>
-                    <TableHead className="text-[10px] font-bold text-white h-10 text-right">Costo</TableHead>
+                  <TableRow className="border-border">
+                    <TableHead className="text-[10px] font-bold text-foreground h-10">Producto</TableHead>
+                    <TableHead className="text-[10px] font-bold text-foreground h-10 text-center">Cantidad</TableHead>
+                    <TableHead className="text-[10px] font-bold text-foreground h-10 text-right">Costo</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {selectedOrderForReception?.items?.map((item: any) => (
-                    <TableRow key={item.id} className="border-[#79716b]/10 bg-transparent">
+                    <TableRow key={item.id} className="border-border bg-transparent">
                       <TableCell className="py-2.5">
-                        <p className="text-xs font-bold text-white">{item.variant.product.name}</p>
+                        <p className="text-xs font-bold text-foreground">{item.variant.product.name}</p>
                         <p className="text-[10px] text-muted-foreground font-medium">{item.variant.name}</p>
                       </TableCell>
                       <TableCell className="text-center font-black text-sm text-foreground">{item.quantity}</TableCell>
