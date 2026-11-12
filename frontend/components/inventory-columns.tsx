@@ -137,7 +137,7 @@ export const inventoryColumns: ColumnDef<z.infer<typeof inventorySchema>>[] = [
       const isLow = row.original.status === "Stock Bajo";
       
       return (
-        <Badge variant="outline" className={`px-1.5 font-light tracking-tight ${isOk ? 'border-muted-foreground/30 text-muted-foreground' : isLow ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : 'bg-rose-500/10 text-rose-600 border-rose-500/20'}`}>
+        <Badge variant="outline" className={`px-1.5 font-medium tracking-tight ${isOk ? 'border-muted-foreground/30 text-muted-foreground' : isLow ? 'bg-amber-500/10 text-amber-700 border-amber-500/20' : 'bg-rose-500/10 text-rose-700 border-rose-500/20'}`}>
           {isOk ? (
             <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400 mr-1" size={14} />
           ) : isLow ? (

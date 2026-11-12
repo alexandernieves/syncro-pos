@@ -3,7 +3,7 @@
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { IconAlertTriangle, IconShoppingCart, IconArrowsExchange, IconChevronRight } from "@tabler/icons-react"
+import { IconAlertTriangle, IconShoppingCart, IconArrowsExchange, IconChevronRight, IconX } from "@tabler/icons-react"
 import { useRouter } from "next/navigation"
 
 export interface AlertData {
@@ -21,7 +21,7 @@ export const alertsColumns: ColumnDef<AlertData>[] = [
     header: "Producto",
     cell: ({ row }) => (
       <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-lg ${row.original.status === 'Sin Stock' ? 'bg-rose-500/10 text-rose-600' : 'bg-amber-500/10 text-amber-600'}`}>
+        <div className={`p-2 rounded-lg ${row.original.status === 'Sin Stock' ? 'bg-rose-500/10 text-rose-700' : 'bg-amber-500/10 text-amber-700'}`}>
           <IconAlertTriangle size={18} />
         </div>
         <div className="flex flex-col">
@@ -35,9 +35,15 @@ export const alertsColumns: ColumnDef<AlertData>[] = [
     accessorKey: "status",
     header: "Estado",
     cell: ({ row }) => (
-      <Badge variant={row.original.status === 'Sin Stock' ? 'destructive' : 'secondary'} className="font-bold border-none">
-        {row.original.status.toUpperCase()}
-      </Badge>
+      row.original.status === 'Sin Stock' ? (
+        <Badge variant="outline" className="gap-1 border-rose-500/25 bg-rose-500/10 px-2 font-semibold text-rose-700">
+          <IconX size={13} /> Sin stock
+        </Badge>
+      ) : (
+        <Badge variant="outline" className="gap-1 border-amber-500/30 bg-amber-500/10 px-2 font-semibold text-amber-700">
+          <IconAlertTriangle size={13} /> Stock bajo
+        </Badge>
+      )
     ),
   },
   {

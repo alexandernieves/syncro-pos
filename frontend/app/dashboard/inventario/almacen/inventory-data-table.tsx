@@ -199,7 +199,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
         const isLow = row.original.status === "Stock Bajo";
         
         return (
-            <Badge variant="outline" className={`px-1.5 font-bold tracking-tight border-none ${isOk ? 'bg-emerald-500/10 text-emerald-600' : isLow ? 'bg-amber-500/10 text-amber-600' : 'bg-rose-500/10 text-rose-600'}`}>
+            <Badge variant="outline" className={`px-1.5 font-bold tracking-tight border-none ${isOk ? 'bg-emerald-500/10 text-emerald-600' : isLow ? 'bg-amber-500/10 text-amber-700' : 'bg-rose-500/10 text-rose-700'}`}>
                 {isOk ? (
                 <IconCircleCheckFilled size={14} className="mr-1 shadow-sm" />
                 ) : isLow ? (
