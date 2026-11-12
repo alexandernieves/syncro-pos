@@ -13,6 +13,7 @@ import {
 } from "@tabler/icons-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { fmtQty, unitInfo } from "@/lib/purchase-units";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -59,7 +60,8 @@ function PurchaseOrderDetailContent() {
 
   const statusConfig: any = {
     DRAFT: { label: "Borrador", color: "bg-slate-500/10 text-slate-600", icon: <IconClock size={16} /> },
-    SENT: { label: "Enviada", color: "bg-blue-500/10 text-blue-600", icon: <IconTruck size={16} /> },
+    SENT: { label: "Enviada", color: "bg-blue-500/10 text-blue-700", icon: <IconTruck size={16} /> },
+    PARTIAL: { label: "Recibida parcial", color: "bg-amber-500/10 text-amber-700", icon: <IconClock size={16} /> },
     RECEIVED: { label: "Recibida", color: "bg-emerald-500/10 text-emerald-600", icon: <IconCircleCheckFilled size={16} /> },
     CANCELLED: { label: "Anulada", color: "bg-rose-500/10 text-rose-600", icon: <IconAlertTriangle size={16} /> },
   };
@@ -77,6 +79,17 @@ function PurchaseOrderDetailContent() {
   if (!order) return null;
 
   const currentStatus = statusConfig[order.status] || statusConfig.DRAFT;
+  const isOpen = ["DRAFT", "SENT", "PARTIAL"].includes(order.status);
+  const pendingOf = (it: any) => Math.max(0, it.quantity - (it.receivedQuantity ?? 0));
+  const pendingItems = order.items.filter((it: any) => pendingOf(it) > 0);
+
+  /** The supplier won't send the rest: close the order as it is */
+  const closePending = async () => {
+    if (!window.confirm("¿Cerrar la orden? Lo pendiente queda registrado como no recibido y la orden pasa a Recibida.")) return;
+    const res = await fetch(`${API}/purchase-orders/${order.id}/close-pending`, { method: "POST", headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+    if (res.ok) { toast.success("Orden cerrada con faltante"); fetchOrder(order.id); }
+    else toast.error((await res.json().catch(() => null))?.message || "No se pudo cerrar la orden");
+  };
 
   return (
     <div className="flex flex-col gap-6 py-4 md:gap-8 md:py-6 max-w-7xl mx-auto px-4 lg:px-6 font-sans">
@@ -102,6 +115,16 @@ function PurchaseOrderDetailContent() {
           <Button variant="outline" size="sm" onClick={() => window.print()} className="h-10 gap-2 border-border bg-card hover:bg-muted transition-colors font-bold text-xs px-5">
             <IconPrinter size={16} /> Imprimir / PDF
           </Button>
+          {order.status === "PARTIAL" && (
+            <Button variant="outline" size="sm" onClick={() => void closePending()} className="h-10 gap-2 px-4 text-xs font-bold">
+              Cerrar con faltante
+            </Button>
+          )}
+          {isOpen && (
+            <Button size="sm" onClick={() => router.push(`/dashboard/inventario/ingreso?oc=${order.id}`)} className="h-10 gap-2 px-5 text-xs font-bold">
+              <IconCircleCheckFilled size={16} /> {order.status === "PARTIAL" ? "Recibir lo pendiente" : "Recibir mercancía"}
+            </Button>
+          )}
           {order.status === 'RECEIVED' && (
              <Button variant="outline" size="sm" className="h-10 gap-2 border-emerald-500/30 bg-emerald-500/5 text-emerald-500 hover:bg-emerald-500/10 transition-colors font-bold text-xs px-5">
                 <IconDownload size={16} /> Ticket de recepción
@@ -124,8 +147,10 @@ function PurchaseOrderDetailContent() {
                 <TableHeader className="bg-muted/50 border-b border-border">
                   <TableRow className="hover:bg-transparent border-none">
                     <TableHead className="text-foreground font-bold text-[10px] h-12 px-6">Producto / especificación</TableHead>
-                    <TableHead className="text-foreground font-bold text-[10px] h-12 text-center">Cant.</TableHead>
-                    <TableHead className="text-foreground font-bold text-[10px] h-12 text-right">Costo unit.</TableHead>
+                    <TableHead className="text-foreground font-bold text-[10px] h-12 text-center">Pedido</TableHead>
+                    <TableHead className="text-foreground font-bold text-[10px] h-12 text-center">Recibido</TableHead>
+                    <TableHead className="text-foreground font-bold text-[10px] h-12 text-center">Pendiente</TableHead>
+                    <TableHead className="text-foreground font-bold text-[10px] h-12 text-right">Costo</TableHead>
                     <TableHead className="text-foreground font-bold text-[10px] h-12 text-right px-6">Subtotal</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -138,8 +163,20 @@ function PurchaseOrderDetailContent() {
                           <span className="text-[10px] text-muted-foreground font-black tracking-tight mt-1">{item.variant.name}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-center font-black tabular-nums text-sm">{item.quantity}</TableCell>
-                      <TableCell className="text-right tabular-nums text-sm text-muted-foreground">USD {item.cost.toFixed(2)}</TableCell>
+                      <TableCell className="text-center tabular-nums text-sm">
+                        <span className="font-black">{fmtQty(item.quantity)}</span> <span className="text-xs text-muted-foreground">{unitInfo(item.unit).short}</span>
+                        {item.unit !== "UNIDAD" && item.unitFactor > 1 && <span className="block text-[10px] text-muted-foreground">de {fmtQty(item.unitFactor)} unid. = {fmtQty(item.quantity * item.unitFactor)}</span>}
+                      </TableCell>
+                      <TableCell className="text-center tabular-nums text-sm font-semibold">{fmtQty(item.receivedQuantity ?? 0)}</TableCell>
+                      <TableCell className="text-center tabular-nums text-sm">
+                        {pendingOf(item) > 0
+                          ? <span className={order.status === "RECEIVED" ? "font-semibold text-muted-foreground line-through" : "font-bold text-amber-700"}>{fmtQty(pendingOf(item))}</span>
+                          : <span className="text-emerald-700">—</span>}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
+                        USD {item.cost.toFixed(2)}
+                        {item.unit !== "UNIDAD" && <span className="block text-[10px]">por {unitInfo(item.unit).short.replace(/s$/, "")}</span>}
+                      </TableCell>
                       <TableCell className="text-right px-6 font-bold tabular-nums text-sm text-foreground">
                         USD {(item.quantity * item.cost).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
                       </TableCell>
@@ -211,26 +248,32 @@ function PurchaseOrderDetailContent() {
               <div className="space-y-6">
                 <div className="flex gap-4 relative">
                   <div className="absolute left-[9px] top-6 bottom-0 w-px bg-border border-dashed" />
-                  <div className={`size-5 rounded-full z-10 shrink-0 flex items-center justify-center ${order.status === 'RECEIVED' ? 'bg-emerald-500' : 'bg-border'}`}>
+                  <div className={`size-5 rounded-full z-10 shrink-0 flex items-center justify-center ${order.status === 'RECEIVED' ? 'bg-emerald-500' : order.status === 'PARTIAL' ? 'bg-amber-500' : 'bg-border'}`}>
                     <IconCircleCheckFilled size={12} className="text-white" />
                   </div>
                   <div className="flex flex-col">
-                    <span className={`text-xs font-black  tracking-tight ${order.status === 'RECEIVED' ? 'text-foreground' : 'text-muted-foreground'}`}>Mercancía recibida</span>
-                    <span className="text-[10px] text-muted-foreground mt-0.5">{order.status === 'RECEIVED' ? 'Verificado en sistema' : 'Pendiente por recepcionar'}</span>
+                    <span className={`text-xs font-black  tracking-tight ${order.status === 'RECEIVED' || order.status === 'PARTIAL' ? 'text-foreground' : 'text-muted-foreground'}`}>{order.status === 'PARTIAL' ? 'Mercancía recibida en parte' : 'Mercancía recibida'}</span>
+                    <span className={`text-[10px] mt-0.5 ${order.status === 'PARTIAL' ? 'font-semibold text-amber-700' : 'text-muted-foreground'}`}>
+                      {order.status === 'PARTIAL'
+                        ? `Falta${pendingItems.length === 1 ? '' : 'n'}: ${pendingItems.map((it: any) => `${fmtQty(pendingOf(it))} ${unitInfo(it.unit).short} de ${it.variant.product.name}`).join(', ')}`
+                        : order.status === 'RECEIVED'
+                          ? (pendingItems.length ? 'Cerrada con faltante' : 'Verificado en sistema')
+                          : 'Pendiente por recepcionar'}
+                    </span>
                   </div>
                 </div>
                 <div className="flex gap-4 relative">
                   <div className="absolute left-[9px] top-6 bottom-0 w-px bg-border border-dashed" />
-                  <div className={`size-5 rounded-full z-10 shrink-0 flex items-center justify-center ${order.status === 'SENT' || order.status === 'RECEIVED' ? 'bg-blue-500' : 'bg-border'}`}>
+                  <div className={`size-5 rounded-full z-10 shrink-0 flex items-center justify-center ${['SENT', 'PARTIAL', 'RECEIVED'].includes(order.status) ? 'bg-blue-500' : 'bg-border'}`}>
                     <IconTruck size={12} className="text-white" />
                   </div>
                   <div className="flex flex-col">
-                    <span className={`text-xs font-black  tracking-tight ${order.status === 'SENT' || order.status === 'RECEIVED' ? 'text-foreground' : 'text-muted-foreground'}`}>Orden despachada</span>
+                    <span className={`text-xs font-black  tracking-tight ${['SENT', 'PARTIAL', 'RECEIVED'].includes(order.status) ? 'text-foreground' : 'text-muted-foreground'}`}>Orden despachada</span>
                     <span className="text-[10px] text-muted-foreground mt-0.5">Esperando llegada a {order.branch?.name}</span>
                   </div>
                 </div>
                 <div className="flex gap-4 relative">
-                  <div className="size-5 rounded-full z-10 shrink-0 flex items-center justify-center bg-white">
+                  <div className="size-5 rounded-full z-10 shrink-0 flex items-center justify-center bg-primary">
                     <IconFileText size={12} className="text-white" />
                   </div>
                   <div className="flex flex-col">

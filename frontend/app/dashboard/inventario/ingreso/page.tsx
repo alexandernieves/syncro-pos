@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { IconArrowRight, IconBarcode, IconLoader2, IconMinus, IconPackageImport, IconPlus, IconTrash, IconTruckDelivery } from "@tabler/icons-react";
+import { IconAlertTriangle, IconArrowRight, IconBarcode, IconCircleCheck, IconFileInvoice, IconLoader2, IconMinus, IconPackageImport, IconPlus, IconTrash, IconTruckDelivery, IconX } from "@tabler/icons-react";
+import { fmtQty, unitInfo } from "@/lib/purchase-units";
 import { API_URL } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,10 @@ import { cn } from "@/lib/utils";
 
 type Variant = { id: string; name: string; price: number; stock: number; sku: string; barcode?: string; secondaryBarcodes?: string[] };
 type Product = { id: string; name: string; isWeighable?: boolean; variants: Variant[]; category?: { name: string } };
-type Line = { variantId: string; label: string; stock: number; quantity: string };
+/** A line of the purchase order being received: quantities are in the ordered unit (cajas…) */
+type OcLine = { itemId: string; ordered: number; received: number; unit: string; unitFactor: number };
+type Line = { variantId: string; label: string; stock: number; quantity: string; oc?: OcLine };
+type Order = { id: string; number: string | null; status: string; branchId: string; createdAt: string; supplier: { name: string }; items: any[] };
 
 const plain = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const sameCode = (a?: string, b?: string) => {
@@ -29,10 +33,13 @@ const looksLikeCode = (s: string) => /^[0-9A-Za-z-]{6,}$/.test(s) && /\d{4,}/.te
 const labelOf = (p: Product, v: Variant) => p.name + (v.name && !["Principal", "Única", "Unica", "Default"].includes(v.name) ? ` · ${v.name}` : "");
 
 /**
- * Merchandise that arrives without a purchase order: scan each box (or type its name), set how
- * many came, confirm. A box with a barcode the shop doesn't know is linked to the product it
- * already has, so the scanner works at the till too. Purchase orders stay for when the supplier,
- * the cost and what is owed should be recorded.
+ * Merchandise that arrives: scan each box (or type its name), set how many came, confirm. A box
+ * with a barcode the shop doesn't know is linked to the product it already has.
+ *
+ * With a purchase order: choose it (or come from Compras → Recibir mercancía) and each product
+ * shows what was ordered and what arrives, prefilled with what's pending. Confirming receives the
+ * order (completely or in part: what didn't come stays pending in the order) and moves the stock
+ * and the kardex in one go. Products scanned that aren't in the order go in as a plain entry.
  */
 export default function IngresoPage() {
   const router = useRouter();
@@ -47,17 +54,27 @@ export default function IngresoPage() {
   const [flash, setFlash] = useState<string | null>(null);
   const [linkCode, setLinkCode] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  /** Pending purchase orders of the branch, and the one being received */
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [orderId, setOrderId] = useState<string>("");
+  const order = orders.find((o) => o.id === orderId) ?? null;
+  const qtyRefs = useRef(new Map<string, HTMLInputElement>());
 
   const headers = () => ({ Authorization: `Bearer ${localStorage.getItem("token") || ""}`, "Content-Type": "application/json" });
 
   const load = async (branch: string) => {
     try {
-      const [pRes, bRes] = await Promise.all([
+      const [pRes, bRes, oRes] = await Promise.all([
         fetch(`${API_URL}/products${branch ? `?branchId=${branch}` : ""}`, { headers: headers() }),
         fetch(`${API_URL}/branches`, { headers: headers() }),
+        fetch(`${API_URL}/purchase-orders`, { headers: headers() }),
       ]);
       if (pRes.ok) setProducts(await pRes.json());
       if (bRes.ok) setBranches(await bRes.json());
+      if (oRes.ok) {
+        const all: Order[] = await oRes.json();
+        setOrders(all.filter((o) => ["DRAFT", "SENT", "PARTIAL"].includes(o.status)));
+      }
     } catch {
       toast.error("No se pudieron cargar los productos");
     } finally {
@@ -70,6 +87,38 @@ export default function IngresoPage() {
     setBranchId(b);
     void load(b);
   }, []);
+
+  // From Compras → "Recibir mercancía": that order comes chosen
+  const fromUrl = useRef(false);
+  useEffect(() => {
+    if (fromUrl.current || !orders.length) return;
+    fromUrl.current = true;
+    const id = new URLSearchParams(window.location.search).get("oc");
+    if (id && orders.some((o) => o.id === id)) chooseOrder(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders]);
+
+  /** Loads the order's products, each prefilled with what is still pending */
+  const chooseOrder = (id: string) => {
+    const o = orders.find((x) => x.id === id);
+    setOrderId(o ? o.id : "");
+    if (!o) { setLines((prev) => prev.filter((l) => !l.oc)); return; }
+    if (o.branchId) setBranchId(o.branchId);
+    const ocLines: Line[] = o.items.map((it: any) => {
+      const pending = Math.max(0, it.quantity - (it.receivedQuantity ?? 0));
+      const p = it.variant?.product;
+      return {
+        variantId: it.variantId,
+        label: (p?.name ?? "Producto") + (it.variant?.name && !["Principal", "Única", "Unica", "Default"].includes(it.variant.name) ? ` · ${it.variant.name}` : ""),
+        stock: Number(it.variant?.stock ?? 0),
+        quantity: String(pending),
+        oc: { itemId: it.id, ordered: it.quantity, received: it.receivedQuantity ?? 0, unit: it.unit ?? "UNIDAD", unitFactor: it.unitFactor ?? 1 },
+      };
+    }).filter((l: Line) => l.oc!.ordered - l.oc!.received > 0);
+    setLines(ocLines);
+    toast.success(`${o.number ?? "Orden"} cargada`, { description: "Cambia solo lo que llegó distinto a lo pedido." });
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
   useEffect(() => {
     if (!branchId && branches.length) setBranchId(branches[0].id);
   }, [branches, branchId]);
@@ -86,6 +135,17 @@ export default function IngresoPage() {
   useEffect(() => setActive(0), [entry]);
 
   const add = (p: Product, v: Variant, n = 1) => {
+    // A product of the order being received: go to its line to type how many came
+    const inOrder = lines.find((l) => l.oc && l.variantId === v.id);
+    if (inOrder) {
+      setFlash(v.id);
+      setTimeout(() => setFlash((f) => (f === v.id ? null : f)), 900);
+      setEntry("");
+      const el = qtyRefs.current.get(v.id);
+      el?.focus();
+      el?.select();
+      return;
+    }
     setLines((prev) => {
       const i = prev.findIndex((l) => l.variantId === v.id);
       if (i >= 0) {
@@ -132,19 +192,39 @@ export default function IngresoPage() {
   const setQty = (id: string, q: string) => setLines((prev) => prev.map((l) => (l.variantId === id ? { ...l, quantity: q } : l)));
   const bump = (id: string, d: number) => setLines((prev) => prev.map((l) => (l.variantId === id ? { ...l, quantity: String(Math.max(0, (parseFloat(l.quantity) || 0) + d)) } : l)));
 
-  const totals = useMemo(() => ({ products: lines.length, units: lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0) }), [lines]);
+  /** Stock units a line adds (boxes × units per box) */
+  const unitsOf = (l: Line) => (parseFloat(l.quantity) || 0) * (l.oc?.unitFactor ?? 1);
+  const totals = useMemo(() => ({ products: lines.length, units: lines.reduce((s, l) => s + unitsOf(l), 0) }), [lines]);
+  const shortLines = lines.filter((l) => l.oc && (parseFloat(l.quantity) || 0) < l.oc.ordered - l.oc.received);
 
   const confirm = async () => {
-    const items = lines.map((l) => ({ variantId: l.variantId, quantity: parseFloat(l.quantity) })).filter((i) => i.quantity > 0);
-    if (!items.length) return toast.warning("Agrega al menos un producto con cantidad");
+    const extra = lines.filter((l) => !l.oc).map((l) => ({ variantId: l.variantId, quantity: parseFloat(l.quantity) })).filter((i) => i.quantity > 0);
+    const ocLines = lines.filter((l) => l.oc).map((l) => ({ itemId: l.oc!.itemId, quantity: Math.max(0, parseFloat(l.quantity) || 0) }));
+    const ocArrives = ocLines.some((l) => l.quantity > 0);
+    if (!extra.length && !ocArrives) return toast.warning("Agrega al menos un producto con cantidad");
     if (!branchId) return toast.warning("Elige la sucursal");
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/inventory/restock-bulk`, { method: "POST", headers: headers(), body: JSON.stringify({ branchId, items }) });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message || "No se pudo registrar la entrada");
-      toast.success(`Entrada registrada: ${data.units} unidades de ${data.products} productos`);
+      // 1. The purchase order: what arrived goes in, what didn't stays pending
+      if (order && ocArrives) {
+        const res = await fetch(`${API_URL}/purchase-orders/${order.id}/receive`, { method: "POST", headers: headers(), body: JSON.stringify({ lines: ocLines }) });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.message || "No se pudo recibir la orden");
+        if (data.status === "PARTIAL") {
+          toast.warning(`${order.number ?? "Orden"} recibida en parte`, { description: `Quedó pendiente lo que no llegó. La verás como "Recibida parcial" en Compras.`, duration: 8000 });
+        } else {
+          toast.success(`${order.number ?? "Orden"} recibida completa`, { description: "Inventario y kardex actualizados." });
+        }
+      }
+      // 2. Products that came outside the order
+      if (extra.length) {
+        const res = await fetch(`${API_URL}/inventory/restock-bulk`, { method: "POST", headers: headers(), body: JSON.stringify({ branchId, items: extra }) });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.message || "No se pudo registrar la entrada");
+        toast.success(`Entrada registrada: ${data.units} unidades de ${data.products} productos`);
+      }
       setLines([]);
+      setOrderId("");
       await load(branchId);
       inputRef.current?.focus();
     } catch (e: any) {
@@ -161,13 +241,38 @@ export default function IngresoPage() {
           <h1 className="flex items-center gap-2 text-2xl font-bold">
             <IconPackageImport size={24} className="text-primary" /> Ingreso de mercancía
           </h1>
-          <p className="text-sm text-muted-foreground">Para la mercancía que llega sin orden de compra: pasa la pistola por cada caja, pon cuántas llegaron y confirma.</p>
+          <p className="text-sm text-muted-foreground">Pasa la pistola por cada producto, pon cuántos llegaron y confirma. Si viene de una orden de compra, elígela abajo.</p>
         </div>
         <Button variant="outline" asChild className="gap-2">
           <Link href="/dashboard/inventario/compras">
-            <IconTruckDelivery size={16} /> Con orden de compra
+            <IconTruckDelivery size={16} /> Órdenes de compra
           </Link>
         </Button>
+      </div>
+
+      {/* Receiving a purchase order */}
+      <div className={cn("flex flex-col gap-3 rounded-2xl border p-4 shadow-xs sm:flex-row sm:items-center", order ? "border-primary/40 bg-primary/5" : "bg-card")}>
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <IconFileInvoice size={18} className="text-primary" /> ¿Viene de una orden de compra?
+        </div>
+        <select
+          value={orderId}
+          onChange={(e) => chooseOrder(e.target.value)}
+          className="h-10 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+          aria-label="Orden de compra que llega"
+        >
+          <option value="">{orders.filter((o) => !branchId || o.branchId === branchId).length ? "No, es mercancía sin orden" : "No hay órdenes pendientes en esta sucursal"}</option>
+          {orders.filter((o) => !branchId || o.branchId === branchId || o.id === orderId).map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.number ?? o.id.slice(0, 8)} · {o.supplier?.name} · {new Date(o.createdAt).toLocaleDateString("es-VE")}{o.status === "PARTIAL" ? " · recibida a medias" : ""}
+            </option>
+          ))}
+        </select>
+        {order && (
+          <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground" onClick={() => chooseOrder("")}>
+            <IconX size={14} /> Quitar orden
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -220,16 +325,48 @@ export default function IngresoPage() {
                 {lines.map((l) => (
                   <li key={l.variantId} className={cn("flex items-center gap-3 px-4 py-3 transition-colors", flash === l.variantId && "bg-primary/10")}>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{l.label}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Hoy hay {l.stock} · quedarán {Math.round((l.stock + (parseFloat(l.quantity) || 0)) * 100) / 100}
+                      <p className="flex items-center gap-2 truncate text-sm font-medium">
+                        {l.label}
+                        {!l.oc && order && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">fuera de la orden</span>}
                       </p>
+                      {l.oc ? (() => {
+                        const pending = l.oc.ordered - l.oc.received;
+                        const now = parseFloat(l.quantity) || 0;
+                        const unit = unitInfo(l.oc.unit).short;
+                        return (
+                          <>
+                            <p className="text-xs text-muted-foreground">
+                              Pedido: {fmtQty(l.oc.ordered)} {unit}{l.oc.unitFactor > 1 && l.oc.unit !== "UNIDAD" ? ` de ${fmtQty(l.oc.unitFactor)}` : ""}
+                              {l.oc.received > 0 && ` · ya llegaron ${fmtQty(l.oc.received)}`}
+                              {" · "}hoy hay {fmtQty(l.stock)}, quedarán {fmtQty(l.stock + unitsOf(l))}
+                            </p>
+                            {now < pending ? (
+                              <p className="flex items-center gap-1 text-xs font-semibold text-amber-700"><IconAlertTriangle size={13} /> Quedará pendiente {fmtQty(pending - now)} {unit}</p>
+                            ) : (
+                              <p className="flex items-center gap-1 text-xs font-medium text-emerald-700"><IconCircleCheck size={13} /> Completo</p>
+                            )}
+                          </>
+                        );
+                      })() : (
+                        <p className="text-xs text-muted-foreground">
+                          Hoy hay {l.stock} · quedarán {Math.round((l.stock + (parseFloat(l.quantity) || 0)) * 100) / 100}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       <Button variant="outline" size="icon" className="size-8" onClick={() => bump(l.variantId, -1)} aria-label="Una menos">
                         <IconMinus size={14} />
                       </Button>
-                      <Input value={l.quantity} onChange={(e) => setQty(l.variantId, e.target.value.replace(",", "."))} inputMode="decimal" className="h-8 w-20 text-center font-semibold tabular-nums" aria-label={`Cantidad de ${l.label}`} />
+                      <Input
+                        ref={(el) => { if (el) qtyRefs.current.set(l.variantId, el); else qtyRefs.current.delete(l.variantId); }}
+                        value={l.quantity}
+                        onChange={(e) => setQty(l.variantId, e.target.value.replace(",", "."))}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (e.metaKey || e.ctrlKey) void confirm(); else inputRef.current?.focus(); } }}
+                        inputMode="decimal"
+                        className="h-8 w-20 text-center font-semibold tabular-nums"
+                        aria-label={`Cantidad que llegó de ${l.label}`}
+                      />
+                      {l.oc && l.oc.unit !== "UNIDAD" && <span className="w-12 text-xs text-muted-foreground">{unitInfo(l.oc.unit).short}</span>}
                       <Button variant="outline" size="icon" className="size-8" onClick={() => bump(l.variantId, 1)} aria-label="Una más">
                         <IconPlus size={14} />
                       </Button>
@@ -264,10 +401,16 @@ export default function IngresoPage() {
             <span className="text-sm text-muted-foreground">Unidades</span>
             <span className="text-lg font-semibold tabular-nums">{Math.round(totals.units * 100) / 100}</span>
           </div>
+          {order && shortLines.length > 0 && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800">
+              <p className="flex items-center gap-1 font-semibold"><IconAlertTriangle size={14} /> Llega menos de lo pedido</p>
+              <p className="mt-1">{shortLines.length === 1 ? `${shortLines[0].label} quedará` : `${shortLines.length} productos quedarán`} pendiente{shortLines.length === 1 ? "" : "s"} en la orden, que pasará a "Recibida parcial".</p>
+            </div>
+          )}
           <Button className="h-11 w-full gap-2" disabled={saving || !lines.length} onClick={() => void confirm()}>
-            {saving ? <IconLoader2 size={16} className="animate-spin" /> : <IconArrowRight size={16} />} Confirmar entrada
+            {saving ? <IconLoader2 size={16} className="animate-spin" /> : <IconArrowRight size={16} />} {order ? `Recibir ${order.number ?? "orden"}` : "Confirmar entrada"}
           </Button>
-          <p className="text-xs text-muted-foreground">Atajo: Ctrl + Enter. Suma el stock y queda en Inventario → Movimientos. Para registrar el costo y lo que le debes al proveedor, usa una orden de compra.</p>
+          <p className="text-xs text-muted-foreground">Atajo: Ctrl + Enter. Suma el stock y queda en el kardex (Inventario → Movimientos){order ? "; la orden queda recibida y lo que llegó se carga a lo que le debes al proveedor" : ""}.</p>
         </div>
       </div>
 

@@ -199,16 +199,6 @@ export class AiAgentController {
   }
 
   /**
-   * Get predictive purchase orders suggestions based on historical sales speed and inventory metrics
-   */
-  @Get('predictive-purchases')
-  async getPredictivePurchases(@Req() req: any, @Query('branchId') branchId?: string) {
-    const businessId = req.user?.businessId;
-    if (!businessId) return [];
-    return this.aiAgentService.getPredictivePurchases(businessId, branchId);
-  }
-
-  /**
    * Get the full AI conversation history for this user
    */
   @Get('history')

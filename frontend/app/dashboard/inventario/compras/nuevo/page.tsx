@@ -59,6 +59,7 @@ import {
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { PURCHASE_UNITS, UNIT_SINGULAR, fmtQty, unitInfo } from "@/lib/purchase-units";
 import { z } from "zod";
 
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -115,6 +116,14 @@ const orderItemSchema = z.object({
   productName: z.string(),
   variantName: z.string(),
   quantity: z.number(),
+  /** Ordered in this unit (cajas, bultos…) */
+  unit: z.string(),
+  /** Stock units in one ordered unit */
+  unitFactor: z.number(),
+  /** Cost of one stock unit (the line cost is this × unitFactor unless typed) */
+  baseCost: z.number(),
+  /** Units wanted while the units per box are still unknown */
+  wantedUnits: z.number().optional(),
   cost: z.number(),
   taxRate: z.number(),
   id: z.string(), // Needed for DND (same as variantId)
@@ -173,6 +182,9 @@ export default function NewPurchaseOrderPage() {
   
   const [selectedSupplierId, setSelectedSupplierId] = React.useState("");
   const [selectedBranchId, setSelectedBranchId] = React.useState("");
+  /** Last unit used for each product ("cajas de 24" comes back by itself) */
+  const [unitMemory, setUnitMemory] = React.useState<Record<string, { unit: string; unitFactor: number; cost: number }>>({});
+  const prefilled = React.useRef(false);
   const [notes, setNotes] = React.useState("");
   const [items, setItems] = React.useState<OrderItem[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -205,18 +217,27 @@ export default function NewPurchaseOrderPage() {
     try {
       const token = localStorage.getItem("token");
       const headers = { 'Authorization': `Bearer ${token}` };
-      const [suppRes, branchRes, prodRes] = await Promise.all([
+      const [suppRes, branchRes, prodRes, memRes] = await Promise.all([
         fetch(`${API}/suppliers`, { headers }),
         fetch(`${API}/branches`, { headers }),
-        fetch(`${API}/products`, { headers })
+        fetch(`${API}/products`, { headers }),
+        fetch(`${API}/purchase-orders/unit-memory`, { headers }),
       ]);
       if (suppRes.ok) setSuppliers(await suppRes.json());
-      if (branchRes.ok) setBranches(await branchRes.json());
+      if (branchRes.ok) {
+        const list = await branchRes.json();
+        setBranches(list);
+        // The branch you're working in
+        const here = localStorage.getItem("currentBranchId");
+        const pick = list.find((b: any) => b.id === here) ?? list.find((b: any) => b.isMain) ?? list[0];
+        if (pick) setSelectedBranchId((cur) => cur || pick.id);
+      }
+      if (memRes.ok) setUnitMemory(await memRes.json());
       if (prodRes.ok) {
         const prodData = await prodRes.json();
         const flattened: any[] = [];
         prodData.forEach((p: any) => {
-          p.variants.forEach((v: any) => flattened.push({ ...v, productName: p.name }));
+          p.variants.forEach((v: any) => flattened.push({ ...v, productName: p.name, productSupplierId: p.supplierId ?? null }));
         });
         setProducts(flattened);
       }
@@ -225,14 +246,55 @@ export default function NewPurchaseOrderPage() {
     }
   };
 
+  /** A new line, in the unit last used for that product */
+  const lineFor = (v: any, quantity = 1): OrderItem => {
+    const mem = unitMemory[v.id];
+    const unitFactor = mem?.unitFactor && mem.unitFactor > 0 ? mem.unitFactor : 1;
+    const baseCost = Number(v.cost) || (mem ? mem.cost / unitFactor : 0);
+    return {
+      variantId: v.id, id: v.id, productName: v.productName, variantName: v.name,
+      quantity, unit: mem?.unit ?? "UNIDAD", unitFactor, baseCost, cost: mem?.cost ?? Math.round(baseCost * unitFactor * 100) / 100, taxRate: 16,
+    };
+  };
+
   const addItem = (vId: string) => {
     const v = products.find(p => p.id === vId);
     if (!v || items.some(i => i.variantId === vId)) return;
-    setItems([...items, {
-      variantId: v.id, id: v.id, productName: v.productName, variantName: v.name,
-      quantity: 1, cost: v.cost || 0, taxRate: 16
-    }]);
+    setItems([...items, lineFor(v)]);
   };
+
+  // From Alertas de stock → "Compra": that product already in the order, its usual supplier chosen
+  React.useEffect(() => {
+    if (prefilled.current || !products.length) return;
+    const q = new URLSearchParams(window.location.search);
+    const vId = q.get("variant");
+    if (!vId) return;
+    prefilled.current = true;
+    const v = products.find((p) => p.id === vId);
+    if (!v) return;
+    const units = Math.max(1, Math.round(Number(q.get("qty")) || 1));
+    const line = lineFor(v, units);
+    // In boxes: enough boxes to cover the units needed
+    if (line.unitFactor > 1) line.quantity = Math.max(1, Math.ceil(units / line.unitFactor));
+    setItems([line]);
+    if (v.productSupplierId && suppliers.some((s) => s.id === v.productSupplierId)) setSelectedSupplierId(v.productSupplierId);
+    toast.success(`${v.productName} listo en la orden`, { description: "Solo elige el proveedor y emite la orden." });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, suppliers, unitMemory]);
+
+  /** Change the unit: the line cost follows (a box of 24 costs 24 units) */
+  const setUnit = (vId: string, unit: string, factorIn?: number) =>
+    setItems((list) => list.map((i) => {
+      if (i.variantId !== vId) return i;
+      const fixed = unitInfo(unit).factor;
+      const unitFactor = fixed ?? (factorIn && factorIn > 0 ? factorIn : i.unit === unit ? i.unitFactor : (unitMemory[vId]?.unit === unit ? unitMemory[vId].unitFactor : 0));
+      // Same need in the new unit (14 units → 2 boxes of 12). Changing only the size of a box that
+      // was already known keeps the boxes ordered.
+      const units = i.unitFactor > 0 ? i.quantity * i.unitFactor : (i.wantedUnits ?? i.quantity);
+      const keep = i.unit === unit && i.unitFactor > 0;
+      const quantity = keep ? i.quantity : unitFactor > 0 ? Math.max(1, Math.ceil(units / unitFactor)) : i.quantity;
+      return { ...i, unit, unitFactor, quantity, wantedUnits: unitFactor > 0 ? undefined : units, cost: Math.round(i.baseCost * Math.max(unitFactor, 1) * 100) / 100 };
+    }));
 
   /** Adds from the catalog; a product already in the order gets one more unit */
   const addFromCatalog = (p: any) => {
@@ -293,30 +355,67 @@ export default function NewPurchaseOrderPage() {
     {
       accessorKey: "quantity",
       header: () => <div className="text-center">Cantidad</div>,
-      cell: ({ row }) => (
-        <div className="flex justify-center">
-          <Input 
-            type="number" className="h-8 text-center text-sm font-medium shadow-none w-20 bg-transparent border-transparent hover:border-muted focus-visible:bg-muted/10 transition-all" 
-            value={row.original.quantity} onChange={(e) => updateItem(row.original.variantId, 'quantity', Number(e.target.value))}
-          />
-        </div>
-      ),
+      cell: ({ row }) => {
+        const it = row.original;
+        const info = unitInfo(it.unit);
+        const askFactor = info.factor === null;
+        return (
+          <div className="flex flex-col items-center gap-1">
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number" min={1} className="h-8 w-16 text-center text-sm font-medium shadow-none"
+                value={it.quantity} onChange={(e) => updateItem(it.variantId, 'quantity', Math.max(0, Number(e.target.value)))}
+                aria-label="Cantidad"
+              />
+              <select
+                value={it.unit}
+                onChange={(e) => setUnit(it.variantId, e.target.value)}
+                className="h-8 rounded-md border bg-background px-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                aria-label="Unidad de medida"
+              >
+                {PURCHASE_UNITS.map((u) => <option key={u.key} value={u.key}>{u.label}</option>)}
+              </select>
+            </div>
+            {askFactor && (
+              <label className={cn("flex items-center gap-1 text-[11px]", it.unitFactor > 1 ? "text-muted-foreground" : "font-semibold text-amber-700")}>
+                de
+                <Input
+                  key={`${it.variantId}-${it.unit}-${it.unitFactor}`}
+                  type="number" min={2} className="h-6 w-14 px-1 text-center text-xs shadow-none"
+                  defaultValue={it.unitFactor > 0 ? it.unitFactor : ""} placeholder="¿?"
+                  onBlur={(e) => { const n = Number(e.target.value); if (n > 0 && n !== it.unitFactor) setUnit(it.variantId, it.unit, n); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }}
+                  aria-label={`Unidades por ${UNIT_SINGULAR[it.unit]}`}
+                />
+                unid. c/u
+              </label>
+            )}
+            {it.unit !== "UNIDAD" && it.unitFactor > 1 && <span className="text-[11px] text-muted-foreground">= {fmtQty(it.quantity * it.unitFactor)} unidades</span>}
+          </div>
+        );
+      },
     },
     {
       accessorKey: "cost",
-      header: () => <div className="text-right">Costo unit.</div>,
+      header: () => <div className="text-right">Costo</div>,
       cell: ({ row }) => (
-        <div className="flex justify-end">
-          <Input 
-            type="number" className="h-8 text-right text-sm font-medium shadow-none w-28 bg-transparent border-transparent hover:border-muted focus-visible:bg-muted/10 transition-all" 
-            value={row.original.cost} onChange={(e) => updateItem(row.original.variantId, 'cost', Number(e.target.value))}
+        <div className="flex flex-col items-end gap-0.5">
+          <Input
+            type="number" className="h-8 w-28 text-right text-sm font-medium shadow-none"
+            value={row.original.cost}
+            onChange={(e) => {
+              const cost = Math.max(0, Number(e.target.value));
+              setItems((list) => list.map((i) => i.variantId === row.original.variantId ? { ...i, cost, baseCost: cost / Math.max(i.unitFactor, 1) } : i));
+            }}
+            aria-label="Costo"
           />
+          <span className="text-[11px] text-muted-foreground">por {UNIT_SINGULAR[row.original.unit] ?? "unidad"}</span>
         </div>
       ),
     },
     { id: "subtotal", header: () => <div className="text-right">Subtotal</div>, cell: ({ row }) => (
       <div className="text-[13px] font-medium tabular-nums text-right text-foreground pr-2">
-        USD {(row.original.quantity * row.original.cost).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+        USD {(row.original.quantity * row.original.cost).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </div>
     )},
     { id: "actions", header: () => null, cell: ({ row }) => (
@@ -353,15 +452,19 @@ export default function NewPurchaseOrderPage() {
   };
 
   const handleSubmit = async () => {
-    if (!selectedSupplierId || !selectedBranchId || items.length === 0) return toast.error("Complete campos obligatorios");
+    if (!selectedSupplierId) return toast.error("Elige el proveedor");
+    if (!selectedBranchId || items.length === 0) return toast.error("Complete campos obligatorios");
+    const noFactor = items.find((i) => unitInfo(i.unit).factor === null && !(i.unitFactor > 1));
+    if (noFactor) return toast.error(`¿Cuántas unidades trae cada ${UNIT_SINGULAR[noFactor.unit]} de ${noFactor.productName}?`);
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`${API}/purchase-orders`, {
         method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ supplierId: selectedSupplierId, branchId: selectedBranchId, notes, items: items.map(i => ({ variantId: i.variantId, quantity: i.quantity, cost: i.cost, taxRate: i.taxRate })) })
+        body: JSON.stringify({ supplierId: selectedSupplierId, branchId: selectedBranchId, notes, items: items.map(i => ({ variantId: i.variantId, quantity: i.quantity, unit: i.unit, unitFactor: i.unitFactor, cost: i.cost, taxRate: i.taxRate })) })
       });
       if (res.ok) { toast.success("Orden creada"); router.push("/dashboard/inventario/compras"); }
+      else { const err = await res.json().catch(() => null); toast.error(err?.message || "No se pudo crear la orden"); }
     } finally { setLoading(false); }
   };
 
@@ -573,16 +676,16 @@ export default function NewPurchaseOrderPage() {
             <CardContent className="pt-6 space-y-4">
               <div className="flex justify-between items-center text-xs">
                  <span className="text-muted-foreground font-medium tracking-tight">Imponible</span>
-                 <span className="font-bold tabular-nums">USD {subtotal.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                 <span className="font-bold tabular-nums">USD {subtotal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                  <span className="text-muted-foreground font-medium tracking-tight">IVA (16%)</span>
-                 <span className="font-bold tabular-nums">USD {tax.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                 <span className="font-bold tabular-nums">USD {tax.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <Separator />
               <div className="flex justify-between items-center py-1">
                  <span className="text-sm font-bold">Total orden</span>
-                 <span className="text-xl font-black tabular-nums text-primary">USD {total.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                 <span className="text-xl font-black tabular-nums text-primary">USD {total.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="pt-4 space-y-2">
                   <Label className="text-xs font-medium text-muted-foreground">Observaciones</Label>

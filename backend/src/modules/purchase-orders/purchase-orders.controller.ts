@@ -33,6 +33,8 @@ export class PurchaseOrdersController {
       variantId: string;
       quantity: number;
       cost: number;
+      unit?: string;
+      unitFactor?: number;
     }>;
   }) {
     if (!req.user || !req.user.id) {
@@ -43,7 +45,7 @@ export class PurchaseOrdersController {
       throw new BadRequestException('Datos incompletos para crear la orden de compra');
     }
 
-    return this.purchaseOrdersService.create(createData);
+    return this.purchaseOrdersService.create(createData, req.user.businessId);
   }
 
   @Get()
@@ -53,6 +55,11 @@ export class PurchaseOrdersController {
     }
 
     return this.purchaseOrdersService.findAll(branchId, ownedBy('purchaseOrder', req.user));
+  }
+
+  @Get('unit-memory')
+  async unitMemory(@Req() req: any) {
+    return this.purchaseOrdersService.unitMemory(req.user?.businessId);
   }
 
   @Get(':id')
@@ -75,14 +82,22 @@ export class PurchaseOrdersController {
     return this.purchaseOrdersService.send(id);
   }
 
+  /** Receives the order: all of it, or `lines` with what actually arrived (the rest stays pending) */
   @Post(':id/receive')
-  async receive(@Req() req: any, @Param('id') id: string) {
+  async receive(@Req() req: any, @Param('id') id: string, @Body() body: { lines?: Array<{ itemId: string; quantity: number }> }) {
     if (!req.user || !req.user.id) {
       throw new BadRequestException('Usuario no autenticado');
     }
 
     await assertOwned(this.prisma, 'purchaseOrder', id, req.user);
-    return this.purchaseOrdersService.receive(id, req.user.id);
+    return this.purchaseOrdersService.receive(id, req.user.id, Array.isArray(body?.lines) ? body.lines : undefined);
+  }
+
+  /** Close an order received in part: what's pending won't come */
+  @Post(':id/close-pending')
+  async closePending(@Req() req: any, @Param('id') id: string) {
+    await assertOwned(this.prisma, 'purchaseOrder', id, req.user);
+    return this.purchaseOrdersService.closePending(id);
   }
 
   @Patch(':id/status')

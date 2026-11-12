@@ -168,7 +168,7 @@ export class SuppliersService {
         lastPurchase,
         avgDeliveryDays,
         completedOrders: completedOrders.length,
-        pendingOrders: purchaseOrders.filter((po: any) => po.status === 'SENT').length
+        pendingOrders: purchaseOrders.filter((po: any) => po.status === 'SENT' || po.status === 'PARTIAL').length
       },
       financialStats: {
         totalInvoiced,

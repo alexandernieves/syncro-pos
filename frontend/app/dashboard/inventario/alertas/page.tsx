@@ -7,9 +7,8 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
-  IconBell, IconShoppingCart, IconReload, IconSparkles
+  IconBell, IconShoppingCart, IconReload
 } from "@tabler/icons-react";
-import Link from "next/link";
 import { toast } from "sonner";
 import { UniversalTable } from "@/components/universal-table";
 import { alertsColumns, AlertData } from "@/components/alerts-columns";
@@ -52,7 +51,8 @@ export default function AlertasPage() {
       status: p.status === 'CRITICAL' ? 'Sin Stock' : 'Stock Bajo',
       target: p.totalStock,
       limit: p.variants[0]?.minStock || 5,
-      category: p.category?.name || 'General'
+      category: p.category?.name || 'General',
+      variantId: p.variants[0]?.id,
     }));
   }, [alerts]);
 
@@ -66,10 +66,6 @@ export default function AlertasPage() {
           <p className="text-sm text-muted-foreground font-medium">Productos que requieren atención inmediata en esta sucursal.</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* What to order and how much, from what sells */}
-          <Button asChild variant="outline" size="sm" className="h-9 gap-2 font-bold shadow-sm">
-            <Link href="/dashboard/inventario/compras/prediccion"><IconSparkles size={16} className="text-violet-600" /> ¿Cuánto pedir?</Link>
-          </Button>
           <Button variant="outline" size="sm" onClick={loadData} disabled={loading} className="gap-2 font-bold shadow-sm h-9">
             <IconReload size={16} />
             Recargar

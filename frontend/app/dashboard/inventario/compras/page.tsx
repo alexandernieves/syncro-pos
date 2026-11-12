@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
-  IconTruck, IconPlus, IconAlertTriangle, IconClock, IconReceipt, IconTrendingUp, IconDownload, IconBox, IconSparkles
+  IconTruck, IconPlus, IconAlertTriangle, IconClock, IconReceipt, IconTrendingUp, IconDownload, IconBox
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,6 +34,21 @@ import { getPurchaseOrdersColumns } from "@/components/purchase-orders-columns";
 import { useCurrency } from "@/context/CurrencyContext";
 
 const API = API_URL;
+
+const UNIT_LABEL: Record<string, string> = { UNIDAD: "unid.", CAJA: "cajas", BULTO: "bultos", PAQUETE: "paquetes", FARDO: "fardos", DOCENA: "docenas", KILO: "kg", LITRO: "L" };
+const fmtQty = (n: number) => (Math.round(n * 100) / 100).toLocaleString("es-VE");
+
+/** "Pendiente: 1 unid. de Aceite vegetal 1 L" for an order received in part */
+function pendingText(order: any) {
+  if (order.status !== "PARTIAL") return null;
+  const pending = (order.items ?? []).filter((i: any) => i.quantity - (i.receivedQuantity ?? 0) > 0);
+  if (!pending.length) return null;
+  if (pending.length === 1) {
+    const i = pending[0];
+    return `Pendiente: ${fmtQty(i.quantity - (i.receivedQuantity ?? 0))} ${UNIT_LABEL[i.unit] ?? "unid."} de ${i.variant?.product?.name ?? "un producto"}`;
+  }
+  return `Pendiente en ${pending.length} productos`;
+}
 
 export default function PurchaseOrdersPage() {
   const router = useRouter();
@@ -124,7 +139,8 @@ export default function PurchaseOrdersPage() {
         formattedTotal: formatCurrency(order.total)
       }),
       status: JSON.stringify({
-        status: order.status
+        status: order.status,
+        pending: pendingText(order),
       }),
       createdAt: new Date(order.createdAt).toLocaleDateString("es-VE"),
       type: "PURCHASE",
@@ -138,7 +154,7 @@ export default function PurchaseOrdersPage() {
   const [selectedOrderForReception, setSelectedOrderForReception] = useState<any | null>(null);
 
   const stats = React.useMemo(() => {
-    const pending = orders.filter(o => o.status === 'SENT' || o.status === 'DRAFT').length;
+    const pending = orders.filter(o => o.status === 'SENT' || o.status === 'DRAFT' || o.status === 'PARTIAL').length;
     const totalMonth = orders
       .filter(o => o.status === 'RECEIVED' && new Date(o.createdAt).getMonth() === new Date().getMonth())
       .reduce((acc, curr) => acc + curr.total, 0);
@@ -146,10 +162,9 @@ export default function PurchaseOrdersPage() {
     return { pending, totalMonth };
   }, [orders]);
 
+  // Receiving happens in Ingreso de mercancía, with that order loaded: you enter what actually arrived
   const handleReceive = (id: string) => {
-    const order = orders.find(o => o.id === id);
-    if (!order) return;
-    setSelectedOrderForReception(order);
+    router.push(`/dashboard/inventario/ingreso?oc=${id}`);
   };
 
   const processReceive = async (id: string) => {
@@ -258,9 +273,6 @@ export default function PurchaseOrdersPage() {
         </div>
         
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => router.push('/dashboard/inventario/compras/prediccion')} className="h-9 gap-2 shadow-none bg-card">
-            <IconSparkles size={16} className="text-violet-600" /> Predicción de compras
-          </Button>
           <Button variant="outline" size="sm" className="h-9 shadow-none bg-card">
             <IconDownload size={16} className="mr-2" /> Reporte mensual
           </Button>
@@ -288,7 +300,7 @@ export default function PurchaseOrdersPage() {
               pastPerformance: (
                 <UniversalTable 
                   hideHeader={true}
-                  data={tableData.filter(d => JSON.parse(d.status).status === 'SENT' || JSON.parse(d.status).status === 'DRAFT')}
+                  data={tableData.filter(d => ['SENT', 'DRAFT', 'PARTIAL'].includes(JSON.parse(d.status).status))}
                   columns={getPurchaseOrdersColumns({ onReceive: handleReceive, onSend: handleSend, onDelete: handleDelete }) as any}
                 />
               ),

@@ -13,6 +13,8 @@ export interface AlertData {
   target: number;
   limit: number;
   category: string;
+  /** The variant to order (the product's first one) */
+  variantId?: string;
 }
 
 export const alertsColumns: ColumnDef<AlertData>[] = [
@@ -83,7 +85,12 @@ export const alertsColumns: ColumnDef<AlertData>[] = [
           <Button 
             size="sm" 
             className="h-8 gap-2 text-[10px] font-bold bg-primary"
-            onClick={() => router.push("/dashboard/inventario/compras")}
+            // A new purchase order with this product and what's missing to reach twice the minimum
+            onClick={() => {
+              const o = row.original;
+              const qty = Math.max(1, Math.ceil(o.limit * 2 - Number(o.target || 0)));
+              router.push(o.variantId ? `/dashboard/inventario/compras/nuevo?variant=${o.variantId}&qty=${qty}` : "/dashboard/inventario/compras/nuevo");
+            }}
           >
             <IconShoppingCart size={14} />
             Compra

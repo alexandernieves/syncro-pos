@@ -1,10 +1,15 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PurchaseOrderStatus, MovementType } from '@prisma/client';
+import { ProductsService } from '../products/products.service';
+import { PURCHASE_UNITS, normalizeUnit } from './units';
+
+const OPEN_STATUSES: PurchaseOrderStatus[] = [PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.SENT, PurchaseOrderStatus.PARTIAL];
+const fmt = (n: number) => (Math.round(n * 1000) / 1000).toString();
 
 @Injectable()
 export class PurchaseOrdersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private products: ProductsService) {}
 
   async create(data: {
     supplierId: string;
@@ -16,19 +21,35 @@ export class PurchaseOrdersService {
       variantId: string;
       quantity: number;
       cost: number;
+      unit?: string;
+      unitFactor?: number;
       taxRate?: number;
       discountAmount?: number;
     }>;
-  }) {
-    const { supplierId, branchId, items, notes, taxRate: globalTaxRate = 0, discountAmount: globalDiscount = 0 } = data;
+  }, businessId?: string) {
+    const { supplierId, branchId, notes, taxRate: globalTaxRate = 0, discountAmount: globalDiscount = 0 } = data;
 
+    // Everything must belong to the business placing the order
     const supplier = await this.prisma.supplier.findFirst({
-      where: { id: supplierId, status: 'ACTIVE' }
+      where: { id: supplierId, status: 'ACTIVE', ...(businessId ? { businessId } : {}) }
     });
     if (!supplier) throw new BadRequestException('Proveedor no encontrado o inactivo');
 
-    const branch = await this.prisma.branch.findUnique({ where: { id: branchId } });
+    const branch = await this.prisma.branch.findFirst({ where: { id: branchId, ...(businessId ? { businessId } : {}) } });
     if (!branch) throw new BadRequestException('Sucursal no encontrada');
+
+    const items = (data.items ?? []).map((i) => {
+      const quantity = Number(i.quantity);
+      const cost = Number(i.cost);
+      if (!Number.isFinite(quantity) || quantity <= 0) throw new BadRequestException('Cantidad no válida');
+      if (!Number.isFinite(cost) || cost < 0) throw new BadRequestException('Costo no válido');
+      return { ...i, quantity, cost, ...normalizeUnit(i.unit, i.unitFactor) };
+    });
+    if (businessId) {
+      const ids = [...new Set(items.map((i) => i.variantId))];
+      const owned = await this.prisma.productVariant.count({ where: { id: { in: ids }, product: { businessId } } });
+      if (owned !== ids.length) throw new BadRequestException('Hay productos que no son de tu negocio');
+    }
 
     // Generate Order Number
     const lastOrder = await (this.prisma.purchaseOrder as any).findFirst({
@@ -64,6 +85,8 @@ export class PurchaseOrdersService {
       return {
         variantId: item.variantId,
         quantity: item.quantity,
+        unit: item.unit,
+        unitFactor: item.unitFactor,
         cost: item.cost,
         taxRate: effectiveTaxRate,
         taxAmount: itemTaxAmount,
@@ -127,7 +150,14 @@ export class PurchaseOrdersService {
     return purchaseOrder;
   }
 
-  async receive(id: string, userId: string) {
+  /**
+   * Receives an order, all of it or what actually arrived (`lines`: item id → quantity in the
+   * ordered unit). Can be called again for what was pending. Stock goes up by quantity × unit
+   * factor in the branch and in the product, with an IN movement in the kardex that says how much
+   * of what was ordered arrived and how much is still pending. The cost of each stock unit is
+   * averaged in (WAC). The received value goes to accounting and to a supplier invoice.
+   */
+  async receive(id: string, userId: string, lines?: Array<{ itemId: string; quantity: number }>) {
     const purchaseOrder = await this.prisma.purchaseOrder.findUnique({
       where: { id },
       include: {
@@ -138,108 +168,124 @@ export class PurchaseOrdersService {
     });
 
     if (!purchaseOrder) throw new NotFoundException('Orden de compra no encontrada');
-
-    if (purchaseOrder.status !== PurchaseOrderStatus.SENT && purchaseOrder.status !== PurchaseOrderStatus.DRAFT) {
-      throw new BadRequestException('La orden debe estar enviada o en borrador antes de recibir');
+    if (!OPEN_STATUSES.includes(purchaseOrder.status)) {
+      throw new BadRequestException(purchaseOrder.status === PurchaseOrderStatus.RECEIVED ? 'Esta orden ya fue recibida completa' : 'Esta orden está anulada');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Check if we need to auto-send first
-      if (purchaseOrder.status === PurchaseOrderStatus.DRAFT) {
-        await tx.purchaseOrder.update({ where: { id }, data: { status: PurchaseOrderStatus.SENT } });
+    // What arrives now, per item (in the ordered unit)
+    const arriving = new Map<string, number>();
+    if (lines?.length) {
+      for (const l of lines) {
+        const q = Number(l?.quantity);
+        if (!Number.isFinite(q) || q < 0 || q > 1_000_000) throw new BadRequestException('Cantidad no válida');
+        if (!purchaseOrder.items.some((i) => i.id === l.itemId)) throw new BadRequestException('Ese producto no es de esta orden');
+        if (q > 0) arriving.set(l.itemId, (arriving.get(l.itemId) ?? 0) + q);
       }
+    } else {
+      for (const i of purchaseOrder.items) {
+        const pending = Math.max(0, i.quantity - i.receivedQuantity);
+        if (pending > 0) arriving.set(i.id, pending);
+      }
+    }
+    if (!arriving.size) throw new BadRequestException('Indica cuánto llegó de al menos un producto');
 
-      // 2. Update Order Status to RECEIVED
-      const updatedOrder = await tx.purchaseOrder.update({
-        where: { id },
-        data: { status: PurchaseOrderStatus.RECEIVED }
-      });
+    const number = purchaseOrder.number || purchaseOrder.id.substring(0, 8);
+    const result = await this.prisma.$transaction(async (tx) => {
+      let receivedValue = 0;
+      let stillPending = 0;
+      const summary: Array<{ product: string; ordered: number; received: number; pending: number; unit: string }> = [];
 
-      // 3. Process Items
       for (const item of purchaseOrder.items) {
-        // Find existing inventory
-        const inventory = await tx.inventory.findUnique({
-          where: { variantId_branchId: { variantId: item.variantId, branchId: purchaseOrder.branchId } }
+        const now = arriving.get(item.id) ?? 0;
+        const receivedTotal = item.receivedQuantity + now;
+        const pending = Math.max(0, item.quantity - receivedTotal);
+        stillPending += pending;
+        if (now <= 0) continue;
+
+        const units = now * item.unitFactor;
+        const costPerUnit = item.unitFactor > 0 ? item.cost / item.unitFactor : item.cost;
+        receivedValue += now * item.cost * (1 + (item.taxRate || 0) / 100);
+
+        const inventory = await tx.inventory.upsert({
+          where: { variantId_branchId: { variantId: item.variantId, branchId: purchaseOrder.branchId } },
+          update: { quantity: { increment: units } },
+          create: { variantId: item.variantId, branchId: purchaseOrder.branchId, quantity: units },
         });
+        const before = inventory.quantity - units;
 
-        const currentStock = inventory?.quantity || 0;
-        const newStock = item.quantity;
+        // Weighted average cost of one stock unit
+        const variant = await tx.productVariant.findUnique({ where: { id: item.variantId }, select: { cost: true, stock: true } });
+        const oldCost = variant?.cost || 0;
+        const base = Math.max(0, variant?.stock ?? before);
+        const newCost = base + units > 0 ? (base * oldCost + units * costPerUnit) / (base + units) : costPerUnit;
+        await tx.productVariant.update({ where: { id: item.variantId }, data: { stock: { increment: units }, cost: newCost } });
 
-        // Update Stock
-        if (inventory) {
-          await tx.inventory.update({
-            where: { id: inventory.id },
-            data: { quantity: currentStock + newStock }
-          });
-        } else {
-          await tx.inventory.create({
-            data: { variantId: item.variantId, branchId: purchaseOrder.branchId, quantity: newStock }
-          });
-        }
+        await tx.purchaseOrderItem.update({ where: { id: item.id }, data: { receivedQuantity: receivedTotal } });
 
-        // 3. WEIGHTED AVERAGE COST (WAC/PPP) calculation
-        const variant = await tx.productVariant.findUnique({ where: { id: item.variantId } });
-        if (variant) {
-          const currentCost = variant.cost || 0;
-          const totalStockAfter = currentStock + newStock;
-          
-          // Formula: ((Existing Stock * Old Cost) + (New Stock * New Cost)) / Total Stock
-          const newWacCost = totalStockAfter > 0 
-            ? ((currentStock * currentCost) + (newStock * item.cost)) / totalStockAfter 
-            : item.cost;
-
-          await tx.productVariant.update({
-            where: { id: item.variantId },
-            data: { cost: newWacCost }
-          });
-        }
-
-        // 4. Record Movement
+        const unitLabel = (PURCHASE_UNITS[item.unit]?.label ?? 'Unidades').toLowerCase();
+        const inUnits = item.unit === 'UNIDAD' ? '' : ` (${fmt(units)} unid.)`;
         await tx.inventoryMovement.create({
           data: {
             variantId: item.variantId,
             branchId: purchaseOrder.branchId,
             type: MovementType.IN,
-            quantity: newStock,
-            reason: `Recepción OC #${(purchaseOrder as any).number || purchaseOrder.id.substring(0, 8)}`,
+            quantity: units,
+            reason: `Recepción ${number}: llegaron ${fmt(now)} de ${fmt(item.quantity)} ${unitLabel}${inUnits}${pending > 0 ? ` · pendiente ${fmt(pending)}` : ''}`,
             referenceId: purchaseOrder.id,
-            previousStock: currentStock,
-            newStock: currentStock + newStock
-          }
+            previousStock: Math.round(before),
+            newStock: Math.round(inventory.quantity),
+          },
         });
+        summary.push({ product: item.variant.product.name, ordered: item.quantity, received: receivedTotal, pending, unit: item.unit });
       }
 
-      // 5. Accounting Entry (Inventory Expense / Liability)
-      await tx.accountingEntry.create({
-        data: {
-          description: `Compra: ${(purchaseOrder as any).number || 'N/A'} - Proveedor: ${purchaseOrder.supplier.name}`,
-          type: 'EXPENSE',
-          amount: purchaseOrder.total,
-          category: 'COMPRA_INVENTARIO',
-          userId
-        }
-      });
+      const status = stillPending > 0 ? PurchaseOrderStatus.PARTIAL : PurchaseOrderStatus.RECEIVED;
+      const updatedOrder = await tx.purchaseOrder.update({ where: { id }, data: { status } });
 
-      // 6. Automatic Supplier Invoice (Accounts Payable)
-      const creditDays = (purchaseOrder.supplier as any).creditDays || 0;
-      const dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + creditDays);
+      // Only what arrived is owed to the supplier
+      const amount = Math.round(receivedValue * 100) / 100;
+      let invoice: any = null;
+      if (amount > 0) {
+        await tx.accountingEntry.create({
+          data: {
+            description: `Compra ${number} - Proveedor: ${purchaseOrder.supplier.name}${status === PurchaseOrderStatus.PARTIAL ? ' (recepción parcial)' : ''}`,
+            type: 'EXPENSE',
+            amount,
+            category: 'COMPRA_INVENTARIO',
+            userId,
+          },
+        });
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + ((purchaseOrder.supplier as any).creditDays || 0));
+        invoice = await tx.supplierInvoice.create({
+          data: { supplierId: purchaseOrder.supplierId, purchaseOrderId: purchaseOrder.id, total: amount, balance: amount, dueDate, status: 'PENDING' },
+        });
+      }
+      return { updatedOrder, invoice, status, pending: stillPending, summary };
+    }, { timeout: 20000 });
 
-      const invoice = await tx.supplierInvoice.create({
-        data: {
-          supplierId: purchaseOrder.supplierId,
-          purchaseOrderId: purchaseOrder.id,
-          total: purchaseOrder.total,
-          balance: purchaseOrder.total,
-          dueDate,
-          status: 'PENDING'
-        }
-      });
+    if (purchaseOrder.branch?.businessId) await this.products.invalidateProductsCache(purchaseOrder.branch.businessId).catch(() => undefined);
+    return result;
+  }
 
-      return { updatedOrder, invoice };
-    }, { 
-      timeout: 10000 // Higher timeout for complex transactions
+  /** The supplier won't send what's missing: the order is closed as it is (what's pending stays on record). */
+  async closePending(id: string) {
+    const po = await this.prisma.purchaseOrder.findUnique({ where: { id } });
+    if (!po) throw new NotFoundException('Orden de compra no encontrada');
+    if (po.status !== PurchaseOrderStatus.PARTIAL) throw new BadRequestException('Solo se cierran órdenes recibidas a medias');
+    return this.prisma.purchaseOrder.update({ where: { id }, data: { status: PurchaseOrderStatus.RECEIVED, notes: [po.notes, 'Cerrada con faltante: lo pendiente no llegó.'].filter(Boolean).join('\n') } });
+  }
+
+  /** Last unit used for each product in an order of this business ("cajas de 24" comes back by itself). */
+  async unitMemory(businessId: string) {
+    const rows = await this.prisma.purchaseOrderItem.findMany({
+      where: { purchaseOrder: { branch: { businessId } } },
+      orderBy: { purchaseOrder: { createdAt: 'desc' } },
+      distinct: ['variantId'],
+      select: { variantId: true, unit: true, unitFactor: true, cost: true },
+      take: 2000,
     });
+    return Object.fromEntries(rows.map((r) => [r.variantId, { unit: r.unit, unitFactor: r.unitFactor, cost: r.cost }]));
   }
 
   async send(id: string) {

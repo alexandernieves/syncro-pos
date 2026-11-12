@@ -719,7 +719,15 @@ model PurchaseOrderItem {
   id              String         @id @default(uuid())
   purchaseOrderId String
   variantId       String
+  /// In the ordered unit (cajas, bultos…); stock moves by quantity × unitFactor
   quantity        Float
+  /// UNIDAD, CAJA, BULTO, PAQUETE, FARDO, DOCENA, KILO, LITRO
+  unit            String         @default("UNIDAD")
+  /// Stock units in one ordered unit (a box of 24 → 24)
+  unitFactor      Float          @default(1)
+  /// How much has arrived so far, in the ordered unit (partial deliveries add up)
+  receivedQuantity Float         @default(0)
+  /// Cost of one ordered unit (one box), before tax
   cost            Float
   taxRate         Float          @default(0)
   taxAmount       Float          @default(0)
@@ -1218,6 +1226,8 @@ enum PaymentMethod {
 enum PurchaseOrderStatus {
   DRAFT
   SENT
+  /// Part of it arrived; the rest is pending
+  PARTIAL
   RECEIVED
   CANCELLED
 }

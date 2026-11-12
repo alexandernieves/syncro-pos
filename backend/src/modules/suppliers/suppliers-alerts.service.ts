@@ -168,7 +168,7 @@ export class SuppliersAlertsService {
 
   private async getDeliveryDelays(businessId?: string) {
     const where: any = {
-      status: 'SENT',
+      status: { in: ['SENT', 'PARTIAL'] },
       createdAt: { lt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) } // Más de 14 días enviada
     };
     if (businessId) {

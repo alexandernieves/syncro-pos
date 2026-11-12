@@ -137,7 +137,8 @@ export const getPurchaseOrdersColumns = (actions: {
       
       const config: any = {
         DRAFT: { label: "Borrador", color: "bg-slate-500/10 text-slate-600", icon: <IconClock size={14} /> },
-        SENT: { label: "Enviada", color: "bg-blue-500/10 text-blue-600", icon: <IconTruck size={14} /> },
+        SENT: { label: "Enviada", color: "bg-blue-500/10 text-blue-700", icon: <IconTruck size={14} /> },
+        PARTIAL: { label: "Recibida parcial", color: "bg-amber-500/10 text-amber-700", icon: <IconClock size={14} /> },
         RECEIVED: { label: "Recibida", color: "bg-emerald-500/10 text-emerald-600", icon: <IconCircleCheckFilled size={14} /> },
         CANCELLED: { label: "Anulada", color: "bg-rose-500/10 text-rose-600", icon: <IconBan size={14} /> },
       };
@@ -145,10 +146,13 @@ export const getPurchaseOrdersColumns = (actions: {
       const style = config[status] || config.DRAFT;
       
       return (
-        <Badge variant="outline" className={`px-2 py-0.5 font-bold tracking-tight border-none ${style.color}`}>
-          <span className="mr-1.5">{style.icon}</span>
-          {style.label}
-        </Badge>
+        <div className="flex flex-col items-start gap-1">
+          <Badge variant="outline" className={`px-2 py-0.5 font-bold tracking-tight border-none ${style.color}`}>
+            <span className="mr-1.5">{style.icon}</span>
+            {style.label}
+          </Badge>
+          {data.pending && <span className="text-[11px] font-medium text-amber-700">{data.pending}</span>}
+        </div>
       );
     },
   },
@@ -186,16 +190,16 @@ export const getPurchaseOrdersColumns = (actions: {
             
             <DropdownMenuSeparator className="bg-border" />
 
-            {(status === "SENT" || status === "DRAFT") && (
-              <DropdownMenuItem onClick={() => actions.onReceive(row.original.id)} className="text-emerald-400 focus:text-emerald-400 focus:bg-emerald-500/10 cursor-pointer">
+            {(status === "SENT" || status === "DRAFT" || status === "PARTIAL") && (
+              <DropdownMenuItem onClick={() => actions.onReceive(row.original.id)} className="cursor-pointer text-emerald-700 focus:bg-emerald-500/10 focus:text-emerald-700">
                 <IconCircleCheckFilled className="mr-2 h-4 w-4" />
-                Recibir mercancía
+                {status === "PARTIAL" ? "Recibir lo pendiente" : "Recibir mercancía"}
               </DropdownMenuItem>
             )}
 
             {status === "DRAFT" && (
               <>
-                <DropdownMenuItem onClick={() => actions.onSend(row.original.id)} className="text-blue-400 focus:text-blue-400 focus:bg-blue-500/10 cursor-pointer">
+                <DropdownMenuItem onClick={() => actions.onSend(row.original.id)} className="cursor-pointer text-blue-700 focus:bg-blue-500/10 focus:text-blue-700">
                   <IconTruck className="mr-2 h-4 w-4" />
                   Marcar como enviada
                 </DropdownMenuItem>
