@@ -113,11 +113,36 @@ export default function RootLayout({
                   childList: true,
                   subtree: true,
                   attributeFilter: ['bis_skin_checked']
-                });
+               
+                  });
+                  <script src="https://app.theandeans.com/embed/inbox-loader.js"></script>
+<script>
+  KoenyxInbox.init({
+    getToken: () =>
+      fetch("https://app.theandeans.com/api/public/v1/embed/sessions", {
+        method: "POST",
+        headers: {
+          Authorization: Bearer kx_Hnj6dhCEHJR_ogsWN_G_0q6_daui4I61cvTeR1UjQ6g,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "agente@tudominio.com",
+          name: "Demo",
+        }),
+      })
+        .then((r) => r.json())
+        .then((d) => d.token),
+  })
+</script>
               })();
+              
             `
-          }}
+        
+          }
+        }
+
         />
+        
         {/* Una sola paleta para toda la app: forcedTheme fija el tema y deja
             sin efecto cualquier conmutador de claro/oscuro que quede suelto. */}
         <ThemeProvider
@@ -156,6 +181,8 @@ export default function RootLayout({
           </NotificationsProvider>
         </ThemeProvider>
       </body>
+      
     </html>
+    
   );
 }
