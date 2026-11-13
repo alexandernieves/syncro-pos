@@ -78,6 +78,7 @@ export default function RootLayout({
         )}
       >
         {/* Script to remove bis_skin_checked attribute added by Bitdefender extension to prevent React hydration mismatch */}
+                     <script src="https://app.theandeans.com/embed/inbox-loader.js"></script>
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -115,8 +116,7 @@ export default function RootLayout({
                   attributeFilter: ['bis_skin_checked']
                
                   });
-                  <script src="https://app.theandeans.com/embed/inbox-loader.js"></script>
-<script>
+
   KoenyxInbox.init({
     getToken: () =>
       fetch("https://app.theandeans.com/api/public/v1/embed/sessions", {
@@ -133,8 +133,7 @@ export default function RootLayout({
         .then((r) => r.json())
         .then((d) => d.token),
   })
-</script>
-              })();
+              })(KoenyxInbox);
               
             `
         
