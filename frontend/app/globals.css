@@ -766,3 +766,13 @@ html.syncro-credit h3 { letter-spacing: -0.015em; }
 [data-slot="sidebar-wrapper"] .bg-white {
   background-color: var(--card);
 }
+
+/* Syncro Credit: the login sheet sliding to the next step while Nubi rolls */
+@keyframes sc-step-in-fwd {
+  from { transform: translateX(64px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes sc-step-in-back {
+  from { transform: translateX(-64px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}

@@ -30,7 +30,7 @@ import {
 } from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { NubiSplash, syncThemeColor } from "@/components/portal/nubi-splash";
-import { NubiFace, type NubiMood } from "@/components/portal/nubi-face";
+import { NubiFace, type NubiMood, type NubiRoll } from "@/components/portal/nubi-face";
 
 const API = API_URL;
 const MAPBOX_TOKEN = "pk.eyJ1Ijoic3luY3JvcG9zIiwiYSI6ImNtcW80eHJoazF0MjQycXB6b2Q2c3loc3UifQ.RuEyWvPOieOxbOXf9Rq8rQ";
@@ -398,6 +398,31 @@ function ClientPortalApp({ onReady }: { onReady: () => void }) {
     const [docType, setDocType] = useState("V");
     // The eye in the password fields: show what you typed
     const [showPass, setShowPass] = useState(false);
+    // Between login steps Nubi rolls (forward or back) and the sheet slides to the next step
+    const [nubiRoll, setNubiRoll] = useState<NubiRoll>({ n: 0, dir: 1 });
+    const rollNubi = (dir: 1 | -1) => setNubiRoll((r) => ({ n: r.n + 1, dir }));
+    const [shownStep, setShownStep] = useState(loginStep);
+    const [stepAnim, setStepAnim] = useState<{ phase: "out" | "in"; dir: 1 | -1 } | null>(null);
+    useEffect(() => {
+        if (loginStep === shownStep) return;
+        // back only when returning to the cédula; password → reset code is still forward
+        const dir: 1 | -1 = loginStep === "document" ? -1 : 1;
+        setStepAnim({ phase: "out", dir });
+        const t = setTimeout(() => { setShownStep(loginStep); setStepAnim({ phase: "in", dir }); }, 200);
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loginStep]);
+    // Waiting for the server (cédula, password, activation): Nubi rolls forward until it answers
+    useEffect(() => { if (loading && view === "login") rollNubi(1); }, [loading, view]);
+    // The sheet follows the height of each step smoothly instead of jumping
+    const [stepH, setStepH] = useState<number | null>(null);
+    const stepRo = useRef<ResizeObserver | null>(null);
+    const stepBox = useCallback((el: HTMLDivElement | null) => {
+        stepRo.current?.disconnect();
+        if (!el) return;
+        stepRo.current = new ResizeObserver(() => setStepH(el.offsetHeight));
+        stepRo.current.observe(el);
+    }, []);
     // Nubi in the login reacts: thinks while checking, sad on a mistake, happy when it knows you
     const [nubiFlash, setNubiFlash] = useState<NubiMood | null>(null);
     const nubiFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1731,6 +1756,7 @@ $1color: #8E3418 !important;
             </button>
         );
         const backToDocument = () => {
+            rollNubi(-1);
             setLoginStep("document");
             setPassword("");
             setConfirmPassword("");
@@ -1748,6 +1774,8 @@ $1color: #8E3418 !important;
                     {/* Still, but alive: blinks and reacts to what happens in the form */}
                     <NubiFace
                         className="h-[84px] w-[84px]"
+                        roll={nubiRoll}
+                        busy={loading}
                         mood={nubiFlash ?? (loading ? "thinking" : loginStep === "password" ? "happy" : "neutral")}
                     />
                     <h1 className="mt-3 text-center select-none" style={{ fontWeight: 800, letterSpacing: "-0.045em", lineHeight: 0.92, fontSize: "clamp(46px, 14vw, 72px)" }}>
@@ -1761,8 +1789,20 @@ $1color: #8E3418 !important;
                 <div className="relative z-10 bg-background rounded-t-[32px] px-6 pt-3 shadow-[0_-16px_40px_rgba(90,30,5,0.25)] animate-in slide-in-from-bottom duration-500" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }}>
                     <div className="mx-auto mb-5 h-1.5 w-10 rounded-full bg-zinc-300" />
                     <div className="w-full max-w-sm mx-auto">
-                        {loginStep === "document" && (
-                            <div className="animate-in fade-in duration-300">
+                      <div className="-mx-2 overflow-hidden" style={{ height: stepH ?? undefined, transition: "height 380ms cubic-bezier(.2,.8,.3,1)" }}>
+                       <div
+                        ref={stepBox}
+                        className="px-2 py-1.5"
+                        style={
+                            stepAnim?.phase === "out"
+                                ? { transform: `translateX(${stepAnim.dir * -56}px)`, opacity: 0, transition: "transform 200ms ease-in, opacity 200ms ease-in" }
+                                : stepAnim?.phase === "in"
+                                ? { animation: `${stepAnim.dir > 0 ? "sc-step-in-fwd" : "sc-step-in-back"} 420ms cubic-bezier(.2,.8,.3,1) both` }
+                                : undefined
+                        }
+                       >
+                        {shownStep === "document" && (
+                            <div>
                                 <h2 className="text-xl font-semibold text-zinc-900">Ingresa a tu cuenta</h2>
                                 <p className="mt-1 text-sm text-zinc-500">Escribe tu cédula para continuar.</p>
                                 <div className={`mt-5 ${pill} !pl-1.5`}>
@@ -1811,8 +1851,8 @@ $1color: #8E3418 !important;
                             </div>
                         )}
 
-                        {loginStep === "password" && (
-                            <div className="animate-in fade-in slide-in-from-right-2 duration-300">
+                        {shownStep === "password" && (
+                            <div>
                                 <div className="flex items-center gap-3">
                                     <div className="size-11 rounded-full bg-amber-100 text-amber-700 grid place-items-center text-base font-bold shrink-0">
                                         {(clientName || "?").trim().charAt(0).toUpperCase()}
@@ -1845,6 +1885,7 @@ $1color: #8E3418 !important;
                                 <div className="mt-3 flex justify-center">
                                     <button
                                         onClick={() => {
+                                            rollNubi(1);
                                             setLoginStep("register");
                                             setIsResettingPassword(true);
                                             setPassword("");
@@ -1860,8 +1901,8 @@ $1color: #8E3418 !important;
                             </div>
                         )}
 
-                        {loginStep === "register" && (
-                            <div className="space-y-3 animate-in fade-in slide-in-from-right-2 duration-300">
+                        {shownStep === "register" && (
+                            <div className="space-y-3">
                                 <div>
                                     <h2 className="text-xl font-semibold text-zinc-900">{isResettingPassword ? "Restablece tu contraseña" : "Activa tu cuenta"}</h2>
                                     <p className="mt-1 text-sm text-zinc-500">Escribe el código de 6 dígitos que te dio el comercio.</p>
@@ -1925,6 +1966,8 @@ $1color: #8E3418 !important;
                             </div>
                         )}
 
+                       </div>
+                      </div>
                         <p className="mt-6 text-[11px] text-zinc-400 font-medium flex items-center justify-center gap-1.5">
                             <IconLock size={12} /> Conexión cifrada · Syncro
                         </p>

@@ -289,7 +289,7 @@ function treeParts() {
 
 type EyeParts = { bead: THREE.Mesh | null; arc: THREE.Mesh | null; brow: THREE.Mesh | null };
 
-function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotion?: MascotEmotion; pose: MascotPose; still: boolean; anchor: React.RefObject<HTMLDivElement | null>; poke: React.RefObject<number>; outfit: MascotOutfit; timeline?: number }) {
+function Head({ emotion, pose, still, anchor, poke, outfit, timeline, noSleep }: { emotion?: MascotEmotion; pose: MascotPose; still: boolean; noSleep?: boolean; anchor: React.RefObject<HTMLDivElement | null>; poke: React.RefObject<number>; outfit: MascotOutfit; timeline?: number }) {
   // "Polished skin": white glazed ceramic with a clear coat; the emotion only tints it softly
   const mat = useMemo(
     () => ({
@@ -410,7 +410,7 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline }: { emotio
     const rect = anchor.current?.getBoundingClientRect();
     const pointerFresh = pointer.at > 0 && now - pointer.at < 6000;
     const hovered = !!rect && pointerFresh && pointer.x >= rect.left && pointer.x <= rect.right && pointer.y >= rect.top && pointer.y <= rect.bottom;
-    const asleep = !still && pointer.at > 0 && now - pointer.at > 30000;
+    const asleep = !noSleep && !still && pointer.at > 0 && now - pointer.at > 30000;
     if (poke.current && poke.current !== b.lastPoke) {
       b.lastPoke = poke.current;
       b.mood = "surprised";
@@ -882,7 +882,7 @@ const CAMERA_Z = (5 * (1 + 2 * ROOM)) / 1.15;
  * its own: follows the cursor, smiles when the pointer is over it, gets startled when poked, dozes
  * off when nobody moves the mouse for a while, and shows a short mood now and then.
  */
-export function SyncroMascot3D({ pose = "idle", emotion, festive = false, outfit, timeline }: { pose?: MascotPose; emotion?: MascotEmotion; festive?: boolean; outfit?: MascotOutfit; /** Freezes the tree animation at this second (previews) */ timeline?: number }) {
+export function SyncroMascot3D({ pose = "idle", emotion, festive = false, outfit, timeline, noSleep }: { pose?: MascotPose; emotion?: MascotEmotion; festive?: boolean; outfit?: MascotOutfit; /** Freezes the tree animation at this second (previews) */ timeline?: number; /** Never dozes off (phones: no mouse to wake it, e.g. the SyncroCredit PWA) */ noSleep?: boolean }) {
   // `festive` is the older switch: Santa's outfit
   const wearing: MascotOutfit = outfit ?? (festive ? "santa" : "none");
   const anchor = useRef<HTMLDivElement>(null);
@@ -912,7 +912,7 @@ export function SyncroMascot3D({ pose = "idle", emotion, festive = false, outfit
         onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
       >
         <Studio />
-        <Head emotion={emotion} pose={pose} still={still} anchor={anchor} poke={poke} outfit={wearing} timeline={timeline} />
+        <Head emotion={emotion} pose={pose} still={still} anchor={anchor} poke={poke} outfit={wearing} timeline={timeline} noSleep={noSleep} />
       </Canvas>
       </div>
     </div>
