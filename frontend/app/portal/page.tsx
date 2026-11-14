@@ -1736,7 +1736,7 @@ $1color: #8E3418 !important;
                 <div className="flex-1 flex flex-col items-center justify-center px-6 pt-8 pb-10 relative z-10 min-h-[260px]">
                     {/* Still, but alive: blinks and reacts to what happens in the form */}
                     <NubiFace
-                        className="h-[70px] w-[78px]"
+                        className="h-[84px] w-[84px]"
                         mood={nubiFlash ?? (loading ? "thinking" : loginStep === "password" ? "happy" : "neutral")}
                     />
                     <h1 className="mt-3 text-center select-none" style={{ fontWeight: 800, letterSpacing: "-0.045em", lineHeight: 0.92, fontSize: "clamp(46px, 14vw, 72px)" }}>
