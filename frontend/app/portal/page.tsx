@@ -2152,7 +2152,9 @@ $1color: #8E3418 !important;
         );
 
         return (
-            <div className="space-y-0 animate-in fade-in duration-500">
+            // Fills the screen: the gaps between blocks share the free height evenly (with limits), and
+            // "Para ti" sits at the bottom so the PIN button floats over the cards, like in the design.
+            <div className="flex flex-col animate-in fade-in duration-500" style={{ minHeight: "calc(100dvh - 166px - env(safe-area-inset-top))" }}>
                 {/* Hello, with Nubi */}
                 <div className="relative text-white pr-24">
                     <h1 className="text-[30px] leading-tight" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>Hola{firstName ? `, ${firstName}` : ""}</h1>
@@ -2160,8 +2162,9 @@ $1color: #8E3418 !important;
                     <NubiFace className="!absolute -right-1 -top-4 h-[84px] w-[84px]" />
                 </div>
 
+                <div aria-hidden className="flex-1 min-h-4 max-h-9" />
                 {/* Credit card */}
-                <div className="relative mt-5 rounded-[26px] p-5 text-white overflow-hidden shadow-[0_18px_36px_-14px_rgba(40,20,10,0.55)]" style={{ background: "radial-gradient(90% 120% at 100% 0%, rgba(242,107,58,.55), rgba(242,107,58,0) 55%), linear-gradient(145deg,#2A2622,#151311)" }}>
+                <div className="relative rounded-[26px] p-5 text-white overflow-hidden shadow-[0_18px_36px_-14px_rgba(40,20,10,0.55)]" style={{ background: "radial-gradient(90% 120% at 100% 0%, rgba(242,107,58,.55), rgba(242,107,58,0) 55%), linear-gradient(145deg,#2A2622,#151311)" }}>
                     <span className="absolute right-4 top-4 rounded-full bg-white/12 px-2.5 py-1 text-[12px] font-bold">Nivel {levelInfo.level} · {levelInfo.name}</span>
                     <p className="text-[12.5px] font-semibold text-white/60">Crédito disponible</p>
                     <p className="mt-0.5 text-[42px] leading-none" style={{ fontWeight: 800, letterSpacing: "-0.04em" }}>{money(availableCredit)}</p>
@@ -2174,9 +2177,10 @@ $1color: #8E3418 !important;
                     </div>
                 </div>
 
+                <div aria-hidden className="flex-1 min-h-3 max-h-6" />
                 {/* Next payment */}
                 {nextInst ? (
-                    <div className="mt-3 flex items-center gap-3 rounded-[20px] border border-zinc-200 bg-white p-3.5">
+                    <div className="flex items-center gap-3 rounded-[20px] border border-zinc-200 bg-white p-3.5">
                         <div className={`size-11 shrink-0 rounded-2xl grid place-items-center ${daysUntil(nextInst.dueDate) < 0 ? "bg-rose-50 text-rose-600" : "bg-amber-100 text-amber-600"}`}>
                             <IconCalendar size={22} />
                         </div>
@@ -2187,7 +2191,7 @@ $1color: #8E3418 !important;
                         <button onClick={() => openPay(nextInst.debt)} className="ml-auto rounded-full bg-primary px-[18px] py-2.5 text-sm font-bold text-white shadow-[0_6px_14px_-6px_rgba(242,107,58,0.7)] active:scale-95 transition">Pagar</button>
                     </div>
                 ) : (
-                    <div className="mt-3 flex items-center gap-3 rounded-[20px] border border-emerald-100 bg-emerald-50/60 p-3.5">
+                    <div className="flex items-center gap-3 rounded-[20px] border border-emerald-100 bg-emerald-50/60 p-3.5">
                         <div className="size-11 shrink-0 rounded-2xl grid place-items-center bg-emerald-100 text-emerald-600"><IconCircleCheck size={22} /></div>
                         <div>
                             <p className="text-[12px] font-semibold text-emerald-700">Estás al día</p>
@@ -2196,8 +2200,9 @@ $1color: #8E3418 !important;
                     </div>
                 )}
 
+                <div aria-hidden className="flex-1 min-h-5 max-h-11" />
                 {/* Quick actions */}
-                <div className="mt-5 grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-4 gap-1.5">
                     {[
                         { label: "Pagar", icon: <IconWallet size={24} />, on: () => (nextInst ? openPay(nextInst.debt) : goTab("payments")) },
                         { label: "Mis cuotas", icon: <IconCalendar size={24} />, on: () => goTab("payments") },
@@ -2214,12 +2219,20 @@ $1color: #8E3418 !important;
                 {/* For you */}
                 {ads.length > 0 && (
                     <>
-                        <div className="mt-6 mb-2.5 flex items-baseline justify-between">
-                            <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Para ti</h3>
+                        <div aria-hidden className="flex-1 min-h-5" />
+                        <div className="mb-3 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Para ti</h3>
+                                {ads.length > 1 && (
+                                    <div className="flex gap-1.5">
+                                        {ads.map((_, i) => <span key={i} className={`h-1.5 rounded-full transition-all ${i === adIndex ? "w-[18px] bg-primary" : "w-1.5 bg-zinc-300"}`} />)}
+                                    </div>
+                                )}
+                            </div>
                             <button onClick={() => goTab("rewards")} className="text-[13px] font-bold text-amber-600">Ver todo</button>
                         </div>
                         <div
-                            className="-mx-6 px-6 flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-none"
+                            className="-mx-6 px-6 scroll-px-6 -mb-3 flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-none"
                             onScroll={(e) => {
                                 const el = e.currentTarget;
                                 setAdIndex(Math.round(el.scrollLeft / 312));
@@ -2227,11 +2240,6 @@ $1color: #8E3418 !important;
                         >
                             {ads}
                         </div>
-                        {ads.length > 1 && (
-                            <div className="mt-2.5 flex justify-center gap-1.5">
-                                {ads.map((_, i) => <span key={i} className={`h-1.5 rounded-full transition-all ${i === adIndex ? "w-[18px] bg-primary" : "w-1.5 bg-zinc-300"}`} />)}
-                            </div>
-                        )}
                     </>
                 )}
             </div>
