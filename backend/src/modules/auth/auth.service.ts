@@ -101,32 +101,41 @@ export class AuthService {
     };
   }
 
+  /** Every client whose cédula matches however it was typed, the exact spelling first. */
+  private async portalClients(documentId: string) {
+    const variants = documentIdVariants(documentId);
+    const list = await this.prisma.client.findMany({
+      where: { documentId: { in: variants, mode: 'insensitive' } },
+      orderBy: { updatedAt: 'desc' },
+      take: 20,
+    });
+    const exact = variants[0];
+    return list.sort((a, b) => Number((b.documentId || '').toUpperCase() === exact) - Number((a.documentId || '').toUpperCase() === exact));
+  }
+
   // ── Client Login (PWA Portal) ──────────────────────────────────────────────
   async clientLogin(documentId: string, password?: string) {
-    const client = await this.prisma.client.findFirst({
-      where: {
-        documentId: { in: documentIdVariants(documentId), mode: 'insensitive' },
-      },
-    });
-
-    if (!client) {
+    // The same cédula can be on more than one client (typed "V-123" in one place and "123" in
+    // another, or in two businesses): the account is the one this password opens.
+    const candidates = await this.portalClients(documentId);
+    if (!candidates.length) {
       throw new UnauthorizedException('Cliente no encontrado');
+    }
+    let client: (typeof candidates)[number] | null = null;
+    if (password) {
+      for (const c of candidates) {
+        if (c.password && (await bcrypt.compare(password, c.password))) { client = c; break; }
+      }
+    }
+    if (!client) {
+      if (!candidates.some((c) => c.password)) {
+        throw new UnauthorizedException('Esta cuenta requiere registrar una contraseña antes de acceder');
+      }
+      throw new UnauthorizedException(password ? 'Contraseña incorrecta' : 'La contraseña es requerida');
     }
 
     if (client.isSuspended) {
       throw new UnauthorizedException('Tu cuenta ha sido pausada temporalmente. Por favor comunícate con el comercio.');
-    }
-
-    if (client.password) {
-      if (!password) {
-        throw new UnauthorizedException('La contraseña es requerida');
-      }
-      const isPasswordValid = await bcrypt.compare(password, client.password);
-      if (!isPasswordValid) {
-        throw new UnauthorizedException('Contraseña incorrecta');
-      }
-    } else {
-      throw new UnauthorizedException('Esta cuenta requiere registrar una contraseña antes de acceder');
     }
 
     const payload = {
@@ -149,12 +158,10 @@ export class AuthService {
 
   // ── Client Check Status (PWA Portal) ───────────────────────────────────────
   async clientCheckStatus(documentId: string) {
-    const client = await this.prisma.client.findFirst({
-      where: {
-        documentId: { in: documentIdVariants(documentId), mode: 'insensitive' },
-      },
-    });
-
+    // Several clients may match the cédula: the one with a password first (log in), then the one
+    // waiting with an activation code (activate), then the exact spelling.
+    const candidates = await this.portalClients(documentId);
+    const client = candidates.find((c) => c.password) ?? candidates.find((c) => c.activationCode) ?? candidates[0];
     if (!client) {
       throw new UnauthorizedException('Cliente no encontrado');
     }
@@ -172,17 +179,13 @@ export class AuthService {
 
   // ── Client Register Password (PWA Portal) ──────────────────────────────────
   async clientRegisterPassword(documentId: string, activationCode: string, pass: string) {
-    const client = await this.prisma.client.findFirst({
-      where: {
-        documentId: { in: documentIdVariants(documentId), mode: 'insensitive' },
-      },
-    });
-
-    if (!client) {
+    // The account being activated is the one this code was generated for
+    const candidates = await this.portalClients(documentId);
+    if (!candidates.length) {
       throw new UnauthorizedException('Cliente no encontrado');
     }
-
-    if (!client.activationCode || client.activationCode !== activationCode) {
+    const client = candidates.find((c) => !!c.activationCode && c.activationCode === String(activationCode || '').trim());
+    if (!client) {
       throw new UnauthorizedException('Código de activación inválido');
     }
 

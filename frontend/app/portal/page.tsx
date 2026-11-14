@@ -14,7 +14,7 @@ import {
     IconCalendar, IconChevronRight, IconGift, IconMapPin, IconInfoCircle,
     IconShoppingBag, IconChevronLeft, IconSearch, IconBuildingStore, IconPhone,
     IconCamera, IconClock, IconTruck, IconCircleCheck, IconCircleX,
-    IconWallet, IconBrandPaypal, IconArrowRight, IconChevronDown
+    IconWallet, IconBrandPaypal, IconArrowRight, IconChevronDown, IconEye, IconEyeOff
 } from "@tabler/icons-react";
 
 import { toast } from "sonner";
@@ -396,6 +396,8 @@ function ClientPortalApp({ onReady }: { onReady: () => void }) {
 
     // Document type of the cédula (V, E, J, G, C), picked next to the number in the login
     const [docType, setDocType] = useState("V");
+    // The eye in the password fields: show what you typed
+    const [showPass, setShowPass] = useState(false);
     // Nubi in the login reacts: thinks while checking, sad on a mistake, happy when it knows you
     const [nubiFlash, setNubiFlash] = useState<NubiMood | null>(null);
     const nubiFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1717,8 +1719,17 @@ $1color: #8E3418 !important;
         const pill = "flex items-center h-14 rounded-full bg-white border border-zinc-200 pl-5 pr-1.5 gap-2 transition focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15";
         const pillInput = "flex-1 min-w-0 h-full bg-transparent outline-none text-[15px] font-medium text-zinc-900 placeholder:text-zinc-400";
         const pillBtn = "h-11 shrink-0 rounded-full bg-primary hover:bg-primary/90 text-white px-5 text-sm font-semibold inline-flex items-center gap-1.5 shadow-sm active:scale-95 transition disabled:opacity-60";
-        const plainPill = "w-full h-14 rounded-full bg-white border border-zinc-200 px-5 text-[15px] font-medium text-zinc-900 placeholder:text-zinc-400 outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15";
         const linkCls = "text-sm font-medium bg-transparent border-none outline-none cursor-pointer py-1.5 px-2 rounded-lg focus-visible:ring-2 focus-visible:ring-primary/30";
+        const eye = (
+            <button
+                type="button"
+                onClick={() => setShowPass((v) => !v)}
+                aria-label={showPass ? "Ocultar contraseña" : "Ver contraseña"}
+                className="size-10 shrink-0 grid place-items-center rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+                {showPass ? <IconEyeOff size={20} /> : <IconEye size={20} />}
+            </button>
+        );
         const backToDocument = () => {
             setLoginStep("document");
             setPassword("");
@@ -1816,7 +1827,7 @@ $1color: #8E3418 !important;
                                     <IconLock size={20} className="shrink-0 text-zinc-400" />
                                     <input
                                         id="sc-pass"
-                                        type="password"
+                                        type={showPass ? "text" : "password"}
                                         autoFocus
                                         autoComplete="current-password"
                                         aria-label="Contraseña"
@@ -1826,6 +1837,7 @@ $1color: #8E3418 !important;
                                         onChange={(e) => setPassword(e.target.value)}
                                         onKeyDown={(e) => e.key === "Enter" && handleLoginWithPassword()}
                                     />
+                                    {eye}
                                     <button onClick={handleLoginWithPassword} disabled={loading} className={pillBtn}>
                                         Entrar <IconArrowRight size={16} />
                                     </button>
@@ -1873,25 +1885,31 @@ $1color: #8E3418 !important;
                                         />
                                     ))}
                                 </div>
-                                <input
-                                    type="password"
-                                    autoComplete="new-password"
-                                    aria-label="Nueva contraseña"
-                                    placeholder="Nueva contraseña"
-                                    className={plainPill}
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                />
-                                <input
-                                    type="password"
-                                    autoComplete="new-password"
-                                    aria-label="Confirmar contraseña"
-                                    placeholder="Confirmar contraseña"
-                                    className={plainPill}
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && handleRegisterPassword()}
-                                />
+                                <div className={`${pill} !pr-2`}>
+                                    <input
+                                        type={showPass ? "text" : "password"}
+                                        autoComplete="new-password"
+                                        aria-label="Nueva contraseña"
+                                        placeholder="Nueva contraseña"
+                                        className={pillInput}
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                    />
+                                    {eye}
+                                </div>
+                                <div className={`${pill} !pr-2`}>
+                                    <input
+                                        type={showPass ? "text" : "password"}
+                                        autoComplete="new-password"
+                                        aria-label="Confirmar contraseña"
+                                        placeholder="Confirmar contraseña"
+                                        className={pillInput}
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        onKeyDown={(e) => e.key === "Enter" && handleRegisterPassword()}
+                                    />
+                                    {eye}
+                                </div>
                                 <button
                                     onClick={handleRegisterPassword}
                                     disabled={loading}
