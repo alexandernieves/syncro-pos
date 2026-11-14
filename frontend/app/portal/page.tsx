@@ -29,189 +29,35 @@ import {
     PolarGrid, PolarRadiusAxis, PolarAngleAxis, RadialBar, RadialBarChart, Label as RechartsLabel 
 } from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
+import { NubiSplash } from "@/components/portal/nubi-splash";
 
 const API = API_URL;
 const MAPBOX_TOKEN = "pk.eyJ1Ijoic3luY3JvcG9zIiwiYSI6ImNtcW80eHJoazF0MjQycXB6b2Q2c3loc3UifQ.RuEyWvPOieOxbOXf9Rq8rQ";
 
-// --- Custom Hand-Drawn Sketch Styles for Login (Sharpie/Marker style) ---
-
-const SplatterQuote = () => {
-    return (
-        <svg 
-            className="inline-block w-8 h-8 ml-1 align-middle select-none text-zinc-900" 
-            viewBox="0 0 32 32" 
-            fill="none" 
-            xmlns="http://www.w3.org/2000/svg"
-            style={{ transform: "rotate(4deg)", stroke: "currentColor" }}
-        >
-            {/* Ink Splatter / Drops */}
-            <circle cx="6" cy="22" r="1.5" fill="currentColor" />
-            <circle cx="26" cy="10" r="1.8" fill="currentColor" />
-            <circle cx="29" cy="24" r="1.0" fill="currentColor" />
-            <circle cx="14" cy="27" r="1.3" fill="currentColor" />
-            
-            {/* Little splatter sprays */}
-            <path d="M 5,8 L 7,10 M 8,7 L 6,9" strokeWidth="1.5" strokeLinecap="round" />
-            <path d="M 28,15 L 30,17 M 30,14 L 28,17" strokeWidth="1.0" strokeLinecap="round" opacity="0.8" />
-            <path d="M 12,2 L 14,4 M 14,2 L 12,4" strokeWidth="1.2" strokeLinecap="round" />
-
-            {/* Double quote marks - thick sharpie strokes */}
-            {/* Quote 1 */}
-            <path 
-                d="M 9,7 C 11,11 11,16 9,20" 
-                strokeWidth="5.5" 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-            />
-            {/* Quote 2 */}
-            <path 
-                d="M 19,6 C 21,10 21,15 19,19" 
-                strokeWidth="5.5" 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-            />
-        </svg>
-    );
-};
-
-const MarkerHighlight = ({ 
-    children, 
-    className = "", 
-    color = "#fbbf24", 
-    opacity = 0.88,
-    style = {}
-}: { 
-    children: React.ReactNode; 
-    className?: string; 
-    color?: string; 
-    opacity?: number;
-    style?: React.CSSProperties;
-}) => {
-    return (
-        <span className={`relative inline-block ${className}`} style={style}>
-            <svg
-                aria-hidden="true"
-                className="absolute inset-x-[-12px] inset-y-[-4px] w-[calc(100%+24px)] h-[calc(100%+8px)] pointer-events-none select-none"
-                preserveAspectRatio="none"
-                viewBox="0 0 200 50"
-                xmlns="http://www.w3.org/2000/svg"
-                style={{ zIndex: 0 }}
-            >
-                {/* Overlapping stroke 1: top half (thicker marker stroke) */}
-                <path
-                    d="M 5,18 C 50,12 100,16 150,14 C 175,13 190,17 195,15"
-                    fill="none"
-                    stroke={color}
-                    strokeWidth="19"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    opacity={opacity}
-                />
-                {/* Overlapping stroke 2: bottom half (thicker marker stroke) */}
-                <path
-                    d="M 8,32 C 55,36 110,30 160,34 C 175,35 188,31 193,33"
-                    fill="none"
-                    stroke={color}
-                    strokeWidth="21"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    opacity={opacity * 0.9}
-                />
-                {/* Overlapping stroke 3: middle connecting */}
-                <path
-                    d="M 12,24 C 60,20 120,26 170,22 C 182,21 191,25 196,23"
-                    fill="none"
-                    stroke={color}
-                    strokeWidth="15"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    opacity={opacity * 0.7}
-                />
-                {/* Edge scribble starts/ends to show ink pooling */}
-                <path
-                    d="M 4,12 C 6,18 5,28 3,36"
-                    fill="none"
-                    stroke="#f59e0b"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                    opacity="0.5"
-                />
-                <path
-                    d="M 194,15 C 196,22 195,30 193,38"
-                    fill="none"
-                    stroke="#f59e0b"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                    opacity="0.5"
-                />
-            </svg>
-            <span className="relative z-10">{children}</span>
-        </span>
-    );
-};
-
-const SharpieCard = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => {
-    return (
-        <div className={`relative p-8 mt-2 w-full ${className}`}>
-            {/* Hand-drawn ruled card */}
-            <svg
-                aria-hidden="true"
-                className="absolute inset-0 w-full h-full pointer-events-none select-none z-0"
-                preserveAspectRatio="none"
-                viewBox="0 0 200 200"
-                xmlns="http://www.w3.org/2000/svg"
-            >
-                {/* Page background fill */}
-                <path
-                    d="M 5,8 Q 100,5 195,8 T 192,192 Q 100,195 8,192 Z"
-                    fill="#ffffff"
-                />
-                {/* Main black Sharpie border (Thicker fine tip marker) */}
-                <path
-                    d="M 6,7 Q 100,4 194,7 T 193,193 Q 100,196 7,193 Z"
-                    fill="none"
-                    stroke="#1c1917"
-                    strokeWidth="4.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                />
-                {/* Secondary thin sketch line (Thicker fine tip marker) */}
-                <path
-                    d="M 4,9 Q 100,6 196,9 T 191,190 Q 100,194 9,190 Z"
-                    fill="none"
-                    stroke="#1c1917"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    opacity="0.4"
-                />
-                {/* Pink left-margin notebook line */}
-                <path
-                    d="M 32,4 L 32,196"
-                    fill="none"
-                    stroke="#f43f5e"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    opacity="0.65"
-                />
-                {/* Blue ruled lines */}
-                <path
-                    d="M 8,30 L 192,30 M 8,50 L 192,50 M 8,70 L 192,70 M 8,90 L 192,90 M 8,110 L 192,110 M 8,130 L 192,130 M 8,150 L 192,150 M 8,170 L 192,170"
-                    fill="none"
-                    stroke="#3b82f6"
-                    strokeWidth="1.2"
-                    strokeLinecap="round"
-                    opacity="0.18"
-                />
-            </svg>
-            <div className="relative z-10 flex flex-col gap-4">
-                {children}
-            </div>
-        </div>
-    );
-};
-
+/** The app behind Nubi's start screen, which leaves once the session check is done. */
 export default function ClientPortal() {
+    const [ready, setReady] = useState(false);
+    const onReady = useCallback(() => setReady(true), []);
+    return (
+        <>
+            <ClientPortalApp onReady={onReady} />
+            <NubiSplash ready={ready} />
+        </>
+    );
+}
+
+/** Small header used on every screen: the app name above the screen's title. */
+const PortalTitle = ({ children }: { children: React.ReactNode }) => (
+    <div className="select-none">
+        <p className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1.5">
+            <img src="/syncro.png" alt="" className="size-4 rounded-[5px]" />
+            Syncro <span className="text-primary -ml-1">Credit</span>
+        </p>
+        <h1 className="mt-1 text-[26px] font-bold leading-tight tracking-[-0.02em] text-zinc-900">{children}</h1>
+    </div>
+);
+
+function ClientPortalApp({ onReady }: { onReady: () => void }) {
     const [idSearch, setIdSearch] = useState("");
     const [client, setClient] = useState<any>(null);
     const [loans, setLoans] = useState<any[]>([]);
@@ -240,6 +86,7 @@ export default function ClientPortal() {
     const [showCancelConfirmModal, setShowCancelConfirmModal] = useState(false);
     const [loading, setLoading] = useState(false);
     const [isInitializing, setIsInitializing] = useState(true);
+    useEffect(() => { if (!isInitializing) onReady(); }, [isInitializing, onReady]);
     const [view, setView] = useState<"login" | "dashboard">("login");
     const [activeTab, setActiveTab] = useState<"home" | "payments" | "rewards" | "profile" | "auth-purchase">("home");
     
@@ -1485,8 +1332,8 @@ export default function ClientPortal() {
     const animationStyle = (
         <style>{`
             html, body {
-                background-color: ${view === "login" ? "#fffdf5" : "#faf9f5"} !important;
-                background: ${view === "login" ? "#fffdf5" : "#faf9f5"} !important;
+                background-color: ${"#F7F5F0"} !important;
+                background: ${"#F7F5F0"} !important;
             }
             @keyframes softFloat {
                 0%, 100% { transform: translateY(0px) rotate(0deg); }
@@ -1559,8 +1406,8 @@ export default function ClientPortal() {
             }
             .mapboxgl-ctrl-geocoder .suggestions > .active > a,
             .mapboxgl-ctrl-geocoder .suggestions > li > a:hover {
-                background-color: #fef3c7 !important;
-                color: #78350f !important;
+                background-color: #FDE4D8 !important;
+$1color: #8E3418 !important;
             }
 
             /* Stacking Context overlays control container above center pin */
@@ -1615,7 +1462,7 @@ export default function ClientPortal() {
 
     if (isInitializing) {
         return (
-            <div className="min-h-screen bg-[#faf9f5] text-zinc-800 font-sans-ui pb-28 relative overflow-x-clip">
+            <div className="min-h-screen bg-background text-zinc-800 font-sans-ui pb-28 relative overflow-x-clip">
                 {animationStyle}
 
                 {/* Header Skeleton */}
@@ -1674,7 +1521,7 @@ export default function ClientPortal() {
                                 {[1, 2, 3].map((i) => (
                                     <div key={i} className="pb-2 relative shrink-0 w-20 space-y-1 animate-pulse">
                                         <div className="h-3 w-16 bg-zinc-200/80 rounded" />
-                                        <div className="h-2 w-10 bg-zinc-150/70 rounded" />
+                                        <div className="h-2 w-10 bg-zinc-100/70 rounded" />
                                     </div>
                                 ))}
                             </div>
@@ -1697,11 +1544,11 @@ export default function ClientPortal() {
                                         <div className="flex justify-between items-start">
                                             <div className="space-y-2">
                                                 <div className="h-4 w-32 bg-zinc-200/80 rounded" />
-                                                <div className="h-3 w-24 bg-zinc-150/70 rounded" />
+                                                <div className="h-3 w-24 bg-zinc-100/70 rounded" />
                                             </div>
                                             <div className="flex flex-col items-end gap-1.5">
                                                 <div className="h-4 w-12 bg-zinc-200/80 rounded-full" />
-                                                <div className="h-3 w-14 bg-zinc-150/70 rounded" />
+                                                <div className="h-3 w-14 bg-zinc-100/70 rounded" />
                                                 <div className="h-4 w-16 bg-zinc-300/80 rounded" />
                                             </div>
                                         </div>
@@ -1719,7 +1566,7 @@ export default function ClientPortal() {
                         <div className="space-y-5 animate-pulse">
                             <div className="border-b border-zinc-100 pb-3 space-y-1.5">
                                 <div className="h-4 w-36 bg-zinc-200/80 rounded" />
-                                <div className="h-3 w-48 bg-zinc-150/70 rounded" />
+                                <div className="h-3 w-48 bg-zinc-100/70 rounded" />
                             </div>
                             
                             {/* Search input skeleton */}
@@ -1733,7 +1580,7 @@ export default function ClientPortal() {
                                             <div className="size-10 rounded-xl bg-zinc-200/80" />
                                             <div className="h-3.5 w-24 bg-zinc-200/80 rounded" />
                                         </div>
-                                        <div className="h-3 w-16 bg-zinc-150/70 rounded" />
+                                        <div className="h-3 w-16 bg-zinc-100/70 rounded" />
                                     </div>
                                 ))}
                             </div>
@@ -1746,8 +1593,8 @@ export default function ClientPortal() {
                             <div className="flex flex-col items-center text-center space-y-3">
                                 <div className="size-20 rounded-full bg-zinc-200/80 border-4 border-white shadow-md" />
                                 <div className="space-y-1">
-                                    <div className="h-5 w-28 bg-zinc-250/70 rounded mx-auto" />
-                                    <div className="h-3 w-20 bg-zinc-150/70 rounded mx-auto" />
+                                    <div className="h-5 w-28 bg-zinc-200/70 rounded mx-auto" />
+                                    <div className="h-3 w-20 bg-zinc-100/70 rounded mx-auto" />
                                 </div>
                             </div>
 
@@ -1756,7 +1603,7 @@ export default function ClientPortal() {
                                 {[1, 2, 3, 4].map((i) => (
                                     <div key={i} className="flex justify-between items-center py-1">
                                         <div className="space-y-1">
-                                            <div className="h-2.5 w-16 bg-zinc-150/70 rounded" />
+                                            <div className="h-2.5 w-16 bg-zinc-100/70 rounded" />
                                             <div className="h-3.5 w-32 bg-zinc-200/80 rounded" />
                                         </div>
                                     </div>
@@ -1769,7 +1616,7 @@ export default function ClientPortal() {
                         <div className="space-y-5 animate-pulse">
                             <div className="text-center space-y-2">
                                 <div className="h-5 w-40 bg-zinc-300/85 rounded mx-auto" />
-                                <div className="h-3 w-48 bg-[#fffbeb] rounded mx-auto" />
+                                <div className="h-3 w-48 bg-amber-50 rounded mx-auto" />
                             </div>
 
                             {/* PIN Code Boxes Skeleton */}
@@ -1780,8 +1627,8 @@ export default function ClientPortal() {
                             </div>
 
                             {/* Floating details box skeleton */}
-                            <div className="rounded-2xl bg-white border border-zinc-150 p-5 space-y-4 shadow-sm text-center">
-                                <div className="h-14 w-full bg-zinc-150/70 rounded-xl" />
+                            <div className="rounded-2xl bg-white border border-zinc-100 p-5 space-y-4 shadow-sm text-center">
+                                <div className="h-14 w-full bg-zinc-100/70 rounded-xl" />
                             </div>
                         </div>
                     )}
@@ -1801,7 +1648,7 @@ export default function ClientPortal() {
                             <div className="h-2 w-8 bg-zinc-200 rounded animate-pulse" />
                         </div>
                         <div className="relative w-[84px] h-full flex items-center justify-center shrink-0">
-                            <div className="absolute -top-[22px] size-14 rounded-full bg-zinc-200/80 animate-pulse border-4 border-[#faf9f5]" />
+                            <div className="absolute -top-[22px] size-14 rounded-full bg-zinc-200/80 animate-pulse border-4 border-background" />
                         </div>
                         <div className="flex-1 flex flex-col items-center justify-center gap-1 opacity-40">
                             <div className="size-5 bg-zinc-300 rounded-full animate-pulse" />
@@ -1819,34 +1666,21 @@ export default function ClientPortal() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-b from-[#fffdf0] via-white to-[#fffdf0] flex flex-col items-center justify-center p-6 font-sans-ui text-zinc-800 animate-in fade-in duration-300 relative overflow-hidden">
+            <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center p-6 text-zinc-800 animate-in fade-in duration-300 relative overflow-hidden">
                 {animationStyle}
-                
-                {/* Background Curves & Waves in Pastel Colors */}
-                <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden bg-gradient-to-b from-[#fffdf0] via-white to-[#fffdf0] select-none">
-                    <div className="absolute top-1/4 left-1/4 w-[300px] h-[300px] rounded-full bg-[#fef3c7]/20 blur-3xl animate-pulse" />
-                </div>
+                <div aria-hidden className="pointer-events-none absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2 size-[300px] rounded-full" style={{ background: "radial-gradient(circle, rgba(242,107,58,0.16) 0%, rgba(242,107,58,0) 65%)" }} />
 
-                <div className="relative flex flex-col items-center justify-center space-y-6 z-10 text-center">
-                    {/* Cheese & Grater - floating & scaling loading animation */}
-                    <div className="relative w-[180px] h-[180px] animate-soft-float-cheese select-none">
-                        <img 
-                            src="/cheese.png" 
-                            alt="Cargando..." 
-                            className="w-full h-full object-contain mix-blend-multiply" 
-                        />
+                <div className="relative flex flex-col items-center justify-center z-10 text-center">
+                    {/* Nubi waits with you */}
+                    <div className="relative h-[120px] w-[134px] animate-soft-float select-none">
+                        <img src="/nubi/nubi-neutral.webp" alt="" className="size-full object-contain" style={{ filter: "drop-shadow(0 16px 20px rgba(60,40,20,0.15))" }} />
                     </div>
-                    
-                    <div className="space-y-2">
-                        <h2 className="text-lg font-black text-zinc-800 tracking-tight">Procesando...</h2>
-                        <p className="text-xs text-zinc-450 font-bold max-w-[200px] leading-tight">Preparando tu cuenta de Syncro...</p>
+                    <div className="mt-6 space-y-1.5">
+                        <h2 className="text-lg font-semibold text-zinc-900">Un momento…</h2>
+                        <p className="text-sm text-zinc-500 max-w-[220px] leading-snug">Estamos preparando tu cuenta</p>
                     </div>
-                    
-                    {/* Minimal loading dot line */}
-                    <div className="flex gap-1.5 justify-center pt-2">
-                        <span className="size-2 rounded-full bg-[#fef3c7] animate-bounce [animation-delay:-0.3s]" />
-                        <span className="size-2 rounded-full bg-[#fde68a] animate-bounce [animation-delay:-0.15s]" />
-                        <span className="size-2 rounded-full bg-amber-400 animate-bounce" />
+                    <div className="mt-5 h-1 w-28 overflow-hidden rounded-full bg-zinc-200">
+                        <div className="h-full w-2/5 rounded-full bg-primary" style={{ animation: "sc-bar 1.1s ease-in-out infinite" }} />
                     </div>
                 </div>
             </div>
@@ -1863,229 +1697,99 @@ export default function ClientPortal() {
     }
 
     if (view === "login") {
-        const textStrokeStyle = {
-            WebkitTextStroke: "1.4px #1c1917",
-            fontWeight: "bold" as const,
-        };
+        const inputCls = "h-12 px-4 rounded-xl bg-white border-zinc-200 text-[15px] font-medium text-zinc-900 placeholder:text-zinc-400 shadow-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:border-primary";
+        const linkCls = "w-full text-center text-sm font-medium bg-transparent border-none outline-none cursor-pointer py-1.5 rounded-lg focus-visible:ring-2 focus-visible:ring-primary/30";
+        const title = loginStep === "register"
+            ? (isResettingPassword ? "Restablece tu contraseña" : "Activa tu cuenta")
+            : loginStep === "password"
+            ? <>¡Hola de nuevo{clientName ? `, ${clientName.split(" ")[0]}` : ""}!</>
+            : <>Compra hoy,<br /><span className="text-primary">paga después</span></>;
+        const subtitle = loginStep === "register"
+            ? "Escribe el código de 6 dígitos que te dio el comercio y crea tu contraseña."
+            : loginStep === "password"
+            ? "Ingresa tu contraseña para continuar."
+            : "Tu línea de crédito digital, sin complicaciones.";
 
         return (
-            <div className="min-h-screen bg-[#fffdf5] flex flex-col justify-between p-0 font-sans-ui text-zinc-800 animate-in fade-in duration-700 relative overflow-hidden">
+            <div className="min-h-[100dvh] bg-background flex flex-col text-zinc-800 relative overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
                 {animationStyle}
+                <div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 size-[520px] rounded-full" style={{ background: "radial-gradient(circle, rgba(242,107,58,0.07) 0%, rgba(242,107,58,0) 62%)" }} />
 
-                {/* Background blobs */}
-                <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden select-none">
-                    <div className="absolute -top-24 -right-24 w-[320px] h-[320px] rounded-full bg-amber-100/40 blur-3xl" />
-                    <div className="absolute bottom-0 -left-16 w-[280px] h-[280px] rounded-full bg-amber-50/60 blur-3xl" />
-
-                    {/* ——— Sharpie-drawn coins (Static, no float animation) ——— */}
-
-                    {/* Coin top-right — large */}
-                    <svg className="absolute top-8 right-5 w-20 h-20" style={{ transform: "rotate(15deg)" }} viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        {/* Fill */}
-                        <path d="M40,5 C56,4 75,20 75,40 C75,60 58,76 39,75 C20,75 5,59 5,40 C5,21 23,6 40,5 Z" fill="#fde68a" />
-                        {/* Outer border (Double drawn) (Thicker borders) */}
-                        <path d="M40,5 C56,4 75,20 75,40 C75,60 58,76 39,75 C20,75 5,59 5,40 C5,21 23,6 40,5 Z" stroke="#1c1917" strokeWidth="4.2" strokeLinecap="round" strokeLinejoin="round"/>
-                        <path d="M40,6 C55,5 73,21 73,40 C73,59 57,74 39,73 C21,73 7,58 7,40 C7,22 22,7 40,6 Z" stroke="#1c1917" strokeWidth="2.2" strokeLinecap="round" opacity="0.5"/>
-                        {/* Dollar sign sketched */}
-                        <path d="M40,15 L40,65" stroke="#1c1917" strokeWidth="4.2" strokeLinecap="round"/>
-                        <path d="M30,26 C30,21 34,18 40,18 C46,18 51,22 51,28 C51,34 46,37 40,39 C34,41 29,44 29,50 C29,56 33,60 40,60 C47,60 51,57 51,52" stroke="#1c1917" strokeWidth="4.2" fill="none" strokeLinecap="round"/>
-                        {/* Hatching/shading on bottom left */}
-                        <path d="M14,50 L20,53 M18,44 L25,48 M23,39 L30,43 M29,35 L36,39 M35,32 L42,36" stroke="#1c1917" strokeWidth="2.0" strokeLinecap="round" opacity="0.65"/>
-                        {/* Shine reflection strokes on top right */}
-                        <path d="M52,18 C60,23 66,31 67,40" stroke="#ffffff" strokeWidth="3.0" strokeLinecap="round" opacity="0.9"/>
-                    </svg>
-
-                    {/* Coin bottom-right — small tilted */}
-                    <svg className="absolute bottom-32 right-8 w-12 h-12" style={{ transform: "rotate(-20deg)" }} viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M30,4 C43,3 57,16 57,30 C57,45 44,57 30,57 C16,58 3,45 3,30 C2,16 16,5 30,4 Z" fill="#fde68a" />
-                        <path d="M30,4 C43,3 57,16 57,30 C57,45 44,57 30,57 C16,58 3,45 3,30 C2,16 16,5 30,4 Z" stroke="#1c1917" strokeWidth="3.8" strokeLinecap="round"/>
-                        <path d="M29,5 C41,4 55,17 55,30 C55,43 42,55 29,55 C16,56 5,43 5,30 C4,17 16,6 29,5 Z" stroke="#1c1917" strokeWidth="1.8" strokeLinecap="round" opacity="0.4"/>
-                        <path d="M30,13 L30,47" stroke="#1c1917" strokeWidth="3.8" strokeLinecap="round"/>
-                        <path d="M22,21 C22,17 25,14 30,14 C36,14 39,18 39,23 C39,28 35,30 30,31 C25,32 21,35 21,40 C21,45 24,47 30,47 C36,47 39,44 39,40" stroke="#1c1917" strokeWidth="3.8" fill="none" strokeLinecap="round"/>
-                        {/* Hatching/shading on bottom left */}
-                        <path d="M10,38 L15,41 M13,33 L19,36 M17,29 L23,32" stroke="#1c1917" strokeWidth="1.8" strokeLinecap="round" opacity="0.6"/>
-                        {/* Shine reflection */}
-                        <path d="M41,13 C47,17 51,23 52,30" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" opacity="0.9"/>
-                    </svg>
-
-                    {/* Coin top-left — medium */}
-                    <svg className="absolute top-20 -left-2 w-14 h-14" style={{ transform: "rotate(8deg)" }} viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M30,3 C44,2 58,15 58,30 C58,46 44,58 29,58 C14,58 2,45 2,30 C1,15 15,4 30,3 Z" fill="#fef3c7" />
-                        <path d="M30,3 C44,2 58,15 58,30 C58,46 44,58 29,58 C14,58 2,45 2,30 C1,15 15,4 30,3 Z" stroke="#1c1917" strokeWidth="3.8" strokeLinecap="round"/>
-                        <path d="M29,4 C42,3 55,16 55,30 C55,44 42,56 28,56 C14,56 4,44 4,30 C3,16 15,5 29,4 Z" stroke="#1c1917" strokeWidth="1.8" strokeLinecap="round" opacity="0.4"/>
-                        <path d="M30,13 L30,47" stroke="#1c1917" strokeWidth="3.8" strokeLinecap="round"/>
-                        <path d="M22,21 C22,17 25,14 30,14 C36,14 39,18 39,23 C39,28 35,30 30,31 C25,32 21,35 21,40 C21,45 24,47 30,47 C36,47 39,44 39,40" stroke="#1c1917" strokeWidth="3.8" fill="none" strokeLinecap="round"/>
-                        {/* Hatching/shading on bottom left */}
-                        <path d="M10,38 L15,41 M13,33 L19,36 M17,29 L23,32" stroke="#1c1917" strokeWidth="1.8" strokeLinecap="round" opacity="0.6"/>
-                        {/* Shine reflection */}
-                        <path d="M41,13 C47,17 51,23 52,30" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" opacity="0.9"/>
-                    </svg>
-
-                    {/* Coin scatter bottom-left — tiny */}
-                    <svg className="absolute bottom-16 left-6 w-9 h-9" style={{ transform: "rotate(-10deg)" }} viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M25,3 C36,2 48,13 48,25 C48,37 37,48 25,48 C13,49 2,38 2,25 C1,12 13,4 25,3 Z" fill="#fde68a" />
-                        <path d="M25,3 C36,2 48,13 48,25 C48,37 37,48 25,48 C13,49 2,38 2,25 C1,12 13,4 25,3 Z" stroke="#1c1917" strokeWidth="3.8" strokeLinecap="round"/>
-                        <path d="M24,4 C34,3 45,13 45,25 C45,36 35,46 24,46 C13,47 4,36 4,25 C3,13 13,5 24,4 Z" stroke="#1c1917" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
-                        <path d="M25,11 L25,39" stroke="#1c1917" strokeWidth="3.8" strokeLinecap="round"/>
-                        <path d="M18,18 C18,15 21,12 25,12 C30,12 32,16 32,20 C32,24 28,26 25,26 C22,27 17,29 17,33 C17,37 20,39 25,39 C30,39 32,36 32,33" stroke="#1c1917" strokeWidth="3.8" fill="none" strokeLinecap="round"/>
-                        {/* Hatching/shading on bottom left */}
-                        <path d="M8,31 L12,34 M10,27 L15,30 M13,23 L18,26" stroke="#1c1917" strokeWidth="1.6" strokeLinecap="round" opacity="0.6"/>
-                    </svg>
-
-                    {/* Stars / sparkles */}
-                    <svg className="absolute top-36 right-14 w-6 h-6" style={{ transform: "rotate(15deg)" }} viewBox="0 0 24 24" fill="none">
-                        <path d="M12,2 L13.5,8 L20,8 L14.5,12 L16.5,18 L12,14 L7.5,18 L9.5,12 L4,8 L10.5,8 Z" stroke="#1c1917" strokeWidth="2.2" fill="#fbbf24" strokeLinejoin="round"/>
-                    </svg>
-                    <svg className="absolute bottom-44 right-16 w-4 h-4" style={{ transform: "rotate(-10deg)" }} viewBox="0 0 24 24" fill="none">
-                        <path d="M12,2 L13.5,8 L20,8 L14.5,12 L16.5,18 L12,14 L7.5,18 L9.5,12 L4,8 L10.5,8 Z" stroke="#1c1917" strokeWidth="2.2" fill="#fef3c7" strokeLinejoin="round"/>
-                    </svg>
-                </div>
-
-                {/* Main content */}
-                <div className="flex-1 flex flex-col justify-center px-7 pt-14 pb-6 z-10 w-full relative">
-                    <div className="w-full max-w-sm mx-auto flex flex-col items-center gap-8">
-
-                        {/* Sharpie / Marker headline — centered, bolder pen stroke */}
-                        <div className="space-y-4 w-full text-center flex flex-col items-center">
-                            <h1 className="leading-[1.1] text-zinc-900 tracking-tight text-center">
-                                {loginStep === "register" ? (
-                                    <>
-                                        <span className="block font-handwritten text-[3.8rem] text-zinc-900 leading-none" style={{ transform: "rotate(-1.5deg) translateY(-2px)", transformOrigin: "center", ...textStrokeStyle }}>
-                                            Activa tu
-                                        </span>
-                                        <div className="mt-1 flex justify-center w-full">
-                                            <MarkerHighlight className="font-handwritten text-[4.0rem]" color="#fbbf24" style={{ transform: "rotate(2deg)", display: "inline-flex", alignItems: "center", transformOrigin: "center", ...textStrokeStyle }}>
-                                                cuenta
-                                                <SplatterQuote />
-                                            </MarkerHighlight>
-                                        </div>
-                                    </>
-                                ) : loginStep === "password" ? (
-                                    <>
-                                        <span className="block font-handwritten text-[3.8rem] text-zinc-900 leading-none" style={{ transform: "rotate(1.5deg) translateY(-2px)", transformOrigin: "center", ...textStrokeStyle }}>
-                                            ¡Bienvenido
-                                        </span>
-                                        <div className="mt-1 flex justify-center w-full">
-                                            <MarkerHighlight className="font-handwritten text-[4.0rem]" color="#fbbf24" style={{ transform: "rotate(-1.5deg)", display: "inline-flex", alignItems: "center", transformOrigin: "center", ...textStrokeStyle }}>
-                                                De vuelta!
-                                                <SplatterQuote />
-                                            </MarkerHighlight>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="flex justify-center w-full" style={{ transform: "rotate(-2deg)", transformOrigin: "center" }}>
-                                            <span className="font-handwritten text-[3.8rem] text-zinc-900 leading-none inline-flex items-center gap-3" style={textStrokeStyle}>
-                                                <MarkerHighlight color="#fbbf24">
-                                                    Compra
-                                                </MarkerHighlight>
-                                                hoy,
-                                            </span>
-                                        </div>
-                                        <div className="mt-1 flex justify-center w-full">
-                                            <span className="font-handwritten text-[4.0rem] inline-flex items-center gap-3" style={{ transform: "rotate(2deg)", transformOrigin: "center", ...textStrokeStyle }}>
-                                                paga{" "}
-                                                <span className="relative inline-block">
-                                                    después
-                                                    {/* Blue sharpie underline — curved, shorter, hand-drawn feel */}
-                                                    <svg
-                                                        aria-hidden="true"
-                                                        className="absolute pointer-events-none select-none"
-                                                        style={{ bottom: "-10px", left: "5%", width: "88%", height: "20px" }}
-                                                        viewBox="0 0 180 20"
-                                                        preserveAspectRatio="none"
-                                                        xmlns="http://www.w3.org/2000/svg"
-                                                    >
-                                                        {/* Main sweeping arc — starts mid-left, dips down, lifts back */}
-                                                        <path
-                                                            d="M 8,8 C 35,14 75,16 110,12 C 135,9 158,7 172,10"
-                                                            stroke="#38bdf8"
-                                                            strokeWidth="6.5"
-                                                            strokeLinecap="round"
-                                                            fill="none"
-                                                            opacity="0.9"
-                                                        />
-                                                        {/* Shadow stroke — slightly offset, gives depth */}
-                                                        <path
-                                                            d="M 10,10 C 38,15 78,17 112,13 C 137,11 159,9 171,12"
-                                                            stroke="#0284c7"
-                                                            strokeWidth="3"
-                                                            strokeLinecap="round"
-                                                            fill="none"
-                                                            opacity="0.35"
-                                                        />
-                                                    </svg>
-                                                </span>!
-                                            </span>
-                                        </div>
-                                    </>
-                                )}
-                            </h1>
-
-                            <p
-                                className="font-handwritten text-[1.45rem] text-zinc-550 leading-snug text-center"
-                                style={{ transform: "rotate(-0.5deg)", transformOrigin: "center", ...textStrokeStyle }}
-                            >
-                                {loginStep === "register"
-                                    ? (isResettingPassword ? "Restablece tu contraseña" : "Ingresa tu código de activación")
-                                    : loginStep === "password"
-                                    ? "Ingresa tu contraseña para continuar"
-                                    : "Tu línea de crédito digital, sin complicaciones."}
-                            </p>
+                <div className="flex-1 flex flex-col justify-center px-6 py-10 relative z-10">
+                    <div className="w-full max-w-sm mx-auto">
+                        {/* Nubi greets: smiles once it recognises the cédula */}
+                        <div className="relative mx-auto mb-6 h-[92px] w-[104px] animate-soft-float">
+                            <img src="/nubi/nubi-neutral.webp" alt="" className="absolute inset-0 size-full object-contain transition-opacity duration-300" style={{ opacity: loginStep === "password" ? 0 : 1, filter: "drop-shadow(0 12px 16px rgba(60,40,20,0.14))" }} />
+                            <img src="/nubi/nubi-happy.webp" alt="" className="absolute inset-0 size-full object-contain transition-opacity duration-300" style={{ opacity: loginStep === "password" ? 1 : 0, filter: "drop-shadow(0 12px 16px rgba(60,40,20,0.14))" }} />
                         </div>
 
-                        {/* Separator wavy line (Thicker outlines) */}
-                        <div className="w-full flex justify-center" style={{ transform: "rotate(-1deg)", transformOrigin: "center" }}>
-                            <svg viewBox="0 0 280 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full max-w-[220px]">
-                                <path d="M 2,9 C 18,3 36,14 58,7 C 78,1 98,13 118,7 C 138,2 158,13 178,7 C 198,2 218,13 240,7 C 258,2 272,11 278,7" stroke="#1c1917" strokeWidth="4.5" strokeLinecap="round" fill="none"/>
-                                <path d="M 4,11 C 19,6 37,15 57,9 C 78,3 97,14 117,9 C 137,4 157,14 177,9 C 197,4 217,15 239,9 C 257,4 271,12 276,9" stroke="#1c1917" strokeWidth="2.2" strokeLinecap="round" fill="none" opacity="0.4"/>
-                            </svg>
+                        <div className="text-center mb-7">
+                            <p className="text-xs font-semibold text-zinc-400 mb-2">Syncro <span className="text-primary">Credit</span></p>
+                            <h1 key={loginStep} className="text-[30px] font-bold leading-[1.12] tracking-[-0.025em] text-zinc-900 animate-in fade-in slide-in-from-bottom-1 duration-300">{title}</h1>
+                            <p className="mt-2.5 text-sm text-zinc-500 leading-relaxed max-w-[290px] mx-auto">{subtitle}</p>
                         </div>
 
-                        {/* Form Steps */}
-                        <div className="w-full">
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_2px_rgba(26,24,21,0.04),0_8px_24px_-12px_rgba(26,24,21,0.10)]">
                             {loginStep === "document" && (
-                                <div className="space-y-4 w-full">
-                                    <Input 
-                                        placeholder="Cédula de identidad (ej. V12345678)" 
-                                        className="h-13 px-5 rounded-[1.25rem] bg-white border-zinc-200 text-sm font-semibold focus-visible:ring-amber-300 text-zinc-850 placeholder:text-zinc-450 transition-all duration-300 shadow-inner"
-                                        value={idSearch}
-                                        onChange={(e) => setIdSearch(e.target.value)}
-                                        onKeyDown={(e) => e.key === "Enter" && handleCheckStatus()}
-                                    />
-                                    <Button 
+                                <div className="space-y-4">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="sc-doc" className="text-xs font-semibold text-zinc-600">Cédula de identidad</Label>
+                                        <Input
+                                            id="sc-doc"
+                                            autoFocus
+                                            inputMode="text"
+                                            autoComplete="username"
+                                            placeholder="Ej. V12345678"
+                                            className={inputCls}
+                                            value={idSearch}
+                                            onChange={(e) => setIdSearch(e.target.value)}
+                                            onKeyDown={(e) => e.key === "Enter" && handleCheckStatus()}
+                                        />
+                                    </div>
+                                    <Button
                                         onClick={handleCheckStatus}
                                         disabled={loading}
-                                        className="w-full h-13 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none"
+                                        className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold text-[15px] shadow-sm active:scale-[0.98] transition"
                                     >
-                                        Ingresar
+                                        Continuar
                                     </Button>
                                 </div>
                             )}
 
                             {loginStep === "password" && (
-                                <div className="space-y-4 w-full animate-in fade-in slide-in-from-right-4 duration-300">
-                                    <div className="text-left px-1 mb-1">
-                                        <p className="text-[10px] text-zinc-400 font-bold">Cliente detectado</p>
-                                        <p className="text-sm font-black text-zinc-850">{clientName}</p>
+                                <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-300">
+                                    <div className="flex items-center gap-3 rounded-xl bg-zinc-50 border border-zinc-100 px-3 py-2.5">
+                                        <div className="size-9 rounded-full bg-amber-100 text-amber-700 grid place-items-center text-sm font-bold">
+                                            {(clientName || "?").trim().charAt(0).toUpperCase()}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[11px] text-zinc-400 font-medium">Cliente</p>
+                                            <p className="text-sm font-semibold text-zinc-900 truncate">{clientName}</p>
+                                        </div>
                                     </div>
-                                    <Input 
-                                        type="password"
-                                        placeholder="Contraseña" 
-                                        className="h-13 px-5 rounded-[1.25rem] bg-white border-zinc-200 text-sm font-semibold focus-visible:ring-amber-300 text-zinc-850 placeholder:text-zinc-450 transition-all duration-300 shadow-inner"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        onKeyDown={(e) => e.key === "Enter" && handleLoginWithPassword()}
-                                    />
-                                    <Button 
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="sc-pass" className="text-xs font-semibold text-zinc-600">Contraseña</Label>
+                                        <Input
+                                            id="sc-pass"
+                                            type="password"
+                                            autoFocus
+                                            autoComplete="current-password"
+                                            placeholder="Tu contraseña"
+                                            className={inputCls}
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            onKeyDown={(e) => e.key === "Enter" && handleLoginWithPassword()}
+                                        />
+                                    </div>
+                                    <Button
                                         onClick={handleLoginWithPassword}
                                         disabled={loading}
-                                        className="w-full h-13 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none"
+                                        className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold text-[15px] shadow-sm active:scale-[0.98] transition"
                                     >
                                         Ingresar
                                     </Button>
-                                    <div className="flex flex-col gap-1.5 w-full mt-1.5 pt-1">
-                                        <button 
+                                    <div className="flex flex-col gap-0.5 pt-1">
+                                        <button
                                             onClick={() => {
                                                 setLoginStep("register");
                                                 setIsResettingPassword(true);
@@ -2094,27 +1798,28 @@ export default function ClientPortal() {
                                                 setActivationCode("");
                                                 setOtpDigits(["", "", "", "", "", ""]);
                                             }}
-                                            className="w-full text-center text-sm text-[#854d0e] hover:text-amber-950 font-handwritten underline bg-transparent border-none outline-none cursor-pointer py-1"
+                                            className={`${linkCls} text-primary hover:text-amber-600`}
                                         >
                                             Olvidé mi contraseña
                                         </button>
-                                        <button 
+                                        <button
                                             onClick={() => {
                                                 setLoginStep("document");
                                                 setPassword("");
                                             }}
-                                            className="w-full text-center text-sm text-zinc-500 hover:text-zinc-700 font-handwritten underline bg-transparent border-none outline-none cursor-pointer py-1"
+                                            className={`${linkCls} text-zinc-500 hover:text-zinc-700`}
                                         >
-                                            Ingresar otra cédula
+                                            Usar otra cédula
                                         </button>
                                     </div>
                                 </div>
                             )}
 
                             {loginStep === "register" && (
-                                <div className="space-y-4 w-full animate-in fade-in slide-in-from-right-4 duration-300">
+                                <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-300">
                                     <div className="space-y-1.5">
-                                        <div className="flex justify-between gap-1.5 w-full px-1 py-1">
+                                        <Label className="text-xs font-semibold text-zinc-600">{isResettingPassword ? "Código de restablecimiento" : "Código de activación"}</Label>
+                                        <div className="flex justify-between gap-1.5">
                                             {otpDigits.map((digit, idx) => (
                                                 <input
                                                     key={idx}
@@ -2122,40 +1827,50 @@ export default function ClientPortal() {
                                                     type="text"
                                                     inputMode="numeric"
                                                     pattern="[0-9]*"
+                                                    autoComplete={idx === 0 ? "one-time-code" : "off"}
                                                     maxLength={1}
                                                     value={digit}
                                                     onChange={(e) => handleOtpChange(idx, e.target.value)}
                                                     onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                                                     onPaste={handleOtpPaste}
-                                                    className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white border border-zinc-200 text-center font-black text-lg focus:ring-2 focus:ring-amber-300 focus:border-amber-400 outline-none transition-all duration-200 shadow-inner text-zinc-850"
+                                                    className={`w-full max-w-12 h-12 rounded-xl bg-white border text-center font-semibold text-lg text-zinc-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/25 ${digit ? "border-amber-300" : "border-zinc-200"}`}
                                                 />
                                             ))}
                                         </div>
-                                        <p className="text-[10px] text-zinc-400 font-bold text-center pt-1">{isResettingPassword ? "Código de restablecimiento" : "Código de activación"}</p>
                                     </div>
-                                    <Input 
-                                        type="password"
-                                        placeholder="Nueva contraseña" 
-                                        className="h-12 px-5 rounded-[1.25rem] bg-white border-zinc-200 text-sm font-semibold focus-visible:ring-amber-300 text-zinc-850 placeholder:text-zinc-450 transition-all duration-300 shadow-inner"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                    />
-                                    <Input 
-                                        type="password"
-                                        placeholder="Confirmar contraseña" 
-                                        className="h-12 px-5 rounded-[1.25rem] bg-white border-zinc-200 text-sm font-semibold focus-visible:ring-amber-300 text-zinc-850 placeholder:text-zinc-450 transition-all duration-300 shadow-inner"
-                                        value={confirmPassword}
-                                        onChange={(e) => setConfirmPassword(e.target.value)}
-                                        onKeyDown={(e) => e.key === "Enter" && handleRegisterPassword()}
-                                    />
-                                    <Button 
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="sc-new" className="text-xs font-semibold text-zinc-600">Nueva contraseña</Label>
+                                        <Input
+                                            id="sc-new"
+                                            type="password"
+                                            autoComplete="new-password"
+                                            placeholder="Mínimo 6 caracteres"
+                                            className={inputCls}
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="sc-confirm" className="text-xs font-semibold text-zinc-600">Confirmar contraseña</Label>
+                                        <Input
+                                            id="sc-confirm"
+                                            type="password"
+                                            autoComplete="new-password"
+                                            placeholder="Repítela"
+                                            className={inputCls}
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            onKeyDown={(e) => e.key === "Enter" && handleRegisterPassword()}
+                                        />
+                                    </div>
+                                    <Button
                                         onClick={handleRegisterPassword}
                                         disabled={loading}
-                                        className="w-full h-13 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none"
+                                        className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold text-[15px] shadow-sm active:scale-[0.98] transition"
                                     >
-                                        {isResettingPassword ? "Restablecer" : "Activar cuenta"}
+                                        {isResettingPassword ? "Restablecer contraseña" : "Activar cuenta"}
                                     </Button>
-                                    <button 
+                                    <button
                                         onClick={() => {
                                             setLoginStep("document");
                                             setPassword("");
@@ -2163,9 +1878,9 @@ export default function ClientPortal() {
                                             setActivationCode("");
                                             setOtpDigits(["", "", "", "", "", ""]);
                                         }}
-                                        className="w-full text-center text-sm text-zinc-500 hover:text-zinc-700 font-handwritten underline bg-transparent border-none outline-none cursor-pointer py-1"
+                                        className={`${linkCls} text-zinc-500 hover:text-zinc-700`}
                                     >
-                                        Ingresar otra cédula
+                                        Usar otra cédula
                                     </button>
                                 </div>
                             )}
@@ -2173,10 +1888,9 @@ export default function ClientPortal() {
                     </div>
                 </div>
 
-                {/* Footer */}
-                <div className="w-full text-center pb-8 z-10 relative">
-                    <p className="text-[9px] text-zinc-400 font-bold flex items-center justify-center gap-1.5">
-                        <IconLock size={11} /> Conexión encriptada
+                <div className="w-full text-center pb-6 relative z-10">
+                    <p className="text-[11px] text-zinc-400 font-medium flex items-center justify-center gap-1.5">
+                        <IconLock size={12} /> Conexión cifrada · Syncro
                     </p>
                 </div>
             </div>
@@ -2185,34 +1899,24 @@ export default function ClientPortal() {
 
     if (view === "dashboard" && client?.isSuspended) {
         return (
-            <div className="min-h-screen bg-gradient-to-b from-[#fff5f5] via-white to-[#fff5f5] flex flex-col items-center justify-center p-6 text-center font-sans-ui text-zinc-800 animate-in fade-in duration-500 relative overflow-hidden">
+            <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center p-6 text-center text-zinc-800 animate-in fade-in duration-500 relative overflow-hidden">
                 {animationStyle}
-                <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden select-none">
-                    <div className="absolute -top-20 -right-20 w-[300px] h-[300px] rounded-full bg-rose-100/30 blur-2xl" />
-                    <div className="absolute bottom-10 -left-20 w-[260px] h-[260px] rounded-full bg-rose-50/20 blur-3xl" />
-                </div>
-
-                <div className="relative max-w-sm w-full bg-white border border-rose-100 rounded-[2rem] p-8 shadow-sm space-y-6 z-10 flex flex-col items-center">
-                    <div className="relative w-[150px] h-[150px] select-none">
-                        <img 
-                            src="/mascot.png" 
-                            alt="Mascota arepa triste" 
-                            className="w-full h-full object-contain grayscale opacity-80" 
-                        />
+                <div className="relative max-w-sm w-full bg-white border border-zinc-200 rounded-2xl p-7 shadow-sm space-y-5 z-10 flex flex-col items-center">
+                    {/* Nubi dozing: the account is on hold, not gone */}
+                    <div className="relative h-[100px] w-[112px] select-none">
+                        <img src="/nubi/nubi-sleepy.webp" alt="" className="size-full object-contain opacity-90" style={{ filter: "grayscale(0.4) drop-shadow(0 12px 16px rgba(60,40,20,0.12))" }} />
                     </div>
                     <div className="space-y-2">
-                        <h2 className="text-2xl font-black text-rose-700 tracking-tight">Cuenta pausada</h2>
-                        <p className="text-zinc-650 text-sm font-bold max-w-xs mx-auto leading-snug">
-                            Tu cuenta de SyncroCredit ha sido pausada temporalmente.
-                        </p>
-                        <p className="text-zinc-400 text-xs font-semibold leading-relaxed pt-2">
-                            Por favor, comunícate con el comercio o acércate a la caja para más información sobre tu límite de crédito y reactivación.
+                        <span className="inline-flex items-center rounded-full bg-rose-50 border border-rose-100 px-2.5 py-0.5 text-[11px] font-semibold text-rose-700">Cuenta pausada</span>
+                        <h2 className="text-xl font-semibold text-zinc-900">Tu crédito está en pausa</h2>
+                        <p className="text-zinc-500 text-sm leading-relaxed">
+                            Comunícate con el comercio o acércate a la caja para saber cómo reactivar tu línea de crédito.
                         </p>
                     </div>
-                    
-                    <Button 
+                    <Button
                         onClick={handleLogout}
-                        className="w-full h-12 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 font-black text-sm shadow-sm transition-all border-none"
+                        variant="outline"
+                        className="w-full h-12 rounded-xl border-zinc-200 bg-white text-zinc-700 font-semibold text-sm"
                     >
                         Cerrar sesión
                     </Button>
@@ -2222,19 +1926,19 @@ export default function ClientPortal() {
     }
 
     return (
-        <div className="min-h-screen bg-[#faf9f5] text-zinc-800 font-sans-ui pb-28 animate-in fade-in duration-500 relative overflow-x-clip">
+        <div className="min-h-screen bg-background text-zinc-800 font-sans-ui pb-28 animate-in fade-in duration-500 relative overflow-x-clip">
             {animationStyle}
 
             {/* Header */}
             {!isOrdersListOpen && !isTrackingOpen && (
-                <div className="px-6 pt-4 pb-0 mb-4 flex items-center z-50 relative">
-                    <span className="text-zinc-850 text-4xl font-handwritten select-none leading-none tracking-normal">
-                        {activeTab === "home" && `¡Hola${client ? `, ${client.name.split(" ")[0]}` : ""}!`}
-                        {activeTab === "payments" && `¡Aquí tus pagos${client ? `, ${client.name.split(" ")[0]}` : ""}!`}
-                        {activeTab === "rewards" && `¡Compra en nuestras tiendas${client ? `, ${client.name.split(" ")[0]}` : ""}!`}
-                        {activeTab === "profile" && `¡Tu perfil${client ? `, ${client.name.split(" ")[0]}` : ""}!`}
-                        {activeTab === "auth-purchase" && `¡Autoriza tu compra${client ? `, ${client.name.split(" ")[0]}` : ""}!`}
-                    </span>
+                <div className="max-w-md mx-auto px-6 mb-5 z-50 relative" style={{ paddingTop: "calc(env(safe-area-inset-top) + 18px)" }}>
+                    <PortalTitle>
+                        {activeTab === "home" && `Hola${client ? `, ${client.name.split(" ")[0]}` : ""}`}
+                        {activeTab === "payments" && "Tus pagos"}
+                        {activeTab === "rewards" && "Compra en tiendas"}
+                        {activeTab === "profile" && "Tu perfil"}
+                        {activeTab === "auth-purchase" && "Autoriza tu compra"}
+                    </PortalTitle>
                 </div>
             )}
 
@@ -2258,7 +1962,7 @@ export default function ClientPortal() {
                             <Button
                                 variant="ghost"
                                 onClick={() => setRequestLoanView(false)}
-                                className="text-xs text-[#854d0e] hover:text-amber-850 font-extrabold h-8 px-3 rounded-full bg-amber-50 hover:bg-amber-100/60 border border-amber-200/50 flex items-center gap-1 transition-all duration-300"
+                                className="text-xs text-amber-800 hover:text-amber-800 font-extrabold h-8 px-3 rounded-full bg-amber-50 hover:bg-amber-100/60 border border-amber-200/50 flex items-center gap-1 transition-all duration-300"
                             >
                                 ← Volver
                             </Button>
@@ -2276,13 +1980,13 @@ export default function ClientPortal() {
                                 <div className="space-y-2">
                                     <h3 className="text-lg font-black text-zinc-800">Solicitud en revisión</h3>
                                     <p className="text-xs text-zinc-500 leading-relaxed font-semibold">
-                                        Tu solicitud de préstamo por <strong className="text-amber-850">${pendingRequestLoan.amount} USD</strong> está siendo evaluada por el comercio.
+                                        Tu solicitud de préstamo por <strong className="text-amber-800">${pendingRequestLoan.amount} USD</strong> está siendo evaluada por el comercio.
                                     </p>
                                     <p className="text-[10px] text-zinc-400 font-bold mt-3">
                                         Te notificaremos aquí una vez sea aprobada.
                                     </p>
                                 </div>
-                                <div className="bg-zinc-50 border border-zinc-150/60 rounded-xl p-4 text-[10px] space-y-1.5 text-left text-zinc-500">
+                                <div className="bg-zinc-50 border border-zinc-100/60 rounded-xl p-4 text-[10px] space-y-1.5 text-left text-zinc-500">
                                     <div className="flex justify-between">
                                         <span>Monto solicitado:</span>
                                         <span className="font-extrabold text-zinc-700">${pendingRequestLoan.amount.toFixed(2)} USD</span>
@@ -2307,15 +2011,15 @@ export default function ClientPortal() {
                                 </div>
                                 <div className="space-y-2">
                                     <h3 className="text-lg font-black text-zinc-800">¡Préstamo aprobado!</h3>
-                                    <p className="text-xs text-zinc-550 leading-relaxed font-semibold">
-                                        Tu préstamo por <strong className="text-emerald-750">${approvedRequestLoan.amount} USD</strong> ha sido aprobado.
+                                    <p className="text-xs text-zinc-600 leading-relaxed font-semibold">
+                                        Tu préstamo por <strong className="text-emerald-700">${approvedRequestLoan.amount} USD</strong> ha sido aprobado.
                                     </p>
                                     <div className="bg-emerald-50/50 border border-emerald-100/50 rounded-xl p-4 text-xs font-semibold text-emerald-800 space-y-2 mt-3 leading-tight text-left">
                                         <p>📍 Por favor acércate al negocio o sucursal para desembolsar el dinero en efectivo.</p>
                                         <p>🤝 En la sucursal coordinaremos a cuántas cuotas pagarás tu préstamo y en qué días.</p>
                                     </div>
                                 </div>
-                                <div className="bg-zinc-50 border border-zinc-150/60 rounded-xl p-4 text-[10px] space-y-1.5 text-left text-zinc-500">
+                                <div className="bg-zinc-50 border border-zinc-100/60 rounded-xl p-4 text-[10px] space-y-1.5 text-left text-zinc-500">
                                     <div className="flex justify-between">
                                         <span>Monto a entregar:</span>
                                         <span className="font-extrabold text-zinc-700">${approvedRequestLoan.amount.toFixed(2)} USD</span>
@@ -2333,7 +2037,7 @@ export default function ClientPortal() {
                         ) : (
                             <div className="space-y-6">
                                 <div className="text-center space-y-2">
-                                    <h3 className="text-xl font-black text-zinc-850">¿Cuánto dinero necesitas?</h3>
+                                    <h3 className="text-xl font-black text-zinc-800">¿Cuánto dinero necesitas?</h3>
                                     <p className="text-xs text-zinc-400 font-bold max-w-xs mx-auto leading-tight">
                                         Como cliente nivel 1, puedes solicitar préstamos rápidos en efectivo.
                                     </p>
@@ -2351,19 +2055,19 @@ export default function ClientPortal() {
                                                 className={`rounded-2xl p-5 border text-center cursor-pointer transition-all duration-300 flex flex-col justify-between space-y-3 ${
                                                     isSelected
                                                         ? 'bg-gradient-to-b from-white to-amber-50/15 border-amber-400 shadow-md shadow-amber-500/5'
-                                                        : 'bg-white border-zinc-150 hover:border-zinc-200'
+                                                        : 'bg-white border-zinc-100 hover:border-zinc-200'
                                                 }`}
                                             >
                                                 <div className="space-y-1">
-                                                    <p className="text-xs text-zinc-450 font-bold">Monto</p>
-                                                    <p className="text-3xl font-black text-zinc-850">${amt}</p>
+                                                    <p className="text-xs text-zinc-500 font-bold">Monto</p>
+                                                    <p className="text-3xl font-black text-zinc-800">${amt}</p>
                                                 </div>
                                                 <div className="border-t border-zinc-100 pt-2.5 space-y-1 text-[9px] text-zinc-400 font-bold text-left">
                                                     <div className="flex justify-between">
                                                         <span>Interés (20%):</span>
-                                                        <span className="text-zinc-650">${interest.toFixed(0)} USD</span>
+                                                        <span className="text-zinc-600">${interest.toFixed(0)} USD</span>
                                                     </div>
-                                                    <div className="flex justify-between text-[10px] font-extrabold text-amber-805">
+                                                    <div className="flex justify-between text-[10px] font-extrabold text-amber-800">
                                                         <span>Total:</span>
                                                         <span>${total.toFixed(0)} USD</span>
                                                     </div>
@@ -2373,10 +2077,10 @@ export default function ClientPortal() {
                                     })}
                                 </div>
 
-                                <div className="bg-[#fffdf4] border border-amber-100/60 p-4 rounded-xl flex items-start gap-3">
+                                <div className="bg-amber-50 border border-amber-100/60 p-4 rounded-xl flex items-start gap-3">
                                     <IconInfoCircle size={18} className="text-amber-700 shrink-0 mt-0.5" />
                                     <div className="space-y-0.5 text-[10px] text-zinc-500 leading-normal font-semibold">
-                                        <p className="font-bold text-[#854d0e]">Información importante</p>
+                                        <p className="font-bold text-amber-800">Información importante</p>
                                         <p>• Los préstamos se entregan en efectivo dólares (USD) en la sucursal.</p>
                                         <p>• La tasa cobrada es del 20% semanal.</p>
                                         <p>• Al retirar acordarás el número de cuotas y fechas de pago.</p>
@@ -2386,7 +2090,7 @@ export default function ClientPortal() {
                                 <Button
                                     onClick={handleRequestLoan}
                                     disabled={!selectedAmount || submittingRequest}
-                                    className="w-full h-13 rounded-full bg-[#fef3c7] hover:bg-[#fde68a] text-[#854d0e] font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
+                                    className="w-full h-12 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-800 font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
                                 >
                                     {submittingRequest ? "Enviando solicitud..." : `Solicitar $${selectedAmount} USD`}
                                 </Button>
@@ -2417,7 +2121,7 @@ export default function ClientPortal() {
                                             gridType="circle"
                                             radialLines={false}
                                             stroke="none"
-                                            className="first:fill-zinc-200 last:fill-[#faf9f5]"
+                                            className="first:fill-zinc-200 last:fill-background"
                                             polarRadius={[155, 130]}
                                         />
                                         <PolarAngleAxis
@@ -2593,7 +2297,7 @@ export default function ClientPortal() {
                                         setSelectedDebtForPayment(null);
                                         setPaymentStep("details");
                                     }}
-                                    className="text-xs text-[#854d0e] hover:text-amber-850 font-extrabold h-8 px-3 rounded-full bg-amber-50 hover:bg-amber-100/60 border border-amber-200/50 flex items-center gap-1 transition-all duration-300"
+                                    className="text-xs text-amber-800 hover:text-amber-800 font-extrabold h-8 px-3 rounded-full bg-amber-50 hover:bg-amber-100/60 border border-amber-200/50 flex items-center gap-1 transition-all duration-300"
                                 >
                                     ← Volver
                                 </button>
@@ -2614,7 +2318,7 @@ export default function ClientPortal() {
                                     <div className="rounded-2xl bg-white border border-zinc-100 p-5 space-y-4 shadow-sm animate-in fade-in duration-300">
                                         <div className="flex justify-between items-start border-b border-zinc-50 pb-3">
                                             <div>
-                                                <h3 className="text-sm font-black text-zinc-805">
+                                                <h3 className="text-sm font-black text-zinc-800">
                                                     {selectedDebtForPayment.description || "Compra a crédito"}
                                                 </h3>
                                                 <p className="text-[10px] text-zinc-400 font-bold">
@@ -2629,10 +2333,10 @@ export default function ClientPortal() {
 
                                         {selectedDebtForPayment.items && selectedDebtForPayment.items.length > 0 && (
                                             <div className="space-y-2">
-                                                <p className="text-[9px] font-bold text-zinc-450">Productos adquiridos</p>
+                                                <p className="text-[9px] font-bold text-zinc-500">Productos adquiridos</p>
                                                 <div className="space-y-1.5">
                                                     {selectedDebtForPayment.items.map((item: any, idx: number) => (
-                                                        <div key={idx} className="flex justify-between items-center text-xs text-zinc-650">
+                                                        <div key={idx} className="flex justify-between items-center text-xs text-zinc-600">
                                                             <span>{item.quantity}x {item.name}</span>
                                                             <span className="font-bold text-zinc-700">${(item.price * item.quantity).toFixed(2)}</span>
                                                         </div>
@@ -2695,7 +2399,7 @@ export default function ClientPortal() {
                                                                     }}
                                                                     className={`rounded-2xl p-4 border cursor-pointer transition-all duration-300 flex justify-between items-center ${
                                                                         isSelected
-                                                                            ? "bg-[#fffdf4] border-amber-400 shadow-sm text-zinc-900 font-extrabold"
+                                                                            ? "bg-amber-50 border-amber-400 shadow-sm text-zinc-900 font-extrabold"
                                                                             : "bg-white border-zinc-100 hover:border-zinc-200 text-zinc-700 font-medium"
                                                                     }`}
                                                                 >
@@ -2718,7 +2422,7 @@ export default function ClientPortal() {
                                                             }}
                                                             className={`rounded-2xl p-4 border cursor-pointer transition-all duration-300 flex justify-between items-center ${
                                                                 selectedInstallmentOption === "custom"
-                                                                    ? "bg-[#fffdf4] border-amber-400 shadow-sm text-zinc-900 font-extrabold"
+                                                                    ? "bg-amber-50 border-amber-400 shadow-sm text-zinc-900 font-extrabold"
                                                                     : "bg-white border-zinc-100 hover:border-zinc-200 text-zinc-700 font-medium"
                                                             }`}
                                                         >
@@ -2733,8 +2437,8 @@ export default function ClientPortal() {
 
                                                         {/* Custom Amount Input field */}
                                                         {selectedInstallmentOption === "custom" && (
-                                                            <div className="rounded-2xl bg-white border border-zinc-150 p-4 space-y-3 animate-in slide-in-from-top duration-300 text-center">
-                                                                <p className="text-[10px] font-black text-zinc-450">Monto personalizado (USD)</p>
+                                                            <div className="rounded-2xl bg-white border border-zinc-100 p-4 space-y-3 animate-in slide-in-from-top duration-300 text-center">
+                                                                <p className="text-[10px] font-black text-zinc-500">Monto personalizado (USD)</p>
                                                                 <div className="relative max-w-[180px] mx-auto">
                                                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xl font-black text-zinc-400">$</span>
                                                                     <input
@@ -2784,7 +2488,7 @@ export default function ClientPortal() {
                                                 iconBg: "bg-amber-500/10 text-amber-700",
                                                 border: "border-amber-200/60 hover:border-amber-300",
                                                 arrow: "text-amber-700",
-                                                bg: "bg-gradient-to-br from-[#fffdf4] via-[#fffbeb] to-amber-50/30",
+                                                bg: "bg-gradient-to-br from-amber-50 via-amber-50 to-amber-50/30",
                                             },
                                             settings?.binanceEnabled && {
                                                 key: "binance",
@@ -2795,7 +2499,7 @@ export default function ClientPortal() {
                                                 iconBg: "bg-yellow-400/10 text-yellow-600",
                                                 border: "border-yellow-200/60 hover:border-yellow-300",
                                                 arrow: "text-yellow-600",
-                                                bg: "bg-gradient-to-br from-[#fffef4] via-[#fefce8] to-yellow-50/30",
+                                                bg: "bg-gradient-to-br from-amber-50 via-[#fefce8] to-yellow-50/30",
                                             },
                                             settings?.zinliEnabled && {
                                                 key: "zinli",
@@ -2866,7 +2570,7 @@ export default function ClientPortal() {
                             {paymentStep === "pago_movil" && (
                                 <div className="space-y-4">
                                     {/* Business Pago Movil Card */}
-                                    <div className="rounded-2xl bg-gradient-to-br from-[#fffdf4] via-[#fffbeb] to-amber-50/30 border border-amber-200/50 p-5 space-y-4 shadow-sm animate-in fade-in duration-300">
+                                    <div className="rounded-2xl bg-gradient-to-br from-amber-50 via-amber-50 to-amber-50/30 border border-amber-200/50 p-5 space-y-4 shadow-sm animate-in fade-in duration-300">
                                         <div className="flex items-center gap-2 border-b border-zinc-100/60 pb-3">
                                             <IconDeviceMobile size={18} className="text-amber-700" />
                                             <h3 className="text-xs font-black text-zinc-700">Pago móvil del comercio</h3>
@@ -2874,18 +2578,18 @@ export default function ClientPortal() {
                                         {settings?.pagoMovilEnabled ? (
                                             <div className="grid grid-cols-2 gap-4 text-xs">
                                                 <div>
-                                                    <p className="text-zinc-455 text-[9px] font-bold">Banco</p>
+                                                    <p className="text-zinc-500 text-[9px] font-bold">Banco</p>
                                                     <p className="font-extrabold text-zinc-700 mt-0.5">{settings.pagoMovilBank}</p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-zinc-455 text-[9px] font-bold">Cédula / RIF</p>
+                                                    <p className="text-zinc-500 text-[9px] font-bold">Cédula / RIF</p>
                                                     <div className="flex items-center gap-1 cursor-pointer mt-0.5" onClick={() => copyToClipboard(settings.pagoMovilId, "Cédula")}>
                                                         <p className="font-extrabold text-amber-700">{settings.pagoMovilId}</p>
                                                         <IconCopy size={12} className="text-zinc-400" />
                                                     </div>
                                                 </div>
                                                 <div className="col-span-2">
-                                                    <p className="text-zinc-455 text-[9px] font-bold">Teléfono de pago</p>
+                                                    <p className="text-zinc-500 text-[9px] font-bold">Teléfono de pago</p>
                                                     <div className="flex items-center gap-1 cursor-pointer mt-0.5" onClick={() => copyToClipboard(settings.pagoMovilPhone, "Teléfono")}>
                                                         <p className="font-black text-amber-700 text-base">{settings.pagoMovilPhone}</p>
                                                         <IconCopy size={12} className="text-zinc-400" />
@@ -2893,7 +2597,7 @@ export default function ClientPortal() {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <p className="text-xs text-zinc-455 font-bold text-center py-2">
+                                            <p className="text-xs text-zinc-500 font-bold text-center py-2">
                                                 El comercio no tiene habilitado pago móvil actualmente.
                                             </p>
                                         )}
@@ -2962,7 +2666,7 @@ export default function ClientPortal() {
                                                 const usdAmt = bsAmt / rate;
                                                 return !paymentAmountBs || bsAmt <= 0 || usdAmt > selectedDebtForPayment.remainingBalance + 0.005;
                                             })()}
-                                            className="w-full h-12 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
+                                            className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-white font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
                                         >
                                             Ya pagué
                                         </Button>
@@ -2973,7 +2677,7 @@ export default function ClientPortal() {
                             {/* STEP 2b: BINANCE PAY */}
                             {paymentStep === "binance" && (
                                 <div className="space-y-4">
-                                    <div className="rounded-2xl bg-gradient-to-br from-[#fffef4] via-[#fefce8] to-yellow-50/30 border border-yellow-200/50 p-5 space-y-4 shadow-sm animate-in fade-in duration-300">
+                                    <div className="rounded-2xl bg-gradient-to-br from-amber-50 via-[#fefce8] to-yellow-50/30 border border-yellow-200/50 p-5 space-y-4 shadow-sm animate-in fade-in duration-300">
                                         <div className="flex items-center gap-2 border-b border-zinc-100/60 pb-3">
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-yellow-600"><path d="M12 2L8.5 5.5 10.5 7.5 12 6l1.5 1.5 2-2L12 2zm-4 4L6 8l2 2 2-2-2-2zm8 0l-2 2 2 2 2-2-2-2zM12 10l-2 2 2 2 2-2-2-2zm-4 4l-2 2 2 2 2-2-2-2zm8 0l-2 2 2 2 2-2-2-2zM12 18l-1.5 1.5-2-2L12 22l3.5-4.5-2 2L12 18z"/></svg>
                                             <h3 className="text-xs font-black text-zinc-700">Datos de Binance pay</h3>
@@ -3025,7 +2729,7 @@ export default function ClientPortal() {
                                         <Button
                                             onClick={() => setPaymentStep("upload")}
                                             disabled={!paymentAmount || parseFloat(paymentAmount) <= 0 || parseFloat(paymentAmount) > selectedDebtForPayment.remainingBalance + 0.005}
-                                            className="w-full h-12 rounded-full bg-yellow-400 hover:bg-yellow-500 text-yellow-950 font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
+                                            className="w-full h-12 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-yellow-950 font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
                                         >
                                             Ya pagué
                                         </Button>
@@ -3078,7 +2782,7 @@ export default function ClientPortal() {
                                         <Button
                                             onClick={() => setPaymentStep("upload")}
                                             disabled={!paymentAmount || parseFloat(paymentAmount) <= 0 || parseFloat(paymentAmount) > selectedDebtForPayment.remainingBalance + 0.005}
-                                            className="w-full h-12 rounded-full bg-purple-500 hover:bg-purple-600 text-white font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
+                                            className="w-full h-12 rounded-xl bg-purple-500 hover:bg-purple-600 text-white font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
                                         >
                                             Ya pagué
                                         </Button>
@@ -3131,7 +2835,7 @@ export default function ClientPortal() {
                                         <Button
                                             onClick={() => setPaymentStep("upload")}
                                             disabled={!paymentAmount || parseFloat(paymentAmount) <= 0 || parseFloat(paymentAmount) > selectedDebtForPayment.remainingBalance + 0.005}
-                                            className="w-full h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
+                                            className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
                                         >
                                             Ya pagué
                                         </Button>
@@ -3172,8 +2876,8 @@ export default function ClientPortal() {
                                                     <div className="size-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-700">
                                                         <IconCamera size={20} />
                                                     </div>
-                                                    <p className="text-xs font-black text-zinc-655">Subir foto del comprobante</p>
-                                                    <p className="text-[10px] text-zinc-450 font-bold">Formatos permitidos: jpg, png</p>
+                                                    <p className="text-xs font-black text-zinc-600">Subir foto del comprobante</p>
+                                                    <p className="text-[10px] text-zinc-500 font-bold">Formatos permitidos: jpg, png</p>
                                                 </>
                                             )}
                                         </div>
@@ -3238,7 +2942,7 @@ export default function ClientPortal() {
                                                 }
                                             }}
                                             disabled={!receiptFile || isSubmittingPayment}
-                                            className="w-full h-12 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
+                                            className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-white font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
                                         >
                                             {isSubmittingPayment ? "Registrando abono..." : "Enviar comprobante"}
                                         </Button>
@@ -3251,14 +2955,14 @@ export default function ClientPortal() {
                                 <div className="space-y-4">
                                     <div className="rounded-2xl bg-white border border-zinc-100 p-6 shadow-sm text-center space-y-5 animate-in scale-in-95 duration-300">
                                         <div className="flex justify-center">
-                                            <div className="relative flex items-center justify-center size-20 rounded-full bg-amber-50 text-amber-505">
+                                            <div className="relative flex items-center justify-center size-20 rounded-full bg-amber-50 text-amber-500">
                                                 <span className="absolute size-20 rounded-full bg-amber-100 animate-ping opacity-30" />
                                                 <IconClock size={40} className="relative z-10" />
                                             </div>
                                         </div>
                                         <div className="space-y-2">
                                             <h3 className="text-lg font-black text-zinc-800">¡Abono en validación!</h3>
-                                            <p className="text-xs text-zinc-550 leading-relaxed font-semibold">
+                                            <p className="text-xs text-zinc-600 leading-relaxed font-semibold">
                                                 Su orden está pendiente en ser abonada
                                             </p>
                                             <p className="text-[10px] text-zinc-400 font-bold leading-normal px-2">
@@ -3271,7 +2975,7 @@ export default function ClientPortal() {
                                                 setSelectedDebtForPayment(null);
                                                 setPaymentStep("details");
                                             }}
-                                            className="w-full h-12 rounded-full bg-zinc-800 hover:bg-zinc-900 text-white font-black text-sm shadow-sm transition-all border-none mt-2"
+                                            className="w-full h-12 rounded-xl bg-zinc-800 hover:bg-zinc-900 text-white font-black text-sm shadow-sm transition-all border-none mt-2"
                                         >
                                             Entendido
                                         </Button>
@@ -3290,7 +2994,7 @@ export default function ClientPortal() {
 
                                 if (pendingDebts.length === 0) {
                                     return (
-                                        <div className="rounded-xl bg-white/60 border border-zinc-150/80 p-6 text-center text-zinc-400 font-bold text-xs">
+                                        <div className="rounded-xl bg-white/60 border border-zinc-100/80 p-6 text-center text-zinc-400 font-bold text-xs">
                                             No tienes deudas pendientes de pago.
                                         </div>
                                     );
@@ -3366,7 +3070,7 @@ export default function ClientPortal() {
                                                         key={key}
                                                         onClick={() => setSelectedMonthTab(key)}
                                                         className={`pb-2 text-left transition-all duration-300 relative shrink-0 ${
-                                                            isActive ? "text-zinc-900" : "text-zinc-450 hover:text-zinc-600"
+                                                            isActive ? "text-zinc-900" : "text-zinc-500 hover:text-zinc-600"
                                                         }`}
                                                     >
                                                         <p className="text-[11px] font-black">{monthNamesFull[group.month]} {group.year}</p>
@@ -3452,7 +3156,7 @@ export default function ClientPortal() {
                                                                 >
                                                                     <div className="flex justify-between items-start">
                                                                         <div className="space-y-1">
-                                                                            <h4 className="text-sm font-black text-zinc-850">
+                                                                            <h4 className="text-sm font-black text-zinc-800">
                                                                                 {debt.description || "Compra a crédito"}
                                                                             </h4>
                                                                             {pendingSubmission && (
@@ -3475,7 +3179,7 @@ export default function ClientPortal() {
                                                                                     Al día
                                                                                 </span>
                                                                             )}
-                                                                            <span className="text-[10px] text-zinc-450 font-bold mt-1">Monto restante</span>
+                                                                            <span className="text-[10px] text-zinc-500 font-bold mt-1">Monto restante</span>
                                                                             <span className="text-base font-black text-zinc-950 font-mono">${debt.remainingBalance.toFixed(2)}</span>
                                                                         </div>
                                                                     </div>
@@ -3502,7 +3206,7 @@ export default function ClientPortal() {
                                                                                                     <p className="text-[9px] text-zinc-400">Vence: {instDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                                                                                                 </div>
                                                                                                 <div className="text-right">
-                                                                                                    <span className={`font-mono font-bold ${isInstOverdue ? 'text-rose-650' : 'text-zinc-700'}`}>
+                                                                                                    <span className={`font-mono font-bold ${isInstOverdue ? 'text-rose-600' : 'text-zinc-700'}`}>
                                                                                                         ${instRemaining.toFixed(2)}
                                                                                                     </span>
                                                                                                     <p className={`text-[8px] font-black   ${inst.status === 'PAID' ? 'text-emerald-600' : 'text-amber-500'}`}>
@@ -3553,7 +3257,7 @@ export default function ClientPortal() {
                             )}
 
                             {client?.creditTransactions.length === 0 ? (
-                                <div className="rounded-xl bg-white/60 backdrop-blur-md border border-zinc-150/80 p-8 text-center text-zinc-455 font-bold">
+                                <div className="rounded-xl bg-white/60 backdrop-blur-md border border-zinc-100/80 p-8 text-center text-zinc-500 font-bold">
                                     Aún no tienes movimientos registrados.
                                 </div>
                             ) : (
@@ -3570,7 +3274,7 @@ export default function ClientPortal() {
 
                                     if (filteredTxs.length === 0) {
                                         return (
-                                            <div className="rounded-xl bg-white/60 border border-dashed border-zinc-200 p-8 text-center text-zinc-450 font-bold text-xs">
+                                            <div className="rounded-xl bg-white/60 border border-dashed border-zinc-200 p-8 text-center text-zinc-500 font-bold text-xs">
                                                 No se encontraron transacciones con esa búsqueda.
                                             </div>
                                         );
@@ -3858,7 +3562,7 @@ export default function ClientPortal() {
                                                     );
                                                 })}
                                             </div>
-                                            <div className="pt-2 border-t border-zinc-150 flex justify-between items-baseline">
+                                            <div className="pt-2 border-t border-zinc-100 flex justify-between items-baseline">
                                                 <span className="text-[10px] font-black text-zinc-500">Total</span>
                                                 <span className="text-base font-black text-zinc-900 font-mono">
                                                     ${checkoutItems.reduce((sum, item) => {
@@ -3899,7 +3603,7 @@ export default function ClientPortal() {
                                         <Button
                                             onClick={handleSubmitDeliveryRequest}
                                             disabled={isSubmittingDelivery || !deliveryCoordinates}
-                                            className="w-full h-13 rounded-2xl bg-amber-400 hover:bg-amber-500 active:scale-[0.98] text-amber-950 font-black text-sm border-none shadow-lg shadow-amber-400/20 transition-all duration-200"
+                                            className="w-full h-12 rounded-2xl bg-amber-400 hover:bg-amber-500 active:scale-[0.98] text-white font-black text-sm border-none shadow-lg shadow-amber-400/20 transition-all duration-200"
                                         >
                                             {isSubmittingDelivery ? (
                                                 <span className="flex items-center gap-2">
@@ -3926,12 +3630,12 @@ export default function ClientPortal() {
                                 const price = firstVariant?.price || 0;
                                 const promoPrice = firstVariant?.promoPrice;
                                 return (
-                                    <div className="fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-[#faf9f5] z-50 overflow-y-auto px-6 pt-8 pb-28 flex flex-col space-y-5 animate-in slide-in-from-right duration-300">
+                                    <div className="fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-background z-50 overflow-y-auto px-6 pt-8 pb-28 flex flex-col space-y-5 animate-in slide-in-from-right duration-300">
                                         {/* Back Header */}
                                         <div className="flex items-center justify-between pb-1.5">
                                             <button
                                                 onClick={() => setSelectedProductForDetail(null)}
-                                                className="text-xs text-[#854d0e] hover:text-amber-850 font-extrabold h-8 px-3 rounded-full bg-amber-50 hover:bg-amber-100/60 border border-amber-200/50 flex items-center gap-1 transition-all duration-300 cursor-pointer"
+                                                className="text-xs text-amber-800 hover:text-amber-800 font-extrabold h-8 px-3 rounded-full bg-amber-50 hover:bg-amber-100/60 border border-amber-200/50 flex items-center gap-1 transition-all duration-300 cursor-pointer"
                                             >
                                                 <IconChevronLeft size={14} />
                                                 <span>Volver</span>
@@ -3959,7 +3663,7 @@ export default function ClientPortal() {
 
                                             <div className="space-y-3.5">
                                                 {product.category && (
-                                                    <span className="inline-block text-[9px] bg-zinc-100/80 text-zinc-550 font-extrabold px-2.5 py-0.5 rounded-md">
+                                                    <span className="inline-block text-[9px] bg-zinc-100/80 text-zinc-600 font-extrabold px-2.5 py-0.5 rounded-md">
                                                         {product.category.name}
                                                     </span>
                                                 )}
@@ -3967,7 +3671,7 @@ export default function ClientPortal() {
                                                     {product.name}
                                                 </h3>
                                                 {product.description && (
-                                                    <p className="text-xs text-zinc-650 leading-relaxed font-semibold">
+                                                    <p className="text-xs text-zinc-600 leading-relaxed font-semibold">
                                                         {product.description}
                                                     </p>
                                                 )}
@@ -3985,7 +3689,7 @@ export default function ClientPortal() {
                                                             </span>
                                                         </>
                                                     ) : (
-                                                        <span className="text-zinc-850 font-black text-2xl font-mono">
+                                                        <span className="text-zinc-800 font-black text-2xl font-mono">
                                                             ${price.toFixed(2)}
                                                         </span>
                                                     )}
@@ -4009,14 +3713,14 @@ export default function ClientPortal() {
                                                     setSelectedProductForDetail(null);
                                                 }}
                                                 disabled={!inStock}
-                                                className="h-14 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-850 font-black text-xs transition-colors border-none active:scale-[0.98] cursor-pointer"
+                                                className="h-14 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-black text-xs transition-colors border-none active:scale-[0.98] cursor-pointer"
                                             >
                                                 Agregar al carrito
                                             </Button>
                                             <Button
                                                 onClick={() => handleCheckout([{ product, quantity: 1 }])}
                                                 disabled={!inStock}
-                                                className="h-14 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-xs transition-all duration-200 border-none active:scale-[0.98] cursor-pointer shadow-md shadow-amber-400/10"
+                                                className="h-14 rounded-xl bg-amber-400 hover:bg-amber-500 text-white font-black text-xs transition-all duration-200 border-none active:scale-[0.98] cursor-pointer shadow-md shadow-amber-400/10"
                                             >
                                                 Comprar
                                             </Button>
@@ -4035,7 +3739,7 @@ export default function ClientPortal() {
                                     </div>
                                     <Button
                                         onClick={() => setIsOrdersListOpen(true)}
-                                        className="w-full rounded-2xl bg-amber-400 hover:bg-amber-500 text-amber-955 font-black text-xs h-11 border-none shadow-md shadow-amber-450/20 flex items-center justify-center gap-2 active:scale-[0.97] transition-all duration-200 cursor-pointer animate-in fade-in"
+                                        className="w-full rounded-2xl bg-amber-400 hover:bg-amber-500 text-amber-900 font-black text-xs h-11 border-none shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 active:scale-[0.97] transition-all duration-200 cursor-pointer animate-in fade-in"
                                     >
                                         <IconTruck size={18} />
                                         <span>Mis pedidos</span>
@@ -4043,7 +3747,7 @@ export default function ClientPortal() {
                                 </div>
 
                                 {/* Search Businesses */}
-                                <div className="sticky top-0 z-40 bg-[#faf9f5] py-3 -mx-6 px-6 border-b border-zinc-150/40 shadow-sm">
+                                <div className="sticky top-0 z-40 bg-background py-3 -mx-6 px-6 border-b border-zinc-100/40 shadow-sm">
                                     <div className="relative">
                                         <IconSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
                                         <Input
@@ -4057,7 +3761,7 @@ export default function ClientPortal() {
                                 </div>
 
                                 {portalBusinesses.length === 0 ? (
-                                    <div className="rounded-2xl bg-white/60 border border-dashed border-zinc-200 p-8 text-center text-zinc-450 font-bold text-xs">
+                                    <div className="rounded-2xl bg-white/60 border border-dashed border-zinc-200 p-8 text-center text-zinc-500 font-bold text-xs">
                                         No hay tiendas disponibles en este momento.
                                     </div>
                                 ) : (
@@ -4070,7 +3774,7 @@ export default function ClientPortal() {
 
                                         if (filteredBusinesses.length === 0) {
                                             return (
-                                                <div className="rounded-2xl bg-white/60 border border-dashed border-zinc-200 p-8 text-center text-zinc-450 font-bold text-xs">
+                                                <div className="rounded-2xl bg-white/60 border border-dashed border-zinc-200 p-8 text-center text-zinc-500 font-bold text-xs">
                                                     No se encontraron comercios con esa búsqueda.
                                                 </div>
                                             );
@@ -4182,7 +3886,7 @@ export default function ClientPortal() {
                                     {(selectedBranchForShop.location || selectedBranchForShop.phone) && (
                                         <div className="flex flex-wrap gap-2 pt-1">
                                             {selectedBranchForShop.location && (
-                                                <span className="inline-flex items-center gap-1.5 text-[10px] bg-zinc-100/70 border border-zinc-200/30 text-zinc-650 px-3 py-1.5 rounded-full font-bold">
+                                                <span className="inline-flex items-center gap-1.5 text-[10px] bg-zinc-100/70 border border-zinc-200/30 text-zinc-600 px-3 py-1.5 rounded-full font-bold">
                                                     <IconMapPin size={12} className="text-zinc-400 shrink-0" />
                                                     <span>{selectedBranchForShop.location}</span>
                                                 </span>
@@ -4203,7 +3907,7 @@ export default function ClientPortal() {
                                         <div className="h-3.5 w-32 bg-zinc-200/80 rounded animate-pulse" />
                                         <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-none">
                                             {[1, 2].map((i) => (
-                                                <div key={i} className="h-[34px] w-24 bg-zinc-150/70 rounded-xl animate-pulse shrink-0" />
+                                                <div key={i} className="h-[34px] w-24 bg-zinc-100/70 rounded-xl animate-pulse shrink-0" />
                                             ))}
                                         </div>
                                     </div>
@@ -4222,8 +3926,8 @@ export default function ClientPortal() {
                                                             onClick={() => { setSelectedBranchForShop(b); }}
                                                             className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-300 ${
                                                                 isSelected
-                                                                    ? 'bg-amber-400 text-amber-950 shadow-md shadow-amber-400/20 scale-[1.02] border-none'
-                                                                    : 'bg-white border border-zinc-150 text-zinc-650 hover:border-amber-200 hover:text-amber-500'
+                                                                    ? 'bg-amber-400 text-white shadow-md shadow-amber-400/20 scale-[1.02] border-none'
+                                                                    : 'bg-white border border-zinc-100 text-zinc-600 hover:border-amber-200 hover:text-amber-500'
                                                             }`}
                                                         >
                                                             {b.name} {b.isMain && "🏠"}
@@ -4237,7 +3941,7 @@ export default function ClientPortal() {
 
                                 {/* Search Catalog */}
                                 <div className="space-y-4">
-                                    <div className="sticky top-0 z-40 bg-[#faf9f5] py-3 -mx-6 px-6 border-b border-zinc-150/40 shadow-sm">
+                                    <div className="sticky top-0 z-40 bg-background py-3 -mx-6 px-6 border-b border-zinc-100/40 shadow-sm">
                                         <div className="flex items-center gap-3">
                                             <div className="relative flex-1">
                                                 <IconSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
@@ -4250,7 +3954,7 @@ export default function ClientPortal() {
                                                 />
                                             </div>
                                             
-                                            <div className="flex flex-col items-center shrink-0 bg-white border border-zinc-150/80 px-2.5 py-1.5 rounded-xl shadow-xs gap-0.5 min-w-[66px]">
+                                            <div className="flex flex-col items-center shrink-0 bg-white border border-zinc-100/80 px-2.5 py-1.5 rounded-xl shadow-xs gap-0.5 min-w-[66px]">
                                                 <span className="text-[8px] font-black text-zinc-400">En stock</span>
                                                 <Switch
                                                     checked={onlyInStock}
@@ -4277,7 +3981,7 @@ export default function ClientPortal() {
                                                         <div className="h-4 w-12 bg-zinc-100/80 rounded-md" />
                                                         
                                                         {/* Product title placeholder */}
-                                                        <div className="h-4 w-3/4 bg-zinc-150/70 rounded-md" />
+                                                        <div className="h-4 w-3/4 bg-zinc-100/70 rounded-md" />
                                                         
                                                         {/* Description placeholder */}
                                                         <div className="space-y-1.5">
@@ -4288,7 +3992,7 @@ export default function ClientPortal() {
 
                                                     <div className="space-y-2.5 pt-2 border-t border-zinc-50">
                                                         {/* Price placeholder */}
-                                                        <div className="h-5 w-16 bg-zinc-150/70 rounded" />
+                                                        <div className="h-5 w-16 bg-zinc-100/70 rounded" />
                                                         
                                                         {/* Stock badge placeholder */}
                                                         <div className="h-6 w-full bg-zinc-100/80 rounded-full" />
@@ -4308,7 +4012,7 @@ export default function ClientPortal() {
 
                                             if (filteredProducts.length === 0) {
                                                 return (
-                                                    <div className="rounded-2xl bg-white/60 border border-dashed border-zinc-200 p-8 text-center text-zinc-450 font-bold text-xs">
+                                                    <div className="rounded-2xl bg-white/60 border border-dashed border-zinc-200 p-8 text-center text-zinc-500 font-bold text-xs">
                                                         No se encontraron productos disponibles en esta sucursal.
                                                     </div>
                                                 );
@@ -4326,7 +4030,7 @@ export default function ClientPortal() {
                                                             <div 
                                                                 key={product.id} 
                                                                 onClick={() => setSelectedProductForDetail(product)}
-                                                                className="rounded-2xl bg-white border border-zinc-100/80 overflow-hidden flex flex-col justify-between hover:border-amber-250/60 hover:-translate-y-0.5 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.02)] hover:shadow-[0_12px_30px_-5px_rgba(0,0,0,0.08)] animate-in zoom-in-95 duration-200 cursor-pointer"
+                                                                className="rounded-2xl bg-white border border-zinc-100/80 overflow-hidden flex flex-col justify-between hover:border-amber-200/60 hover:-translate-y-0.5 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.02)] hover:shadow-[0_12px_30px_-5px_rgba(0,0,0,0.08)] animate-in zoom-in-95 duration-200 cursor-pointer"
                                                             >
                                                                 {product.image ? (
                                                                     <img 
@@ -4337,7 +4041,7 @@ export default function ClientPortal() {
                                                                         className="h-28 w-full object-contain bg-zinc-50/50 p-1.5 border-b border-zinc-100 shrink-0" 
                                                                     />
                                                                 ) : (
-                                                                    <div className="h-28 bg-gradient-to-br from-zinc-50 to-zinc-100/50 flex items-center justify-center border-b border-zinc-100 shrink-0 text-zinc-350">
+                                                                    <div className="h-28 bg-gradient-to-br from-zinc-50 to-zinc-100/50 flex items-center justify-center border-b border-zinc-100 shrink-0 text-zinc-300">
                                                                         <IconShoppingBag size={28} className="opacity-40 text-zinc-400" />
                                                                     </div>
                                                                 )}
@@ -4352,7 +4056,7 @@ export default function ClientPortal() {
                                                                             {product.name}
                                                                         </h4>
                                                                         {product.description && (
-                                                                            <p className="text-[9px] text-zinc-450 line-clamp-2 leading-relaxed">
+                                                                            <p className="text-[9px] text-zinc-500 line-clamp-2 leading-relaxed">
                                                                                 {product.description}
                                                                             </p>
                                                                         )}
@@ -4404,8 +4108,8 @@ export default function ClientPortal() {
 
                         {isEditingProfile ? (
                             <>
-                                <div className="rounded-xl bg-gradient-to-br from-[#fffdf4] via-[#fffbeb] to-amber-50/30 border border-amber-200/50 p-6 space-y-4">
-                                    <h3 className="text-sm font-black text-zinc-800 border-b border-zinc-150 pb-2">Editar perfil</h3>
+                                <div className="rounded-xl bg-gradient-to-br from-amber-50 via-amber-50 to-amber-50/30 border border-amber-200/50 p-6 space-y-4">
+                                    <h3 className="text-sm font-black text-zinc-800 border-b border-zinc-100 pb-2">Editar perfil</h3>
                                     <div className="space-y-3.5">
                                         <div className="space-y-1">
                                             <label className="text-[10px] font-black text-zinc-400">Nombre</label>
@@ -4457,7 +4161,7 @@ export default function ClientPortal() {
                                     </Button>
                                     <Button 
                                         onClick={handleSaveProfile} 
-                                        className="flex-1 h-12 rounded-xl text-xs font-black bg-amber-400 hover:bg-amber-500 text-amber-950 shadow-md border-none"
+                                        className="flex-1 h-12 rounded-xl text-xs font-black bg-amber-400 hover:bg-amber-500 text-white shadow-md border-none"
                                         disabled={isSavingProfile}
                                     >
                                         {isSavingProfile ? "Guardando..." : "Guardar"}
@@ -4466,9 +4170,9 @@ export default function ClientPortal() {
                             </>
                         ) : (
                             <>
-                                <div className="rounded-xl bg-gradient-to-br from-[#fffdf4] via-[#fffbeb] to-amber-50/30 border border-amber-200/50 p-6 space-y-5">
+                                <div className="rounded-xl bg-gradient-to-br from-amber-50 via-amber-50 to-amber-50/30 border border-amber-200/50 p-6 space-y-5">
                                     <div className="flex items-center gap-3.5">
-                                        <div className="size-12 rounded-full bg-[#fffbeb] text-amber-950 flex items-center justify-center font-black">
+                                        <div className="size-12 rounded-full bg-amber-50 text-amber-950 flex items-center justify-center font-black">
                                             {client?.name ? client.name.charAt(0).toUpperCase() : "A"}
                                         </div>
                                         <div>
@@ -4548,7 +4252,7 @@ export default function ClientPortal() {
                                 </p>
                             </div>
                         ) : !pendingPurchase ? (
-                            <div className="w-full max-w-sm rounded-2xl border border-amber-100 bg-[#fffdfa] p-6 space-y-6 text-center shadow-sm mx-auto">
+                            <div className="w-full max-w-sm rounded-2xl border border-amber-100 bg-card p-6 space-y-6 text-center shadow-sm mx-auto">
                                 <div className="size-16 rounded-full bg-amber-400/10 text-amber-500 flex items-center justify-center mx-auto">
                                     <IconLock size={32} />
                                 </div>
@@ -4572,7 +4276,7 @@ export default function ClientPortal() {
                                     <Button
                                         onClick={() => handleFetchPendingPurchase(authPin)}
                                         disabled={isLoadingPendingPurchase || authPin.length !== 6}
-                                        className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-xs shadow-sm border-none transition-all duration-350 active:scale-95"
+                                        className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-white font-black text-xs shadow-sm border-none transition-all duration-350 active:scale-95"
                                     >
                                         {isLoadingPendingPurchase ? "Buscando..." : "Buscar compra"}
                                     </Button>
@@ -4581,7 +4285,7 @@ export default function ClientPortal() {
                         ) : (
                             <div className="w-full max-w-sm space-y-4 animate-in zoom-in-95 duration-350 mx-auto">
                                 {/* CART SUMMARY CARD */}
-                                <div className="rounded-2xl border border-amber-150 bg-white p-5 space-y-4 shadow-sm">
+                                <div className="rounded-2xl border border-amber-100 bg-white p-5 space-y-4 shadow-sm">
                                     <div className="flex justify-between items-start pb-3 border-b border-zinc-100">
                                         <div className="space-y-0.5">
                                             <span className="text-[9px] font-extrabold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100/50">
@@ -4610,7 +4314,7 @@ export default function ClientPortal() {
                                     </div>
 
                                     {/* FREQUENCY SELECTOR */}
-                                    <div className="rounded-2xl border border-amber-150 bg-white p-5 space-y-4 shadow-sm animate-in fade-in duration-200">
+                                    <div className="rounded-2xl border border-amber-100 bg-white p-5 space-y-4 shadow-sm animate-in fade-in duration-200">
                                         <h4 className="font-black text-xs text-zinc-800">Elige la frecuencia de pago</h4>
                                         
                                         <div className="grid grid-cols-4 gap-2">
@@ -4629,8 +4333,8 @@ export default function ClientPortal() {
                                                         onClick={() => setSelectedFrequency(freq)}
                                                         className={`h-12 rounded-xl text-xs font-extrabold border transition-all duration-150 ${
                                                             selectedFrequency === freq
-                                                                ? "bg-amber-400 border-amber-400 text-amber-950 shadow-sm"
-                                                                : "bg-[#fffdfb] border-amber-100 text-zinc-700 hover:border-amber-400 hover:text-amber-500"
+                                                                ? "bg-amber-400 border-amber-400 text-white shadow-sm"
+                                                                : "bg-amber-50 border-amber-100 text-zinc-700 hover:border-amber-400 hover:text-amber-500"
                                                         }`}
                                                     >
                                                         {freq} días
@@ -4641,7 +4345,7 @@ export default function ClientPortal() {
                                     </div>
 
                                     {/* INSTALLMENTS SELECTOR */}
-                                    <div className="rounded-2xl border border-amber-150 bg-white p-5 space-y-4 shadow-sm">
+                                    <div className="rounded-2xl border border-amber-100 bg-white p-5 space-y-4 shadow-sm">
                                         <h4 className="font-black text-xs text-zinc-800">Elige el número de cuotas</h4>
                                         
                                         <div className="grid grid-cols-3 gap-2">
@@ -4652,8 +4356,8 @@ export default function ClientPortal() {
                                                     onClick={() => setSelectedInstallments(num)}
                                                     className={`h-12 rounded-xl text-xs font-extrabold border transition-all duration-150 ${
                                                         selectedInstallments === num
-                                                            ? "bg-amber-400 border-amber-400 text-amber-950 shadow-sm"
-                                                            : "bg-[#fffdfb] border-amber-100 text-zinc-700 hover:border-amber-400 hover:text-amber-500"
+                                                            ? "bg-amber-400 border-amber-400 text-white shadow-sm"
+                                                            : "bg-amber-50 border-amber-100 text-zinc-700 hover:border-amber-400 hover:text-amber-500"
                                                     }`}
                                                 >
                                                     {num} {num === 1 ? "Cuota" : "Cuotas"}
@@ -4807,8 +4511,8 @@ export default function ClientPortal() {
                             }} 
                             className={`absolute -top-[34px] w-[72px] h-[72px] rounded-full flex flex-col items-center justify-center transition-all duration-300 transform active:scale-95 shadow-md z-10 ${
                                 activeTab === "auth-purchase" 
-                                    ? "bg-amber-400 text-amber-950 scale-105 shadow-amber-400/35 border-none" 
-                                    : "bg-[#fffbeb] border border-amber-200 text-amber-700 hover:bg-amber-100/40 shadow-zinc-200"
+                                    ? "bg-amber-400 text-white scale-105 shadow-amber-400/35 border-none" 
+                                    : "bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100/40 shadow-zinc-200"
                             }`}
                         >
                             <IconLock size={22} className={activeTab === "auth-purchase" ? "animate-pulse" : ""} />
@@ -4859,7 +4563,7 @@ export default function ClientPortal() {
 
             {/* BRANCHES MODAL */}
             <Dialog open={isBranchesModalOpen} onOpenChange={setIsBranchesModalOpen}>
-                <DialogContent className="max-w-md rounded-xl border-amber-100 bg-[#fffdfa] text-zinc-850 p-6 shadow-lg">
+                <DialogContent className="max-w-md rounded-xl border-amber-100 bg-card text-zinc-800 p-6 shadow-lg">
                     <DialogHeader>
                         <DialogTitle className="text-lg font-black text-zinc-900 flex items-center gap-2">
                             <IconMapPin className="text-amber-700" size={20} />
@@ -4893,7 +4597,7 @@ export default function ClientPortal() {
                                         </Badge>
                                     )}
                                     <p className="font-extrabold text-sm text-zinc-800 pr-12">{b.name}</p>
-                                    <p className="text-xs text-zinc-505 flex items-start gap-1">
+                                    <p className="text-xs text-zinc-500 flex items-start gap-1">
                                         <IconMapPin size={14} className="text-zinc-400 shrink-0 mt-0.5" />
                                         <span>{b.location || b.state || "Sin dirección registrada"}</span>
                                     </p>
@@ -4917,12 +4621,12 @@ export default function ClientPortal() {
                         setCheckoutItems(cart);
                         setIsCartOpen(true);
                     }}
-                    className="fixed bottom-[108px] right-6 z-40 size-14 rounded-full bg-amber-400 text-amber-950 flex items-center justify-center shadow-lg shadow-amber-400/25 active:scale-95 transition-all duration-200 border-none animate-in zoom-in-95 duration-200 cursor-pointer"
+                    className="fixed bottom-[108px] right-6 z-40 size-14 rounded-full bg-amber-400 text-white flex items-center justify-center shadow-lg shadow-amber-400/25 active:scale-95 transition-all duration-200 border-none animate-in zoom-in-95 duration-200 cursor-pointer"
                 >
                     <div className="relative">
                         <IconShoppingBag size={24} />
                         {cart.reduce((sum, item) => sum + item.quantity, 0) > 0 && (
-                            <span className="absolute -top-3.5 -right-3.5 bg-rose-500 text-white text-[10px] font-black size-6 rounded-full flex items-center justify-center border-2 border-[#faf9f5]">
+                            <span className="absolute -top-3.5 -right-3.5 bg-rose-500 text-white text-[10px] font-black size-6 rounded-full flex items-center justify-center border-2 border-background">
                                 {cart.reduce((sum, item) => sum + item.quantity, 0)}
                             </span>
                         )}
@@ -4935,17 +4639,17 @@ export default function ClientPortal() {
 
             {/* SHOPPING CART FULL PAGE OVERLAY */}
             {isCartOpen && (
-                <div className="fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-[#faf9f5] z-50 overflow-y-auto px-6 pt-8 pb-28 flex flex-col space-y-5 animate-in slide-in-from-right duration-300">
+                <div className="fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-background z-50 overflow-y-auto px-6 pt-8 pb-28 flex flex-col space-y-5 animate-in slide-in-from-right duration-300">
                     {/* Header */}
-                    <div className="flex items-center justify-between pb-1.5 border-b border-zinc-150/40 shrink-0">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-zinc-100/40 shrink-0">
                         <button
                             onClick={() => setIsCartOpen(false)}
-                            className="text-xs text-[#854d0e] hover:text-amber-855 font-extrabold h-8 px-3 rounded-full bg-amber-50 hover:bg-amber-100/60 border border-amber-200/50 flex items-center gap-1 transition-all duration-300 cursor-pointer animate-in fade-in"
+                            className="text-xs text-amber-800 hover:text-amber-800 font-extrabold h-8 px-3 rounded-full bg-amber-50 hover:bg-amber-100/60 border border-amber-200/50 flex items-center gap-1 transition-all duration-300 cursor-pointer animate-in fade-in"
                         >
                             <IconChevronLeft size={14} />
                             <span>Volver</span>
                         </button>
-                        <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-955 px-3 py-1 rounded-full font-black">
+                        <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-900 px-3 py-1 rounded-full font-black">
                             Carrito de compras
                         </span>
                     </div>
@@ -4957,7 +4661,7 @@ export default function ClientPortal() {
                             </div>
                             <div className="space-y-1">
                                 <p className="text-sm font-black text-zinc-800">Tu carrito está vacío</p>
-                                <p className="text-xs text-zinc-450 font-semibold max-w-[200px] mx-auto leading-relaxed">
+                                <p className="text-xs text-zinc-500 font-semibold max-w-[200px] mx-auto leading-relaxed">
                                     Agrega productos de los comercios para iniciar tu compra a crédito.
                                 </p>
                             </div>
@@ -4982,7 +4686,7 @@ export default function ClientPortal() {
                                                 )}
                                                 <div className="min-w-0">
                                                     <p className="font-extrabold text-xs text-zinc-800 truncate">{item.product.name}</p>
-                                                    <p className="text-[10px] font-black text-zinc-455 mt-0.5">${price.toFixed(2)} c/u</p>
+                                                    <p className="text-[10px] font-black text-zinc-500 mt-0.5">${price.toFixed(2)} c/u</p>
                                                 </div>
                                             </div>
 
@@ -4994,7 +4698,7 @@ export default function ClientPortal() {
                                                 >
                                                     -
                                                 </button>
-                                                <span className="font-black text-xs text-zinc-850 text-center w-4">{item.quantity}</span>
+                                                <span className="font-black text-xs text-zinc-800 text-center w-4">{item.quantity}</span>
                                                 <button
                                                     onClick={() => updateCartQuantity(item.product.id, 1)}
                                                     className="size-8 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 flex items-center justify-center font-black border-none text-xs transition-colors cursor-pointer"
@@ -5008,9 +4712,9 @@ export default function ClientPortal() {
                             </div>
 
                             {/* Total and Checkout */}
-                            <div className="pt-4 border-t border-zinc-150/40 bg-[#faf9f5] space-y-4 shrink-0 mt-4">
+                            <div className="pt-4 border-t border-zinc-100/40 bg-background space-y-4 shrink-0 mt-4">
                                 <div className="flex justify-between items-baseline">
-                                    <span className="text-xs font-bold text-zinc-450">Total estimado:</span>
+                                    <span className="text-xs font-bold text-zinc-500">Total estimado:</span>
                                     <span className="text-xl font-black text-zinc-900 font-mono">
                                         ${cart.reduce((sum, item) => {
                                             const firstVariant = item.product.variants?.[0];
@@ -5022,7 +4726,7 @@ export default function ClientPortal() {
 
                                 <Button
                                     onClick={() => handleCheckout(cart)}
-                                    className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-955 font-black text-xs transition-all duration-200 border-none shadow-md shadow-amber-400/10"
+                                    className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-900 font-black text-xs transition-all duration-200 border-none shadow-md shadow-amber-400/10"
                                 >
                                     Proceder al pago
                                 </Button>
@@ -5037,7 +4741,7 @@ export default function ClientPortal() {
 
             {/* PURCHASE SUCCESS CONFIRMATION MODAL */}
             <Dialog open={purchaseSuccessData !== null} onOpenChange={(open) => { if (!open) setPurchaseSuccessData(null); }}>
-                <DialogContent className="max-w-md rounded-2xl border-emerald-150 bg-[#fdfdfd] text-zinc-850 p-6 shadow-xl text-center">
+                <DialogContent className="max-w-md rounded-2xl border-emerald-100 bg-card text-zinc-800 p-6 shadow-xl text-center">
                     {purchaseSuccessData && (
                         <div className="space-y-6">
                             <div className="flex justify-center pt-2">
@@ -5077,36 +4781,33 @@ export default function ClientPortal() {
 
             {isTrackingOpen && activeDeliveryOrder !== null && (
                 /* Active Delivery Order Tracking View */
-                            <div className="fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-[#faf9f5] z-[45] overflow-y-auto px-6 pt-8 pb-28 flex flex-col space-y-5 animate-in slide-in-from-right duration-300">
-                                {/* Sharpie marker phrase in header */}
-                                <div className="flex items-center shrink-0">
-                                    <span className="text-zinc-850 text-4xl font-handwritten select-none leading-none tracking-normal">
-                                        {`¡Sigue tu envío${client ? `, ${client.name.split(" ")[0]}` : ""}!`}
-                                    </span>
+                            <div className="fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-background z-[45] overflow-y-auto px-6 pt-8 pb-28 flex flex-col space-y-5 animate-in slide-in-from-right duration-300">
+                                <div className="shrink-0">
+                                    <PortalTitle>Sigue tu envío</PortalTitle>
                                 </div>
 
-                                <div className="flex items-center justify-between pb-1.5 border-b border-zinc-150/40 shrink-0">
+                                <div className="flex items-center justify-between pb-1.5 border-b border-zinc-100/40 shrink-0">
                                     <button
                                         onClick={() => {
                                             setIsTrackingOpen(false);
                                         }}
-                                        className="text-xs text-[#854d0e] hover:text-amber-855 font-extrabold h-8 px-3 rounded-full bg-amber-50 hover:bg-amber-100/60 border border-amber-200/50 flex items-center gap-1 transition-all duration-300 cursor-pointer animate-in fade-in"
+                                        className="text-xs text-amber-800 hover:text-amber-800 font-extrabold h-8 px-3 rounded-full bg-amber-50 hover:bg-amber-100/60 border border-amber-200/50 flex items-center gap-1 transition-all duration-300 cursor-pointer animate-in fade-in"
                                     >
                                         <IconChevronLeft size={14} />
                                         <span>Volver</span>
                                     </button>
                                     <span className={`text-[10px] px-3 py-1 rounded-full font-black   ${
                                         activeDeliveryOrder.status === "PENDING"
-                                            ? "bg-amber-50 border border-amber-100 text-amber-955"
+                                            ? "bg-amber-50 border border-amber-100 text-amber-900"
                                             : activeDeliveryOrder.status === "APPROVED"
-                                            ? "bg-blue-50 border border-blue-100 text-blue-955"
+                                            ? "bg-blue-50 border border-blue-100 text-blue-900"
                                             : activeDeliveryOrder.status === "SHIPPED"
-                                            ? "bg-indigo-50 border border-indigo-100 text-indigo-955"
+                                            ? "bg-indigo-50 border border-indigo-100 text-indigo-900"
                                             : activeDeliveryOrder.status === "ON_THE_WAY"
-                                            ? "bg-orange-50 border border-orange-100 text-orange-955"
+                                            ? "bg-orange-50 border border-orange-100 text-orange-900"
                                             : activeDeliveryOrder.status === "DELIVERED"
-                                            ? "bg-emerald-50 border border-emerald-100 text-emerald-955"
-                                            : "bg-zinc-50 border border-zinc-100 text-zinc-955"
+                                            ? "bg-emerald-50 border border-emerald-100 text-emerald-900"
+                                            : "bg-zinc-50 border border-zinc-100 text-zinc-900"
                                     }`}>
                                         {activeDeliveryOrder.status === "PENDING" ? "Verificando" :
                                          activeDeliveryOrder.status === "APPROVED" ? "Aprobado" :
@@ -5178,7 +4879,7 @@ export default function ClientPortal() {
                                     /* Approved Tracking Details with Map and Timeline */
                                     <div className="space-y-5">
                                         {/* Map rendering the coordinates - half screen height, edge-to-edge */}
-                                        <div className="relative -mx-6 -mt-5 h-[45vh] bg-zinc-50 border-b border-zinc-150/60 shadow-inner overflow-hidden">
+                                        <div className="relative -mx-6 -mt-5 h-[45vh] bg-zinc-50 border-b border-zinc-100/60 shadow-inner overflow-hidden">
                                             <div ref={trackingMapContainerRef} className="w-full h-full" />
                                             {activeDeliveryOrder.address && (
                                                 <div className="absolute bottom-3 left-3 right-3 bg-white/95 backdrop-blur-sm px-4 py-2.5 rounded-xl shadow-md border border-zinc-100 text-xs text-zinc-700 font-semibold">
@@ -5285,43 +4986,40 @@ export default function ClientPortal() {
                                             </div>
                                         )}
 
-                                        {/* Wobbly/Sharpie Hand-drawn Arrows pointing to the PIN button */}
-                                        <div className="flex flex-col items-center justify-center pt-6 pb-4 space-y-1.5 select-none">
-                                            <span className="text-zinc-750 text-[19px] font-handwritten text-center max-w-[310px] leading-relaxed rotate-[-1.5deg]">
-                                                ¡Pide el PIN de 6 dígitos al repartidor y presiona el botón de abajo para completar tu compra!
-                                            </span>
-                                            <div className="flex justify-center items-center pt-2 text-[#b45309]">
-                                                {/* Single long curved hand-drawn arrow pointing to center PIN button */}
-                                                <svg viewBox="0 0 60 80" className="w-20 h-28" fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="M 40,8 Q 15,35 28,70" />
-                                                    <path d="M 17,62 Q 22,68 28,70" />
-                                                    <path d="M 29,56 Q 29,65 28,70" />
-                                                </svg>
+                                        {/* How to finish: points down to the PIN button in the bar */}
+                                        <div className="flex flex-col items-center pt-4 pb-2 select-none">
+                                            <div className="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3.5 flex items-start gap-3">
+                                                <div className="size-9 shrink-0 rounded-xl bg-amber-400 text-white grid place-items-center">
+                                                    <IconLock size={18} />
+                                                </div>
+                                                <p className="text-[13px] leading-snug text-zinc-700">
+                                                    <span className="font-semibold text-zinc-900">Pide el PIN de 6 dígitos al repartidor</span> y tócalo en el botón <span className="font-semibold text-amber-700">PIN</span> de abajo para completar tu compra.
+                                                </p>
                                             </div>
+                                            <svg viewBox="0 0 24 24" className="mt-3 size-6 text-amber-400 animate-bounce" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                                <path d="M12 5v14M5 12l7 7 7-7" />
+                                            </svg>
                                         </div>
                                     </div>
                                 )}
                             </div>
             )}
 {isOrdersListOpen && (
-                            <div className="fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-[#faf9f5] z-40 overflow-y-auto px-6 pt-8 pb-28 flex flex-col space-y-5 animate-in slide-in-from-right duration-300">
-                                {/* Sharpie marker phrase in header */}
-                                <div className="flex items-center shrink-0">
-                                    <span className="text-zinc-850 text-4xl font-handwritten select-none leading-none tracking-normal">
-                                        {`¡Tus pedidos${client ? `, ${client.name.split(" ")[0]}` : ""}!`}
-                                    </span>
+                            <div className="fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-background z-40 overflow-y-auto px-6 pt-8 pb-28 flex flex-col space-y-5 animate-in slide-in-from-right duration-300">
+                                <div className="shrink-0">
+                                    <PortalTitle>Tus pedidos</PortalTitle>
                                 </div>
 
                                 {/* Header */}
-                                <div className="flex items-center justify-between pb-1.5 border-b border-zinc-150/40 shrink-0">
+                                <div className="flex items-center justify-between pb-1.5 border-b border-zinc-100/40 shrink-0">
                                     <button
                                         onClick={() => setIsOrdersListOpen(false)}
-                                        className="text-xs text-[#854d0e] hover:text-amber-855 font-extrabold h-8 px-3 rounded-full bg-amber-50 hover:bg-amber-100/60 border border-amber-200/50 flex items-center gap-1 transition-all duration-300 cursor-pointer animate-in fade-in"
+                                        className="text-xs text-amber-800 hover:text-amber-800 font-extrabold h-8 px-3 rounded-full bg-amber-50 hover:bg-amber-100/60 border border-amber-200/50 flex items-center gap-1 transition-all duration-300 cursor-pointer animate-in fade-in"
                                     >
                                         <IconChevronLeft size={14} />
                                         <span>Volver</span>
                                     </button>
-                                    <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-955 px-3 py-1 rounded-full font-black">
+                                    <span className="text-[10px] bg-amber-50 border border-amber-100 text-amber-900 px-3 py-1 rounded-full font-black">
                                         Mis pedidos
                                     </span>
                                 </div>
@@ -5336,9 +5034,9 @@ export default function ClientPortal() {
                                                         <div className="h-3 w-16 bg-zinc-200/80 rounded" />
                                                         <div className="h-4.5 w-44 bg-zinc-200/80 rounded" />
                                                     </div>
-                                                    <div className="h-5 w-24 bg-zinc-150/70 rounded-full" />
+                                                    <div className="h-5 w-24 bg-zinc-100/70 rounded-full" />
                                                 </div>
-                                                <div className="h-3.5 w-32 bg-zinc-150/70 rounded" />
+                                                <div className="h-3.5 w-32 bg-zinc-100/70 rounded" />
                                             </div>
                                         ))}
                                     </div>
@@ -5349,7 +5047,7 @@ export default function ClientPortal() {
                                         </div>
                                         <div className="space-y-1">
                                             <p className="text-sm font-black text-zinc-800">Sin pedidos activos</p>
-                                            <p className="text-xs text-zinc-450 font-semibold max-w-[200px] mx-auto leading-relaxed">Aquí podrás ver el estado de tus envíos cuando realices una compra.</p>
+                                            <p className="text-xs text-zinc-500 font-semibold max-w-[200px] mx-auto leading-relaxed">Aquí podrás ver el estado de tus envíos cuando realices una compra.</p>
                                         </div>
                                     </div>
                                 ) : (
@@ -5399,7 +5097,7 @@ export default function ClientPortal() {
                                                         <span className="font-mono">
                                                             Total: <strong className="text-emerald-600 font-extrabold">${order.total.toFixed(2)}</strong>
                                                         </span>
-                                                        <span className="text-[9px] text-zinc-450">
+                                                        <span className="text-[9px] text-zinc-500">
                                                             {new Date(order.createdAt).toLocaleDateString("es-VE", {
                                                                 day: "numeric",
                                                                 month: "short",

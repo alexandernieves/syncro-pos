@@ -6,11 +6,17 @@ export const metadata: Metadata = {
   manifest: "/manifest-portal.json",
   icons: {
     icon: "/syncro.png",
+    apple: "/syncrocredit.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Syncro Credit",
+    statusBarStyle: "default",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#faf9f5",
+  themeColor: "#F7F5F0",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -18,10 +24,20 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+// Syncro's palette for the whole PWA (globals.css → html.syncro-credit), set before the first
+// paint so the splash and the page never flash the old colours. Dialogs live in <body>, so it
+// goes on <html>.
+const PALETTE_SCRIPT = `document.documentElement.classList.add('syncro-credit');`;
+
 export default function PortalLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return <>{children}</>;
+  return (
+    <>
+      <script dangerouslySetInnerHTML={{ __html: PALETTE_SCRIPT }} />
+      {children}
+    </>
+  );
 }
