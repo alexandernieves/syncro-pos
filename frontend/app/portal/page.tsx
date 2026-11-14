@@ -14,7 +14,7 @@ import {
     IconCalendar, IconChevronRight, IconGift, IconMapPin, IconInfoCircle,
     IconShoppingBag, IconChevronLeft, IconSearch, IconBuildingStore, IconPhone,
     IconCamera, IconClock, IconTruck, IconCircleCheck, IconCircleX,
-    IconWallet, IconBrandPaypal, IconId, IconArrowRight
+    IconWallet, IconBrandPaypal, IconArrowRight, IconChevronDown
 } from "@tabler/icons-react";
 
 import { toast } from "sonner";
@@ -30,6 +30,7 @@ import {
 } from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { NubiSplash, syncThemeColor } from "@/components/portal/nubi-splash";
+import { NubiFace, type NubiMood } from "@/components/portal/nubi-face";
 
 const API = API_URL;
 const MAPBOX_TOKEN = "pk.eyJ1Ijoic3luY3JvcG9zIiwiYSI6ImNtcW80eHJoazF0MjQycXB6b2Q2c3loc3UifQ.RuEyWvPOieOxbOXf9Rq8rQ";
@@ -392,6 +393,17 @@ function ClientPortalApp({ onReady }: { onReady: () => void }) {
     const [activationCode, setActivationCode] = useState("");
     const [clientName, setClientName] = useState("");
     const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
+
+    // Document type of the cédula (V, E, J, G, C), picked next to the number in the login
+    const [docType, setDocType] = useState("V");
+    // Nubi in the login reacts: thinks while checking, sad on a mistake, happy when it knows you
+    const [nubiFlash, setNubiFlash] = useState<NubiMood | null>(null);
+    const nubiFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const nubiFeel = (m: NubiMood, ms = 2600) => {
+        if (nubiFlashTimer.current) clearTimeout(nubiFlashTimer.current);
+        setNubiFlash(m);
+        nubiFlashTimer.current = setTimeout(() => setNubiFlash(null), ms);
+    };
 
     useEffect(() => {
         setActivationCode(otpDigits.join(""));
@@ -910,7 +922,7 @@ function ClientPortalApp({ onReady }: { onReady: () => void }) {
 
     const handleCheckStatus = async () => {
         if (!idSearch.trim()) {
-            toast.error("Por favor ingresa tu número de identificación.");
+            nubiFeel("sad"); toast.error("Por favor ingresa tu número de identificación.");
             return;
         }
         setLoading(true);
@@ -929,13 +941,14 @@ function ClientPortalApp({ onReady }: { onReady: () => void }) {
                     setLoginStep("password");
                 } else {
                     setLoginStep("register");
+                    nubiFeel("surprised", 1600);
                 }
             } else {
                 const err = await res.json();
-                toast.error(err.message || "Identificación no encontrada en el sistema.");
+                nubiFeel("sad"); toast.error(err.message || "Identificación no encontrada en el sistema.");
             }
         } catch (error) {
-            toast.error("Error de conexión");
+            nubiFeel("sad"); toast.error("Error de conexión");
         } finally {
             setLoading(false);
         }
@@ -943,7 +956,7 @@ function ClientPortalApp({ onReady }: { onReady: () => void }) {
 
     const handleLoginWithPassword = async () => {
         if (!password.trim()) {
-            toast.error("Por favor ingresa tu contraseña.");
+            nubiFeel("sad"); toast.error("Por favor ingresa tu contraseña.");
             return;
         }
         setLoading(true);
@@ -962,10 +975,10 @@ function ClientPortalApp({ onReady }: { onReady: () => void }) {
                 toast.success("Sesión iniciada");
             } else {
                 const err = await res.json();
-                toast.error(err.message || "Contraseña incorrecta.");
+                nubiFeel("sad"); toast.error(err.message || "Contraseña incorrecta.");
             }
         } catch (error) {
-            toast.error("Error de conexión");
+            nubiFeel("sad"); toast.error("Error de conexión");
         } finally {
             setLoading(false);
         }
@@ -973,15 +986,15 @@ function ClientPortalApp({ onReady }: { onReady: () => void }) {
 
     const handleRegisterPassword = async () => {
         if (!activationCode.trim()) {
-            toast.error("Por favor ingresa el código de activación.");
+            nubiFeel("sad"); toast.error("Por favor ingresa el código de activación.");
             return;
         }
         if (!password.trim()) {
-            toast.error("Por favor ingresa la nueva contraseña.");
+            nubiFeel("sad"); toast.error("Por favor ingresa la nueva contraseña.");
             return;
         }
         if (password !== confirmPassword) {
-            toast.error("Las contraseñas no coinciden.");
+            nubiFeel("sad"); toast.error("Las contraseñas no coinciden.");
             return;
         }
         setLoading(true);
@@ -1004,7 +1017,7 @@ function ClientPortalApp({ onReady }: { onReady: () => void }) {
                 toast.success("Contraseña registrada y sesión iniciada");
             } else {
                 const err = await res.json();
-                toast.error(err.message || "Error al registrar contraseña.");
+                nubiFeel("sad"); toast.error(err.message || "Error al registrar contraseña.");
             }
         } catch (error) {
             toast.error("Error de conexión");
@@ -1666,7 +1679,8 @@ $1color: #8E3418 !important;
         );
     }
 
-    if (loading) {
+    // In the login the form stays on screen (Nubi thinks while it checks)
+    if (loading && view !== "login") {
         return (
             <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center p-6 text-zinc-800 animate-in fade-in duration-300 relative overflow-hidden">
                 {animationStyle}
@@ -1720,15 +1734,16 @@ $1color: #8E3418 !important;
 
                 {/* Brand on orange, the same as the splash it comes from */}
                 <div className="flex-1 flex flex-col items-center justify-center px-6 pt-8 pb-10 relative z-10 min-h-[260px]">
-                    <div className="relative h-[70px] w-[78px] animate-soft-float">
-                        <img src="/nubi/nubi-neutral.webp" alt="" className="absolute inset-0 size-full object-contain transition-opacity duration-300" style={{ opacity: loginStep === "password" ? 0 : 1, filter: "drop-shadow(0 10px 12px rgba(90,30,5,0.35))" }} />
-                        <img src="/nubi/nubi-happy.webp" alt="" className="absolute inset-0 size-full object-contain transition-opacity duration-300" style={{ opacity: loginStep === "password" ? 1 : 0, filter: "drop-shadow(0 10px 12px rgba(90,30,5,0.35))" }} />
-                    </div>
+                    {/* Still, but alive: blinks and reacts to what happens in the form */}
+                    <NubiFace
+                        className="h-[70px] w-[78px]"
+                        mood={nubiFlash ?? (loading ? "thinking" : loginStep === "password" ? "happy" : "neutral")}
+                    />
                     <h1 className="mt-3 text-center select-none" style={{ fontWeight: 800, letterSpacing: "-0.045em", lineHeight: 0.92, fontSize: "clamp(46px, 14vw, 72px)" }}>
                         <span className="block text-white">SYNCRO</span>
                         <span className="block text-[#1A1815]">CREDIT</span>
                     </h1>
-                    <p className="mt-4 text-[15px] font-medium text-white/90">Compra hoy, paga después</p>
+                    <p className="mt-4 text-[15px] font-medium text-white/90">Tu crédito, en tu bolsillo</p>
                 </div>
 
                 {/* The sheet that rises from the bottom with the form */}
@@ -1739,17 +1754,43 @@ $1color: #8E3418 !important;
                             <div className="animate-in fade-in duration-300">
                                 <h2 className="text-xl font-semibold text-zinc-900">Ingresa a tu cuenta</h2>
                                 <p className="mt-1 text-sm text-zinc-500">Escribe tu cédula para continuar.</p>
-                                <div className={`mt-5 ${pill}`}>
-                                    <IconId size={20} className="shrink-0 text-zinc-400" />
+                                <div className={`mt-5 ${pill} !pl-1.5`}>
+                                    {/* Document type, then only the number: sent as "V-12345678" */}
+                                    <div className="relative shrink-0">
+                                        <select
+                                            aria-label="Tipo de documento"
+                                            value={docType}
+                                            onChange={(e) => {
+                                                const t = e.target.value;
+                                                const num = idSearch.replace(/^[VEJGCP]-?/i, "");
+                                                setDocType(t);
+                                                setIdSearch(num ? `${t}-${num}` : "");
+                                                document.getElementById("sc-doc")?.focus();
+                                            }}
+                                            className="appearance-none h-11 pl-4 pr-8 rounded-full bg-zinc-100 hover:bg-zinc-200/70 text-[15px] font-bold text-zinc-900 outline-none cursor-pointer transition focus-visible:ring-2 focus-visible:ring-primary/30"
+                                        >
+                                            <option value="V">V</option>
+                                            <option value="E">E</option>
+                                            <option value="J">J</option>
+                                            <option value="G">G</option>
+                                            <option value="C">C</option>
+                                        </select>
+                                        <IconChevronDown size={14} stroke={2.5} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                                    </div>
                                     <input
                                         id="sc-doc"
                                         autoFocus
+                                        inputMode="numeric"
                                         autoComplete="username"
-                                        aria-label="Cédula de identidad"
-                                        placeholder="Tu cédula, ej. V123456"
+                                        aria-label="Número de documento"
+                                        placeholder="Número de cédula"
                                         className={pillInput}
-                                        value={idSearch}
-                                        onChange={(e) => setIdSearch(e.target.value)}
+                                        value={idSearch.replace(/^[VEJGCP]-?/i, "")}
+                                        onFocus={() => nubiFeel("surprised", 900)}
+                                        onChange={(e) => {
+                                            const num = e.target.value.replace(/\D/g, "").slice(0, 10);
+                                            setIdSearch(num ? `${docType}-${num}` : "");
+                                        }}
                                         onKeyDown={(e) => e.key === "Enter" && handleCheckStatus()}
                                     />
                                     <button onClick={handleCheckStatus} disabled={loading} className={pillBtn}>

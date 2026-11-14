@@ -41,6 +41,8 @@ export function NubiSplash({ ready }: { ready: boolean }) {
   const nubi = useRef<HTMLDivElement>(null);
   const stretch = useRef<HTMLDivElement>(null);
   const squash = useRef<HTMLDivElement>(null);
+  const spin = useRef<HTMLDivElement>(null);
+  const trail = useRef<SVGPathElement>(null);
   const top = useRef<(HTMLSpanElement | null)[]>([]);
   const bottom = useRef<(HTMLSpanElement | null)[]>([]);
   const tag = useRef<HTMLParagraphElement>(null);
@@ -90,8 +92,17 @@ export function NubiSplash({ ready }: { ready: boolean }) {
         return finish();
       }
 
-      // A ball's flight: a parabola between two letters (or a fall), stretched by its speed
-      const fly = (a: Pt, b: Pt, dur: number, h: number, fall = false) => new Promise<void>((res) => {
+      // The dashed line that draws the path of the bounces (through Nubi's centre)
+      const path: string[] = [];
+      const draw = (p: Pt) => {
+        path.push(`${p.x.toFixed(1)} ${(p.y - 27).toFixed(1)}`);
+        if (path.length > 700) path.splice(0, path.length - 700);
+        trail.current?.setAttribute("d", "M" + path.join(" L"));
+      };
+
+      // A ball's flight: a parabola between two letters (or a fall), stretched by its speed and
+      // spinning a full turn on the way (it lands upright, so the squash looks right)
+      const fly = (a: Pt, b: Pt, dur: number, h: number, fall = false, turn = 0) => new Promise<void>((res) => {
         const t0 = performance.now();
         const step = (now: number) => {
           if (cancelled) return;
@@ -101,8 +112,15 @@ export function NubiSplash({ ready }: { ready: boolean }) {
           const speed = fall ? t : Math.abs(2 * t - 1);
           const s = 0.13 * speed;
           place({ x, y }, 1 - s * 0.7, 1 + s);
+          const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+          if (spin.current) spin.current.style.transform = `rotate(${turn * ease}deg)`;
+          draw({ x, y });
           if (t < 1) raf = requestAnimationFrame(step);
-          else { place(b); res(); }
+          else {
+            place(b);
+            if (spin.current) spin.current.style.transform = "none";
+            res();
+          }
         };
         raf = requestAnimationFrame(step);
       });
@@ -148,7 +166,7 @@ export function NubiSplash({ ready }: { ready: boolean }) {
       };
 
       // Drop from above the screen onto the S
-      await fly({ x: pts[0].x, y: -box.top - 140 }, pts[0], DROP_MS, 0, true);
+      await fly({ x: pts[0].x, y: -box.top - 140 }, pts[0], DROP_MS, 0, true, -360);
       land(1.15);
       hit(top.current[0], 1.2);
       await sleep(60);
@@ -163,7 +181,7 @@ export function NubiSplash({ ready }: { ready: boolean }) {
           if (readyRef.current || performance.now() - startedAt > 15000) break;
           dir = -dir;
         }
-        await fly(pts[i], pts[i + dir], HOP_MS, HOP_H);
+        await fly(pts[i], pts[i + dir], HOP_MS, HOP_H, false, 360 * dir);
         i += dir;
         land();
         hit(top.current[i]);
@@ -174,7 +192,7 @@ export function NubiSplash({ ready }: { ready: boolean }) {
 
       // Last big hop to the middle of the word, a smile, and into the app
       const mid = { x: (pts[0].x + pts[last].x) / 2, y: pts[0].y };
-      await fly(pts[i], mid, FINAL_MS, 130);
+      await fly(pts[i], mid, FINAL_MS, 130, false, mid.x >= pts[i].x ? 360 : -360);
       land(0.8);
       hit(top.current[Math.floor(last / 2)], 0.6);
       hit(top.current[Math.ceil(last / 2)], 0.6);
@@ -231,13 +249,19 @@ export function NubiSplash({ ready }: { ready: boolean }) {
             ))}
           </div>
           <p ref={tag} className="mt-5 text-[15px] text-white/90" style={{ opacity: 0, fontWeight: 500, letterSpacing: "0" }}>
-            Compra hoy, paga después
+            Tu crédito, en tu bolsillo
           </p>
+
+          {/* Dashed line drawing the path of the bounces */}
+          <svg aria-hidden className="pointer-events-none absolute left-0 top-0 overflow-visible" width="1" height="1" style={{ opacity: out ? 0 : 1, transition: "opacity 300ms ease" }}>
+            <path ref={trail} fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2" strokeDasharray="1.5 7" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
 
           {/* Nubi: anchored by the bottom centre, so it sits on the letter it lands on */}
           <div ref={nubi} className="pointer-events-none absolute left-0 top-0" style={{ opacity: 0, transform: "translate(-200px,-400px)" }}>
             <div ref={stretch} className="origin-bottom" style={{ width: 60, height: 54, marginLeft: -30, marginTop: -52 }}>
-              <div ref={squash} className="relative size-full origin-bottom">
+              <div ref={squash} className="relative size-full origin-bottom" style={{ filter: "drop-shadow(0 10px 12px rgba(90,30,5,0.35))" }}>
+                <div ref={spin} className="relative size-full" style={{ transformOrigin: "50% 52%" }}>
                 {(["neutral", "sleepy", "happy"] as const).map((f) => (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -247,9 +271,10 @@ export function NubiSplash({ ready }: { ready: boolean }) {
                     alt=""
                     draggable={false}
                     className="absolute inset-0 size-full object-contain"
-                    style={{ opacity: f === "neutral" ? 1 : 0, filter: "drop-shadow(0 10px 12px rgba(90,30,5,0.35))" }}
+                    style={{ opacity: f === "neutral" ? 1 : 0 }}
                   />
                 ))}
+                </div>
               </div>
             </div>
           </div>

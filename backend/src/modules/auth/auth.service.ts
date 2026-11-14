@@ -8,6 +8,7 @@ import { BranchesService } from '../branches/branches.service';
 import { HistoryService } from '../history/history.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { suspendedMessage } from '../syncro-admin/suspension';
+import { documentIdVariants } from './document-id';
 
 @Injectable()
 export class AuthService {
@@ -104,10 +105,7 @@ export class AuthService {
   async clientLogin(documentId: string, password?: string) {
     const client = await this.prisma.client.findFirst({
       where: {
-        documentId: {
-          equals: documentId,
-          mode: 'insensitive',
-        },
+        documentId: { in: documentIdVariants(documentId), mode: 'insensitive' },
       },
     });
 
@@ -153,10 +151,7 @@ export class AuthService {
   async clientCheckStatus(documentId: string) {
     const client = await this.prisma.client.findFirst({
       where: {
-        documentId: {
-          equals: documentId,
-          mode: 'insensitive',
-        },
+        documentId: { in: documentIdVariants(documentId), mode: 'insensitive' },
       },
     });
 
@@ -179,10 +174,7 @@ export class AuthService {
   async clientRegisterPassword(documentId: string, activationCode: string, pass: string) {
     const client = await this.prisma.client.findFirst({
       where: {
-        documentId: {
-          equals: documentId,
-          mode: 'insensitive',
-        },
+        documentId: { in: documentIdVariants(documentId), mode: 'insensitive' },
       },
     });
 
