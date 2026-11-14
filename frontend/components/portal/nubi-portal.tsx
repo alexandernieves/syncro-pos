@@ -28,6 +28,8 @@ export function NubiPortal({ fx, ready = false, onMid, onDone }: { fx: PortalFx;
   const [minDone, setMinDone] = useState(false);
   const [force, setForce] = useState(false);
   const cb = useRef({ onMid, onDone });
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
   cb.current = { onMid, onDone };
 
   // the hole in the orange: 0 = all orange, max = all open
@@ -68,14 +70,14 @@ export function NubiPortal({ fx, ready = false, onMid, onDone }: { fx: PortalFx;
 
   useEffect(() => {
     if (fx.mode !== "enter" || phase !== "wait" || !(ready || force) || !minDone) return;
-    let alive = true;
+    // (no cleanup here on purpose: switching to "pop" re-runs this effect, and cancelling then left
+    // the open, invisible layer on top of the app, swallowing every tap)
     setPhase("pop");
-    // Nubi pops, then the circle opens from where it was
+    // Nubi pops, then the circle opens from where it was, and the layer goes away
     setTimeout(async () => {
       await animateHole(0, maxR(), 760);
-      if (alive) cb.current.onDone();
+      if (mounted.current) cb.current.onDone();
     }, 260);
-    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, ready, minDone, force]);
 
@@ -103,7 +105,7 @@ export function NubiPortal({ fx, ready = false, onMid, onDone }: { fx: PortalFx;
   return (
     <div
       className="fixed inset-0 z-[260] select-none"
-      style={{ opacity: phase === "fade" ? 0 : 1, transition: "opacity 420ms ease", pointerEvents: phase === "fade" ? "none" : "auto" }}
+      style={{ opacity: phase === "fade" ? 0 : 1, transition: "opacity 420ms ease", pointerEvents: phase === "fade" || phase === "pop" ? "none" : "auto" }}
       role="status"
       aria-label={fx.title}
     >

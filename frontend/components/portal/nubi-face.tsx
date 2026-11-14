@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { Component, type ReactNode, useEffect, useRef, useState } from "react";
 import type { MascotEmotion } from "@/components/mascot/syncro-mascot-3d";
 
 export type NubiMood = "neutral" | "happy" | "sad" | "surprised" | "thinking" | "angry";
@@ -15,6 +15,24 @@ const Still = () => <img src="/nubi/nubi-neutral.webp" alt="" draggable={false} 
 // The same 3D Nubi as the dashboard: its face morphs from one emotion to the next, blinks and
 // looks around by itself. Loaded only here, so the rest of the PWA doesn't carry three.js.
 const SyncroMascot3D = dynamic(() => import("@/components/mascot/syncro-mascot-3d").then((m) => m.SyncroMascot3D), { ssr: false, loading: Still });
+
+/** Whether this phone can draw the 3D head (WebGL off, blocked or out of memory → still Nubi). */
+function canDraw3D() {
+  try {
+    const c = document.createElement("canvas");
+    return !!(c.getContext("webgl2") || c.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
+
+/** If the 3D head fails anyway, show the still Nubi instead of taking the whole app down. */
+class Safe3D extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { /* the still Nubi takes over */ }
+  render() { return this.state.failed ? <Still /> : this.props.children; }
+}
 
 // Spontaneous moods while nothing happens in the form: every emotion but sleeping (on a phone
 // there's no mouse to wake it up, so it would just look asleep)
@@ -31,6 +49,8 @@ const SPEED = 560; // px per second while rolling
  */
 export function NubiFace({ mood = "neutral", className = "", roll, busy = false }: { mood?: NubiMood; className?: string; roll?: NubiRoll; busy?: boolean }) {
   const [own, setOwn] = useState<MascotEmotion | undefined>("happy");
+  const [webgl, setWebgl] = useState<boolean | null>(null);
+  useEffect(() => setWebgl(canDraw3D()), []);
 
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -130,7 +150,13 @@ export function NubiFace({ mood = "neutral", className = "", roll, busy = false 
     <div className={`relative ${className}`} aria-hidden style={{ filter: "drop-shadow(0 10px 12px rgba(90,30,5,0.30))" }}>
       <div ref={move} className="absolute inset-0 will-change-transform">
         <div ref={spin} className="absolute inset-0 will-change-transform">
-          <SyncroMascot3D emotion={emotion} noSleep />
+          {webgl ? (
+            <Safe3D>
+              <SyncroMascot3D emotion={emotion} noSleep />
+            </Safe3D>
+          ) : (
+            <Still />
+          )}
         </div>
       </div>
     </div>
