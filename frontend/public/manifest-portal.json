@@ -4,7 +4,7 @@
   "description": "Gestiona tus créditos y realiza pagos en línea",
   "start_url": "/portal?pwa=true",
   "display": "standalone",
-  "background_color": "#F7F5F0",
+  "background_color": "#F26B3A",
   "theme_color": "#F7F5F0",
   "scope": "/portal",
   "icons": [

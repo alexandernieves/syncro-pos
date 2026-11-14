@@ -14,7 +14,7 @@ import {
     IconCalendar, IconChevronRight, IconGift, IconMapPin, IconInfoCircle,
     IconShoppingBag, IconChevronLeft, IconSearch, IconBuildingStore, IconPhone,
     IconCamera, IconClock, IconTruck, IconCircleCheck, IconCircleX,
-    IconWallet, IconBrandPaypal
+    IconWallet, IconBrandPaypal, IconId, IconArrowRight
 } from "@tabler/icons-react";
 
 import { toast } from "sonner";
@@ -29,7 +29,7 @@ import {
     PolarGrid, PolarRadiusAxis, PolarAngleAxis, RadialBar, RadialBarChart, Label as RechartsLabel 
 } from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
-import { NubiSplash } from "@/components/portal/nubi-splash";
+import { NubiSplash, syncThemeColor } from "@/components/portal/nubi-splash";
 
 const API = API_URL;
 const MAPBOX_TOKEN = "pk.eyJ1Ijoic3luY3JvcG9zIiwiYSI6ImNtcW80eHJoazF0MjQycXB6b2Q2c3loc3UifQ.RuEyWvPOieOxbOXf9Rq8rQ";
@@ -87,6 +87,8 @@ function ClientPortalApp({ onReady }: { onReady: () => void }) {
     const [loading, setLoading] = useState(false);
     const [isInitializing, setIsInitializing] = useState(true);
     useEffect(() => { if (!isInitializing) onReady(); }, [isInitializing, onReady]);
+    // Status bar: orange while the orange login is on screen, bone inside the app
+    useEffect(() => { syncThemeColor(); });
     const [view, setView] = useState<"login" | "dashboard">("login");
     const [activeTab, setActiveTab] = useState<"home" | "payments" | "rewards" | "profile" | "auth-purchase">("home");
     
@@ -1697,201 +1699,177 @@ $1color: #8E3418 !important;
     }
 
     if (view === "login") {
-        const inputCls = "h-12 px-4 rounded-xl bg-white border-zinc-200 text-[15px] font-medium text-zinc-900 placeholder:text-zinc-400 shadow-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:border-primary";
-        const linkCls = "w-full text-center text-sm font-medium bg-transparent border-none outline-none cursor-pointer py-1.5 rounded-lg focus-visible:ring-2 focus-visible:ring-primary/30";
-        const title = loginStep === "register"
-            ? (isResettingPassword ? "Restablece tu contraseña" : "Activa tu cuenta")
-            : loginStep === "password"
-            ? <>¡Hola de nuevo{clientName ? `, ${clientName.split(" ")[0]}` : ""}!</>
-            : <>Compra hoy,<br /><span className="text-primary">paga después</span></>;
-        const subtitle = loginStep === "register"
-            ? "Escribe el código de 6 dígitos que te dio el comercio y crea tu contraseña."
-            : loginStep === "password"
-            ? "Ingresa tu contraseña para continuar."
-            : "Tu línea de crédito digital, sin complicaciones.";
+        // One rounded "pill" holds the field and its button, like a search bar
+        const pill = "flex items-center h-14 rounded-full bg-white border border-zinc-200 pl-5 pr-1.5 gap-2 transition focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15";
+        const pillInput = "flex-1 min-w-0 h-full bg-transparent outline-none text-[15px] font-medium text-zinc-900 placeholder:text-zinc-400";
+        const pillBtn = "h-11 shrink-0 rounded-full bg-primary hover:bg-primary/90 text-white px-5 text-sm font-semibold inline-flex items-center gap-1.5 shadow-sm active:scale-95 transition disabled:opacity-60";
+        const plainPill = "w-full h-14 rounded-full bg-white border border-zinc-200 px-5 text-[15px] font-medium text-zinc-900 placeholder:text-zinc-400 outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15";
+        const linkCls = "text-sm font-medium bg-transparent border-none outline-none cursor-pointer py-1.5 px-2 rounded-lg focus-visible:ring-2 focus-visible:ring-primary/30";
+        const backToDocument = () => {
+            setLoginStep("document");
+            setPassword("");
+            setConfirmPassword("");
+            setActivationCode("");
+            setOtpDigits(["", "", "", "", "", ""]);
+        };
 
         return (
-            <div className="min-h-[100dvh] bg-background flex flex-col text-zinc-800 relative overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
+            <div data-sc-orange className="min-h-[100dvh] flex flex-col relative overflow-hidden text-zinc-800" style={{ background: "#F26B3A", paddingTop: "env(safe-area-inset-top)" }}>
                 {animationStyle}
-                <div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 size-[520px] rounded-full" style={{ background: "radial-gradient(circle, rgba(242,107,58,0.07) 0%, rgba(242,107,58,0) 62%)" }} />
+                <div aria-hidden className="pointer-events-none absolute -top-1/4 left-1/2 -translate-x-1/2 size-[140vw] max-w-[900px] max-h-[900px] rounded-full" style={{ background: "radial-gradient(circle, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 62%)" }} />
 
-                <div className="flex-1 flex flex-col justify-center px-6 py-10 relative z-10">
+                {/* Brand on orange, the same as the splash it comes from */}
+                <div className="flex-1 flex flex-col items-center justify-center px-6 pt-8 pb-10 relative z-10 min-h-[260px]">
+                    <div className="relative h-[70px] w-[78px] animate-soft-float">
+                        <img src="/nubi/nubi-neutral.webp" alt="" className="absolute inset-0 size-full object-contain transition-opacity duration-300" style={{ opacity: loginStep === "password" ? 0 : 1, filter: "drop-shadow(0 10px 12px rgba(90,30,5,0.35))" }} />
+                        <img src="/nubi/nubi-happy.webp" alt="" className="absolute inset-0 size-full object-contain transition-opacity duration-300" style={{ opacity: loginStep === "password" ? 1 : 0, filter: "drop-shadow(0 10px 12px rgba(90,30,5,0.35))" }} />
+                    </div>
+                    <h1 className="mt-3 text-center select-none" style={{ fontWeight: 800, letterSpacing: "-0.045em", lineHeight: 0.92, fontSize: "clamp(46px, 14vw, 72px)" }}>
+                        <span className="block text-white">SYNCRO</span>
+                        <span className="block text-[#1A1815]">CREDIT</span>
+                    </h1>
+                    <p className="mt-4 text-[15px] font-medium text-white/90">Compra hoy, paga después</p>
+                </div>
+
+                {/* The sheet that rises from the bottom with the form */}
+                <div className="relative z-10 bg-background rounded-t-[32px] px-6 pt-3 shadow-[0_-16px_40px_rgba(90,30,5,0.25)] animate-in slide-in-from-bottom duration-500" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }}>
+                    <div className="mx-auto mb-5 h-1.5 w-10 rounded-full bg-zinc-300" />
                     <div className="w-full max-w-sm mx-auto">
-                        {/* Nubi greets: smiles once it recognises the cédula */}
-                        <div className="relative mx-auto mb-6 h-[92px] w-[104px] animate-soft-float">
-                            <img src="/nubi/nubi-neutral.webp" alt="" className="absolute inset-0 size-full object-contain transition-opacity duration-300" style={{ opacity: loginStep === "password" ? 0 : 1, filter: "drop-shadow(0 12px 16px rgba(60,40,20,0.14))" }} />
-                            <img src="/nubi/nubi-happy.webp" alt="" className="absolute inset-0 size-full object-contain transition-opacity duration-300" style={{ opacity: loginStep === "password" ? 1 : 0, filter: "drop-shadow(0 12px 16px rgba(60,40,20,0.14))" }} />
-                        </div>
-
-                        <div className="text-center mb-7">
-                            <p className="text-xs font-semibold text-zinc-400 mb-2">Syncro <span className="text-primary">Credit</span></p>
-                            <h1 key={loginStep} className="text-[30px] font-bold leading-[1.12] tracking-[-0.025em] text-zinc-900 animate-in fade-in slide-in-from-bottom-1 duration-300">{title}</h1>
-                            <p className="mt-2.5 text-sm text-zinc-500 leading-relaxed max-w-[290px] mx-auto">{subtitle}</p>
-                        </div>
-
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_2px_rgba(26,24,21,0.04),0_8px_24px_-12px_rgba(26,24,21,0.10)]">
-                            {loginStep === "document" && (
-                                <div className="space-y-4">
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="sc-doc" className="text-xs font-semibold text-zinc-600">Cédula de identidad</Label>
-                                        <Input
-                                            id="sc-doc"
-                                            autoFocus
-                                            inputMode="text"
-                                            autoComplete="username"
-                                            placeholder="Ej. V12345678"
-                                            className={inputCls}
-                                            value={idSearch}
-                                            onChange={(e) => setIdSearch(e.target.value)}
-                                            onKeyDown={(e) => e.key === "Enter" && handleCheckStatus()}
-                                        />
-                                    </div>
-                                    <Button
-                                        onClick={handleCheckStatus}
-                                        disabled={loading}
-                                        className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold text-[15px] shadow-sm active:scale-[0.98] transition"
-                                    >
-                                        Continuar
-                                    </Button>
+                        {loginStep === "document" && (
+                            <div className="animate-in fade-in duration-300">
+                                <h2 className="text-xl font-semibold text-zinc-900">Ingresa a tu cuenta</h2>
+                                <p className="mt-1 text-sm text-zinc-500">Escribe tu cédula para continuar.</p>
+                                <div className={`mt-5 ${pill}`}>
+                                    <IconId size={20} className="shrink-0 text-zinc-400" />
+                                    <input
+                                        id="sc-doc"
+                                        autoFocus
+                                        autoComplete="username"
+                                        aria-label="Cédula de identidad"
+                                        placeholder="Tu cédula, ej. V123456"
+                                        className={pillInput}
+                                        value={idSearch}
+                                        onChange={(e) => setIdSearch(e.target.value)}
+                                        onKeyDown={(e) => e.key === "Enter" && handleCheckStatus()}
+                                    />
+                                    <button onClick={handleCheckStatus} disabled={loading} className={pillBtn}>
+                                        Acceder <IconArrowRight size={16} />
+                                    </button>
                                 </div>
-                            )}
+                            </div>
+                        )}
 
-                            {loginStep === "password" && (
-                                <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-300">
-                                    <div className="flex items-center gap-3 rounded-xl bg-zinc-50 border border-zinc-100 px-3 py-2.5">
-                                        <div className="size-9 rounded-full bg-amber-100 text-amber-700 grid place-items-center text-sm font-bold">
-                                            {(clientName || "?").trim().charAt(0).toUpperCase()}
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-[11px] text-zinc-400 font-medium">Cliente</p>
-                                            <p className="text-sm font-semibold text-zinc-900 truncate">{clientName}</p>
-                                        </div>
+                        {loginStep === "password" && (
+                            <div className="animate-in fade-in slide-in-from-right-2 duration-300">
+                                <div className="flex items-center gap-3">
+                                    <div className="size-11 rounded-full bg-amber-100 text-amber-700 grid place-items-center text-base font-bold shrink-0">
+                                        {(clientName || "?").trim().charAt(0).toUpperCase()}
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="sc-pass" className="text-xs font-semibold text-zinc-600">Contraseña</Label>
-                                        <Input
-                                            id="sc-pass"
-                                            type="password"
-                                            autoFocus
-                                            autoComplete="current-password"
-                                            placeholder="Tu contraseña"
-                                            className={inputCls}
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                            onKeyDown={(e) => e.key === "Enter" && handleLoginWithPassword()}
-                                        />
+                                    <div className="min-w-0 flex-1">
+                                        <h2 className="text-xl font-semibold text-zinc-900 truncate">¡Hola, {(clientName || "").split(" ")[0]}!</h2>
+                                        <p className="text-sm text-zinc-500 truncate">{clientName}</p>
                                     </div>
-                                    <Button
-                                        onClick={handleLoginWithPassword}
-                                        disabled={loading}
-                                        className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold text-[15px] shadow-sm active:scale-[0.98] transition"
-                                    >
-                                        Ingresar
-                                    </Button>
-                                    <div className="flex flex-col gap-0.5 pt-1">
-                                        <button
-                                            onClick={() => {
-                                                setLoginStep("register");
-                                                setIsResettingPassword(true);
-                                                setPassword("");
-                                                setConfirmPassword("");
-                                                setActivationCode("");
-                                                setOtpDigits(["", "", "", "", "", ""]);
-                                            }}
-                                            className={`${linkCls} text-primary hover:text-amber-600`}
-                                        >
-                                            Olvidé mi contraseña
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setLoginStep("document");
-                                                setPassword("");
-                                            }}
-                                            className={`${linkCls} text-zinc-500 hover:text-zinc-700`}
-                                        >
-                                            Usar otra cédula
-                                        </button>
-                                    </div>
+                                    <button onClick={backToDocument} className={`${linkCls} text-zinc-500 hover:text-zinc-800 shrink-0`}>Cambiar</button>
                                 </div>
-                            )}
-
-                            {loginStep === "register" && (
-                                <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-300">
-                                    <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold text-zinc-600">{isResettingPassword ? "Código de restablecimiento" : "Código de activación"}</Label>
-                                        <div className="flex justify-between gap-1.5">
-                                            {otpDigits.map((digit, idx) => (
-                                                <input
-                                                    key={idx}
-                                                    id={`otp-${idx}`}
-                                                    type="text"
-                                                    inputMode="numeric"
-                                                    pattern="[0-9]*"
-                                                    autoComplete={idx === 0 ? "one-time-code" : "off"}
-                                                    maxLength={1}
-                                                    value={digit}
-                                                    onChange={(e) => handleOtpChange(idx, e.target.value)}
-                                                    onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                                                    onPaste={handleOtpPaste}
-                                                    className={`w-full max-w-12 h-12 rounded-xl bg-white border text-center font-semibold text-lg text-zinc-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/25 ${digit ? "border-amber-300" : "border-zinc-200"}`}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="sc-new" className="text-xs font-semibold text-zinc-600">Nueva contraseña</Label>
-                                        <Input
-                                            id="sc-new"
-                                            type="password"
-                                            autoComplete="new-password"
-                                            placeholder="Mínimo 6 caracteres"
-                                            className={inputCls}
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                        />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="sc-confirm" className="text-xs font-semibold text-zinc-600">Confirmar contraseña</Label>
-                                        <Input
-                                            id="sc-confirm"
-                                            type="password"
-                                            autoComplete="new-password"
-                                            placeholder="Repítela"
-                                            className={inputCls}
-                                            value={confirmPassword}
-                                            onChange={(e) => setConfirmPassword(e.target.value)}
-                                            onKeyDown={(e) => e.key === "Enter" && handleRegisterPassword()}
-                                        />
-                                    </div>
-                                    <Button
-                                        onClick={handleRegisterPassword}
-                                        disabled={loading}
-                                        className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold text-[15px] shadow-sm active:scale-[0.98] transition"
-                                    >
-                                        {isResettingPassword ? "Restablecer contraseña" : "Activar cuenta"}
-                                    </Button>
+                                <div className={`mt-5 ${pill}`}>
+                                    <IconLock size={20} className="shrink-0 text-zinc-400" />
+                                    <input
+                                        id="sc-pass"
+                                        type="password"
+                                        autoFocus
+                                        autoComplete="current-password"
+                                        aria-label="Contraseña"
+                                        placeholder="Tu contraseña"
+                                        className={pillInput}
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        onKeyDown={(e) => e.key === "Enter" && handleLoginWithPassword()}
+                                    />
+                                    <button onClick={handleLoginWithPassword} disabled={loading} className={pillBtn}>
+                                        Entrar <IconArrowRight size={16} />
+                                    </button>
+                                </div>
+                                <div className="mt-3 flex justify-center">
                                     <button
                                         onClick={() => {
-                                            setLoginStep("document");
+                                            setLoginStep("register");
+                                            setIsResettingPassword(true);
                                             setPassword("");
                                             setConfirmPassword("");
                                             setActivationCode("");
                                             setOtpDigits(["", "", "", "", "", ""]);
                                         }}
-                                        className={`${linkCls} text-zinc-500 hover:text-zinc-700`}
+                                        className={`${linkCls} text-primary hover:text-amber-600`}
                                     >
+                                        Olvidé mi contraseña
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {loginStep === "register" && (
+                            <div className="space-y-3 animate-in fade-in slide-in-from-right-2 duration-300">
+                                <div>
+                                    <h2 className="text-xl font-semibold text-zinc-900">{isResettingPassword ? "Restablece tu contraseña" : "Activa tu cuenta"}</h2>
+                                    <p className="mt-1 text-sm text-zinc-500">Escribe el código de 6 dígitos que te dio el comercio.</p>
+                                </div>
+                                <div className="flex justify-between gap-2 pt-1">
+                                    {otpDigits.map((digit, idx) => (
+                                        <input
+                                            key={idx}
+                                            id={`otp-${idx}`}
+                                            type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            autoComplete={idx === 0 ? "one-time-code" : "off"}
+                                            aria-label={`Dígito ${idx + 1}`}
+                                            maxLength={1}
+                                            value={digit}
+                                            onChange={(e) => handleOtpChange(idx, e.target.value)}
+                                            onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                                            onPaste={handleOtpPaste}
+                                            className={`w-full max-w-[52px] h-14 rounded-2xl bg-white border text-center font-semibold text-xl text-zinc-900 outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15 ${digit ? "border-amber-300" : "border-zinc-200"}`}
+                                        />
+                                    ))}
+                                </div>
+                                <input
+                                    type="password"
+                                    autoComplete="new-password"
+                                    aria-label="Nueva contraseña"
+                                    placeholder="Nueva contraseña"
+                                    className={plainPill}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                />
+                                <input
+                                    type="password"
+                                    autoComplete="new-password"
+                                    aria-label="Confirmar contraseña"
+                                    placeholder="Confirmar contraseña"
+                                    className={plainPill}
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    onKeyDown={(e) => e.key === "Enter" && handleRegisterPassword()}
+                                />
+                                <button
+                                    onClick={handleRegisterPassword}
+                                    disabled={loading}
+                                    className="w-full h-14 rounded-full bg-primary hover:bg-primary/90 text-white font-semibold text-[15px] shadow-sm active:scale-[0.98] transition disabled:opacity-60"
+                                >
+                                    {isResettingPassword ? "Restablecer contraseña" : "Activar cuenta"}
+                                </button>
+                                <div className="flex justify-center">
+                                    <button onClick={backToDocument} className={`${linkCls} text-zinc-500 hover:text-zinc-800`}>
                                         Usar otra cédula
                                     </button>
                                 </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
+                            </div>
+                        )}
 
-                <div className="w-full text-center pb-6 relative z-10">
-                    <p className="text-[11px] text-zinc-400 font-medium flex items-center justify-center gap-1.5">
-                        <IconLock size={12} /> Conexión cifrada · Syncro
-                    </p>
+                        <p className="mt-6 text-[11px] text-zinc-400 font-medium flex items-center justify-center gap-1.5">
+                            <IconLock size={12} /> Conexión cifrada · Syncro
+                        </p>
+                    </div>
                 </div>
             </div>
         );
