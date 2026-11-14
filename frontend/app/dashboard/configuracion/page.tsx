@@ -170,6 +170,7 @@ const SECTIONS = [
   { id: "facturacion", label: "Facturación e IVA", icon: IconReceipt },
   { id: "factura", label: "Diseño de factura", icon: IconFileInvoice },
   { id: "pagos", label: "Métodos de pago", icon: IconCreditCard },
+  { id: "syncrocredit", label: "Syncro Credit (PWA)", icon: IconDevices },
   { id: "pos", label: "Punto de venta", icon: IconCash },
   { id: "usuarios", label: "Usuarios y roles", icon: IconShieldLock },
   { id: "sucursales", label: "Sucursales", icon: IconMapPin },
@@ -265,6 +266,9 @@ export default function ConfiguracionPage() {
   const [syncroCreditMaxInstallments, setSyncroCreditMaxInstallments] = useState(3);
   const [syncroCreditFrequencyDays, setSyncroCreditFrequencyDays] = useState(15);
   const [syncroCreditLimits, setSyncroCreditLimits] = useState({ initial: 30, max: 200, step: 10 });
+  // Syncro Credit (PWA): presence in the clients' app and the business's own "Para ti" card
+  const [syncroCreditVisible, setSyncroCreditVisible] = useState(true);
+  const [scPromo, setScPromo] = useState({ title: "", text: "" });
 
   const [dashboardConfig, setDashboardConfig] = useState({
     salesGoal: "10000",
@@ -889,6 +893,8 @@ export default function ConfiguracionPage() {
             setSyncroCreditMaxInstallments(data.syncroCreditMaxInstallments ?? 3);
             setSyncroCreditFrequencyDays(data.syncroCreditFrequencyDays ?? 15);
             setSyncroCreditLimits({ initial: data.syncroCreditInitialLimit ?? 30, max: data.syncroCreditMaxLimit ?? 200, step: data.syncroCreditLimitStep ?? 10 });
+            setSyncroCreditVisible(data.syncroCreditVisible ?? true);
+            setScPromo({ title: data.syncroCreditPromoTitle || "", text: data.syncroCreditPromoText || "" });
             setWhatsappBotEnabled(data.whatsappBotEnabled || false);
             setWhatsappAuthorizedPhones(data.whatsappAuthorizedPhones || []);
             setWhatsappAlerts(readWhatsAppAlerts(data.whatsappAlerts));
@@ -1101,6 +1107,9 @@ export default function ConfiguracionPage() {
           syncroCreditInitialLimit: Math.max(1, Number(syncroCreditLimits.initial) || 30),
           syncroCreditMaxLimit: Math.max(Number(syncroCreditLimits.initial) || 30, Number(syncroCreditLimits.max) || 200),
           syncroCreditLimitStep: Math.max(0, Number(syncroCreditLimits.step) || 0),
+          syncroCreditVisible,
+          syncroCreditPromoTitle: scPromo.title,
+          syncroCreditPromoText: scPromo.text,
           salesGoal: Number(dashboardConfig.salesGoal) || 10000,
           showSalesGoal: !!dashboardConfig.showSalesGoal,
           showNetMargin: !!dashboardConfig.showNetMargin,
@@ -1621,6 +1630,162 @@ export default function ConfiguracionPage() {
           </div>
         )}
 
+        {/* ─── SYNCRO CREDIT (PWA) ─── */}
+        {activeSection === "syncrocredit" && (() => {
+          const freqPresets = [
+            { days: 7, label: "Semanal" },
+            { days: 15, label: "Quincenal" },
+            { days: 30, label: "Mensual" },
+          ];
+          const freq = Number(syncroCreditFrequencyDays) || 15;
+          const maxInst = Math.max(1, Number(syncroCreditMaxInstallments) || 1);
+          const exampleTotal = 30;
+          const freqText = freq === 7 ? "semanales" : freq === 15 ? "quincenales" : freq === 30 ? "mensuales" : `cada ${freq} días`;
+          const methods = [
+            { on: pagoMovil.enabled, label: "Pago móvil", detail: pagoMovil.enabled ? [pagoMovil.bank, pagoMovil.id, pagoMovil.phone].filter(Boolean).join(" · ") || "Faltan los datos" : "Desactivado" },
+            { on: binance.enabled, label: "Binance Pay", detail: binance.enabled ? binance.binanceId || binance.email || "Faltan los datos" : "Desactivado" },
+            { on: zinli.enabled, label: "Zinli", detail: zinli.enabled ? zinli.email || "Faltan los datos" : "Desactivado" },
+            { on: paypal.enabled, label: "PayPal", detail: paypal.enabled ? paypal.email || "Faltan los datos" : "Desactivado" },
+          ];
+          return (
+            <div className="max-w-2xl flex flex-col gap-6">
+              <div>
+                <h2 className="text-xl font-bold">Syncro Credit (PWA)</h2>
+                <p className="text-sm text-muted-foreground">La app donde tus clientes ven su crédito, pagan sus cuotas y compran en tu tienda.</p>
+              </div>
+
+              {/* Presence */}
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-semibold">Mostrar mi negocio en Syncro Credit</p>
+                      <p className="text-xs text-muted-foreground mt-1 max-w-md">
+                        Tus tiendas aparecen en “Comprar” y en “Para ti” de la app, y los clientes pueden ver tu catálogo.
+                        Si lo apagas, tu negocio deja de verse, pero tus clientes igual pueden entrar a la app y pagar sus cuotas.
+                      </p>
+                    </div>
+                    <Switch checked={syncroCreditVisible} onCheckedChange={setSyncroCreditVisible} aria-label="Mostrar mi negocio en Syncro Credit" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Promo card */}
+              <Card className={cn(!syncroCreditVisible && "opacity-50 pointer-events-none")}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold">Tu anuncio en “Para ti”</CardTitle>
+                  <CardDescription>Aparece en el inicio de la app de tus clientes. Si lo dejas vacío, se muestra “Compra hoy y paga en cuotas”.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-5 md:grid-cols-[1fr_300px]">
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between"><Label className="text-xs font-semibold">Título</Label><span className="text-[11px] text-muted-foreground">{scPromo.title.length}/40</span></div>
+                      <Input maxLength={40} placeholder="Ej. 10% menos en víveres" value={scPromo.title} onChange={(e) => setScPromo((p) => ({ ...p, title: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between"><Label className="text-xs font-semibold">Texto</Label><span className="text-[11px] text-muted-foreground">{scPromo.text.length}/90</span></div>
+                      <Input maxLength={90} placeholder="Ej. Pagando a crédito hasta el 30 nov" value={scPromo.text} onChange={(e) => setScPromo((p) => ({ ...p, text: e.target.value }))} />
+                    </div>
+                  </div>
+                  {/* Preview, as the client sees it */}
+                  <div
+                    className="relative h-[164px] overflow-hidden rounded-[22px] p-4 text-white"
+                    style={{ background: "radial-gradient(80% 90% at 100% 0%, rgba(242,107,58,.55), rgba(242,107,58,0) 60%), linear-gradient(135deg,#2E2A26,#45413A)" }}
+                  >
+                    <span className="inline-block max-w-[220px] truncate rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-bold" style={{ color: "#fff" }}>{negocio.businessName || "Tu negocio"}</span>
+                    <p className="mt-2.5 max-w-[200px] text-[18px] font-extrabold leading-tight tracking-tight" style={{ color: "#fff" }}>{scPromo.title || "Compra hoy y paga en cuotas"}</p>
+                    <p className="mt-1 max-w-[210px] text-[12px] line-clamp-2" style={{ color: "rgba(255,255,255,.85)" }}>{scPromo.text || negocio.address || "Tu dirección"}</p>
+                    <span className="absolute bottom-3.5 left-4 rounded-full bg-white px-3 py-1.5 text-[11.5px] font-extrabold text-[#1A1815]">Ver tienda →</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Installments */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold">Cuotas</CardTitle>
+                  <CardDescription>Cómo se reparte una compra a crédito.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">Cada cuánto paga el cliente</Label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {freqPresets.map((p) => (
+                        <Button key={p.days} type="button" size="sm" variant={freq === p.days ? "default" : "outline"} onClick={() => setSyncroCreditFrequencyDays(p.days)}>
+                          {p.label} <span className="ml-1 opacity-70">{p.days} d</span>
+                        </Button>
+                      ))}
+                      <div className="flex items-center gap-2 pl-1">
+                        <span className="text-xs text-muted-foreground">Otro:</span>
+                        <Input type="number" min={1} max={90} value={syncroCreditFrequencyDays} onChange={(e) => setSyncroCreditFrequencyDays(Number(e.target.value))} className="w-20 text-center font-mono" />
+                        <span className="text-xs text-muted-foreground">días</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">Máximo de cuotas por compra</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {[1, 2, 3, 4, 6, 8, 12].map((n) => (
+                        <Button key={n} type="button" size="sm" variant={maxInst === n ? "default" : "outline"} className="min-w-10" onClick={() => setSyncroCreditMaxInstallments(n)}>{n}</Button>
+                      ))}
+                      <Input type="number" min={1} max={24} value={syncroCreditMaxInstallments} onChange={(e) => setSyncroCreditMaxInstallments(Number(e.target.value))} className="w-20 text-center font-mono" />
+                    </div>
+                  </div>
+                  <p className="rounded-lg bg-muted px-3 py-2.5 text-xs text-muted-foreground">
+                    Ejemplo: una compra de <b className="text-foreground">${exampleTotal}</b> en {maxInst} cuota{maxInst > 1 ? "s" : ""} {maxInst > 1 ? freqText : ""} serían{" "}
+                    <b className="text-foreground">${(exampleTotal / maxInst).toFixed(2)}</b>{maxInst > 1 ? ` cada ${freq} días` : ` en ${freq} días`}.
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Limits */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold">Límite de crédito</CardTitle>
+                  <CardDescription>Con cuánto empieza un cliente y cómo crece si paga a tiempo.</CardDescription>
+                </CardHeader>
+                <CardContent className="divide-y divide-border/60">
+                  {[
+                    { k: "initial" as const, label: "Límite inicial ($)", desc: "Con cuánto crédito empieza un cliente nuevo al activar Syncro Credit" },
+                    { k: "step" as const, label: "Aumento por pago a tiempo ($)", desc: "Cuánto sube el límite cada vez que salda una deuda a tiempo" },
+                    { k: "max" as const, label: "Límite máximo ($)", desc: "Hasta dónde puede subir el límite automáticamente" },
+                  ].map((r) => (
+                    <div key={r.k} className="flex items-center justify-between gap-4 py-3">
+                      <div><p className="text-sm font-medium">{r.label}</p><p className="text-xs text-muted-foreground">{r.desc}</p></div>
+                      <Input type="number" min={0} value={syncroCreditLimits[r.k]} onChange={(e) => setSyncroCreditLimits((p) => ({ ...p, [r.k]: Number(e.target.value) }))} className="w-24 text-center font-mono font-bold" />
+                    </div>
+                  ))}
+                  <p className="pt-3 text-xs text-muted-foreground">En la caja, la cajera solo activa Syncro Credit con el límite inicial. Para dar otro límite hace falta el PIN de supervisor.</p>
+                </CardContent>
+              </Card>
+
+              {/* How they pay */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold">Cómo te pagan desde la app</CardTitle>
+                  <CardDescription>Son los datos de “Métodos de pago”: tus clientes ven exactamente estos al pagar una cuota.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="divide-y rounded-lg border">
+                    {methods.map((m) => (
+                      <div key={m.label} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{m.label}</p>
+                          <p className="truncate text-xs text-muted-foreground">{m.detail}</p>
+                        </div>
+                        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", m.on ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-muted text-muted-foreground")}>{m.on ? "Visible" : "Oculto"}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setActiveSection("pagos")}>Editar en Métodos de pago</Button>
+                </CardContent>
+              </Card>
+
+              <Button className="self-start gap-2" onClick={() => handleSave("Syncro Credit")}><IconDeviceFloppy size={16} />Guardar Syncro Credit</Button>
+            </div>
+          );
+        })()}
+
         {/* ─── POS ─── */}
         {activeSection === "pos" && (
           <div className="max-w-2xl flex flex-col gap-6">
@@ -1693,86 +1858,7 @@ export default function ConfiguracionPage() {
               </CardContent>
             </Card>
 
-            <Card className="mt-4">
-              <CardHeader>
-                <CardTitle className="text-base font-bold flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-                  <IconDevices size={18} />
-                  Configuración de SyncroCredit (crédito digital PWA)
-                </CardTitle>
-                <CardDescription>
-                  Establece los límites y frecuencia predeterminada de cuotas para el cobro digital de créditos.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 divide-y divide-border/60">
-                <div className="flex justify-between items-center py-3">
-                  <div>
-                    <p className="font-medium text-sm">Límite inicial ($)</p>
-                    <p className="text-xs text-muted-foreground">Con cuánto crédito empieza un cliente nuevo al activar SyncroCredit</p>
-                  </div>
-                  <Input
-                    type="number"
-                    value={syncroCreditLimits.initial}
-                    onChange={e => setSyncroCreditLimits(p => ({ ...p, initial: Number(e.target.value) }))}
-                    className="w-24 text-center font-mono font-bold"
-                    min={0}
-                  />
-                </div>
-                <div className="flex justify-between items-center py-3">
-                  <div>
-                    <p className="font-medium text-sm">Aumento por pago a tiempo ($)</p>
-                    <p className="text-xs text-muted-foreground">Cuánto sube el límite cada vez que el cliente salda su deuda a tiempo</p>
-                  </div>
-                  <Input
-                    type="number"
-                    value={syncroCreditLimits.step}
-                    onChange={e => setSyncroCreditLimits(p => ({ ...p, step: Number(e.target.value) }))}
-                    className="w-24 text-center font-mono font-bold"
-                    min={0}
-                  />
-                </div>
-                <div className="flex justify-between items-center py-3">
-                  <div>
-                    <p className="font-medium text-sm">Límite máximo ($)</p>
-                    <p className="text-xs text-muted-foreground">Hasta dónde puede subir el límite automáticamente</p>
-                  </div>
-                  <Input
-                    type="number"
-                    value={syncroCreditLimits.max}
-                    onChange={e => setSyncroCreditLimits(p => ({ ...p, max: Number(e.target.value) }))}
-                    className="w-24 text-center font-mono font-bold"
-                    min={0}
-                  />
-                </div>
-                <p className="pt-3 text-xs text-muted-foreground">En la caja, la cajera solo activa SyncroCredit con el límite inicial. Para dar otro límite hace falta el PIN de supervisor.</p>
-                <div className="flex justify-between items-center py-2">
-                  <div>
-                    <p className="font-medium text-sm">Frecuencia de cuotas (días)</p>
-                    <p className="text-xs text-muted-foreground">Cada cuántos días el cliente debe realizar un abono (ej: 15 días)</p>
-                  </div>
-                  <Input 
-                    type="number" 
-                    value={syncroCreditFrequencyDays} 
-                    onChange={e => setSyncroCreditFrequencyDays(Number(e.target.value))} 
-                    className="w-24 text-center font-mono font-bold" 
-                    min={1}
-                  />
-                </div>
-
-                <div className="flex justify-between items-center py-3">
-                  <div>
-                    <p className="font-medium text-sm">Máximo de cuotas habilitadas</p>
-                    <p className="text-xs text-muted-foreground">Número máximo de cuotas que el cliente puede elegir al pagar en la PWA (ej: 3 cuotas)</p>
-                  </div>
-                  <Input 
-                    type="number" 
-                    value={syncroCreditMaxInstallments} 
-                    onChange={e => setSyncroCreditMaxInstallments(Number(e.target.value))} 
-                    className="w-24 text-center font-mono font-bold" 
-                    min={1}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            <p className="text-xs text-muted-foreground">Las cuotas, los límites y la presencia en la app de clientes están en <button type="button" className="font-semibold text-primary underline-offset-2 hover:underline" onClick={() => setActiveSection("syncrocredit")}>Syncro Credit (PWA)</button>.</p>
 
             <Button className="self-start gap-2" onClick={() => handleSave("Punto de Venta")}><IconDeviceFloppy size={16}/>Guardar</Button>
           </div>

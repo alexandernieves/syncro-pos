@@ -137,6 +137,7 @@ const data = {
       items: [
         { title: "Directorio", url: "/dashboard/clientes" },
         { title: "Cuentas por cobrar (fiado)", url: "/dashboard/clientes/creditos", moduleId: "credit" },
+        { title: "Comprobantes", url: "/dashboard/clientes/comprobantes", moduleId: "credit" },
         { title: "Chat de WhatsApp", url: "/dashboard/chat", moduleId: "whatsapp" },
       ],
     },

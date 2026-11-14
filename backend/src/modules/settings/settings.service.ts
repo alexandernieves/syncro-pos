@@ -85,6 +85,7 @@ export class SettingsService {
       'paymentMethods', 'discountPin', 'pinPermissions',
       'syncroCreditMaxInstallments', 'syncroCreditFrequencyDays',
       'syncroCreditInitialLimit', 'syncroCreditMaxLimit', 'syncroCreditLimitStep',
+      'syncroCreditVisible', 'syncroCreditPromoTitle', 'syncroCreditPromoText',
       'salesGoal', 'showSalesGoal', 'showNetMargin',
       'exchangeRate', 'exchangeRateEur', 'bcvUpdateDate',
       'exchangeRateDashboard', 'exchangeRateDashboardEur', 'bcvUpdateDateDashboard',
@@ -103,6 +104,14 @@ export class SettingsService {
       if (updateData[key] !== undefined) {
         filteredData[key] = updateData[key];
       }
+    }
+
+    // Syncro Credit (PWA): sane installment rules and short texts for the app's card
+    if (filteredData.syncroCreditFrequencyDays !== undefined) filteredData.syncroCreditFrequencyDays = Math.min(90, Math.max(1, Math.round(Number(filteredData.syncroCreditFrequencyDays) || 15)));
+    if (filteredData.syncroCreditMaxInstallments !== undefined) filteredData.syncroCreditMaxInstallments = Math.min(24, Math.max(1, Math.round(Number(filteredData.syncroCreditMaxInstallments) || 3)));
+    if (filteredData.syncroCreditVisible !== undefined) filteredData.syncroCreditVisible = !!filteredData.syncroCreditVisible;
+    for (const [k, max] of [['syncroCreditPromoTitle', 40], ['syncroCreditPromoText', 90]] as const) {
+      if (filteredData[k] !== undefined) filteredData[k] = String(filteredData[k] ?? '').trim().slice(0, max) || null;
     }
 
     // Avisos por WhatsApp: only a valid configuration is stored

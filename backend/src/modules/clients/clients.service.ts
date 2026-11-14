@@ -839,9 +839,16 @@ export class ClientsService {
   }
 
 
+  /** Businesses that turned off their presence in Syncro Credit (Configuración → Syncro Credit). */
+  private async hiddenPortalBusinessIds(): Promise<Set<string>> {
+    const rows = await this.prisma.setting.findMany({ where: { syncroCreditVisible: false, businessId: { not: null } }, select: { businessId: true } });
+    return new Set(rows.map((r) => r.businessId as string));
+  }
+
   async getPortalBusinesses() {
-    // Return all main branches (stores) that have a businessId, including business info
-    return this.prisma.branch.findMany({
+    // Main branches (stores) of the businesses present in the app, with their own card for "Para ti"
+    const hidden = await this.hiddenPortalBusinessIds();
+    const branches = await this.prisma.branch.findMany({
       where: {
         businessId: { not: null },
         isMain: true,
@@ -857,11 +864,24 @@ export class ClientsService {
       },
       orderBy: { name: 'asc' }
     });
+    const visible = branches.filter((b) => !hidden.has(b.businessId as string));
+    const promos = await this.prisma.setting.findMany({
+      where: { businessId: { in: [...new Set(visible.map((b) => b.businessId as string))] } },
+      select: { businessId: true, syncroCreditPromoTitle: true, syncroCreditPromoText: true },
+    });
+    const promoOf = new Map(promos.map((p) => [p.businessId, p]));
+    return visible.map((b) => {
+      const p = promoOf.get(b.businessId);
+      return { ...b, promo: p?.syncroCreditPromoTitle ? { title: p.syncroCreditPromoTitle, text: p.syncroCreditPromoText || null } : null };
+    });
   }
 
   async getPortalBusinessBranches(businessId: string) {
     if (!businessId) {
       throw new BadRequestException('El ID del negocio es requerido');
+    }
+    if ((await this.hiddenPortalBusinessIds()).has(businessId)) {
+      throw new NotFoundException('Este comercio no está disponible en Syncro Credit');
     }
     return this.prisma.branch.findMany({
       where: { businessId },
@@ -886,6 +906,9 @@ export class ClientsService {
     const businessId = branch.businessId;
     if (!businessId) {
       throw new BadRequestException('La sucursal no está asociada a ningún negocio');
+    }
+    if ((await this.hiddenPortalBusinessIds()).has(businessId)) {
+      throw new NotFoundException('Este comercio no está disponible en Syncro Credit');
     }
 
     const products = await this.prisma.product.findMany({
@@ -993,6 +1016,9 @@ export class ClientsService {
 
   /** What the customer portal may know about a business: never the supervisor PIN or the bot's phones. */
   async getSettings(businessId: string) {
+    // Golden rule: without a business there is nothing to show (an undefined filter would match
+    // ANY business and hand out someone else's payment details)
+    if (!businessId) return {};
     const settings = await this.prisma.setting.findFirst({
       where: { businessId }
     });
@@ -1336,7 +1362,7 @@ export class ClientsService {
       where: { businessId },
       include: {
         client: {
-          select: { id: true, name: true, documentId: true, phone: true },
+          select: { id: true, name: true, documentId: true, phone: true, currentDebt: true },
         },
       },
       orderBy: { createdAt: 'desc' },

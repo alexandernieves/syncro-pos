@@ -415,6 +415,15 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
     const [planDebt, setPlanDebt] = useState<any | null>(null);
     const [showHistory, setShowHistory] = useState(false);
     const [adIndex, setAdIndex] = useState(0);
+    // Receipts already decided that the client closed (so "¡Pago aprobado!" shows once)
+    const [seenSubs, setSeenSubs] = useState<string[]>(() => {
+        try { return JSON.parse(localStorage.getItem("sc-seen-subs") || "[]"); } catch { return []; }
+    });
+    const dismissSub = (id: string) => setSeenSubs((prev) => {
+        const next = [...prev, id].slice(-50);
+        try { localStorage.setItem("sc-seen-subs", JSON.stringify(next)); } catch { /* private mode */ }
+        return next;
+    });
     // Between login steps Nubi rolls (forward or back) and the sheet slides to the next step
     const [nubiRoll, setNubiRoll] = useState<NubiRoll>({ n: 0, dir: 1 });
     const rollNubi = (dir: 1 | -1) => setNubiRoll((r) => ({ n: r.n + 1, dir }));
@@ -1374,6 +1383,27 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
         };
     };
 
+    // A receipt in review: ask every 20 s (and when the app comes back) until the business decides;
+    // then reload the account so the installments show the payment applied
+    useEffect(() => {
+        if (view !== "dashboard" || !mySubmissions.some((x: any) => x.status === "PENDING")) return;
+        const token = localStorage.getItem("client_token");
+        if (!token) return;
+        const check = async () => {
+            try {
+                const r = await fetch(`${API}/clients/portal/payments/submissions`, { headers: { Authorization: `Bearer ${token}` } });
+                if (!r.ok) return;
+                const fresh = await r.json();
+                const changed = fresh.some((n: any) => { const o = mySubmissions.find((x: any) => x.id === n.id); return o && o.status !== n.status; });
+                if (changed) await loadPortalData(token);
+            } catch { /* offline: next round */ }
+        };
+        const t = setInterval(check, 20000);
+        const onVis = () => { if (document.visibilityState === "visible") check(); };
+        document.addEventListener("visibilitychange", onVis);
+        return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
+    }, [view, mySubmissions, loadPortalData]);
+
     const levelInfo = getClientLevel(client?.creditScore || 50);
 
     const availableCredit = Math.max(0, (client?.creditLimit || 0) - (client?.currentDebt || 0));
@@ -2062,6 +2092,46 @@ $1color: #8E3418 !important;
     const allInstsOf = (d: any) => [...(d.installments || [])].sort((a: any, b: any) => (a.number - b.number) || (new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()));
     const paidCountOf = (d: any) => (d.installments || []).filter((i: any) => i.status === "PAID" || instLeft(i) <= 0.004).length;
     const totalCountOf = (d: any) => Math.max(d.installmentsCount || 0, (d.installments || []).length, 1);
+    /** The latest news about a receipt: approved / rejected (until closed) or in review */
+    const subBanner = () => {
+        const recent = (x: any) => Date.now() - new Date(x.updatedAt || x.createdAt).getTime() < 14 * 86400000;
+        const decided = mySubmissions.find((x: any) => x.status !== "PENDING" && recent(x) && !seenSubs.includes(x.id));
+        const pending = mySubmissions.filter((x: any) => x.status === "PENDING");
+        if (decided) {
+            const ok = decided.status === "APPROVED";
+            return (
+                <div className={`relative flex items-center gap-3 rounded-[20px] border p-3.5 pr-10 animate-in fade-in slide-in-from-bottom-1 duration-300 ${ok ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
+                    <img src={ok ? "/nubi/nubi-happy.webp" : "/nubi/nubi-sad.webp"} alt="" className="h-11 w-12 shrink-0 object-contain" />
+                    <div className="min-w-0">
+                        <p className={`text-[15px] font-bold ${ok ? "text-emerald-800" : "text-rose-800"}`}>{ok ? "¡Pago aprobado!" : "Comprobante rechazado"}</p>
+                        <p className={`text-[12.5px] ${ok ? "text-emerald-700" : "text-rose-700"}`}>
+                            {ok ? `Tu abono de ${money(decided.amount)} ya se aplicó a tus cuotas.` : `El comercio no pudo verificar tu pago de ${money(decided.amount)}. Escríbele o envía otro comprobante.`}
+                        </p>
+                    </div>
+                    <button onClick={() => dismissSub(decided.id)} aria-label="Cerrar aviso" className={`absolute right-2 top-2 size-8 grid place-items-center rounded-full ${ok ? "text-emerald-700 hover:bg-emerald-100" : "text-rose-700 hover:bg-rose-100"}`}>
+                        <IconCircleX size={18} />
+                    </button>
+                </div>
+            );
+        }
+        if (pending.length) {
+            const total = pending.reduce((a: number, x: any) => a + (Number(x.amount) || 0), 0);
+            return (
+                <div className="flex items-center gap-3 rounded-[20px] border border-amber-200 bg-amber-50 p-3.5">
+                    <span className="relative grid size-11 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-700">
+                        <IconClock size={22} />
+                        <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-amber-500 animate-pulse" />
+                    </span>
+                    <div className="min-w-0">
+                        <p className="text-[15px] font-bold text-amber-900">Pago en revisión</p>
+                        <p className="text-[12.5px] text-amber-800">El comercio está verificando {pending.length > 1 ? `tus ${pending.length} comprobantes (${money(total)})` : `tu comprobante de ${money(total)}`}. Te avisamos aquí.</p>
+                    </div>
+                </div>
+            );
+        }
+        return null;
+    };
+
     const isOverdue = (d: any) => pendingInstsOf(d).some((i: any) => daysUntil(i.dueDate) < 0);
 
     // Pay: straight to the existing payment flow of that purchase, with the next installment chosen
@@ -2129,8 +2199,8 @@ $1color: #8E3418 !important;
         stores.forEach((b: any) => ads.push(
             <div key={`s-${b.id}`} className="sc-ad" style={{ background: "radial-gradient(80% 90% at 100% 0%, rgba(242,107,58,.55), rgba(242,107,58,0) 60%), linear-gradient(135deg,#2E2A26,#45413A)" }}>
                 <span className="sc-ad-tag">{b.business?.name || b.name}</span>
-                <h4>Compra hoy y paga en cuotas</h4>
-                <p className="truncate">{b.name}{b.location ? ` · ${b.location}` : ""}</p>
+                <h4>{b.promo?.title || "Compra hoy y paga en cuotas"}</h4>
+                <p className="line-clamp-2">{b.promo?.text || `${b.name}${b.location ? ` · ${b.location}` : ""}`}</p>
                 <button className="sc-ad-go" onClick={() => { goTab("rewards"); setSelectedBranchForShop(b); setProductSearchQuery(""); setBusinessSearchQuery(""); }}>Ver tienda →</button>
                 <IconShoppingBag size={120} stroke={1.1} className="absolute -right-2 -bottom-3 text-white/15" />
             </div>,
@@ -2200,6 +2270,7 @@ $1color: #8E3418 !important;
                     </div>
                 )}
 
+                {subBanner() && <div className="mt-3">{subBanner()}</div>}
                 <div aria-hidden className="flex-1 min-h-5 max-h-11" />
                 {/* Quick actions */}
                 <div className="grid grid-cols-4 gap-1.5">
@@ -2272,6 +2343,28 @@ $1color: #8E3418 !important;
                         className="w-full h-12 rounded-full bg-white border border-zinc-200 pl-11 pr-4 text-[15px] font-medium outline-none focus:border-primary focus:ring-4 focus:ring-primary/15"
                     />
                 </div>
+                {mySubmissions.length > 0 && !txSearchQuery && (
+                    <div className="mt-5">
+                        <p className="mb-2 px-1 text-[12px] font-bold text-zinc-500">Comprobantes enviados</p>
+                        <div className="rounded-[22px] border border-zinc-200 bg-white overflow-hidden">
+                            {mySubmissions.slice(0, 10).map((x: any, i: number) => {
+                                const st = x.status === "APPROVED" ? { t: "Aprobado", c: "bg-emerald-50 text-emerald-700" } : x.status === "REJECTED" ? { t: "Rechazado", c: "bg-rose-50 text-rose-700" } : { t: "En revisión", c: "bg-amber-100 text-amber-800" };
+                                return (
+                                    <button key={x.id} onClick={() => x.receiptUrl && window.open(x.receiptUrl, "_blank")} className={`w-full text-left flex items-center gap-3 p-3.5 ${i ? "border-t border-zinc-100" : ""}`}>
+                                        <div className="size-11 shrink-0 overflow-hidden rounded-[15px] bg-zinc-100">
+                                            {x.receiptUrl ? <img src={x.receiptUrl} alt="" className="size-full object-cover" /> : <div className="grid size-full place-items-center text-zinc-400"><IconCamera size={20} /></div>}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[14.5px] font-semibold text-zinc-900">Abono de {money(x.amount)}</p>
+                                            <p className="text-[12.5px] text-zinc-500 truncate">{new Date(x.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}{x.referenceNumber ? ` · Ref. ${x.referenceNumber}` : ""}</p>
+                                        </div>
+                                        <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${st.c}`}>{st.t}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
                 {groups.length === 0 ? (
                     <div className="mt-8 text-center text-sm text-zinc-500">{(client?.creditTransactions || []).length ? "No hay movimientos con esa búsqueda." : "Aún no tienes movimientos."}</div>
                 ) : groups.map((g) => (
@@ -2460,6 +2553,8 @@ $1color: #8E3418 !important;
                         <p className="mt-1 text-[13.5px] font-medium text-white/90">No tienes cuotas pendientes</p>
                     </div>
                 )}
+
+                {subBanner() && <div className="mt-5">{subBanner()}</div>}
 
                 {pendingDebtsList.length > 0 && (
                     <>

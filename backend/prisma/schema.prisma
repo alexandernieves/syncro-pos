@@ -439,6 +439,11 @@ model Setting {
   syncroCreditInitialLimit    Float     @default(30)
   syncroCreditMaxLimit        Float     @default(200)
   syncroCreditLimitStep       Float     @default(10)
+  /// Syncro Credit (PWA): the business appears in the clients' app (Comprar, Para ti); off = hidden, its clients still log in and pay
+  syncroCreditVisible         Boolean   @default(true)
+  /// Its own card in the app's "Para ti" carousel
+  syncroCreditPromoTitle      String?
+  syncroCreditPromoText       String?
   whatsappAuthorizedPhones    String[]  @default([])
   whatsappBotEnabled          Boolean   @default(false)
   /// Notifications forwarded to WhatsApp through the bot's connection: who gets them, which ones, quiet hours
