@@ -776,3 +776,25 @@ html.syncro-credit h3 { letter-spacing: -0.015em; }
   from { transform: translateX(-64px); opacity: 0; }
   to { transform: none; opacity: 1; }
 }
+
+/* Syncro Credit: "Nubi's portal" between the login and the account */
+@keyframes sc-portal-bounce {
+  0%, 100% { transform: translateY(0) scale(1.18, 0.82); }
+  12% { transform: translateY(-6px) scale(0.94, 1.08); }
+  50% { transform: translateY(-58px) scale(1, 1); }
+  88% { transform: translateY(-6px) scale(0.96, 1.05); }
+}
+@keyframes sc-portal-shadow {
+  0%, 100% { transform: scaleX(1); opacity: 0.35; }
+  50% { transform: scaleX(0.55); opacity: 0.14; }
+}
+@keyframes sc-portal-pop {
+  0% { transform: scale(1); opacity: 1; }
+  35% { transform: scale(1.3, 0.72); opacity: 1; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+@keyframes sc-portal-in {
+  0% { transform: scale(0.2); opacity: 0; }
+  60% { transform: scale(1.12, 0.9); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}

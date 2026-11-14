@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { API_URL } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,10 @@ import {
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { NubiSplash, syncThemeColor } from "@/components/portal/nubi-splash";
 import { NubiFace, type NubiMood, type NubiRoll } from "@/components/portal/nubi-face";
+import { NubiPortal, type PortalFx } from "@/components/portal/nubi-portal";
+
+/** Starts "Nubi's portal" (the screen between the login and the account) from inside the app. */
+type PortalControl = { start: (fx: PortalFx, onMid?: () => void) => void; ready: () => void };
 
 const API = API_URL;
 const MAPBOX_TOKEN = "pk.eyJ1Ijoic3luY3JvcG9zIiwiYSI6ImNtcW80eHJoazF0MjQycXB6b2Q2c3loc3UifQ.RuEyWvPOieOxbOXf9Rq8rQ";
@@ -39,9 +43,18 @@ const MAPBOX_TOKEN = "pk.eyJ1Ijoic3luY3JvcG9zIiwiYSI6ImNtcW80eHJoazF0MjQycXB6b2Q
 export default function ClientPortal() {
     const [ready, setReady] = useState(false);
     const onReady = useCallback(() => setReady(true), []);
+    // Nubi's portal: covers the jump between the login and the account (both ways)
+    const [fx, setFx] = useState<PortalFx | null>(null);
+    const [fxReady, setFxReady] = useState(false);
+    const fxMid = useRef<(() => void) | undefined>(undefined);
+    const portal = useMemo<PortalControl>(() => ({
+        start: (f, onMid) => { fxMid.current = onMid; setFxReady(false); setFx(f); },
+        ready: () => setFxReady(true),
+    }), []);
     return (
         <>
-            <ClientPortalApp onReady={onReady} />
+            <ClientPortalApp onReady={onReady} portal={portal} />
+            {fx && <NubiPortal key={fx.mode + fx.title} fx={fx} ready={fxReady} onMid={() => fxMid.current?.()} onDone={() => setFx(null)} />}
             <NubiSplash ready={ready} />
         </>
     );
@@ -58,7 +71,7 @@ const PortalTitle = ({ children }: { children: React.ReactNode }) => (
     </div>
 );
 
-function ClientPortalApp({ onReady }: { onReady: () => void }) {
+function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: PortalControl }) {
     const [idSearch, setIdSearch] = useState("");
     const [client, setClient] = useState<any>(null);
     const [loans, setLoans] = useState<any[]>([]);
@@ -997,9 +1010,11 @@ function ClientPortalApp({ onReady }: { onReady: () => void }) {
             if (res.ok) {
                 const data = await res.json();
                 localStorage.setItem("client_token", data.access_token);
+                const first = String(data.client?.name || clientName || "").trim().split(" ")[0];
+                portal.start({ mode: "enter", title: first ? `¡Hola, ${first}!` : "¡Hola!", subtitle: "Abriendo tu cuenta" });
                 await loadPortalData(data.access_token);
                 setView("dashboard");
-                toast.success("Sesión iniciada");
+                portal.ready();
             } else {
                 const err = await res.json();
                 nubiFeel("sad"); toast.error(err.message || "Contraseña incorrecta.");
@@ -1039,9 +1054,10 @@ function ClientPortalApp({ onReady }: { onReady: () => void }) {
             if (res.ok) {
                 const data = await res.json();
                 localStorage.setItem("client_token", data.access_token);
+                portal.start({ mode: "enter", title: isResettingPassword ? "¡Contraseña lista!" : "¡Cuenta activada!", subtitle: "Preparando todo para ti" });
                 await loadPortalData(data.access_token);
                 setView("dashboard");
-                toast.success("Contraseña registrada y sesión iniciada");
+                portal.ready();
             } else {
                 const err = await res.json();
                 nubiFeel("sad"); toast.error(err.message || "Error al registrar contraseña.");
@@ -1055,6 +1071,7 @@ function ClientPortalApp({ onReady }: { onReady: () => void }) {
 
     const handleLogout = () => {
         localStorage.removeItem("client_token");
+        setIdSearch("");
         setClient(null);
         setLoans([]);
         setRewards([]);
@@ -1066,6 +1083,12 @@ function ClientPortalApp({ onReady }: { onReady: () => void }) {
         setActivationCode("");
         setClientName("");
         setOtpDigits(["", "", "", "", "", ""]);
+    };
+
+    // Log out behind Nubi's goodbye (the portal swaps to the login while it covers the screen)
+    const requestLogout = () => {
+        const first = String(client?.name || "").trim().split(" ")[0];
+        portal.start({ mode: "leave", title: first ? `¡Hasta pronto, ${first}!` : "¡Hasta pronto!", subtitle: "Cerrando tu sesión de forma segura" }, handleLogout);
     };
 
     const handleStartEditProfile = () => {
@@ -1994,7 +2017,7 @@ $1color: #8E3418 !important;
                         </p>
                     </div>
                     <Button
-                        onClick={handleLogout}
+                        onClick={requestLogout}
                         variant="outline"
                         className="w-full h-12 rounded-xl border-zinc-200 bg-white text-zinc-700 font-semibold text-sm"
                     >
@@ -4286,7 +4309,7 @@ $1color: #8E3418 !important;
 
                                 <Button 
                                     variant="outline" 
-                                    onClick={handleLogout} 
+                                    onClick={requestLogout} 
                                     className="w-full h-12 rounded-xl text-xs font-black text-rose-600 hover:text-rose-700 border-rose-200 hover:bg-rose-50/50 transition-all duration-300 bg-transparent"
                                 >
                                     Cerrar sesión
