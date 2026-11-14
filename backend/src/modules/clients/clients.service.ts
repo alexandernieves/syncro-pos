@@ -567,8 +567,8 @@ export class ClientsService {
         status: 'PENDING',
       },
       include: {
+        // every installment (paid ones too): the PWA shows the whole plan and how many are paid
         installments: {
-          where: { status: 'PENDING' },
           orderBy: { dueDate: 'asc' },
         },
       },
@@ -605,6 +605,8 @@ export class ClientsService {
       ? await this.prisma.sale.findMany({
           where: { id: { in: uniqueSaleIds } },
           include: {
+            business: { select: { name: true } },
+            branch: { select: { name: true } },
             items: {
               include: {
                 variant: {
@@ -634,7 +636,7 @@ export class ClientsService {
         subtotal: si.subtotal,
       })) || [];
 
-      const nextInstallment = loan.installments[0];
+      const nextInstallment = loan.installments.find((i) => i.status === 'PENDING');
 
       return {
         loanId: loan.id,
@@ -646,6 +648,8 @@ export class ClientsService {
         nextPaymentDate: nextInstallment?.dueDate ?? null,
         nextPaymentAmount: nextInstallment?.amount ?? null,
         createdAt: loan.createdAt,
+        storeName: (sale as any)?.business?.name || (sale as any)?.branch?.name || null,
+        installmentsCount: loan.installmentsCount,
         items: itemsSummary,
         installments: loan.installments.map(inst => ({
           id: inst.id,
@@ -696,6 +700,8 @@ export class ClientsService {
           nextPaymentDate: fallbackDueDate,
           nextPaymentAmount: allocatedRemaining,
           createdAt: tx.createdAt,
+          storeName: (sale as any)?.business?.name || (sale as any)?.branch?.name || null,
+          installmentsCount: 1,
           items: itemsSummary,
           installments: [
             {

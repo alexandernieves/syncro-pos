@@ -411,6 +411,10 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
     const [docType, setDocType] = useState("V");
     // The eye in the password fields: show what you typed
     const [showPass, setShowPass] = useState(false);
+    // Redesign: the installment plan and the history are views of their own; the home carousel
+    const [planDebt, setPlanDebt] = useState<any | null>(null);
+    const [showHistory, setShowHistory] = useState(false);
+    const [adIndex, setAdIndex] = useState(0);
     // Between login steps Nubi rolls (forward or back) and the sheet slides to the next step
     const [nubiRoll, setNubiRoll] = useState<NubiRoll>({ n: 0, dir: 1 });
     const rollNubi = (dir: 1 | -1) => setNubiRoll((r) => ({ n: r.n + 1, dir }));
@@ -2028,24 +2032,504 @@ $1color: #8E3418 !important;
         );
     }
 
+    // ── Redesign (Inicio / Pagos / Plan de cuotas / Historial) ──────────────────
+    const instLeft = (i: any) => (i.remaining !== undefined ? i.remaining : (i.amount - (i.paidAmount || 0)));
+    const pendingDebtsList = (debts || []).filter((d: any) => d.remainingBalance > 0.004);
+    const pendingInstsOf = (d: any) => {
+        const list = (d.installments || [])
+            .filter((i: any) => i.status === "PENDING" && instLeft(i) > 0.004)
+            .sort((a: any, b: any) => (a.number - b.number) || (new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()));
+        return list.length ? list : [{ id: `virtual-${d.loanId}`, number: 1, dueDate: d.nextPaymentDate || d.createdAt, amount: d.remainingBalance, paidAmount: 0, remaining: d.remainingBalance, status: "PENDING" }];
+    };
+    const allPendingInsts = pendingDebtsList
+        .flatMap((d: any) => pendingInstsOf(d).map((i: any) => ({ ...i, remaining: instLeft(i), debt: d })))
+        .sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    const nextInst = allPendingInsts[0];
+    const ticketOf = (d: any) => (String(d?.description || "").match(/#\s?([A-Za-z0-9]+)/) || [])[1];
+    const storeOf = (d: any) => d?.storeName || "Compra a crédito";
+    const dayStart = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const daysUntil = (date: any) => Math.round((dayStart(new Date(date)) - dayStart(new Date())) / 86400000);
+    const whenText = (date: any) => {
+        const n = daysUntil(date);
+        if (n < 0) return `vencida hace ${-n} día${n === -1 ? "" : "s"}`;
+        if (n === 0) return "vence hoy";
+        if (n === 1) return "mañana";
+        return `en ${n} días`;
+    };
+    const fmtDay = (date: any) => new Date(date).toLocaleDateString("es-ES", { day: "numeric", month: "short" }).replace(".", "");
+    const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`;
+    const firstName = String(client?.name || "").trim().split(" ")[0];
+    const allInstsOf = (d: any) => [...(d.installments || [])].sort((a: any, b: any) => (a.number - b.number) || (new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()));
+    const paidCountOf = (d: any) => (d.installments || []).filter((i: any) => i.status === "PAID" || instLeft(i) <= 0.004).length;
+    const totalCountOf = (d: any) => Math.max(d.installmentsCount || 0, (d.installments || []).length, 1);
+    const isOverdue = (d: any) => pendingInstsOf(d).some((i: any) => daysUntil(i.dueDate) < 0);
+
+    // Pay: straight to the existing payment flow of that purchase, with the next installment chosen
+    const openPay = (debt: any, custom = false) => {
+        setActiveTab("payments");
+        setPlanDebt(null);
+        setShowHistory(false);
+        setSelectedDebtForPayment(debt);
+        setPaymentStep("details");
+        setReceiptFile(null);
+        setReceiptPreview(null);
+        if (custom) {
+            setSelectedInstallmentOption("custom");
+            setPaymentAmount("");
+        } else {
+            setSelectedInstallmentOption(1);
+            setPaymentAmount(instLeft(pendingInstsOf(debt)[0]).toFixed(2));
+        }
+        window.scrollTo({ top: 0 });
+    };
+    const goTab = (tab: typeof activeTab) => {
+        setRequestLoanView(false);
+        setActiveTab(tab);
+        setPlanDebt(null);
+        setShowHistory(false);
+        setSelectedDebtForPayment(null);
+        setPaymentStep("details");
+        setSelectedInstallmentOption(null);
+        window.scrollTo({ top: 0 });
+    };
+
+    /** A tiny row of segments: paid (green), next (orange), the rest (grey) */
+    const Segments = ({ debt }: { debt: any }) => {
+        const total = totalCountOf(debt);
+        const paid = paidCountOf(debt);
+        return (
+            <div className="flex gap-1 mt-2">
+                {Array.from({ length: Math.min(total, 12) }, (_, i) => (
+                    <span key={i} className={`h-[5px] flex-1 max-w-7 rounded-full ${i < paid ? "bg-emerald-500" : i === paid ? "bg-amber-400" : "bg-zinc-200"}`} />
+                ))}
+            </div>
+        );
+    };
+
+    const BackBar = ({ title, subtitle, onBack }: { title: string; subtitle?: string; onBack: () => void }) => (
+        <div className="flex items-center gap-3 pt-1">
+            <button onClick={onBack} aria-label="Volver" className="size-10 shrink-0 rounded-full bg-white/25 text-white grid place-items-center active:scale-95 transition">
+                <IconChevronLeft size={20} stroke={2.4} />
+            </button>
+            <div className="min-w-0">
+                <h2 className="text-[22px] font-extrabold text-white leading-tight truncate" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>{title}</h2>
+                {subtitle && <p className="text-[12.5px] font-semibold text-white/85 truncate">{subtitle}</p>}
+            </div>
+        </div>
+    );
+
+    // ── Inicio ──
+    const renderHome = () => {
+        const usedPct = creditLimit > 0 ? Math.min(100, ((client?.currentDebt || 0) / creditLimit) * 100) : 0;
+        const ownBiz = client?.businessId;
+        const stores = [...portalBusinesses]
+            .sort((a: any, b: any) => Number(b.businessId === ownBiz || b.business?.id === ownBiz) - Number(a.businessId === ownBiz || a.business?.id === ownBiz))
+            .slice(0, 3);
+        const ads: React.ReactNode[] = [];
+        stores.forEach((b: any) => ads.push(
+            <div key={`s-${b.id}`} className="sc-ad" style={{ background: "radial-gradient(80% 90% at 100% 0%, rgba(242,107,58,.55), rgba(242,107,58,0) 60%), linear-gradient(135deg,#2E2A26,#45413A)" }}>
+                <span className="sc-ad-tag">{b.business?.name || b.name}</span>
+                <h4>Compra hoy y paga en cuotas</h4>
+                <p className="truncate">{b.name}{b.location ? ` · ${b.location}` : ""}</p>
+                <button className="sc-ad-go" onClick={() => { goTab("rewards"); setSelectedBranchForShop(b); setProductSearchQuery(""); setBusinessSearchQuery(""); }}>Ver tienda →</button>
+                <IconShoppingBag size={120} stroke={1.1} className="absolute -right-2 -bottom-3 text-white/15" />
+            </div>,
+        ));
+        if (levelInfo.level < 4) ads.push(
+            <div key="lvl" className="sc-ad" style={{ background: "linear-gradient(135deg,#F26B3A,#F6A27F)" }}>
+                <span className="sc-ad-tag">Tu nivel · {levelInfo.name}</span>
+                <h4>Sube a Nivel {levelInfo.level + 1}</h4>
+                <p>Paga tus cuotas a tiempo y tu límite puede crecer</p>
+                <img src="/nubi/nubi-happy.webp" alt="" className="absolute right-3 bottom-3 w-[74px] drop-shadow-[0_10px_12px_rgba(90,30,5,0.35)]" />
+            </div>,
+        );
+        if (!nextInst) ads.push(
+            <div key="ok" className="sc-ad" style={{ background: "linear-gradient(135deg,#1F9D5B,#5BC48A)" }}>
+                <span className="sc-ad-tag">Estás al día</span>
+                <h4>¡Sin pagos pendientes!</h4>
+                <p>Tu crédito completo está listo para usar</p>
+            </div>,
+        );
+
+        return (
+            <div className="space-y-0 animate-in fade-in duration-500">
+                {/* Hello, with Nubi */}
+                <div className="relative text-white pr-24">
+                    <h1 className="text-[30px] leading-tight" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>Hola{firstName ? `, ${firstName}` : ""}</h1>
+                    <p className="mt-1 text-[15px] font-medium text-white/90">Tienes <b className="font-bold">{money(availableCredit)}</b> para comprar hoy</p>
+                    <NubiFace className="!absolute -right-1 -top-4 h-[84px] w-[84px]" />
+                </div>
+
+                {/* Credit card */}
+                <div className="relative mt-5 rounded-[26px] p-5 text-white overflow-hidden shadow-[0_18px_36px_-14px_rgba(40,20,10,0.55)]" style={{ background: "radial-gradient(90% 120% at 100% 0%, rgba(242,107,58,.55), rgba(242,107,58,0) 55%), linear-gradient(145deg,#2A2622,#151311)" }}>
+                    <span className="absolute right-4 top-4 rounded-full bg-white/12 px-2.5 py-1 text-[12px] font-bold">Nivel {levelInfo.level} · {levelInfo.name}</span>
+                    <p className="text-[12.5px] font-semibold text-white/60">Crédito disponible</p>
+                    <p className="mt-0.5 text-[42px] leading-none" style={{ fontWeight: 800, letterSpacing: "-0.04em" }}>{money(availableCredit)}</p>
+                    <div className="mt-4 mb-2.5 h-2 rounded-full bg-white/15 overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${100 - usedPct}%`, background: "linear-gradient(90deg,#F6A27F,#F26B3A)" }} />
+                    </div>
+                    <div className="flex justify-between text-[13px] text-white/75">
+                        <span>Usado <b className="text-white">{money(client?.currentDebt || 0)}</b></span>
+                        <span>Límite <b className="text-white">{money(creditLimit)}</b></span>
+                    </div>
+                </div>
+
+                {/* Next payment */}
+                {nextInst ? (
+                    <div className="mt-3 flex items-center gap-3 rounded-[20px] border border-zinc-200 bg-white p-3.5">
+                        <div className={`size-11 shrink-0 rounded-2xl grid place-items-center ${daysUntil(nextInst.dueDate) < 0 ? "bg-rose-50 text-rose-600" : "bg-amber-100 text-amber-600"}`}>
+                            <IconCalendar size={22} />
+                        </div>
+                        <div className="min-w-0">
+                            <p className={`text-[12px] font-semibold ${daysUntil(nextInst.dueDate) < 0 ? "text-rose-600" : "text-zinc-500"}`}>Próximo pago · {whenText(nextInst.dueDate)}</p>
+                            <p className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>{money(nextInst.remaining)} <span className="text-[13px] font-semibold text-zinc-500">· {fmtDay(nextInst.dueDate)}</span></p>
+                        </div>
+                        <button onClick={() => openPay(nextInst.debt)} className="ml-auto rounded-full bg-primary px-[18px] py-2.5 text-sm font-bold text-white shadow-[0_6px_14px_-6px_rgba(242,107,58,0.7)] active:scale-95 transition">Pagar</button>
+                    </div>
+                ) : (
+                    <div className="mt-3 flex items-center gap-3 rounded-[20px] border border-emerald-100 bg-emerald-50/60 p-3.5">
+                        <div className="size-11 shrink-0 rounded-2xl grid place-items-center bg-emerald-100 text-emerald-600"><IconCircleCheck size={22} /></div>
+                        <div>
+                            <p className="text-[12px] font-semibold text-emerald-700">Estás al día</p>
+                            <p className="text-[15px] font-bold text-zinc-900">No tienes pagos pendientes</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Quick actions */}
+                <div className="mt-5 grid grid-cols-4 gap-1.5">
+                    {[
+                        { label: "Pagar", icon: <IconWallet size={24} />, on: () => (nextInst ? openPay(nextInst.debt) : goTab("payments")) },
+                        { label: "Mis cuotas", icon: <IconCalendar size={24} />, on: () => goTab("payments") },
+                        { label: "Historial", icon: <IconHistory size={24} />, on: () => { goTab("payments"); setShowHistory(true); } },
+                        { label: "Tiendas", icon: <IconShoppingBag size={24} />, on: () => goTab("rewards") },
+                    ].map((a) => (
+                        <button key={a.label} onClick={a.on} className="flex flex-col items-center gap-1.5 text-[12px] font-semibold text-zinc-700 active:scale-95 transition">
+                            <span className="size-14 rounded-[20px] border border-zinc-200 bg-white grid place-items-center text-amber-600">{a.icon}</span>
+                            {a.label}
+                        </button>
+                    ))}
+                </div>
+
+                {/* For you */}
+                {ads.length > 0 && (
+                    <>
+                        <div className="mt-6 mb-2.5 flex items-baseline justify-between">
+                            <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Para ti</h3>
+                            <button onClick={() => goTab("rewards")} className="text-[13px] font-bold text-amber-600">Ver todo</button>
+                        </div>
+                        <div
+                            className="-mx-6 px-6 flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-none"
+                            onScroll={(e) => {
+                                const el = e.currentTarget;
+                                setAdIndex(Math.round(el.scrollLeft / 312));
+                            }}
+                        >
+                            {ads}
+                        </div>
+                        {ads.length > 1 && (
+                            <div className="mt-2.5 flex justify-center gap-1.5">
+                                {ads.map((_, i) => <span key={i} className={`h-1.5 rounded-full transition-all ${i === adIndex ? "w-[18px] bg-primary" : "w-1.5 bg-zinc-300"}`} />)}
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+        );
+    };
+
+    // ── Historial ──
+    const renderHistory = () => {
+        const txs = (client?.creditTransactions || []).filter((tx: any) => {
+            const isDebt = tx.type === "DEBT";
+            const notes = (tx.notes || (isDebt ? "Compra a crédito" : "Abono realizado")).toLowerCase();
+            const q = txSearchQuery.toLowerCase();
+            return !q || notes.includes(q) || String(tx.amount).includes(q) || fmtDay(tx.createdAt).toLowerCase().includes(q);
+        });
+        const groups: { label: string; items: any[] }[] = [];
+        txs.forEach((tx: any) => {
+            const label = new Date(tx.createdAt).toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+            const g = groups.find((x) => x.label === label);
+            if (g) g.items.push(tx); else groups.push({ label, items: [tx] });
+        });
+        return (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                <BackBar title="Historial" subtitle="Tus compras y abonos" onBack={() => setShowHistory(false)} />
+                <div className="relative mt-5">
+                    <IconSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    <input
+                        value={txSearchQuery}
+                        onChange={(e) => setTxSearchQuery(e.target.value)}
+                        placeholder="Buscar por tienda, monto o fecha"
+                        className="w-full h-12 rounded-full bg-white border border-zinc-200 pl-11 pr-4 text-[15px] font-medium outline-none focus:border-primary focus:ring-4 focus:ring-primary/15"
+                    />
+                </div>
+                {groups.length === 0 ? (
+                    <div className="mt-8 text-center text-sm text-zinc-500">{(client?.creditTransactions || []).length ? "No hay movimientos con esa búsqueda." : "Aún no tienes movimientos."}</div>
+                ) : groups.map((g) => (
+                    <div key={g.label} className="mt-5">
+                        <p className="mb-2 px-1 text-[12px] font-bold text-zinc-500 first-letter:uppercase">{g.label}</p>
+                        <div className="rounded-[22px] border border-zinc-200 bg-white overflow-hidden">
+                            {g.items.map((tx: any, i: number) => {
+                                const isDebt = tx.type === "DEBT";
+                                return (
+                                    <div key={tx.id} className={`flex items-center gap-3 p-3.5 ${i ? "border-t border-zinc-100" : ""}`}>
+                                        <div className={`size-11 shrink-0 rounded-[15px] grid place-items-center ${isDebt ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"}`}>
+                                            {isDebt ? <IconShoppingBag size={20} /> : <IconCash size={20} />}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[14.5px] font-semibold text-zinc-900 truncate">{tx.notes || (isDebt ? "Compra a crédito" : "Abono realizado")}</p>
+                                            <p className="text-[12.5px] text-zinc-500">{new Date(tx.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                                        </div>
+                                        <span className={`ml-auto shrink-0 text-[15px] font-bold ${isDebt ? "text-zinc-900" : "text-emerald-600"}`}>{isDebt ? "" : "−"}{money(Math.abs(tx.amount))}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
+    // ── Plan de cuotas ──
+    const renderPlan = (debt: any) => {
+        const insts = allInstsOf(debt);
+        const total = totalCountOf(debt);
+        const paid = paidCountOf(debt);
+        const next = pendingInstsOf(debt)[0];
+        const pct = total ? paid / total : 0;
+        const pendingSubmission = mySubmissions.find((s: any) => s.debtId === debt.loanId && s.status === "PENDING");
+        const R = 15, C = 2 * Math.PI * R;
+        return (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300 pb-36">
+                <BackBar title="Plan de cuotas" subtitle={`${storeOf(debt)}${ticketOf(debt) ? ` · Ticket #${ticketOf(debt)}` : ""}`} onBack={() => setPlanDebt(null)} />
+                <div className="mt-5 flex items-center gap-4 rounded-[24px] bg-white p-[18px] shadow-[0_16px_30px_-18px_rgba(90,40,10,0.45)]">
+                    <svg width="74" height="74" viewBox="0 0 36 36" className="shrink-0">
+                        <circle cx="18" cy="18" r={R} fill="none" stroke="#EDEAE4" strokeWidth="4" />
+                        <circle cx="18" cy="18" r={R} fill="none" stroke="#F26B3A" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${Math.max(pct * C, 0.01)} ${C}`} transform="rotate(-90 18 18)" />
+                        <text x="18" y="21" textAnchor="middle" fontSize="8.5" fontWeight="800" fill="#1A1815">{paid}/{total}</text>
+                    </svg>
+                    <div className="min-w-0">
+                        <p className="text-[12.5px] font-semibold text-zinc-500">Te falta pagar</p>
+                        <p className="text-[30px] leading-tight text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>{money(debt.remainingBalance)}</p>
+                        <p className="text-[12.5px] text-zinc-500">
+                            {total} cuota{total > 1 ? "s" : ""} · {isOverdue(debt) ? <b className="text-rose-600">con atraso</b> : <b className="text-emerald-600">al día</b>}
+                        </p>
+                    </div>
+                </div>
+                {pendingSubmission && (
+                    <div className="mt-3 flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-800">
+                        <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+                        Abono de {money(pendingSubmission.amount)} en revisión por el comercio
+                    </div>
+                )}
+
+                <h3 className="mt-6 mb-2 px-1 text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Cuotas</h3>
+                <div>
+                    {insts.map((inst: any, idx: number) => {
+                        const left = instLeft(inst);
+                        const isPaid = inst.status === "PAID" || left <= 0.004;
+                        const isNext = !isPaid && next && inst.id === next.id;
+                        const late = !isPaid && daysUntil(inst.dueDate) < 0;
+                        return (
+                            <div key={inst.id} className="relative flex gap-3.5 pb-3">
+                                <div className="relative w-7 flex justify-center">
+                                    <span className={`z-10 mt-4 size-[18px] rounded-full border-[3px] ${isPaid ? "border-emerald-500 bg-emerald-500" : isNext ? "border-primary bg-primary shadow-[0_0_0_5px_#FDE6DA]" : late ? "border-rose-400 bg-background" : "border-zinc-300 bg-background"}`}>
+                                        {isPaid && <IconCheck size={12} stroke={3} className="text-white -m-[1px]" />}
+                                    </span>
+                                    {idx < insts.length - 1 && <span className="absolute top-[34px] -bottom-3 w-0.5 bg-zinc-200" />}
+                                </div>
+                                <div className={`flex-1 flex items-center rounded-[18px] border bg-white px-3.5 py-3 ${isNext ? "border-amber-200 shadow-[0_10px_22px_-14px_rgba(242,107,58,0.6)]" : "border-zinc-200"} ${isPaid ? "opacity-70" : ""}`}>
+                                    <div>
+                                        <p className="text-[15px] font-bold text-zinc-900">
+                                            Cuota {inst.number}
+                                            {isNext && <span className="ml-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700 align-[2px]">Próxima</span>}
+                                            {isPaid && <span className="ml-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 align-[2px]">Pagada</span>}
+                                            {late && <span className="ml-1.5 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-700 align-[2px]">Vencida</span>}
+                                        </p>
+                                        <p className="text-[12.5px] text-zinc-500 mt-0.5">{isPaid ? `Venció el ${fmtDay(inst.dueDate)}` : `Vence el ${fmtDay(inst.dueDate)} · ${whenText(inst.dueDate)}`}</p>
+                                    </div>
+                                    <div className="ml-auto text-right">
+                                        <p className={`text-base font-extrabold ${isPaid ? "text-zinc-500 line-through" : isNext ? "text-zinc-900" : "text-zinc-700"}`} style={{ fontWeight: 800 }}>{money(isPaid ? inst.amount : left)}</p>
+                                        {!isPaid && left < inst.amount - 0.004 && <p className="text-[11px] text-zinc-500">de {money(inst.amount)}</p>}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {(debt.items || []).length > 0 && (
+                    <details className="mt-2 rounded-[18px] border border-zinc-200 bg-white p-3.5 group">
+                        <summary className="list-none flex justify-between text-[14px] font-bold text-zinc-900 cursor-pointer">
+                            <span>Productos ({debt.items.length})</span>
+                            <span className="text-amber-600 group-open:hidden">Ver</span>
+                            <span className="text-amber-600 hidden group-open:inline">Ocultar</span>
+                        </summary>
+                        <div className="mt-2 space-y-1.5">
+                            {debt.items.map((it: any, i: number) => (
+                                <div key={i} className="flex justify-between text-[13.5px] text-zinc-700">
+                                    <span className="truncate pr-3">{it.quantity}× {it.name}</span>
+                                    <span className="shrink-0">{money(it.subtotal ?? it.price * it.quantity)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </details>
+                )}
+
+                {/* Pay, always at hand */}
+                {next && (
+                    <div className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md px-5 pt-4" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 18px)", background: "linear-gradient(180deg, rgba(247,245,240,0), #F7F5F0 30%)" }}>
+                        <button onClick={() => openPay(debt)} className="w-full rounded-full bg-primary py-4 text-base font-extrabold text-white shadow-[0_10px_20px_-10px_rgba(242,107,58,0.8)] active:scale-[0.98] transition" style={{ fontWeight: 800 }}>
+                            Pagar cuota {next.number} · {money(instLeft(next))}
+                        </button>
+                        <button onClick={() => openPay(debt, true)} className="mt-2.5 w-full text-center text-sm font-bold text-zinc-500">Pagar otro monto</button>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // ── Pagos ──
+    const renderPayments = () => {
+        if (showHistory) return renderHistory();
+        if (planDebt) return renderPlan(debts.find((d: any) => d.loanId === planDebt.loanId) || planDebt);
+
+        const monthsFull = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+        const groups: { key: string; m: number; y: number; insts: any[] }[] = [];
+        allPendingInsts.forEach((inst: any) => {
+            const d = new Date(inst.dueDate);
+            const key = `${d.getFullYear()}-${d.getMonth()}`;
+            const g = groups.find((x) => x.key === key);
+            if (g) g.insts.push(inst); else groups.push({ key, m: d.getMonth(), y: d.getFullYear(), insts: [inst] });
+        });
+        const active = groups.find((g) => g.key === selectedMonthTab) || groups[0];
+        const monthTotal = active ? active.insts.reduce((s, i) => s + i.remaining, 0) : 0;
+        const firstOfMonth = active?.insts[0];
+        const q = (inst: any) => (new Date(inst.dueDate).getDate() <= 15 ? "primera quincena" : "segunda quincena");
+        const thisYear = new Date().getFullYear();
+
+        return (
+            <div className="animate-in fade-in duration-500">
+                <h1 className="text-[30px] leading-tight text-white" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>Tus pagos</h1>
+
+                {groups.length > 0 ? (
+                    <>
+                        {groups.length > 1 && (
+                            <div className="mt-4 -mx-6 px-6 overflow-x-auto scrollbar-none">
+                                <div className="flex w-max gap-1.5 rounded-full bg-white/20 p-1">
+                                    {groups.map((g) => (
+                                        <button key={g.key} onClick={() => setSelectedMonthTab(g.key)} className={`rounded-full px-3.5 py-2 text-[13px] font-bold transition ${g.key === active?.key ? "bg-white text-amber-600" : "text-white"}`}>
+                                            <span className="first-letter:uppercase inline-block">{monthsFull[g.m]}{g.y !== thisYear ? ` ${g.y}` : ""}</span>
+                                            <span className="opacity-75 font-semibold"> · {g.insts.length}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        <div className="mt-5 text-white">
+                            <p className="text-[13px] font-semibold text-white/90">A pagar en {monthsFull[active.m]}</p>
+                            <p className="text-[52px] leading-[1.05]" style={{ fontWeight: 800, letterSpacing: "-0.045em" }}>{money(monthTotal)}</p>
+                            <p className="mt-1 text-[13.5px] font-medium text-white/90">
+                                {active.insts.length} cuota{active.insts.length > 1 ? "s" : ""}
+                                {active.insts.length === 1 ? ` · vence el ${fmtDay(firstOfMonth.dueDate)} (${q(firstOfMonth)})` : ` · la primera vence el ${fmtDay(firstOfMonth.dueDate)}`}
+                            </p>
+                        </div>
+                        <div className="mt-4 flex gap-2.5">
+                            <button onClick={() => openPay(firstOfMonth.debt)} className="flex-1 rounded-full bg-[#1A1815] py-3.5 text-[15px] font-bold text-white active:scale-[0.98] transition">
+                                Pagar {money(instLeft(firstOfMonth))}
+                            </button>
+                            <button onClick={() => openPay(firstOfMonth.debt, true)} className="rounded-full bg-white/95 px-[18px] py-3.5 text-[15px] font-bold text-zinc-900 active:scale-[0.98] transition">
+                                Otro monto
+                            </button>
+                        </div>
+                    </>
+                ) : (
+                    <div className="mt-5 text-white">
+                        <p className="text-[13px] font-semibold text-white/90">Estás al día</p>
+                        <p className="text-[52px] leading-[1.05]" style={{ fontWeight: 800, letterSpacing: "-0.045em" }}>$0.00</p>
+                        <p className="mt-1 text-[13.5px] font-medium text-white/90">No tienes cuotas pendientes</p>
+                    </div>
+                )}
+
+                {pendingDebtsList.length > 0 && (
+                    <>
+                        <div className="mt-8 mb-2.5 flex items-baseline justify-between">
+                            <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Compras a crédito</h3>
+                            <span className="text-[13px] font-bold text-amber-600">{pendingDebtsList.length} activa{pendingDebtsList.length > 1 ? "s" : ""}</span>
+                        </div>
+                        <div className="rounded-[22px] border border-zinc-200 bg-white overflow-hidden">
+                            {pendingDebtsList.map((d: any, i: number) => {
+                                const late = isOverdue(d);
+                                const sub = mySubmissions.find((s: any) => s.debtId === d.loanId && s.status === "PENDING");
+                                return (
+                                    <button key={d.loanId} onClick={() => { setPlanDebt(d); window.scrollTo({ top: 0 }); }} className={`w-full text-left flex items-center gap-3 p-3.5 active:bg-zinc-50 transition ${i ? "border-t border-zinc-100" : ""}`}>
+                                        <div className="size-[46px] shrink-0 rounded-[15px] bg-zinc-100 text-zinc-600 grid place-items-center"><IconBuildingStore size={22} /></div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-[15px] font-bold leading-tight text-zinc-900 line-clamp-2">{storeOf(d)}</p>
+                                            <p className="text-[12.5px] text-zinc-500 truncate">{ticketOf(d) ? `#${ticketOf(d)} · ` : ""}{fmtDay(d.createdAt)}{sub ? " · abono en revisión" : ""}</p>
+                                            <Segments debt={d} />
+                                        </div>
+                                        <div className="shrink-0 text-right">
+                                            <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${late ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>{late ? "Vencida" : "Al día"}</span>
+                                            <p className="mt-1 text-base text-zinc-900" style={{ fontWeight: 800 }}>{money(d.remainingBalance)}</p>
+                                            <p className="text-[11.5px] text-zinc-500">{paidCountOf(d)} de {totalCountOf(d)} pagadas</p>
+                                        </div>
+                                        <IconChevronRight size={18} stroke={2.4} className="shrink-0 text-zinc-300" />
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </>
+                )}
+
+                <button onClick={() => { setShowHistory(true); window.scrollTo({ top: 0 }); }} className="mt-3 w-full text-left flex items-center gap-3 rounded-[22px] border border-zinc-200 bg-white p-3.5 active:bg-zinc-50 transition">
+                    <div className="size-[46px] shrink-0 rounded-[15px] bg-amber-100 text-amber-600 grid place-items-center"><IconHistory size={22} /></div>
+                    <div className="min-w-0">
+                        <p className="text-[15px] font-bold text-zinc-900">Historial de movimientos</p>
+                        <p className="text-[12.5px] text-zinc-500">Compras y abonos · {(client?.creditTransactions || []).length} movimiento{(client?.creditTransactions || []).length === 1 ? "" : "s"}</p>
+                    </div>
+                    <IconChevronRight size={18} stroke={2.4} className="ml-auto shrink-0 text-zinc-300" />
+                </button>
+            </div>
+        );
+    };
+
     return (
-        <div className="min-h-screen bg-background text-zinc-800 font-sans-ui pb-28 animate-in fade-in duration-500 relative overflow-x-clip">
+        <div data-sc-orange={!isOrdersListOpen && !isTrackingOpen ? "" : undefined} className="min-h-screen bg-background text-zinc-800 font-sans-ui pb-28 animate-in fade-in duration-500 relative overflow-x-clip">
             {animationStyle}
 
-            {/* Header */}
+            {/* Header: orange that melts into the page, with the bounce trail of the splash */}
             {!isOrdersListOpen && !isTrackingOpen && (
-                <div className="max-w-md mx-auto px-6 mb-5 z-50 relative" style={{ paddingTop: "calc(env(safe-area-inset-top) + 18px)" }}>
-                    <PortalTitle>
-                        {activeTab === "home" && `Hola${client ? `, ${client.name.split(" ")[0]}` : ""}`}
-                        {activeTab === "payments" && "Tus pagos"}
-                        {activeTab === "rewards" && "Compra en tiendas"}
-                        {activeTab === "profile" && "Tu perfil"}
-                        {activeTab === "auth-purchase" && "Autoriza tu compra"}
-                    </PortalTitle>
-                </div>
+                <>
+                    <div aria-hidden className="sc-hero pointer-events-none absolute inset-x-0 top-0 z-0" />
+                    <svg aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 h-[300px] w-full opacity-40" viewBox="0 0 390 300" preserveAspectRatio="none">
+                        <path d="M-10 230 Q40 120 90 210 Q140 110 190 200 Q240 100 290 190 Q340 95 400 170" fill="none" stroke="#fff" strokeWidth="2" strokeDasharray="1.5 8" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                    </svg>
+                    <div className="relative z-10 max-w-md mx-auto px-6 flex items-center justify-between" style={{ paddingTop: "calc(env(safe-area-inset-top) + 14px)" }}>
+                        <div className="flex items-center gap-2 text-sm font-bold text-white select-none">
+                            <span className="size-[26px] rounded-lg bg-white/25 grid place-items-center"><img src="/syncro.png" alt="" className="size-4 rounded" /></span>
+                            Syncro <b className="-ml-1 text-[#1A1815]" style={{ fontWeight: 800 }}>Credit</b>
+                        </div>
+                        <button onClick={() => goTab("profile")} aria-label="Tu perfil" className="size-10 rounded-full bg-white/25 text-white grid place-items-center text-[15px] font-bold active:scale-95 transition">
+                            {(firstName || "?").charAt(0).toUpperCase()}
+                        </button>
+                    </div>
+                    {activeTab !== "home" && !(activeTab === "payments" && !selectedDebtForPayment) && (
+                        <div className="relative z-10 max-w-md mx-auto px-6 mt-4">
+                            <h1 className="text-[30px] leading-tight text-white" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>
+                                {activeTab === "payments" && "Pagar"}
+                                {activeTab === "rewards" && "Compra en tiendas"}
+                                {activeTab === "profile" && "Tu perfil"}
+                                {activeTab === "auth-purchase" && "Autoriza tu compra"}
+                            </h1>
+                        </div>
+                    )}
+                </>
             )}
 
-            <main className="max-w-md mx-auto px-6 space-y-4 pt-1">
+            <main className="relative z-10 max-w-md mx-auto px-6 space-y-4 pt-5">
                 
                 {/* BANNER MORA */}
                 {client?.isSuspended && (
@@ -2203,191 +2687,7 @@ $1color: #8E3418 !important;
                 ) : (
                     <>
                         {/* TAB 1: HOME */}
-                        {activeTab === "home" && (
-                    <div className="space-y-5 animate-in slide-in-from-bottom duration-500">
-                        
-                        {/* PREMIUM CREDITO CARD */}
-                        <div className="w-full flex flex-col items-center justify-center text-center pt-1 pb-3 relative">
-                            <div className="z-10 relative w-full flex flex-col items-center justify-center">
-                                <ChartContainer
-                                    config={chartConfig}
-                                    className="mx-auto aspect-square w-full max-w-[360px]"
-                                >
-                                    <RadialBarChart
-                                        data={chartData}
-                                        startAngle={90}
-                                        endAngle={-270}
-                                        innerRadius={130}
-                                        outerRadius={155}
-                                    >
-                                        <PolarGrid
-                                            gridType="circle"
-                                            radialLines={false}
-                                            stroke="none"
-                                            className="first:fill-zinc-200 last:fill-background"
-                                            polarRadius={[155, 130]}
-                                        />
-                                        <PolarAngleAxis
-                                            type="number"
-                                            domain={[0, 100]}
-                                            tick={false}
-                                        />
-                                        <RadialBar dataKey="value" background={false} cornerRadius={18} />
-                                        <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
-                                            <RechartsLabel
-                                                content={({ viewBox }) => {
-                                                    if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                                                        return (
-                                                            <text
-                                                                x={viewBox.cx}
-                                                                y={viewBox.cy}
-                                                                textAnchor="middle"
-                                                                dominantBaseline="middle"
-                                                            >
-                                                                <tspan
-                                                                    x={viewBox.cx}
-                                                                    y={viewBox.cy - 18}
-                                                                    className="fill-zinc-400 text-[11px] font-black"
-                                                                >
-                                                                    Crédito disponible
-                                                                </tspan>
-                                                                <tspan
-                                                                    x={viewBox.cx}
-                                                                    y={(viewBox.cy || 0) + 18}
-                                                                    className="fill-zinc-800 text-4xl font-black"
-                                                                >
-                                                                    ${availableCredit.toFixed(2)}
-                                                                </tspan>
-                                                            </text>
-                                                        )
-                                                    }
-                                                }}
-                                            />
-                                        </PolarRadiusAxis>
-                                    </RadialBarChart>
-                                </ChartContainer>
-                                {/* Credit info strip below radial — premium cards */}
-                                <div className="grid grid-cols-3 gap-2 mt-4 w-full">
-                                    <div className="rounded-2xl bg-white border border-zinc-100 shadow-sm p-3 flex flex-col items-center gap-0.5">
-                                        <p className="text-[8px] text-zinc-400 font-black">Límite</p>
-                                        <p className="text-lg font-black text-zinc-800">${creditLimit.toFixed(0)}</p>
-                                    </div>
-                                    <div className="rounded-2xl bg-white border border-zinc-100 shadow-sm p-3 flex flex-col items-center gap-0.5">
-                                        <p className="text-[8px] text-rose-500/90 font-black">Usado</p>
-                                        <p className="text-lg font-black text-rose-600">${(client?.currentDebt || 0).toFixed(0)}</p>
-                                    </div>
-                                    <div className="rounded-2xl bg-white border border-zinc-100 shadow-sm p-3 flex flex-col items-center gap-0.5">
-                                        <p className="text-[8px] text-emerald-500/90 font-black">Libre</p>
-                                        <p className="text-lg font-black text-emerald-600">${availableCredit.toFixed(0)}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* PAYMENT CALENDAR SLIDER */}
-                        {client?.currentDebt > 0 && (() => {
-                            const allDueDates: Date[] = (debts || [])
-                                .flatMap((debt: any) =>
-                                    (debt.installments || []).filter((i: any) => i.status === 'PENDING').map((i: any) => new Date(i.dueDate))
-                                )
-                                .sort((a: Date, b: Date) => a.getTime() - b.getTime());
-
-                            const today = new Date();
-
-                            const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-                            const dayNames = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-
-                            const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
-                            const dueDaySet = new Set(
-                                allDueDates
-                                    .filter(d => d.getMonth() === calMonth && d.getFullYear() === calYear)
-                                    .map(d => d.getDate())
-                            );
-
-                            const prevMonth = () => {
-                                if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
-                                else setCalMonth(m => m - 1);
-                            };
-                            const nextMonth = () => {
-                                if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
-                                else setCalMonth(m => m + 1);
-                            };
-
-                            const days = Array.from({ length: daysInMonth }, (_, i) => {
-                                const dayNum = i + 1;
-                                const date = new Date(calYear, calMonth, dayNum);
-                                const dayName = dayNames[date.getDay()];
-                                const isPay = dueDaySet.has(dayNum);
-                                const isPast = date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                                const isToday = date.toDateString() === today.toDateString();
-                                return { dayNum, dayName, isPay, isPast, isToday };
-                            });
-
-                            return (
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between px-1">
-                                        <p className="text-base font-black text-zinc-800">Tus próximos pagos</p>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={prevMonth}
-                                                className="size-8 rounded-full bg-white border border-zinc-200 flex items-center justify-center text-zinc-500 hover:bg-amber-50 hover:border-amber-200 transition-all duration-200 text-sm font-black"
-                                            >‹</button>
-                                            <span className="text-sm font-black text-zinc-700 min-w-[90px] text-center">{monthNames[calMonth]} {calYear}</span>
-                                            <button
-                                                onClick={nextMonth}
-                                                className="size-8 rounded-full bg-white border border-zinc-200 flex items-center justify-center text-zinc-500 hover:bg-amber-50 hover:border-amber-200 transition-all duration-200 text-sm font-black"
-                                            >›</button>
-                                        </div>
-                                    </div>
-
-                                    <div className="overflow-x-auto pb-3" style={{scrollbarWidth:'none'}}>
-                                        <div className="flex gap-3" style={{width: 'max-content'}}>
-                                            {days.map(({ dayNum, dayName, isPay, isPast, isToday }) => (
-                                                <div
-                                                    key={dayNum}
-                                                    className={`flex flex-col items-center justify-center rounded-xl min-w-[90px] h-[100px] px-3 gap-1 transition-all duration-200 select-none ${
-                                                        isPay
-                                                            ? isPast
-                                                                ? 'bg-rose-50 border-2 border-rose-400 shadow-md shadow-rose-100'
-                                                                : 'bg-amber-50 border-2 border-amber-400 shadow-md shadow-amber-100'
-                                                            : isToday
-                                                            ? 'bg-zinc-800 shadow-md'
-                                                            : 'bg-white border border-zinc-100 shadow-sm'
-                                                    }`}
-                                                >
-                                                    <span className={`text-xs font-black   ${
-                                                        isPay
-                                                            ? isPast ? 'text-rose-400' : 'text-amber-500'
-                                                            : isToday ? 'text-white/70' : 'text-zinc-400'
-                                                    }`}>{dayName}</span>
-                                                    <span className={`text-4xl font-black leading-none ${
-                                                        isPay
-                                                            ? isPast ? 'text-rose-500' : 'text-amber-600'
-                                                            : isToday ? 'text-white' : isPast ? 'text-zinc-200' : 'text-zinc-700'
-                                                    }`}>{dayNum}</span>
-                                                    {isPay && (
-                                                        <span className={`text-[8px] font-black   px-2 py-0.5 rounded-full ${
-                                                            isPast ? 'bg-rose-100 text-rose-500' : 'bg-amber-200 text-amber-700'
-                                                        }`}>
-                                                            {isPast ? 'Vencida' : 'Cuota'}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {dueDaySet.size === 0 && (
-                                        <p className="text-center text-xs text-zinc-400 font-bold py-2">Sin pagos en {monthNames[calMonth]}</p>
-                                    )}
-                                </div>
-                            );
-                        })()}
-
-                        {/* ACTIVE LOANS — hidden (cash loans paused) */}
-                        {/* loans feature commented until re-enabled */}
-                    </div>
-                )}
+                        {activeTab === "home" && renderHome()}
 
                 {/* TAB 2: PAYMENTS */}
                 {activeTab === "payments" && (
@@ -2404,8 +2704,8 @@ $1color: #8E3418 !important;
                                 >
                                     ← Volver
                                 </button>
-                                <span className="text-xs font-black text-zinc-400">
-                                    {paymentStep === "details" && "Detalles de Deuda"}
+                                <span className="text-xs font-bold text-white/90">
+                                    {paymentStep === "details" && "Detalles de la compra"}
                                     {paymentStep === "pago_movil" && "Pago Móvil"}
                                     {paymentStep === "binance" && "Binance Pay"}
                                     {paymentStep === "zinli" && "Zinli"}
@@ -3087,330 +3387,7 @@ $1color: #8E3418 !important;
                             )}
                         </div>
                     ) : (
-                        <div className="space-y-5 animate-in slide-in-from-bottom duration-500">
-
-
-                        {/* MIS CUOTAS PENDIENTES */}
-                        <div className="space-y-4">
-                             {(() => {
-                                const pendingDebts = (debts || []).filter((d: any) => d.remainingBalance > 0);
-
-                                if (pendingDebts.length === 0) {
-                                    return (
-                                        <div className="rounded-xl bg-white/60 border border-zinc-100/80 p-6 text-center text-zinc-400 font-bold text-xs">
-                                            No tienes deudas pendientes de pago.
-                                        </div>
-                                    );
-                                }
-
-                                const monthNamesAbbr = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-                                const monthNamesFull = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-
-                                // Extract all pending installments (explicit or virtual)
-                                const pendingInstallments: any[] = [];
-                                pendingDebts.forEach((debt) => {
-                                    const insts = (debt.installments || []).filter((i: any) => i.status === 'PENDING' && (i.remaining !== undefined ? i.remaining : (i.amount - i.paidAmount)) > 0);
-                                    if (insts.length > 0) {
-                                        insts.forEach((inst: any) => {
-                                            pendingInstallments.push({
-                                                ...inst,
-                                                remaining: inst.remaining !== undefined ? inst.remaining : (inst.amount - inst.paidAmount),
-                                                debt
-                                            });
-                                        });
-                                    } else {
-                                        // Virtual single installment
-                                        pendingInstallments.push({
-                                            id: `virtual-${debt.loanId}`,
-                                            number: 1,
-                                            dueDate: debt.nextPaymentDate || debt.createdAt,
-                                            amount: debt.remainingBalance,
-                                            paidAmount: 0,
-                                            remaining: debt.remainingBalance,
-                                            status: 'PENDING',
-                                            debt
-                                        });
-                                    }
-                                });
-
-                                // Map to groups by installment due date's month and year
-                                const groupsMap: { [key: string]: { month: number; year: number; label: string; installmentsList: any[] } } = {};
-
-                                pendingInstallments.forEach((inst) => {
-                                    const d = inst.dueDate ? new Date(inst.dueDate) : new Date();
-                                    const m = d.getMonth();
-                                    const y = d.getFullYear();
-                                    const key = `${y}-${m}`;
-                                    if (!groupsMap[key]) {
-                                        groupsMap[key] = {
-                                            month: m,
-                                            year: y,
-                                            label: `${monthNamesAbbr[m]} ${y}`,
-                                            installmentsList: []
-                                        };
-                                    }
-                                    groupsMap[key].installmentsList.push(inst);
-                                });
-
-                                // Sort groups chronologically
-                                const sortedGroups = Object.values(groupsMap).sort((a, b) => {
-                                    if (a.year !== b.year) return a.year - b.year;
-                                    return a.month - b.month;
-                                });
-
-                                const activeGroupKey = selectedMonthTab || (sortedGroups.length > 0 ? `${sortedGroups[0].year}-${sortedGroups[0].month}` : null);
-                                const activeGroup = sortedGroups.find(g => `${g.year}-${g.month}` === activeGroupKey);
-
-                                return (
-                                    <div className="space-y-4">
-                                        {/* Month navigation tabs */}
-                                        <div className="flex gap-5 border-b border-zinc-100 pb-1 mb-2 overflow-x-auto scrollbar-none">
-                                            {sortedGroups.map((group) => {
-                                                const key = `${group.year}-${group.month}`;
-                                                const isActive = activeGroupKey === key;
-                                                return (
-                                                    <button
-                                                        key={key}
-                                                        onClick={() => setSelectedMonthTab(key)}
-                                                        className={`pb-2 text-left transition-all duration-300 relative shrink-0 ${
-                                                            isActive ? "text-zinc-900" : "text-zinc-500 hover:text-zinc-600"
-                                                        }`}
-                                                    >
-                                                        <p className="text-[11px] font-black">{monthNamesFull[group.month]} {group.year}</p>
-                                                        <p className="text-[9px] font-bold text-zinc-400 mt-0.5">
-                                                            {group.installmentsList.length} cuota{group.installmentsList.length > 1 ? "s" : ""}
-                                                        </p>
-                                                        {isActive && (
-                                                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-400 rounded-full" />
-                                                        )}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-
-                                        {activeGroup && (() => {
-                                            const totalAmount = activeGroup.installmentsList.reduce((sum, inst) => sum + inst.remaining, 0);
-                                            const q1Amount = activeGroup.installmentsList.filter(inst => new Date(inst.dueDate).getDate() <= 15).reduce((sum, inst) => sum + inst.remaining, 0);
-                                            const q2Amount = activeGroup.installmentsList.filter(inst => new Date(inst.dueDate).getDate() > 15).reduce((sum, inst) => sum + inst.remaining, 0);
-
-                                            // Extract unique debts that have active installments in this month
-                                            const activeGroupDebtsMap = new Map();
-                                            activeGroup.installmentsList.forEach(inst => {
-                                                if (!activeGroupDebtsMap.has(inst.debt.loanId)) {
-                                                    activeGroupDebtsMap.set(inst.debt.loanId, inst.debt);
-                                                }
-                                            });
-                                            const activeGroupDebts = Array.from(activeGroupDebtsMap.values());
-
-                                            return (
-                                                <div className="space-y-4">
-                                                    {/* Total card (always expanded, not collapsible) */}
-                                                    <div className="rounded-2xl bg-white border border-zinc-100 p-4 shadow-sm space-y-3">
-                                                        <div className="flex justify-between items-center">
-                                                            <div className="flex items-center gap-2.5">
-                                                                <div className="size-8 rounded-full bg-amber-50 flex items-center justify-center text-amber-500 shrink-0">
-                                                                    <IconCoins size={18} />
-                                                                </div>
-                                                                <p className="text-xs font-black text-zinc-800">Total a pagar este mes</p>
-                                                            </div>
-                                                            <span className="text-base font-black text-zinc-950">${totalAmount.toFixed(2)}</span>
-                                                        </div>
-
-                                                        {(q1Amount > 0 || q2Amount > 0) && (
-                                                            <div className="pt-2.5 border-t border-zinc-50 space-y-2 text-xs font-semibold text-zinc-500 animate-in fade-in duration-200">
-                                                                {q1Amount > 0 && (
-                                                                    <div className="flex justify-between items-center px-1">
-                                                                        <span>Primera quincena</span>
-                                                                        <span className="font-bold text-zinc-700">${q1Amount.toFixed(2)}</span>
-                                                                    </div>
-                                                                )}
-                                                                {q2Amount > 0 && (
-                                                                    <div className="flex justify-between items-center px-1">
-                                                                        <span>Segunda quincena</span>
-                                                                        <span className="font-bold text-zinc-700">${q2Amount.toFixed(2)}</span>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Detailed Debts List */}
-                                                    <div className="space-y-4">
-                                                        {activeGroupDebts.map((debt) => {
-                                                            const nextPaymentDate = debt.nextPaymentDate ? new Date(debt.nextPaymentDate) : null;
-                                                            const daysLeft = nextPaymentDate 
-                                                                ? Math.ceil((nextPaymentDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-                                                                : null;
-                                                            const isOverdue = daysLeft !== null && daysLeft < 0;
-                                                            const pendingSubmission = mySubmissions.find((s: any) => s.debtId === debt.loanId && s.status === 'PENDING');
-
-                                                            return (
-                                                                <div 
-                                                                    key={debt.loanId} 
-                                                                    onClick={() => {
-                                                                        setSelectedDebtForPayment(debt);
-                                                                        setPaymentStep("details");
-                                                                        setPaymentAmount(debt.remainingBalance.toFixed(2));
-                                                                        setSelectedInstallmentOption(null);
-                                                                        setReceiptFile(null);
-                                                                        setReceiptPreview(null);
-                                                                    }}
-                                                                    className="rounded-2xl bg-white border border-zinc-100 p-5 space-y-4 shadow-sm hover:border-zinc-200 hover:shadow-md cursor-pointer transition-all duration-200"
-                                                                >
-                                                                    <div className="flex justify-between items-start">
-                                                                        <div className="space-y-1">
-                                                                            <h4 className="text-sm font-black text-zinc-800">
-                                                                                {debt.description || "Compra a crédito"}
-                                                                            </h4>
-                                                                            {pendingSubmission && (
-                                                                                <span className="text-[9px] font-black text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100/50 mt-1 flex items-center gap-1 w-fit">
-                                                                                    <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                                                                    Abono de ${pendingSubmission.amount.toFixed(2)} pendiente
-                                                                                </span>
-                                                                            )}
-                                                                            <p className="text-[10px] text-zinc-400 font-bold">
-                                                                                Realizada el {new Date(debt.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                                            </p>
-                                                                        </div>
-                                                                        <div className="flex flex-col items-end gap-1">
-                                                                            {isOverdue ? (
-                                                                                <span className="text-[9px] font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100/50">
-                                                                                    Vencida
-                                                                                </span>
-                                                                            ) : (
-                                                                                <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100/50">
-                                                                                    Al día
-                                                                                </span>
-                                                                            )}
-                                                                            <span className="text-[10px] text-zinc-500 font-bold mt-1">Monto restante</span>
-                                                                            <span className="text-base font-black text-zinc-950 font-mono">${debt.remainingBalance.toFixed(2)}</span>
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div className="pt-3 border-t border-zinc-100/50 flex justify-between items-center text-xs">
-                                                                        {debt.installments && debt.installments.length > 0 ? (
-                                                                            <details 
-                                                                                className="group"
-                                                                                onClick={(e) => e.stopPropagation()}
-                                                                            >
-                                                                                <summary className="list-none flex items-center gap-1 text-[10px] font-bold text-amber-500 cursor-pointer select-none">
-                                                                                    <span>Ver plan de cuotas ({debt.installments.length})</span>
-                                                                                    <IconChevronRight size={12} className="text-amber-500 transition-transform group-open:rotate-90" />
-                                                                                </summary>
-                                                                                <div className="mt-3 space-y-2 pl-2 border-l-2 border-amber-100 animate-in fade-in duration-200">
-                                                                                    {debt.installments.map((inst: any) => {
-                                                                                        const instDate = new Date(inst.dueDate);
-                                                                                        const isInstOverdue = instDate < new Date() && inst.status === 'PENDING';
-                                                                                        const instRemaining = inst.remaining !== undefined ? inst.remaining : (inst.amount - inst.paidAmount);
-                                                                                        return (
-                                                                                            <div key={inst.id} className="flex justify-between items-center text-[11px] w-[260px]">
-                                                                                                <div className="space-y-0.5 text-left">
-                                                                                                    <p className="font-bold text-zinc-700">Cuota {inst.number}</p>
-                                                                                                    <p className="text-[9px] text-zinc-400">Vence: {instDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                                                                                                </div>
-                                                                                                <div className="text-right">
-                                                                                                    <span className={`font-mono font-bold ${isInstOverdue ? 'text-rose-600' : 'text-zinc-700'}`}>
-                                                                                                        ${instRemaining.toFixed(2)}
-                                                                                                    </span>
-                                                                                                    <p className={`text-[8px] font-black   ${inst.status === 'PAID' ? 'text-emerald-600' : 'text-amber-500'}`}>
-                                                                                                        {inst.status === 'PAID' ? 'Pagado' : 'Pendiente'}
-                                                                                                    </p>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        );
-                                                                                    })}
-                                                                                </div>
-                                                                            </details>
-                                                                        ) : (
-                                                                            <div />
-                                                                        )}
-
-                                                                        <div className="text-xs font-black text-amber-700 flex items-center gap-1 hover:text-amber-800 transition-colors">
-                                                                            <span>Pagar ahora</span>
-                                                                            <IconChevronRight size={14} />
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })()}
-                                    </div>
-                                );
-                            })()}
-                        </div>
-
-                        {/* HISTORIAL TRANSACCIONES */}
-                        <div className="space-y-3">
-                            <h3 className="text-xs font-black text-zinc-400">Historial de transacciones</h3>
-                            
-                            {client?.creditTransactions && client.creditTransactions.length > 0 && (
-                                <div className="relative">
-                                    <IconSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
-                                    <Input
-                                        type="text"
-                                        placeholder="Buscar transacciones..."
-                                        value={txSearchQuery}
-                                        onChange={(e) => setTxSearchQuery(e.target.value)}
-                                        className="pl-10 h-10 bg-white border-zinc-200 focus-visible:ring-amber-400 rounded-xl font-bold text-xs"
-                                    />
-                                </div>
-                            )}
-
-                            {client?.creditTransactions.length === 0 ? (
-                                <div className="rounded-xl bg-white/60 backdrop-blur-md border border-zinc-100/80 p-8 text-center text-zinc-500 font-bold">
-                                    Aún no tienes movimientos registrados.
-                                </div>
-                            ) : (
-                                (() => {
-                                    const filteredTxs = (client?.creditTransactions || []).filter((tx: any) => {
-                                        const isDebt = tx.type === 'DEBT';
-                                        const notes = (tx.notes || (isDebt ? "Compra a crédito" : "Abono realizado")).toLowerCase();
-                                        const amountStr = tx.amount.toString();
-                                        const dateStr = new Date(tx.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }).toLowerCase();
-                                        
-                                        const query = txSearchQuery.toLowerCase();
-                                        return notes.includes(query) || amountStr.includes(query) || dateStr.includes(query);
-                                    });
-
-                                    if (filteredTxs.length === 0) {
-                                        return (
-                                            <div className="rounded-xl bg-white/60 border border-dashed border-zinc-200 p-8 text-center text-zinc-500 font-bold text-xs">
-                                                No se encontraron transacciones con esa búsqueda.
-                                            </div>
-                                        );
-                                    }
-
-                                    return (
-                                        <div className="space-y-2.5">
-                                            {filteredTxs.map((tx: any) => {
-                                                const isDebt = tx.type === 'DEBT';
-                                                return (
-                                                    <div key={tx.id} className="rounded-xl bg-gradient-to-r from-white to-amber-50/10 border border-zinc-100/80 p-4 flex justify-between items-center text-xs transition-all duration-300">
-                                                        <div className="space-y-0.5">
-                                                            <p className="font-bold text-zinc-700">{tx.notes || (isDebt ? "Compra a crédito" : "Abono realizado")}</p>
-                                                            <p className="text-[10px] text-zinc-400 font-medium">
-                                                                {new Date(tx.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                                                            </p>
-                                                        </div>
-                                                        <span className={`font-black text-sm px-3 py-1 rounded-full ${
-                                                            isDebt 
-                                                                ? 'bg-rose-50 text-rose-600 border border-rose-100' 
-                                                                : 'bg-amber-50 text-amber-500 border border-amber-100'
-                                                        }`}>
-                                                            {isDebt ? '+' : '-'}${Math.abs(tx.amount).toFixed(2)}
-                                                        </span>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    );
-                                })()
-                            )}
-                        </div>
-                    </div>
+                        renderPayments()
                     )
                 )}
 
@@ -4534,7 +4511,7 @@ $1color: #8E3418 !important;
             </main>
 
             {/* CAPSULE BOTTOM NAV (GOOEY METABALLS DESIGN) */}
-            {selectedProductForDetail === null && !isCheckoutOpen && !isCartOpen && (
+            {selectedProductForDetail === null && !isCheckoutOpen && !isCartOpen && !(activeTab === "payments" && planDebt && !showHistory) && (
                 <div className="fixed bottom-6 left-6 right-6 h-16 max-w-sm mx-auto z-50 filter drop-shadow-[0_8px_20px_rgba(139,92,26,0.12)] animate-in slide-in-from-bottom duration-300">
                 {/* SVG Filter for Gooey Effect */}
                 <svg className="absolute w-0 h-0" width="0" height="0" version="1.1" xmlns="http://www.w3.org/2000/svg">
@@ -4569,7 +4546,7 @@ $1color: #8E3418 !important;
                             setTxSearchQuery("");
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
-                            setPurchaseSuccessData(null);
+                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false);
                         }} 
                         className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "home" && !requestLoanView ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
@@ -4588,7 +4565,7 @@ $1color: #8E3418 !important;
                             setTxSearchQuery("");
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
-                            setPurchaseSuccessData(null);
+                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false);
                         }} 
                         className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "payments" ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
@@ -4610,7 +4587,7 @@ $1color: #8E3418 !important;
                                 setTxSearchQuery("");
                                 setOnlyInStock(true);
                                 setSelectedProductForDetail(null);
-                                setPurchaseSuccessData(null);
+                                setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false);
                             }} 
                             className={`absolute -top-[34px] w-[72px] h-[72px] rounded-full flex flex-col items-center justify-center transition-all duration-300 transform active:scale-95 shadow-md z-10 ${
                                 activeTab === "auth-purchase" 
@@ -4634,7 +4611,7 @@ $1color: #8E3418 !important;
                             setTxSearchQuery("");
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
-                            setPurchaseSuccessData(null);
+                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false);
                         }} 
                         className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "rewards" ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
@@ -4653,7 +4630,7 @@ $1color: #8E3418 !important;
                             setTxSearchQuery("");
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
-                            setPurchaseSuccessData(null);
+                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false);
                         }} 
                         className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "profile" ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
