@@ -2289,7 +2289,7 @@ $1color: #8E3418 !important;
             <div key={`s-${b.id}`} className="sc-ad" style={{ background: "radial-gradient(80% 90% at 100% 0%, rgba(242,107,58,.55), rgba(242,107,58,0) 60%), linear-gradient(135deg,#2E2A26,#45413A)" }}>
                 <span className="sc-ad-tag">{b.business?.name || b.name}</span>
                 <h4>{b.promo?.title || "Compra hoy y paga en cuotas"}</h4>
-                <p className="line-clamp-2">{b.promo?.text || `${b.name}${b.location ? ` · ${b.location}` : ""}`}</p>
+                <p className="line-clamp-1">{b.promo?.text || `${b.name}${b.location ? ` · ${b.location}` : ""}`}</p>
                 <button className="sc-ad-go" onClick={() => { goTab("rewards"); setSelectedBranchForShop(b); setProductSearchQuery(""); setBusinessSearchQuery(""); }}>Ver tienda →</button>
                 <IconShoppingBag size={120} stroke={1.1} className="absolute -right-2 -bottom-3 text-white/15" />
             </div>,
@@ -2701,15 +2701,8 @@ $1color: #8E3418 !important;
                     <svg aria-hidden className="pointer-events-none absolute left-0 top-0 z-0 h-[300px] w-full opacity-40" viewBox="0 0 390 300" preserveAspectRatio="none">
                         <path d="M-10 230 Q40 120 90 210 Q140 110 190 200 Q240 100 290 190 Q340 95 400 170" fill="none" stroke="#fff" strokeWidth="2" strokeDasharray="1.5 8" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
                     </svg>
-                    <div className="relative z-10 max-w-md mx-auto px-6 flex items-center justify-between" style={{ paddingTop: "calc(env(safe-area-inset-top) + 14px)" }}>
-                        <div className="flex items-center gap-2 text-sm font-bold text-white select-none">
-                            <span className="size-[26px] rounded-lg bg-white/25 grid place-items-center"><img src="/syncro.png" alt="" className="size-4 rounded" /></span>
-                            Syncro <b className="-ml-1 text-[#1A1815]" style={{ fontWeight: 800 }}>Credit</b>
-                        </div>
-                        <button onClick={() => goTab("profile")} aria-label="Tu perfil" className="size-10 rounded-full bg-white/25 text-white grid place-items-center text-[15px] font-bold active:scale-95 transition">
-                            {(firstName || "?").charAt(0).toUpperCase()}
-                        </button>
-                    </div>
+                    {/* room for the phone's status bar / notch */}
+                    <div aria-hidden className="relative z-10" style={{ height: "calc(env(safe-area-inset-top) + 12px)" }} />
                     {activeTab !== "home" && !(activeTab === "payments" && !selectedDebtForPayment) && (
                         <div className="relative z-10 max-w-md mx-auto px-6 mt-4">
                             <h1 className="text-[30px] leading-tight text-white" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>
