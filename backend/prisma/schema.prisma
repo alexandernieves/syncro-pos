@@ -443,6 +443,8 @@ model Setting {
   syncroCreditLimitStep       Float     @default(10)
   /// Syncro Credit (PWA): the business appears in the clients' app (Comprar, Para ti); off = hidden, its clients still log in and pay
   syncroCreditVisible         Boolean   @default(true)
+  /// Rate the app uses for the amount to transfer: usd (Bs at BCV dollar), eur (Bs at BCV euro), cop (pesos)
+  syncroCreditRate            String    @default("usd")
   /// Its own card in the app's "Para ti" carousel
   syncroCreditPromoTitle      String?
   syncroCreditPromoText       String?

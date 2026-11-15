@@ -1486,6 +1486,12 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
     const percentAvailable = creditLimit > 0 ? (availableCredit / creditLimit) * 100 : 0;
     const usedPercentage = client?.creditLimit > 0 ? (client.currentDebt / client.creditLimit) * 100 : 0;
     const rateUsdToVes = settings?.exchangeRate || 40.0;
+    // The rate the business chose for paying (Configuración → Syncro Credit): Bs at the BCV dollar,
+    // Bs at the BCV euro, or Colombian pesos
+    const payRateMode: "usd" | "eur" | "cop" = settings?.syncroCreditRate === "eur" || settings?.syncroCreditRate === "cop" ? settings.syncroCreditRate : "usd";
+    const payRate = (payRateMode === "eur" ? settings?.exchangeRateEur : payRateMode === "cop" ? (settings?.copRateManual || settings?.exchangeRateCop) : settings?.exchangeRate) || settings?.exchangeRate || 1;
+    const payCur = payRateMode === "cop" ? "COP" : "Bs";
+    const payRateLabel = payRateMode === "eur" ? "Tasa euro BCV" : payRateMode === "cop" ? "Tasa del peso" : "Tasa BCV";
     const rateUsdToCop = 4000;
 
     const pendingRequestLoan = loans.find(l => l.status === 'REQUESTED');
@@ -2219,7 +2225,7 @@ $1color: #8E3418 !important;
     ].filter(Boolean) as { key: "pago_movil" | "binance" | "zinli" | "paypal"; label: string; desc: string; icon: React.ReactNode }[];
     const goMethod = (key: "pago_movil" | "binance" | "zinli" | "paypal", amountUsd: string) => {
         if (key === "pago_movil") {
-            const bs = (parseFloat(amountUsd) || 0) * (settings?.exchangeRate || 1);
+            const bs = (parseFloat(amountUsd) || 0) * (payRate);
             setPaymentAmountBs(bs > 0 ? bs.toFixed(2) : "");
         }
         setPaymentStep(key);
@@ -3543,7 +3549,7 @@ $1color: #8E3418 !important;
                                                         onClick={() => {
                                                             if (method.key === "pago_movil") {
                                                                 // Pre-fill Bs amount from current USD amount
-                                                                const rate = settings?.exchangeRate || 1;
+                                                                const rate = payRate;
                                                                 const bsPre = (parseFloat(paymentAmount) || 0) * rate;
                                                                 setPaymentAmountBs(bsPre > 0 ? bsPre.toFixed(2) : "");
                                                             }
@@ -3577,6 +3583,24 @@ $1color: #8E3418 !important;
                                         <div className="flex items-center gap-2 border-b border-zinc-100/60 pb-3">
                                             <IconDeviceMobile size={18} className="text-amber-700" />
                                             <h3 className="text-xs font-black text-zinc-700">Pago móvil del comercio</h3>
+                                            {settings?.pagoMovilEnabled && (
+                                                <button
+                                                    onClick={() => {
+                                                        // bank, ID, phone and the amount: ready to paste in the bank app or a chat
+                                                        const amt = parseFloat(paymentAmountBs) || 0;
+                                                        const text = [
+                                                            `Banco: ${settings.pagoMovilBank || ""}`,
+                                                            `Cédula/RIF: ${settings.pagoMovilId || ""}`,
+                                                            `Teléfono: ${settings.pagoMovilPhone || ""}`,
+                                                            amt > 0 ? `Monto: ${amt.toFixed(2)} ${payCur}` : "",
+                                                        ].filter(Boolean).join("\n");
+                                                        copyToClipboard(text, "Datos del pago móvil");
+                                                    }}
+                                                    className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-3 py-1.5 text-[12px] font-bold text-white shadow-sm active:scale-95 transition"
+                                                >
+                                                    <IconCopy size={14} /> Copiar todo
+                                                </button>
+                                            )}
                                         </div>
                                         {settings?.pagoMovilEnabled ? (
                                             <div className="grid grid-cols-2 gap-4 text-xs">
@@ -3608,9 +3632,9 @@ $1color: #8E3418 !important;
 
                                     {/* Amount in Bs (primary) with USD conversion */}
                                     <div className="rounded-2xl bg-white border border-zinc-100 p-5 space-y-4 shadow-sm text-center animate-in fade-in duration-300">
-                                        <p className="text-[10px] font-black text-zinc-400">Monto a transferir (Bs)</p>
+                                        <p className="text-[10px] font-black text-zinc-400">Monto a transferir ({payCur})</p>
                                         <div className="relative max-w-[220px] mx-auto">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-black text-zinc-400">Bs</span>
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-black text-zinc-400">{payCur}</span>
                                             <input
                                                 type="number"
                                                 step="0.01"
@@ -3620,7 +3644,7 @@ $1color: #8E3418 !important;
                                                     const bsVal = e.target.value;
                                                     setPaymentAmountBs(bsVal);
                                                     // Derive USD from Bs for submission/validation
-                                                    const rate = settings?.exchangeRate || 1;
+                                                    const rate = payRate;
                                                     const usdDerived = parseFloat(bsVal) / rate;
                                                     setPaymentAmount(isNaN(usdDerived) ? "" : usdDerived.toFixed(4));
                                                 }}
@@ -3630,12 +3654,12 @@ $1color: #8E3418 !important;
                                         {/* USD equivalent & rate info */}
                                         {(() => {
                                             const bsAmt = parseFloat(paymentAmountBs) || 0;
-                                            const rate = settings?.exchangeRate || 1;
+                                            const rate = payRate;
                                             const usdAmt = bsAmt / rate;
                                             return (
                                                 <div className="space-y-1">
                                                     <p className="text-[11px] text-amber-800 font-black bg-amber-50 border border-amber-100/50 px-3 py-1.5 rounded-full inline-block">
-                                                        Tasa BCV: {rate.toFixed(2)} Bs = $1 USD
+                                                        {payRateLabel}: {rate.toFixed(2)} {payCur} = $1 USD
                                                     </p>
                                                     {bsAmt > 0 && (
                                                         <p className="text-[11px] text-zinc-500 font-semibold">
@@ -3649,14 +3673,14 @@ $1color: #8E3418 !important;
                                         {/* Validation error msg */}
                                         {(() => {
                                             const bsAmt = parseFloat(paymentAmountBs) || 0;
-                                            const rate = settings?.exchangeRate || 1;
+                                            const rate = payRate;
                                             const usdAmt = bsAmt / rate;
                                             if (bsAmt <= 0 && paymentAmountBs !== "") {
                                                 return <p className="text-[10px] text-rose-600 font-bold">El monto debe ser mayor a 0</p>;
                                             }
                                             if (bsAmt > 0 && usdAmt > selectedDebtForPayment.remainingBalance + 0.005) {
                                                 const maxBs = selectedDebtForPayment.remainingBalance * rate;
-                                                return <p className="text-[10px] text-rose-600 font-bold">El máximo es {maxBs.toFixed(2)} Bs (${selectedDebtForPayment.remainingBalance.toFixed(2)} USD)</p>;
+                                                return <p className="text-[10px] text-rose-600 font-bold">El máximo es {maxBs.toFixed(2)} {payCur} (${selectedDebtForPayment.remainingBalance.toFixed(2)} USD)</p>;
                                             }
                                             return null;
                                         })()}
@@ -3665,7 +3689,7 @@ $1color: #8E3418 !important;
                                             onClick={() => setPaymentStep("upload")}
                                             disabled={(() => {
                                                 const bsAmt = parseFloat(paymentAmountBs) || 0;
-                                                const rate = settings?.exchangeRate || 1;
+                                                const rate = payRate;
                                                 const usdAmt = bsAmt / rate;
                                                 return !paymentAmountBs || bsAmt <= 0 || usdAmt > selectedDebtForPayment.remainingBalance + 0.005;
                                             })()}

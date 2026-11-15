@@ -269,6 +269,8 @@ export default function ConfiguracionPage() {
   // Syncro Credit (PWA): presence in the clients' app and the business's own "Para ti" card
   const [syncroCreditVisible, setSyncroCreditVisible] = useState(true);
   const [scPromo, setScPromo] = useState({ title: "", text: "" });
+  const [scRate, setScRate] = useState<"usd" | "eur" | "cop">("usd");
+  const [scRates, setScRates] = useState({ usd: 0, eur: 0, cop: 0 });
 
   const [dashboardConfig, setDashboardConfig] = useState({
     salesGoal: "10000",
@@ -895,6 +897,8 @@ export default function ConfiguracionPage() {
             setSyncroCreditLimits({ initial: data.syncroCreditInitialLimit ?? 30, max: data.syncroCreditMaxLimit ?? 200, step: data.syncroCreditLimitStep ?? 10 });
             setSyncroCreditVisible(data.syncroCreditVisible ?? true);
             setScPromo({ title: data.syncroCreditPromoTitle || "", text: data.syncroCreditPromoText || "" });
+            setScRate(data.syncroCreditRate === "eur" || data.syncroCreditRate === "cop" ? data.syncroCreditRate : "usd");
+            setScRates({ usd: Number(data.exchangeRate) || 0, eur: Number(data.exchangeRateEur) || 0, cop: Number(data.copRateManual || data.exchangeRateCop) || 0 });
             setWhatsappBotEnabled(data.whatsappBotEnabled || false);
             setWhatsappAuthorizedPhones(data.whatsappAuthorizedPhones || []);
             setWhatsappAlerts(readWhatsAppAlerts(data.whatsappAlerts));
@@ -1110,6 +1114,7 @@ export default function ConfiguracionPage() {
           syncroCreditVisible,
           syncroCreditPromoTitle: scPromo.title,
           syncroCreditPromoText: scPromo.text,
+          syncroCreditRate: scRate,
           salesGoal: Number(dashboardConfig.salesGoal) || 10000,
           showSalesGoal: !!dashboardConfig.showSalesGoal,
           showNetMargin: !!dashboardConfig.showNetMargin,
@@ -1756,6 +1761,32 @@ export default function ConfiguracionPage() {
                     </div>
                   ))}
                   <p className="pt-3 text-xs text-muted-foreground">En la caja, la cajera solo activa Syncro Credit con el límite inicial. Para dar otro límite hace falta el PIN de supervisor.</p>
+                </CardContent>
+              </Card>
+
+              {/* The rate the app uses to tell the client how much to transfer */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold">Tasa para pagar</CardTitle>
+                  <CardDescription>Con qué tasa la app le calcula al cliente cuánto transferir por su cuota.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {([
+                      { k: "usd", t: "Dólar BCV", d: "Bolívares a la tasa del dólar", v: scRates.usd ? `${scRates.usd.toFixed(2)} Bs = $1` : "Sin tasa" },
+                      { k: "eur", t: "Euro BCV", d: "Bolívares a la tasa del euro", v: scRates.eur > 1 ? `${scRates.eur.toFixed(2)} Bs` : "Sin tasa" },
+                      { k: "cop", t: "Pesos (COP)", d: "Para comercios del Táchira", v: scRates.cop ? `${scRates.cop.toFixed(0)} COP = $1` : "Sin tasa" },
+                    ] as const).map((o) => (
+                      <button key={o.k} type="button" onClick={() => setScRate(o.k)} className={cn("rounded-xl border-2 p-3 text-left transition", scRate === o.k ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50")}>
+                        <p className="text-sm font-semibold">{o.t}</p>
+                        <p className="text-xs text-muted-foreground">{o.d}</p>
+                        <p className="mt-1.5 text-xs font-semibold tabular-nums">{o.v}</p>
+                      </button>
+                    ))}
+                  </div>
+                  {((scRate === "eur" && scRates.eur <= 1) || (scRate === "cop" && !scRates.cop)) && (
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">Esa tasa no está cargada todavía: mientras tanto la app usará la del dólar BCV. Actualízala desde las tasas del punto de venta.</p>
+                  )}
                 </CardContent>
               </Card>
 
