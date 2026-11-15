@@ -81,6 +81,7 @@ import { SupportNotifier } from "@/components/support-notifier";
 import { RemoteAssistHost } from "@/components/remote/remote-assist-host";
 import { MascotPet } from "@/components/mascot/mascot-pet";
 import { PosAccountMenu } from "@/components/pos/pos-account-menu";
+import { LoanDisburseButton } from "@/components/pos/loan-disburse-dialog";
 import { signOutAndReload } from "@/lib/auth-helpers";
 import { type Currency as CashCurrency, CURRENCY_META, cashChange, cashDue, formatMoney, fromUsd, toUsd } from "@/lib/currency";
 
@@ -2656,6 +2657,9 @@ export default function POSPage() {
             </Button>
 
             <BranchSwitcher disabled={!!activeShift} />
+
+          {/* Cash loans (module "loans"): hand the cash over with the client's PIN */}
+          <LoanDisburseButton shiftOpen={!!activeShift} />
           </div>
         </header>
 

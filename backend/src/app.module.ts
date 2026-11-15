@@ -36,6 +36,7 @@ import { StorefrontModule } from './modules/storefront/storefront.module';
 import { SyncroAdminModule } from './modules/syncro-admin/syncro-admin.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { CreditAdsModule } from './modules/credit-ads/credit-ads.module';
+import { LendingModule } from './modules/lending/lending.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { AiAgentModule } from './modules/ai-agent/ai-agent.module';
 import { AppCacheModule } from './modules/cache/app-cache.module';
@@ -87,6 +88,7 @@ import { PushModule } from './modules/push/push.module';
     SyncroAdminModule,
     ChatModule,
     CreditAdsModule,
+    LendingModule,
     UploadModule,
     AiAgentModule,
     WhatsAppModule,

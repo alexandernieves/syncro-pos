@@ -25,6 +25,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // Someone removed from the business can't keep using an old session
     if (payload.sub && payload.role !== 'client' && !(await accountOpen(payload.sub, (id) => this.prisma.user.findUnique({ where: { id }, select: { role: true } }))))
       throw new UnauthorizedException('Tu usuario fue eliminado de este negocio');
-    return { id: payload.sub, email: payload.email, role: payload.role, name: payload.name, businessId: payload.businessId };
+    return { id: payload.sub, cu: payload.cu, email: payload.email, role: payload.role, name: payload.name, businessId: payload.businessId };
   }
 }

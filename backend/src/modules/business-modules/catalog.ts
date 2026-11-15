@@ -69,6 +69,20 @@ export const MODULE_CATALOG: CatalogModule[] = [
   },
 ];
 
+MODULE_CATALOG.push({
+  code: 'loans',
+  name: 'Préstamos',
+  trade: 'Comercios que prestan dinero en efectivo',
+  summary: 'Publica ofertas de préstamo en Syncro Credit, aprueba solicitudes y entrega el efectivo en caja con PIN.',
+  highlights: [
+    'Ofertas visibles para los clientes de Syncro Credit',
+    'Solicitudes desde la app con el nivel y el límite del cliente',
+    'Entrega en el punto de venta con PIN y billetes',
+    'Cuotas, comprobantes y cartera vencida',
+  ],
+  features: [{ key: 'loans.main', label: 'Préstamos', route: '/dashboard/prestamos', default: true }],
+});
+
 export const catalogModule = (code: string) => MODULE_CATALOG.find((m) => m.code === code);
 export const CATALOG_CODES = MODULE_CATALOG.map((m) => m.code);
 

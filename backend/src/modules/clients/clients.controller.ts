@@ -2,6 +2,14 @@ import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Query, UseGuard
 import { ClientsService } from './clients.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
+/** Routes that act on the person's client at a business: an account with none can't use them */
+function needClient(req: any): { clientId: string; businessId: string } {
+  const clientId = req.user?.id || req.user?.sub;
+  const businessId = req.user?.businessId;
+  if (!clientId || !businessId) throw new BadRequestException('Aún no tienes crédito con ningún comercio');
+  return { clientId, businessId };
+}
+
 @Controller('clients')
 @UseGuards(JwtAuthGuard)
 export class ClientsController {
@@ -11,16 +19,13 @@ export class ClientsController {
 
   @Get('portal/profile')
   async getPortalProfile(@Request() req: any) {
-    const clientId = req.user.id || req.user.sub;
-    const businessId = req.user.businessId;
-    return this.clientsService.findOne(clientId, businessId);
+    return this.clientsService.portalProfile(req.user);
   }
 
   /** Syncro Credit level (4 Chispa → 3 Cometa → 2 Órbita → 1 Galaxia) by the money paid on time. */
   @Get('portal/level')
   async getPortalLevel(@Request() req: any) {
-    const clientId = req.user.id || req.user.sub;
-    return this.clientsService.getPortalLevel(clientId);
+    return this.clientsService.getPortalLevel(await this.clientsService.portalClientIds(req.user));
   }
 
   @Patch('portal/profile')
@@ -28,6 +33,8 @@ export class ClientsController {
     const clientId = req.user.id || req.user.sub;
     const businessId = req.user.businessId;
     const { name, email, phone, address } = body;
+    await this.clientsService.updateCreditAccount(req.user, { name, email, phone });
+    if (!clientId) return this.clientsService.portalProfile(req.user);
     const data: any = { name, email, phone, address };
     if (body.birthDate !== undefined) {
       const d = body.birthDate ? new Date(body.birthDate) : null;
@@ -40,34 +47,32 @@ export class ClientsController {
   /** The client changes its own password (asks for the current one) */
   @Post('portal/password')
   async changePortalPassword(@Body() body: any, @Request() req: any) {
-    const clientId = req.user.id || req.user.sub;
-    return this.clientsService.changePortalPassword(clientId, String(body?.current || ''), String(body?.next || ''));
+    return this.clientsService.changePortalPassword(req.user, String(body?.current || ''), String(body?.next || ''));
   }
 
   @Get('portal/loans')
   async getPortalLoans(@Request() req: any) {
     const clientId = req.user.id || req.user.sub;
     const businessId = req.user.businessId;
-    return this.clientsService.getLoans(clientId, businessId);
+    return clientId && businessId ? this.clientsService.getLoans(clientId, businessId) : [];
   }
 
   @Get('portal/debts')
   async getPortalDebts(@Request() req: any) {
-    const clientId = req.user.id || req.user.sub;
-    return this.clientsService.getPortalDebts(clientId);
+    return this.clientsService.getPortalDebtsAll(req.user);
   }
 
   @Post('portal/loans/request')
   async requestPortalLoan(@Body('amount') amount: number, @Request() req: any) {
-    const clientId = req.user.id || req.user.sub;
-    const businessId = req.user.businessId;
+    const { clientId, businessId } = needClient(req);
     return this.clientsService.requestLoan(clientId, amount, businessId);
   }
 
   @Get('portal/rewards')
   async getPortalRewards(@Request() req: any) {
     const businessId = req.user.businessId;
-    return this.clientsService.getRewards(businessId);
+    // golden rule: no business, nothing (an empty filter would match every business)
+    return businessId ? this.clientsService.getRewards(businessId) : [];
   }
 
   @Get('portal/businesses')
@@ -88,27 +93,25 @@ export class ClientsController {
   @Get('portal/settings')
   async getPortalSettings(@Request() req: any) {
     const businessId = req.user.businessId;
-    return this.clientsService.getSettings(businessId);
+    return businessId ? this.clientsService.getSettings(businessId) : {};
   }
 
   @Post('portal/rewards/:rewardId/redeem')
   async redeemPortalReward(@Param('rewardId') rewardId: string, @Request() req: any) {
-    const clientId = req.user.id || req.user.sub;
-    const businessId = req.user.businessId;
+    const { clientId, businessId } = needClient(req);
     return this.clientsService.redeemReward(clientId, rewardId, businessId);
   }
 
   @Post('portal/payments/submit')
   async submitPayment(@Body() body: any, @Request() req: any) {
-    const clientId = req.user.id || req.user.sub;
-    const businessId = req.user.businessId;
-    return this.clientsService.submitPayment(clientId, businessId, body);
+    // The receipt goes to the business that loan belongs to (a person can owe several)
+    const owner = await this.clientsService.portalDebtOwner(req.user, body?.loanId || body?.debtId);
+    return this.clientsService.submitPayment(owner.clientId, owner.businessId, body);
   }
 
   @Get('portal/payments/submissions')
   async getClientSubmissions(@Request() req: any) {
-    const clientId = req.user.id || req.user.sub;
-    return this.clientsService.getClientSubmissions(clientId);
+    return this.clientsService.getClientSubmissionsAll(await this.clientsService.portalClientIds(req.user));
   }
 
   // --- ADMIN / CASHIER ENDPOINTS ---
@@ -176,7 +179,7 @@ export class ClientsController {
 
   @Post('portal/delivery-orders')
   async createPortalDeliveryOrder(@Body() body: any, @Request() req: any) {
-    const clientId = req.user.id || req.user.sub;
+    const { clientId } = needClient(req);
     const businessId = body.businessId;
     return this.clientsService.createDeliveryOrder(clientId, businessId, body);
   }
@@ -184,18 +187,19 @@ export class ClientsController {
   @Get('portal/delivery-orders')
   async getPortalDeliveryOrders(@Request() req: any) {
     const clientId = req.user.id || req.user.sub;
-    return this.clientsService.getPortalDeliveryOrders(clientId);
+    // an account with no business client has no orders (never query with an empty id)
+    return clientId ? this.clientsService.getPortalDeliveryOrders(clientId) : [];
   }
 
   @Get('portal/delivery-orders/active')
   async getPortalActiveDeliveryOrder(@Request() req: any) {
     const clientId = req.user.id || req.user.sub;
-    return this.clientsService.getActiveDeliveryOrder(clientId);
+    return clientId ? this.clientsService.getActiveDeliveryOrder(clientId) : null;
   }
 
   @Post('portal/delivery-orders/:id/cancel')
   async cancelPortalDeliveryOrder(@Param('id') id: string, @Request() req: any) {
-    const clientId = req.user.id || req.user.sub;
+    const { clientId } = needClient(req);
     return this.clientsService.cancelDeliveryOrder(id, clientId);
   }
 

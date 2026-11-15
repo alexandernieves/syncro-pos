@@ -417,7 +417,10 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
     };
 
     // Secure Login / Registration states
-    const [loginStep, setLoginStep] = useState<"document" | "password" | "register">("document");
+    const [loginStep, setLoginStep] = useState<"document" | "password" | "register" | "signup" | "verify">("document");
+    // Open sign-up (like any app): phone of the new account and where the WhatsApp code went
+    const [signupPhone, setSignupPhone] = useState("");
+    const [signupSentTo, setSignupSentTo] = useState("");
     const [isResettingPassword, setIsResettingPassword] = useState(false);
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -436,6 +439,78 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
     // Syncro Credit level (by money paid on time), the "Mi nivel" view and the level-up celebration
     const [scLevel, setScLevel] = useState<any | null>(null);
     const [showLevel, setShowLevel] = useState(false);
+    // Cash loans (P2P): lenders publish offers, the person picks one, gets a PIN and collects at the POS
+    const [showLoans, setShowLoans] = useState(false);
+    const [loanAmount, setLoanAmount] = useState("50");
+    const [loanMarket, setLoanMarket] = useState<{ level: number; levelName: string; offers: any[] } | null>(null);
+    const [loanReqs, setLoanReqs] = useState<any[]>([]);
+    const [loanPick, setLoanPick] = useState<any | null>(null);
+    const [loanBusy, setLoanBusy] = useState(false);
+    const [loanLoading, setLoanLoading] = useState(false);
+    const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem("client_token") || ""}` });
+    const loadLoanRequests = useCallback(async () => {
+        try {
+            const res = await fetch(`${API}/portal-lending/requests`, { headers: authHeaders() });
+            if (res.ok) setLoanReqs(await res.json());
+        } catch { /* offline: keep what we had */ }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    const loadLoanMarket = useCallback(async (amt: string) => {
+        setLoanLoading(true);
+        try {
+            const n = Number(amt) || 0;
+            const res = await fetch(`${API}/portal-lending/offers${n > 0 ? `?amount=${n}` : ""}`, { headers: authHeaders() });
+            if (res.ok) setLoanMarket(await res.json());
+        } catch { /* offline */ } finally {
+            setLoanLoading(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    // the offers follow the amount (a short pause while typing)
+    useEffect(() => {
+        if (!showLoans) return;
+        const t = setTimeout(() => loadLoanMarket(loanAmount), 350);
+        return () => clearTimeout(t);
+    }, [showLoans, loanAmount, loadLoanMarket]);
+    // requests: on open, and every 20 s while open (to see the approval and the PIN arrive)
+    useEffect(() => {
+        if (!showLoans) return;
+        loadLoanRequests();
+        const t = setInterval(loadLoanRequests, 20000);
+        return () => clearInterval(t);
+    }, [showLoans, loadLoanRequests]);
+    const openLoans = () => {
+        setPlanDebt(null); setShowHistory(false); setShowLevel(false);
+        setActiveTab("home"); setShowLoans(true); window.scrollTo({ top: 0 });
+    };
+    const requestCashLoan = async () => {
+        if (!loanPick) return;
+        setLoanBusy(true);
+        try {
+            const res = await fetch(`${API}/portal-lending/request`, {
+                method: "POST",
+                headers: { ...authHeaders(), "Content-Type": "application/json" },
+                body: JSON.stringify({ offerId: loanPick.id, amount: Number(loanPick.amount) }),
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(body.message || "No se pudo enviar la solicitud");
+            toast.success(`Solicitud enviada a ${loanPick.business?.name}. Te avisamos cuando la aprueben.`);
+            setLoanPick(null);
+            await loadLoanRequests();
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        } catch (e: any) {
+            toast.error(e.message);
+        } finally {
+            setLoanBusy(false);
+        }
+    };
+    const cancelCashLoan = async (id: string) => {
+        if (!window.confirm("¿Cancelar esta solicitud?")) return;
+        const res = await fetch(`${API}/portal-lending/requests/${id}/cancel`, { method: "POST", headers: authHeaders() }).catch(() => null);
+        if (res?.ok) { toast.success("Solicitud cancelada"); loadLoanRequests(); }
+        else toast.error("No se pudo cancelar");
+    };
+
     const [levelUp, setLevelUp] = useState<any | null>(null);
     const [scAds, setScAds] = useState<any[]>([]);
     const creditCardRef = useRef<HTMLDivElement | null>(null);
@@ -600,7 +675,7 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
                 setScLevel(lv);
                 // celebrate once when the client really went up (3 → 2 → 1)
                 try {
-                    const sub = JSON.parse(atob(token.split(".")[1])).sub;
+                    const jwt = JSON.parse(atob(token.split(".")[1])); const sub = jwt.cu || jwt.sub;
                     const key = `sc-level-${sub}`;
                     const seen = Number(localStorage.getItem(key) || 0);
                     if (seen && lv.level < seen) setLevelUp(lv);
@@ -1038,13 +1113,19 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
 
             if (res.ok) {
                 const data = await res.json();
-                setClientName(data.name);
+                setClientName(data.name || "");
                 setIsResettingPassword(false);
+                setPassword(""); setConfirmPassword(""); setOtpDigits(["", "", "", "", "", ""]);
                 if (data.hasPassword) {
                     setLoginStep("password");
-                } else {
+                } else if (data.hasCode) {
+                    // the cashier gave this person a code: activate with it (or create the account anyway)
                     setLoginStep("register");
                     nubiFeel("surprised", 1600);
+                } else {
+                    // nobody with that cédula yet: create the account right here
+                    setLoginStep("signup");
+                    nubiFeel("happy", 1600);
                 }
             } else {
                 const err = await res.json();
@@ -1132,6 +1213,65 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
         }
     };
 
+    // A session from sign-up or code: same as a login
+    const enterWithSession = async (data: any, title: string) => {
+        localStorage.setItem("client_token", data.access_token);
+        portal.start({ mode: "enter", title, subtitle: "Preparando todo para ti" });
+        await loadPortalData(data.access_token);
+        setView("dashboard");
+        portal.ready();
+    };
+
+    const handleSignup = async () => {
+        const name = clientName.trim();
+        const phone = signupPhone.replace(/\D/g, "");
+        if (name.length < 3) { nubiFeel("sad"); toast.error("Escribe tu nombre y apellido."); return; }
+        if (phone.length < 10) { nubiFeel("sad"); toast.error("Escribe tu número de teléfono completo."); return; }
+        if (password.length < 6) { nubiFeel("sad"); toast.error("La contraseña debe tener al menos 6 caracteres."); return; }
+        if (password !== confirmPassword) { nubiFeel("sad"); toast.error("Las contraseñas no coinciden."); return; }
+        setLoading(true);
+        try {
+            const res = await fetch(`${API}/auth/credit/register`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ documentId: idSearch, name, phone, password }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) { nubiFeel("sad"); toast.error(data.message || "No pudimos crear tu cuenta."); return; }
+            if (data.needsCode) {
+                setSignupSentTo(data.phone || "");
+                setOtpDigits(["", "", "", "", "", ""]);
+                setLoginStep("verify");
+                nubiFeel("surprised", 1400);
+                return;
+            }
+            await enterWithSession(data, `¡Bienvenido, ${name.split(" ")[0]}!`);
+        } catch {
+            nubiFeel("sad"); toast.error("Error de conexión");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleVerifySignup = async (code = otpDigits.join("")) => {
+        if (code.length !== 6) { nubiFeel("sad"); toast.error("Escribe los 6 dígitos del código."); return; }
+        setLoading(true);
+        try {
+            const res = await fetch(`${API}/auth/credit/verify`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ documentId: idSearch, code }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) { nubiFeel("sad"); toast.error(data.message || "Código incorrecto."); setOtpDigits(["", "", "", "", "", ""]); return; }
+            await enterWithSession(data, `¡Bienvenido, ${clientName.trim().split(" ")[0] || ""}!`);
+        } catch {
+            nubiFeel("sad"); toast.error("Error de conexión");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleLogout = () => {
         localStorage.removeItem("client_token");
         setIdSearch("");
@@ -1145,6 +1285,8 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
         setConfirmPassword("");
         setActivationCode("");
         setClientName("");
+        setSignupPhone("");
+        setSignupSentTo("");
         setOtpDigits(["", "", "", "", "", ""]);
     };
 
@@ -1485,11 +1627,26 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
     const creditLimit = client?.creditLimit || 0;
     const percentAvailable = creditLimit > 0 ? (availableCredit / creditLimit) * 100 : 0;
     const usedPercentage = client?.creditLimit > 0 ? (client.currentDebt / client.creditLimit) * 100 : 0;
-    const rateUsdToVes = settings?.exchangeRate || 40.0;
+    // Paying a debt: the bank details and rate of the business it is owed to (each business has its
+    // own). Until another business's details arrive, nothing is shown, so nobody pays the wrong account.
+    const [paySettings, setPaySettings] = useState<{ businessId: string; data: any } | null>(null);
+    const payBiz: string | null = selectedDebtForPayment?.businessId ?? null;
+    const ownBiz = !payBiz || payBiz === client?.businessId;
+    useEffect(() => {
+        if (ownBiz || !payBiz || paySettings?.businessId === payBiz) return;
+        let live = true;
+        fetch(`${API}/clients/portal/businesses/${payBiz}/settings`, { headers: { Authorization: `Bearer ${localStorage.getItem("client_token") || ""}` } })
+            .then((r) => (r.ok ? r.json() : {}))
+            .then((d) => { if (live) setPaySettings({ businessId: payBiz, data: d || {} }); })
+            .catch(() => { if (live) setPaySettings({ businessId: payBiz, data: {} }); });
+        return () => { live = false; };
+    }, [ownBiz, payBiz, paySettings?.businessId]);
+    const paySet: any = ownBiz ? settings : paySettings?.businessId === payBiz ? paySettings!.data : {};
+    const rateUsdToVes = paySet?.exchangeRate || 40.0;
     // The rate the business chose for paying (Configuración → Syncro Credit): Bs at the BCV dollar,
     // Bs at the BCV euro, or Colombian pesos
-    const payRateMode: "usd" | "eur" | "cop" = settings?.syncroCreditRate === "eur" || settings?.syncroCreditRate === "cop" ? settings.syncroCreditRate : "usd";
-    const payRate = (payRateMode === "eur" ? settings?.exchangeRateEur : payRateMode === "cop" ? (settings?.copRateManual || settings?.exchangeRateCop) : settings?.exchangeRate) || settings?.exchangeRate || 1;
+    const payRateMode: "usd" | "eur" | "cop" = paySet?.syncroCreditRate === "eur" || paySet?.syncroCreditRate === "cop" ? paySet.syncroCreditRate : "usd";
+    const payRate = (payRateMode === "eur" ? paySet?.exchangeRateEur : payRateMode === "cop" ? (paySet?.copRateManual || paySet?.exchangeRateCop) : paySet?.exchangeRate) || paySet?.exchangeRate || 1;
     const payCur = payRateMode === "cop" ? "COP" : "Bs";
     const payRateLabel = payRateMode === "eur" ? "Tasa euro BCV" : payRateMode === "cop" ? "Tasa del peso" : "Tasa BCV";
     const rateUsdToCop = 4000;
@@ -2096,9 +2253,132 @@ $1color: #8E3418 !important;
                                 >
                                     {isResettingPassword ? "Restablecer contraseña" : "Activar cuenta"}
                                 </button>
-                                <div className="flex justify-center">
+                                <div className="flex justify-center gap-5">
                                     <button onClick={backToDocument} className={`${linkCls} text-zinc-500 hover:text-zinc-800`}>
                                         Usar otra cédula
+                                    </button>
+                                    {!isResettingPassword && (
+                                        <button
+                                            onClick={() => { rollNubi(1); setPassword(""); setConfirmPassword(""); setLoginStep("signup"); }}
+                                            className={`${linkCls} text-primary hover:text-amber-600`}
+                                        >
+                                            No tengo código
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {shownStep === "signup" && (
+                            <div className="space-y-3">
+                                <div className="flex items-start gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <h2 className="text-xl font-semibold text-zinc-900">Crea tu cuenta</h2>
+                                        <p className="mt-1 text-sm text-zinc-500">Con la cédula <span className="font-semibold text-zinc-700">{idSearch}</span>. Es gratis y toma un minuto.</p>
+                                    </div>
+                                    <button onClick={backToDocument} className={`${linkCls} text-zinc-500 hover:text-zinc-800 shrink-0 pt-1`}>Cambiar</button>
+                                </div>
+                                <div className={`${pill} !pr-2`}>
+                                    <IconUser size={20} className="shrink-0 text-zinc-400" />
+                                    <input
+                                        autoFocus
+                                        autoComplete="name"
+                                        aria-label="Nombre y apellido"
+                                        placeholder="Nombre y apellido"
+                                        className={pillInput}
+                                        value={clientName}
+                                        onChange={(e) => setClientName(e.target.value.slice(0, 80))}
+                                    />
+                                </div>
+                                <div className={`${pill} !pr-2`}>
+                                    <IconPhone size={20} className="shrink-0 text-zinc-400" />
+                                    <input
+                                        type="tel"
+                                        inputMode="tel"
+                                        autoComplete="tel"
+                                        aria-label="Teléfono"
+                                        placeholder="Teléfono (0414…)"
+                                        className={pillInput}
+                                        value={signupPhone}
+                                        onChange={(e) => setSignupPhone(e.target.value.replace(/[^\d+]/g, "").slice(0, 15))}
+                                    />
+                                </div>
+                                <div className={`${pill} !pr-2`}>
+                                    <IconLock size={20} className="shrink-0 text-zinc-400" />
+                                    <input
+                                        type={showPass ? "text" : "password"}
+                                        autoComplete="new-password"
+                                        aria-label="Contraseña"
+                                        placeholder="Contraseña (mín. 6)"
+                                        className={pillInput}
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                    />
+                                    {eye}
+                                </div>
+                                <div className={`${pill} !pr-2`}>
+                                    <IconLock size={20} className="shrink-0 text-zinc-400" />
+                                    <input
+                                        type={showPass ? "text" : "password"}
+                                        autoComplete="new-password"
+                                        aria-label="Confirmar contraseña"
+                                        placeholder="Confirmar contraseña"
+                                        className={pillInput}
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        onKeyDown={(e) => e.key === "Enter" && handleSignup()}
+                                    />
+                                    {eye}
+                                </div>
+                                <button
+                                    onClick={handleSignup}
+                                    disabled={loading}
+                                    className="w-full h-14 rounded-full bg-primary hover:bg-primary/90 text-white font-semibold text-[15px] active:scale-[0.98] transition disabled:opacity-60"
+                                >
+                                    {loading ? "Creando tu cuenta…" : "Crear mi cuenta"}
+                                </button>
+                                <p className="text-center text-[11px] leading-relaxed text-zinc-400">Te enviaremos un código por WhatsApp para confirmar tu teléfono.</p>
+                            </div>
+                        )}
+
+                        {shownStep === "verify" && (
+                            <div className="space-y-3">
+                                <div>
+                                    <h2 className="text-xl font-semibold text-zinc-900">Confirma tu teléfono</h2>
+                                    <p className="mt-1 text-sm text-zinc-500">Escribe el código que te enviamos por WhatsApp{signupSentTo ? <> al <span className="font-semibold text-zinc-700">{signupSentTo}</span></> : null}.</p>
+                                </div>
+                                <div className="flex justify-between gap-2 pt-1">
+                                    {otpDigits.map((digit, idx) => (
+                                        <input
+                                            key={idx}
+                                            id={`otp-${idx}`}
+                                            type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            autoComplete={idx === 0 ? "one-time-code" : "off"}
+                                            aria-label={`Dígito ${idx + 1}`}
+                                            maxLength={1}
+                                            value={digit}
+                                            onChange={(e) => handleOtpChange(idx, e.target.value)}
+                                            onKeyDown={(e) => { handleOtpKeyDown(idx, e); if (e.key === "Enter") handleVerifySignup(); }}
+                                            onPaste={handleOtpPaste}
+                                            className={`w-full max-w-[52px] h-14 rounded-2xl bg-white border text-center font-semibold text-xl text-zinc-900 outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15 ${digit ? "border-amber-300" : "border-zinc-200"}`}
+                                        />
+                                    ))}
+                                </div>
+                                <button
+                                    onClick={() => handleVerifySignup()}
+                                    disabled={loading}
+                                    className="w-full h-14 rounded-full bg-primary hover:bg-primary/90 text-white font-semibold text-[15px] active:scale-[0.98] transition disabled:opacity-60"
+                                >
+                                    {loading ? "Confirmando…" : "Confirmar"}
+                                </button>
+                                <div className="flex justify-center gap-5">
+                                    <button onClick={() => { rollNubi(-1); setLoginStep("signup"); }} className={`${linkCls} text-zinc-500 hover:text-zinc-800`}>
+                                        Corregir datos
+                                    </button>
+                                    <button onClick={handleSignup} disabled={loading} className={`${linkCls} text-primary hover:text-amber-600`}>
+                                        Reenviar código
                                     </button>
                                 </div>
                             </div>
@@ -2218,10 +2498,10 @@ $1color: #8E3418 !important;
     // Pay: straight to the existing payment flow of that purchase, with the next installment chosen
     // The business's enabled methods (straight to the method: the amount was chosen before)
     const payMethods = [
-        settings?.pagoMovilEnabled && { key: "pago_movil" as const, label: "Pago móvil", desc: "Transferencia en bolívares", icon: <IconDeviceMobile size={22} /> },
-        settings?.binanceEnabled && { key: "binance" as const, label: "Binance Pay", desc: "USDT", icon: <IconCoins size={22} /> },
-        settings?.zinliEnabled && { key: "zinli" as const, label: "Zinli", desc: "Dólares", icon: <IconWallet size={22} /> },
-        settings?.paypalEnabled && { key: "paypal" as const, label: "PayPal", desc: "Dólares", icon: <IconBrandPaypal size={22} /> },
+        paySet?.pagoMovilEnabled && { key: "pago_movil" as const, label: "Pago móvil", desc: "Transferencia en bolívares", icon: <IconDeviceMobile size={22} /> },
+        paySet?.binanceEnabled && { key: "binance" as const, label: "Binance Pay", desc: "USDT", icon: <IconCoins size={22} /> },
+        paySet?.zinliEnabled && { key: "zinli" as const, label: "Zinli", desc: "Dólares", icon: <IconWallet size={22} /> },
+        paySet?.paypalEnabled && { key: "paypal" as const, label: "PayPal", desc: "Dólares", icon: <IconBrandPaypal size={22} /> },
     ].filter(Boolean) as { key: "pago_movil" | "binance" | "zinli" | "paypal"; label: string; desc: string; icon: React.ReactNode }[];
     const goMethod = (key: "pago_movil" | "binance" | "zinli" | "paypal", amountUsd: string) => {
         if (key === "pago_movil") {
@@ -2236,7 +2516,7 @@ $1color: #8E3418 !important;
         setActiveTab("payments");
         setPlanDebt(null);
         setShowHistory(false);
-        setShowLevel(false);
+        setShowLevel(false); setShowLoans(false);
         setPaySheet(null);
         setSelectedDebtForPayment(debt);
         setReceiptFile(null);
@@ -2314,7 +2594,7 @@ $1color: #8E3418 !important;
         setActiveTab(tab);
         setPlanDebt(null);
         setShowHistory(false);
-        setShowLevel(false);
+        setShowLevel(false); setShowLoans(false);
         setSelectedDebtForPayment(null);
         setPaymentStep("details");
         setSelectedInstallmentOption(null);
@@ -2473,7 +2753,197 @@ $1color: #8E3418 !important;
     };
 
     // ── Inicio ──
+    // ── Préstamos: the market of cash offers, and the person's requests ──
+    const bizAv = (b: any) => (
+        <span className="relative overflow-hidden grid size-11 shrink-0 place-items-center rounded-2xl text-[15px] text-white" style={{ background: AV_COLORS[[...String(b?.id || "")].reduce((a, c) => a + c.charCodeAt(0), 0) % AV_COLORS.length], fontWeight: 800 }}>
+            {b?.logo
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={b.logo} alt="" className="absolute inset-0 size-full bg-white object-cover" />
+                : (String(b?.name || "?").trim().charAt(0) || "?").toUpperCase()}
+        </span>
+    );
+    const every = (d: number) => (d === 7 ? "semanales" : d === 15 || d === 14 ? "quincenales" : d === 30 ? "mensuales" : `cada ${d} días`);
+    const renderLoanSheet = () => {
+        const o = loanPick;
+        if (!o) return null;
+        return (
+            <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 animate-in fade-in duration-200" onClick={() => !loanBusy && setLoanPick(null)}>
+                <div className="w-full max-w-md rounded-t-[28px] bg-background px-5 pt-3 animate-in slide-in-from-bottom duration-300" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }} onClick={(e) => e.stopPropagation()}>
+                    <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-zinc-300" />
+                    <div className="flex items-center gap-3">
+                        {bizAv(o.business)}
+                        <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-zinc-500">{o.business?.name} · {o.name}</p>
+                            <h3 className="text-[22px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>Recibes {money(o.amount)}</h3>
+                        </div>
+                    </div>
+                    <div className="mt-4 divide-y divide-zinc-100 rounded-2xl border border-zinc-200 bg-white">
+                        {[
+                            ["Devuelves", money(o.total)],
+                            ["Cuotas", `${o.installments} ${every(o.frequencyDays)} de ${money(o.each)}`],
+                            ["Interés", `${o.interestPct}% · ${money(o.total - o.amount)}`],
+                            ["Primera cuota", `${o.frequencyDays} días después de retirar`],
+                        ].map(([k, v]) => (
+                            <div key={k} className="flex items-center justify-between gap-3 px-4 py-3 text-[14px]">
+                                <span className="text-zinc-500">{k}</span>
+                                <span className="text-right font-bold text-zinc-900">{v}</span>
+                            </div>
+                        ))}
+                    </div>
+                    <p className="mt-3 text-[12.5px] leading-relaxed text-zinc-500">
+                        El comercio revisa tu solicitud. Si la aprueba, aquí te aparece un <b className="text-zinc-700">PIN</b>: lo muestras en su caja y te entregan el efectivo.
+                    </p>
+                    <button
+                        onClick={requestCashLoan}
+                        disabled={loanBusy}
+                        className="mt-4 h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
+                    >
+                        {loanBusy ? "Enviando…" : "Enviar solicitud"}
+                    </button>
+                    <button onClick={() => setLoanPick(null)} disabled={loanBusy} className="mt-2 h-11 w-full rounded-full text-[14px] font-semibold text-zinc-500">Ahora no</button>
+                </div>
+            </div>
+        );
+    };
+    const renderLoans = () => {
+        const amount = Number(loanAmount) || 0;
+        const offers = loanMarket?.offers || [];
+        const busyWith = new Set(loanReqs.filter((q) => q.status === "REQUESTED" || q.status === "APPROVED_PENDING_DISBURSEMENT").map((q) => q.business?.id));
+        return (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300 pb-28">
+                {loanPick && createPortal(renderLoanSheet(), document.body)}
+                <BackBar title="Préstamos" subtitle="Efectivo de comercios cerca de ti" onBack={() => setShowLoans(false)} />
+
+                {/* Requests first: an approved one shows its PIN big */}
+                {loanReqs.length > 0 && (
+                    <div className="mt-5 space-y-2.5">
+                        {loanReqs.map((q) => {
+                            const approved = q.status === "APPROVED_PENDING_DISBURSEMENT";
+                            const until = q.pinExpiresAt ? new Date(q.pinExpiresAt) : null;
+                            return (
+                                <div key={q.id} className={`rounded-[22px] border bg-white p-4 ${approved ? "border-emerald-200" : q.status === "REJECTED" ? "border-rose-100" : "border-zinc-200"}`}>
+                                    <div className="flex items-center gap-3">
+                                        {bizAv(q.business)}
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-[15px] font-bold text-zinc-900">{q.business?.name || "Comercio"}</p>
+                                            <p className="text-[12.5px] text-zinc-500">{money(q.amount)} · devuelves {money(q.totalToPay)} en {q.installments} cuota{q.installments > 1 ? "s" : ""}</p>
+                                        </div>
+                                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                                            approved ? "bg-emerald-50 text-emerald-700" : q.status === "REQUESTED" ? "bg-amber-50 text-amber-700" : q.status === "EXPIRED" ? "bg-zinc-100 text-zinc-500" : "bg-rose-50 text-rose-600"
+                                        }`}>
+                                            {approved ? "Aprobado" : q.status === "REQUESTED" ? "En revisión" : q.status === "EXPIRED" ? "PIN vencido" : "No aprobado"}
+                                        </span>
+                                    </div>
+                                    {approved && q.pin && (
+                                        <div className="mt-3 rounded-2xl bg-emerald-50 p-4 text-center">
+                                            <p className="text-[12px] font-semibold text-emerald-700">Muestra este PIN en la caja</p>
+                                            <p className="mt-1 font-mono text-[38px] tracking-[0.25em] text-zinc-900" style={{ fontWeight: 800 }}>{q.pin}</p>
+                                            <p className="mt-1 text-[12px] text-emerald-800/80">
+                                                {until ? `Vale hasta ${until.toLocaleString("es-VE", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}` : ""}
+                                            </p>
+                                            {q.branch?.location && (
+                                                <p className="mt-2 flex items-center justify-center gap-1 text-[12.5px] font-semibold text-zinc-700"><IconMapPin size={14} className="text-primary" />{q.branch.name ? `${q.branch.name} · ` : ""}{q.branch.location}</p>
+                                            )}
+                                        </div>
+                                    )}
+                                    {q.status === "REJECTED" && q.rejectReason && <p className="mt-2 text-[12.5px] text-rose-600">Motivo: {q.rejectReason}</p>}
+                                    {q.status === "EXPIRED" && <p className="mt-2 text-[12.5px] text-zinc-500">No lo retiraste a tiempo. Puedes pedirlo de nuevo.</p>}
+                                    {(q.status === "REQUESTED" || approved) && (
+                                        <button onClick={() => cancelCashLoan(q.id)} className="mt-2 text-[12.5px] font-semibold text-zinc-500 underline-offset-2 hover:underline">Cancelar solicitud</button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* How much */}
+                <div className="mt-5 rounded-[26px] bg-white p-5 shadow-[0_18px_40px_-20px_rgba(90,30,5,0.35)]">
+                    <p className="text-[13px] font-semibold text-zinc-500">¿Cuánto necesitas?</p>
+                    <div className="mt-1 flex items-baseline gap-1">
+                        <span className="text-[34px] text-zinc-400" style={{ fontWeight: 800 }}>$</span>
+                        <input
+                            inputMode="decimal"
+                            aria-label="Monto del préstamo"
+                            value={loanAmount}
+                            onChange={(e) => setLoanAmount(e.target.value.replace(/[^\d.]/g, "").slice(0, 7))}
+                            className="w-full bg-transparent text-[44px] leading-none text-zinc-900 outline-none"
+                            style={{ fontWeight: 800, letterSpacing: "-0.045em" }}
+                        />
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                        {[20, 50, 100, 200, 500].map((v) => (
+                            <button
+                                key={v}
+                                onClick={() => setLoanAmount(String(v))}
+                                className={`rounded-full border-[1.5px] px-3.5 py-1.5 text-[13px] font-bold transition active:scale-95 ${amount === v ? "border-primary bg-primary text-white" : "border-zinc-200 bg-white text-zinc-700"}`}
+                            >
+                                ${v}
+                            </button>
+                        ))}
+                    </div>
+                    {loanMarket && (
+                        <p className="mt-3 flex items-center gap-1.5 text-[12.5px] text-zinc-500">
+                            <IconTrophy size={14} className="text-amber-500" /> Tu nivel: <b className="text-zinc-800">{loanMarket.level} · {loanMarket.levelName}</b>
+                            <button onClick={() => { setShowLoans(false); openLevel(); }} className="ml-auto font-semibold text-primary">Ver niveles</button>
+                        </p>
+                    )}
+                </div>
+
+                {/* Offers: the ones you can take first, cheapest first */}
+                <div className="mt-6 flex items-center justify-between">
+                    <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Ofertas{amount > 0 ? ` para ${money(amount)}` : ""}</h3>
+                    {loanLoading && <span className="text-[12px] font-semibold text-zinc-400">Buscando…</span>}
+                </div>
+                <div className="mt-3 space-y-2.5">
+                    {loanMarket && !offers.length && (
+                        <div className="rounded-[22px] border border-dashed border-zinc-300 bg-white/70 p-6 text-center">
+                            <img src="/nubi/nubi-thinking.webp" alt="" className="mx-auto h-16 w-16 object-contain" />
+                            <p className="mt-2 text-[15px] font-bold text-zinc-900">No hay ofertas para ese monto</p>
+                            <p className="mt-1 text-[13px] text-zinc-500">Prueba con otra cantidad: cada comercio presta en su propio rango.</p>
+                        </div>
+                    )}
+                    {offers.map((o: any) => {
+                        const taken = busyWith.has(o.business?.id);
+                        return (
+                            <div key={o.id} className={`rounded-[22px] border border-zinc-200 bg-white p-4 ${o.eligible ? "" : "opacity-60"}`}>
+                                <div className="flex items-center gap-3">
+                                    {bizAv(o.business)}
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate text-[15px] font-bold text-zinc-900">{o.business?.name}</p>
+                                        <p className="truncate text-[12.5px] text-zinc-500">{o.name} · de {money(o.minAmount)} a {money(o.maxAmount)}</p>
+                                    </div>
+                                    <div className="shrink-0 text-right">
+                                        <p className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>{money(o.total)}</p>
+                                        <p className="text-[11px] font-semibold text-zinc-400">devuelves</p>
+                                    </div>
+                                </div>
+                                <div className="mt-3 flex items-center gap-2">
+                                    <span className="min-w-0 truncate whitespace-nowrap rounded-full bg-zinc-100 px-2.5 py-1 text-[12px] font-semibold text-zinc-700">{o.installments} × {money(o.each)} {every(o.frequencyDays)} · {o.interestPct}%</span>
+                                    {o.eligible ? (
+                                        <button
+                                            onClick={() => (taken ? toast.info("Ya tienes una solicitud abierta con este comercio.") : setLoanPick(o))}
+                                            disabled={amount <= 0}
+                                            className={`ml-auto rounded-full px-4 py-2 text-[13px] font-bold text-white transition active:scale-95 disabled:opacity-50 ${taken ? "bg-zinc-400" : "bg-primary"}`}
+                                        >
+                                            {taken ? "Solicitado" : "Pedir"}
+                                        </button>
+                                    ) : (
+                                        <span className="ml-auto flex items-center gap-1 text-[12px] font-semibold text-zinc-500"><IconLock size={13} />Desde nivel {o.minLevel} · {o.minLevelName}</span>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    };
+
+    // an account signed up in the app that no business has given credit (and that owes nothing)
+    const noCredit = !!client && client.hasCredit === false && !(debts || []).some((d: any) => Number(d.remainingBalance) > 0.004);
     const renderHome = () => {
+        if (showLoans) return renderLoans();
         if (showLevel) return renderLevel();
         // "Para ti": product ads picked in Syncro Central (each with its own look); while there are
         // none, the level card keeps the spot
@@ -2509,13 +2979,34 @@ $1color: #8E3418 !important;
                 {/* Hello, with Nubi (it glances at the credit card now and then) */}
                 <div className="relative text-white pr-24">
                     <h1 className="text-[30px] leading-tight" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>Hola{firstName ? `, ${firstName}` : ""}</h1>
-                    <p className="mt-1 text-[15px] font-medium text-white/90">Tienes <b className="font-bold">{money(availableCredit)}</b> para comprar hoy</p>
+                    {noCredit
+                        ? <p className="mt-1 text-[15px] font-medium text-white/90">Bienvenido a Syncro Credit</p>
+                        : <p className="mt-1 text-[15px] font-medium text-white/90">Tienes <b className="font-bold">{money(availableCredit)}</b> para comprar hoy</p>}
                     <NubiFace lookAt={creditCardRef} className="!absolute -right-1 -top-4 h-[84px] w-[84px]" />
                 </div>
 
                 <div aria-hidden className="h-6" />
-                {/* Credit available: lacquered white like Nubi, a split bar (what you have / what you used)
-                    and a level button that looks pressable */}
+                {noCredit ? (
+                    // A new account (signed up in the app): no business has given it credit yet
+                    <div
+                        ref={creditCardRef}
+                        className="relative overflow-hidden rounded-[26px] p-5 text-zinc-900"
+                        style={{
+                            background: "linear-gradient(160deg, #ffffff 0%, #fafbfc 42%, #eceff3 100%)",
+                            boxShadow: "0 18px 40px -16px rgba(90,30,5,0.45), inset 0 1px 0 #ffffff, inset 0 -12px 26px rgba(140,150,170,0.18), inset 0 0 0 1px rgba(255,255,255,0.7)",
+                        }}
+                    >
+                        <p className="text-[13px] font-semibold text-zinc-500">Aún no tienes crédito</p>
+                        <p className="mt-1 text-[26px] leading-tight text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.035em" }}>Pide tu primer préstamo</p>
+                        <p className="mt-2 text-[13.5px] leading-relaxed text-zinc-600">Elige entre los comercios que prestan efectivo. Si te aprueban, retiras el dinero en su caja con un PIN.</p>
+                        <div className="mt-4 flex items-center gap-2">
+                            <button onClick={openLoans} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-3 text-[14px] font-bold text-white transition active:scale-95">
+                                Ver ofertas <IconArrowRight size={16} />
+                            </button>
+                            <button onClick={openLevel} className="rounded-full px-4 py-3 text-[13px] font-semibold text-zinc-600">Nivel {lvl} · {lvlName}</button>
+                        </div>
+                    </div>
+                ) : (
                 <div
                     ref={creditCardRef}
                     className="relative overflow-hidden rounded-[26px] p-5 text-zinc-900"
@@ -2565,6 +3056,7 @@ $1color: #8E3418 !important;
                         );
                     })()}
                 </div>
+                )}
 
                 <div aria-hidden className="h-4" />
                 {/* Next payment: overdue first; otherwise everything due on the next day, added up */}
@@ -3488,7 +3980,7 @@ $1color: #8E3418 !important;
                                         if (!isSelectionValid) return null;
 
                                         const enabledMethods = [
-                                            settings?.pagoMovilEnabled && {
+                                            paySet?.pagoMovilEnabled && {
                                                 key: "pago_movil",
                                                 label: "Pago móvil",
                                                 desc: "Transferencia interbancaria rápida (Bs)",
@@ -3499,7 +3991,7 @@ $1color: #8E3418 !important;
                                                 arrow: "text-amber-700",
                                                 bg: "bg-gradient-to-br from-amber-50 via-amber-50 to-amber-50/30",
                                             },
-                                            settings?.binanceEnabled && {
+                                            paySet?.binanceEnabled && {
                                                 key: "binance",
                                                 label: "Binance pay",
                                                 desc: "Pago con criptomonedas (USDT)",
@@ -3510,7 +4002,7 @@ $1color: #8E3418 !important;
                                                 arrow: "text-yellow-600",
                                                 bg: "bg-gradient-to-br from-amber-50 via-[#fefce8] to-yellow-50/30",
                                             },
-                                            settings?.zinliEnabled && {
+                                            paySet?.zinliEnabled && {
                                                 key: "zinli",
                                                 label: "Zinli",
                                                 desc: "Billetera digital panameña (USD)",
@@ -3521,7 +4013,7 @@ $1color: #8E3418 !important;
                                                 arrow: "text-purple-600",
                                                 bg: "bg-gradient-to-br from-[#fdf4ff] via-[#faf5ff] to-purple-50/30",
                                             },
-                                            settings?.paypalEnabled && {
+                                            paySet?.paypalEnabled && {
                                                 key: "paypal",
                                                 label: "PayPal",
                                                 desc: "Pagos internacionales en USD",
@@ -3583,7 +4075,7 @@ $1color: #8E3418 !important;
                                         <div className="flex items-center gap-2 border-b border-zinc-100/60 pb-3">
                                             <IconDeviceMobile size={18} className="text-amber-700" />
                                             <h3 className="text-xs font-black text-zinc-700">Pago móvil del comercio</h3>
-                                            {settings?.pagoMovilEnabled && (
+                                            {paySet?.pagoMovilEnabled && (
                                                 <button
                                                     onClick={() => {
                                                         // bank, ID, phone and the amount: ready to paste in the bank app or a chat
@@ -3602,7 +4094,7 @@ $1color: #8E3418 !important;
                                                 </button>
                                             )}
                                         </div>
-                                        {settings?.pagoMovilEnabled ? (
+                                        {paySet?.pagoMovilEnabled ? (
                                             <div className="grid grid-cols-2 gap-4 text-xs">
                                                 <div>
                                                     <p className="text-zinc-500 text-[9px] font-bold">Banco</p>
@@ -3710,7 +4202,7 @@ $1color: #8E3418 !important;
                                             <h3 className="text-xs font-black text-zinc-700">Datos de Binance pay</h3>
                                         </div>
                                         <div className="grid grid-cols-1 gap-4 text-xs">
-                                            {settings?.binanceId && (
+                                            {paySet?.binanceId && (
                                                 <div>
                                                     <p className="text-zinc-400 text-[9px] font-bold">Binance ID</p>
                                                     <div className="flex items-center gap-1 cursor-pointer mt-0.5" onClick={() => copyToClipboard(settings.binanceId, "Binance ID")}>
@@ -3719,7 +4211,7 @@ $1color: #8E3418 !important;
                                                     </div>
                                                 </div>
                                             )}
-                                            {settings?.binanceEmail && (
+                                            {paySet?.binanceEmail && (
                                                 <div>
                                                     <p className="text-zinc-400 text-[9px] font-bold">Correo de la cuenta</p>
                                                     <div className="flex items-center gap-1 cursor-pointer mt-0.5" onClick={() => copyToClipboard(settings.binanceEmail, "Correo Binance")}>
@@ -3728,7 +4220,7 @@ $1color: #8E3418 !important;
                                                     </div>
                                                 </div>
                                             )}
-                                            {!settings?.binanceId && !settings?.binanceEmail && (
+                                            {!paySet?.binanceId && !paySet?.binanceEmail && (
                                                 <p className="text-xs text-zinc-500 font-bold text-center py-2">El comercio no ha configurado sus datos de Binance pay.</p>
                                             )}
                                         </div>
@@ -3773,7 +4265,7 @@ $1color: #8E3418 !important;
                                             <h3 className="text-xs font-black text-zinc-700">Datos de Zinli</h3>
                                         </div>
                                         <div className="text-xs">
-                                            {settings?.zinliEmail ? (
+                                            {paySet?.zinliEmail ? (
                                                 <div>
                                                     <p className="text-zinc-400 text-[9px] font-bold">Correo Zinli</p>
                                                     <div className="flex items-center gap-1 cursor-pointer mt-0.5" onClick={() => copyToClipboard(settings.zinliEmail, "Correo Zinli")}>
@@ -3826,7 +4318,7 @@ $1color: #8E3418 !important;
                                             <h3 className="text-xs font-black text-zinc-700">Datos de PayPal</h3>
                                         </div>
                                         <div className="text-xs">
-                                            {settings?.paypalEmail ? (
+                                            {paySet?.paypalEmail ? (
                                                 <div>
                                                     <p className="text-zinc-400 text-[9px] font-bold">Correo PayPal</p>
                                                     <div className="flex items-center gap-1 cursor-pointer mt-0.5" onClick={() => copyToClipboard(settings.paypalEmail, "Correo PayPal")}>
@@ -5059,9 +5551,9 @@ $1color: #8E3418 !important;
                             setTxSearchQuery("");
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
-                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false);
+                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false); setShowLoans(false);
                         }} 
-                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "home" && !requestLoanView && !showLevel ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
+                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "home" && !requestLoanView && !showLevel && !showLoans ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
                         <IconCreditCard size={18} />
                         <span>Inicio</span>
@@ -5079,12 +5571,12 @@ $1color: #8E3418 !important;
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
                             setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false);
-                            setShowLevel(true); window.scrollTo({ top: 0 });
+                            openLoans();
                         }}
-                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "home" && showLevel ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
+                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "home" && showLoans ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
-                        <IconTrophy size={18} />
-                        <span>Niveles</span>
+                        <IconCash size={18} />
+                        <span>Préstamos</span>
                     </button>
 
                     {/* Central Large PIN/Pay Button Container (Enlarged) */}
@@ -5101,7 +5593,7 @@ $1color: #8E3418 !important;
                                 setTxSearchQuery("");
                                 setOnlyInStock(true);
                                 setSelectedProductForDetail(null);
-                                setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false);
+                                setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false); setShowLoans(false);
                             }} 
                             className={`absolute -top-[34px] w-[72px] h-[72px] rounded-full flex flex-col items-center justify-center transition-all duration-300 transform active:scale-95 shadow-md z-10 ${
                                 activeTab === "auth-purchase" 
@@ -5125,7 +5617,7 @@ $1color: #8E3418 !important;
                             setTxSearchQuery("");
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
-                            setPurchaseSuccessData(null); setPlanDebt(null); setShowLevel(false);
+                            setPurchaseSuccessData(null); setPlanDebt(null); setShowLevel(false); setShowLoans(false);
                             // the app is credit-only for now: shopping is hidden; this slot is the history
                             setActiveTab("payments");
                             setShowHistory(true);
@@ -5148,7 +5640,7 @@ $1color: #8E3418 !important;
                             setTxSearchQuery("");
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
-                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false);
+                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false); setShowLoans(false);
                         }} 
                         className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "profile" ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >

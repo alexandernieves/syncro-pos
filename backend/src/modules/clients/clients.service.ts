@@ -558,18 +558,113 @@ export class ClientsService {
    * $1500 → 1 · Galaxia.
    * Only this client's own loans count (a client belongs to one business: golden rule).
    */
-  async changePortalPassword(clientId: string, current: string, next: string) {
+  async changePortalPassword(user: any, current: string, next: string) {
     if (next.length < 6) throw new BadRequestException('La nueva contraseña debe tener al menos 6 caracteres');
-    const client = await this.prisma.client.findUnique({ where: { id: clientId }, select: { password: true } });
-    if (!client?.password) throw new BadRequestException('Tu cuenta no tiene contraseña');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const bcrypt = require('bcrypt');
+    if (user?.cu) {
+      const cu = await this.prisma.creditUser.findUnique({ where: { id: user.cu } });
+      if (!cu) throw new BadRequestException('Cuenta no encontrada');
+      if (!(await bcrypt.compare(current, cu.password))) throw new BadRequestException('La contraseña actual no es correcta');
+      await this.prisma.creditUser.update({ where: { id: cu.id }, data: { password: await bcrypt.hash(next, 10) } });
+      return { ok: true };
+    }
+    const clientId = user?.id;
+    const client = clientId ? await this.prisma.client.findUnique({ where: { id: clientId }, select: { password: true } }) : null;
+    if (!client?.password) throw new BadRequestException('Tu cuenta no tiene contraseña');
     if (!(await bcrypt.compare(current, client.password))) throw new BadRequestException('La contraseña actual no es correcta');
     await this.prisma.client.update({ where: { id: clientId }, data: { password: await bcrypt.hash(next, 10) } });
     return { ok: true };
   }
 
-  async getPortalLevel(clientId: string) {
+  // ── Syncro Credit account (one per person, across businesses) ─────────────
+  /** Every business client row of the signed-in person (only theirs: their own account) */
+  async portalClientIds(user: any): Promise<string[]> {
+    if (user?.cu) {
+      const rows = await this.prisma.client.findMany({ where: { creditUserId: user.cu }, select: { id: true } });
+      const ids = rows.map((r) => r.id);
+      if (user.id && !ids.includes(user.id)) ids.push(user.id);
+      return ids;
+    }
+    return user?.id ? [user.id] : [];
+  }
+
+  /** The profile: the main business's client (credit card numbers), the person's account data and
+   *  the history of every business */
+  async portalProfile(user: any) {
+    const cu = user?.cu ? await this.prisma.creditUser.findUnique({ where: { id: user.cu } }) : null;
+    const ids = await this.portalClientIds(user);
+    const txs = ids.length
+      ? await this.prisma.creditTransaction.findMany({ where: { clientId: { in: ids } }, orderBy: { createdAt: 'desc' } })
+      : [];
+    // The main business client: the session's, or (an account that got its first loan after logging
+    // in) the person's client with the highest limit
+    let mainId: string | null = user?.id ?? null;
+    let mainBiz: string | null = user?.businessId ?? null;
+    if (!mainId && ids.length) {
+      const top = await this.prisma.client.findFirst({ where: { id: { in: ids }, isSuspended: false }, orderBy: [{ creditLimit: 'desc' }, { updatedAt: 'desc' }], select: { id: true, businessId: true } });
+      if (top) { mainId = top.id; mainBiz = top.businessId; }
+    }
+    const base: any = mainId && mainBiz
+      ? await this.findOne(mainId, mainBiz)
+      : {
+          id: null, name: cu?.name ?? '', documentId: cu?.documentId ?? null, phone: cu?.phone ?? null, email: cu?.email ?? null,
+          address: null, birthDate: null, creditLimit: 0, currentDebt: 0, creditScore: 50, isSuspended: false,
+          totalPaymentsCount: 0, latePaymentsCount: 0, createdAt: cu?.createdAt ?? new Date(),
+        };
+    return {
+      ...base,
+      name: cu?.name || base.name,
+      phone: base.phone || cu?.phone || null,
+      email: base.email || cu?.email || null,
+      creditTransactions: txs,
+      account: cu ? { id: cu.id, phoneVerified: !!cu.phoneVerifiedAt, since: cu.createdAt } : null,
+      hasCredit: !!mainId,
+    };
+  }
+
+  async updateCreditAccount(user: any, data: { name?: string; email?: string; phone?: string }) {
+    if (!user?.cu) return;
+    const patch: any = {};
+    if (data.name && String(data.name).trim().length >= 3) patch.name = String(data.name).trim().slice(0, 80);
+    if (data.email !== undefined) patch.email = data.email ? String(data.email).trim().slice(0, 120) : null;
+    if (data.phone) patch.phone = String(data.phone).replace(/\D/g, '').slice(0, 15);
+    if (patch.phone) {
+      // a new number isn't verified: it can't be used to join business clients
+      const cu = await this.prisma.creditUser.findUnique({ where: { id: user.cu }, select: { phone: true } });
+      if (String(cu?.phone || '').replace(/\D/g, '').slice(-10) !== patch.phone.slice(-10)) patch.phoneVerifiedAt = null;
+      else delete patch.phone;
+    }
+    if (Object.keys(patch).length) await this.prisma.creditUser.update({ where: { id: user.cu }, data: patch });
+  }
+
+  /** Every purchase and loan the person owes, with every business */
+  async getPortalDebtsAll(user: any) {
+    const ids = await this.portalClientIds(user);
+    const lists = await Promise.all(ids.map((id) => this.getPortalDebts(id)));
+    return lists.flat().sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  /** Which of the person's clients (and business) a loan belongs to */
+  async portalDebtOwner(user: any, loanOrDebtId: string) {
+    const ids = await this.portalClientIds(user);
+    if (!ids.length) throw new BadRequestException('No tienes deudas con ningún comercio');
+    const loan = loanOrDebtId && !String(loanOrDebtId).startsWith('legacy-')
+      ? await this.prisma.loan.findFirst({ where: { id: loanOrDebtId, clientId: { in: ids } }, select: { clientId: true } })
+      : null;
+    const clientId = loan?.clientId ?? user.id ?? ids[0];
+    const client = await this.prisma.client.findUnique({ where: { id: clientId }, select: { businessId: true } });
+    if (!client?.businessId) throw new BadRequestException('Comercio no encontrado');
+    return { clientId, businessId: client.businessId };
+  }
+
+  async getClientSubmissionsAll(clientIds: string[]) {
+    if (!clientIds.length) return [];
+    return this.prisma.paymentSubmission.findMany({ where: { clientId: { in: clientIds } }, orderBy: { createdAt: 'desc' } });
+  }
+
+  async getPortalLevel(clientIdOrIds: string | string[]) {
+    const clientIds = Array.isArray(clientIdOrIds) ? clientIdOrIds : [clientIdOrIds];
     const LEVELS = [
       { level: 4, name: 'Chispa', from: 0 },
       { level: 3, name: 'Cometa', from: 200 },
@@ -577,7 +672,7 @@ export class ClientsService {
       { level: 1, name: 'Galaxia', from: 1500 },
     ];
     const paid = await this.prisma.loanInstallment.findMany({
-      where: { status: 'PAID', paidAt: { not: null }, loan: { clientId } },
+      where: { status: 'PAID', paidAt: { not: null }, loan: { clientId: { in: clientIds } } },
       select: { amount: true, paidAmount: true, paidAt: true, dueDate: true },
     });
     const endOfDay = (d: Date) => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x.getTime(); };
@@ -688,7 +783,8 @@ export class ClientsService {
       return {
         loanId: loan.id,
         saleId: txInfo?.saleId ?? null,
-        description: txInfo?.notes ?? `Compra a crédito`,
+        description: (loan as any).kind === 'CASH' ? `Préstamo en efectivo · $${loan.amount.toFixed(2)}` : txInfo?.notes ?? `Compra a crédito`,
+        kind: (loan as any).kind ?? 'PURCHASE',
         amount: loan.amount,
         totalToPay: loan.totalToPay,
         remainingBalance: loan.remainingBalance,

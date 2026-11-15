@@ -44,6 +44,20 @@ export class AuthController {
     return this.authService.clientLogin(documentId, password);
   }
 
+  /** Syncro Credit: create an account from the app (cédula, name, phone, password) */
+  @Throttle({ default: { limit: 6, ttl: 3600000 } })
+  @Post('credit/register')
+  creditRegister(@Body() body: any) {
+    return this.authService.creditRegisterStart(body);
+  }
+
+  /** Syncro Credit: the WhatsApp code of the sign-up */
+  @Throttle({ default: { limit: 8, ttl: 900000 } })
+  @Post('credit/verify')
+  creditVerify(@Body() body: any) {
+    return this.authService.creditRegisterVerify(body);
+  }
+
   @Post('client-check-status')
   async clientCheckStatus(@Body('documentId') documentId: string) {
     if (!documentId) {

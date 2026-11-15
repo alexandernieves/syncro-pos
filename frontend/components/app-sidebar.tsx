@@ -177,6 +177,12 @@ const data = {
       icon: IconBarbell,
       moduleId: "gym",
     },
+    {
+      title: "Préstamos",
+      url: "/dashboard/prestamos",
+      icon: IconCash,
+      moduleId: "loans",
+    },
   ],
   // Gym workspace: replaces the whole menu while inside /dashboard/gimnasio
   navGym: [
@@ -369,6 +375,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         // Packaged modules follow what Syncro central turned on (fresh), not the saved list
         // Hidden while it isn't known yet: it must never flash for a business without it
         if (item.moduleId === "gym") return !!myModules?.find((m) => m.code === "gym")?.usable;
+        if (item.moduleId === "loans") return !!myModules?.find((m) => m.code === "loans")?.usable;
         if (!item.moduleId || item.moduleId === "dashboard") return true;
         if (enabledModules && enabledModules.length > 0) {
           return enabledModules.includes(item.moduleId);
