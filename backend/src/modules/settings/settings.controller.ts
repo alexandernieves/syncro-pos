@@ -25,7 +25,9 @@ export class SettingsController {
   async getSettings(@Request() req: any) {
     if (!req.user) throw new UnauthorizedException('No user context');
     const businessId = req.user.businessId;
-    return withoutPin(await this.settingsService.getSettings(businessId));
+    const settings = withoutPin(await this.settingsService.getSettings(businessId));
+    const business = businessId ? await this.settingsService.businessLogo(businessId) : null;
+    return settings ? { ...settings, businessLogo: business } : settings;
   }
 
   @Put()

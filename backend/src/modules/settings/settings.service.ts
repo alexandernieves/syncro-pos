@@ -62,8 +62,19 @@ export class SettingsService {
     return settings;
   }
 
+  /** The business's logo (Business.logo): shown to its clients in Syncro Credit */
+  async businessLogo(businessId: string) {
+    const b = await this.prisma.business.findUnique({ where: { id: businessId }, select: { logo: true } });
+    return b?.logo ?? null;
+  }
+
   async updateSettings(updateData: any, businessId: string) {
     if (!businessId) throw new Error('Business ID is required');
+    if (updateData?.businessLogo !== undefined) {
+      const logo = updateData.businessLogo ? String(updateData.businessLogo).slice(0, 600) : null;
+      if (logo && !/^(https?:\/\/|\/uploads\/)/.test(logo)) throw new Error('Logo no válido');
+      await this.prisma.business.update({ where: { id: businessId }, data: { logo } });
+    }
 
     // Always fetch from DB directly (not cache) so we have the correct settings.id
     let settings = await this.prisma.setting.findFirst({ where: { businessId } });

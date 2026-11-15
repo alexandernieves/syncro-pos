@@ -270,6 +270,33 @@ export default function ConfiguracionPage() {
   const [syncroCreditVisible, setSyncroCreditVisible] = useState(true);
   const [scPromo, setScPromo] = useState({ title: "", text: "" });
   const [scRate, setScRate] = useState<"usd" | "eur" | "cop">("usd");
+  // The business logo (shown to its clients in Syncro Credit)
+  const [bizLogo, setBizLogo] = useState<string | null>(null);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const uploadLogo = async (file: File) => {
+    if (!file.type.startsWith("image/")) return toast.error("Elige una imagen");
+    if (file.size > 5 * 1024 * 1024) return toast.error("La imagen debe pesar menos de 5 MB");
+    setLogoBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("folder", "logos");
+      const up = await fetch(`${API}/upload`, { method: "POST", body: fd, headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+      const data = await up.json().catch(() => ({}));
+      if (!up.ok || !data.url) throw new Error(data.message || "No se pudo subir la imagen");
+      await saveLogo(data.url);
+    } catch (e: any) {
+      toast.error(e.message || "No se pudo subir la imagen");
+    } finally {
+      setLogoBusy(false);
+    }
+  };
+  const saveLogo = async (url: string | null) => {
+    const res = await fetch(`${API}/settings`, { method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` }, body: JSON.stringify({ businessLogo: url }) });
+    if (!res.ok) throw new Error("No se pudo guardar el logo");
+    setBizLogo(url);
+    toast.success(url ? "Logo actualizado" : "Logo quitado");
+  };
   const [scRates, setScRates] = useState({ usd: 0, eur: 0, cop: 0 });
 
   const [dashboardConfig, setDashboardConfig] = useState({
@@ -898,6 +925,7 @@ export default function ConfiguracionPage() {
             setSyncroCreditVisible(data.syncroCreditVisible ?? true);
             setScPromo({ title: data.syncroCreditPromoTitle || "", text: data.syncroCreditPromoText || "" });
             setScRate(data.syncroCreditRate === "eur" || data.syncroCreditRate === "cop" ? data.syncroCreditRate : "usd");
+            setBizLogo(data.businessLogo || null);
             setScRates({ usd: Number(data.exchangeRate) || 0, eur: Number(data.exchangeRateEur) || 0, cop: Number(data.copRateManual || data.exchangeRateCop) || 0 });
             setWhatsappBotEnabled(data.whatsappBotEnabled || false);
             setWhatsappAuthorizedPhones(data.whatsappAuthorizedPhones || []);
@@ -1112,8 +1140,6 @@ export default function ConfiguracionPage() {
           syncroCreditMaxLimit: Math.max(Number(syncroCreditLimits.initial) || 30, Number(syncroCreditLimits.max) || 200),
           syncroCreditLimitStep: Math.max(0, Number(syncroCreditLimits.step) || 0),
           syncroCreditVisible,
-          syncroCreditPromoTitle: scPromo.title,
-          syncroCreditPromoText: scPromo.text,
           syncroCreditRate: scRate,
           salesGoal: Number(dashboardConfig.salesGoal) || 10000,
           showSalesGoal: !!dashboardConfig.showSalesGoal,
@@ -1353,6 +1379,28 @@ export default function ConfiguracionPage() {
                       })}
                     </DropdownMenuContent>
                   </DropdownMenu>
+                </div>
+                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                  <Label>Logo del negocio</Label>
+                  <div className="flex items-center gap-4 rounded-xl border p-3">
+                    <div className="grid size-16 shrink-0 place-items-center overflow-hidden rounded-2xl border bg-muted">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      {bizLogo ? <img src={bizLogo} alt="Logo" className="size-full object-cover" /> : <IconBuilding className="size-7 text-muted-foreground" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{bizLogo ? "Así lo ven tus clientes" : "Sin logo"}</p>
+                      <p className="text-xs text-muted-foreground">Aparece junto a cada compra en Syncro Credit. Cuadrado, de al menos 256 × 256 px.</p>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <Button variant="outline" size="sm" disabled={logoBusy} asChild>
+                        <label className="cursor-pointer">
+                          {logoBusy ? "Subiendo…" : bizLogo ? "Cambiar" : "Subir logo"}
+                          <input type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) uploadLogo(file); }} />
+                        </label>
+                      </Button>
+                      {bizLogo && <Button variant="ghost" size="sm" className="text-destructive" disabled={logoBusy} onClick={() => saveLogo(null).catch((e) => toast.error(e.message))}>Quitar</Button>}
+                    </div>
+                  </div>
                 </div>
                 {[
                   { field: "businessName", label: "Nombre del negocio", icon: IconBuilding, placeholder: "Syncro POS" },
@@ -1666,41 +1714,11 @@ export default function ConfiguracionPage() {
                     <div>
                       <p className="font-semibold">Mostrar mi negocio en Syncro Credit</p>
                       <p className="text-xs text-muted-foreground mt-1 max-w-md">
-                        Tus tiendas aparecen en “Comprar” y en “Para ti” de la app, y los clientes pueden ver tu catálogo.
-                        Si lo apagas, tu negocio deja de verse, pero tus clientes igual pueden entrar a la app y pagar sus cuotas.
+                        Tu tienda aparece en la sección de tiendas de la app (cuando esté disponible). Tus clientes con crédito
+                        siempre pueden entrar a la app, ver sus cuotas y pagar, aunque lo apagues.
                       </p>
                     </div>
                     <Switch checked={syncroCreditVisible} onCheckedChange={setSyncroCreditVisible} aria-label="Mostrar mi negocio en Syncro Credit" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Promo card */}
-              <Card className={cn(!syncroCreditVisible && "opacity-50 pointer-events-none")}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-semibold">Tu anuncio en “Para ti”</CardTitle>
-                  <CardDescription>Aparece en el inicio de la app de tus clientes. Si lo dejas vacío, se muestra “Compra hoy y paga en cuotas”.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-5 md:grid-cols-[1fr_300px]">
-                  <div className="space-y-4">
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between"><Label className="text-xs font-semibold">Título</Label><span className="text-[11px] text-muted-foreground">{scPromo.title.length}/40</span></div>
-                      <Input maxLength={40} placeholder="Ej. 10% menos en víveres" value={scPromo.title} onChange={(e) => setScPromo((p) => ({ ...p, title: e.target.value }))} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between"><Label className="text-xs font-semibold">Texto</Label><span className="text-[11px] text-muted-foreground">{scPromo.text.length}/90</span></div>
-                      <Input maxLength={90} placeholder="Ej. Pagando a crédito hasta el 30 nov" value={scPromo.text} onChange={(e) => setScPromo((p) => ({ ...p, text: e.target.value }))} />
-                    </div>
-                  </div>
-                  {/* Preview, as the client sees it */}
-                  <div
-                    className="relative h-[164px] overflow-hidden rounded-[22px] p-4 text-white"
-                    style={{ background: "radial-gradient(80% 90% at 100% 0%, rgba(242,107,58,.55), rgba(242,107,58,0) 60%), linear-gradient(135deg,#2E2A26,#45413A)" }}
-                  >
-                    <span className="inline-block max-w-[220px] truncate rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-bold" style={{ color: "#fff" }}>{negocio.businessName || "Tu negocio"}</span>
-                    <p className="mt-2.5 max-w-[200px] text-[18px] font-extrabold leading-tight tracking-tight" style={{ color: "#fff" }}>{scPromo.title || "Compra hoy y paga en cuotas"}</p>
-                    <p className="mt-1 max-w-[210px] text-[12px] line-clamp-2" style={{ color: "rgba(255,255,255,.85)" }}>{scPromo.text || negocio.address || "Tu dirección"}</p>
-                    <span className="absolute bottom-3.5 left-4 rounded-full bg-white px-3 py-1.5 text-[11.5px] font-extrabold text-[#1A1815]">Ver tienda →</span>
                   </div>
                 </CardContent>
               </Card>

@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UploadService } from './upload.service';
 
 /** Folders the app uploads to; anything else lands in "chat". */
-const FOLDERS = new Set(['chat', 'chat/voice', 'receipts']);
+const FOLDERS = new Set(['chat', 'chat/voice', 'receipts', 'logos']);
 /** Images, video, voice notes and PDFs: what the support chat and the payment receipts need. */
 const ALLOWED = /^(image\/(png|jpe?g|webp|gif|heic|heif)|video\/(mp4|webm|quicktime)|audio\/(webm|ogg|mpeg|mp4|wav|x-m4a|aac)|application\/pdf)$/;
 const MAX_BYTES = 25 * 1024 * 1024;
