@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Component, type ReactNode, useEffect, useRef, useState } from "react";
+import { Component, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import type { MascotEmotion } from "@/components/mascot/syncro-mascot-3d";
 
 export type NubiMood = "neutral" | "happy" | "sad" | "surprised" | "thinking" | "angry";
@@ -47,7 +47,7 @@ const SPEED = 560; // px per second while rolling
  * one side and comes back by the other, keeps going round while `busy` (that's the loading
  * sign), and glides to a stop in the middle, upright.
  */
-export function NubiFace({ mood = "neutral", className = "", roll, busy = false }: { mood?: NubiMood; className?: string; roll?: NubiRoll; busy?: boolean }) {
+export function NubiFace({ mood = "neutral", className = "", roll, busy = false, lookAt }: { mood?: NubiMood; className?: string; roll?: NubiRoll; busy?: boolean; /** Something on the page it glances at now and then */ lookAt?: RefObject<HTMLElement | null> }) {
   const [own, setOwn] = useState<MascotEmotion | undefined>("happy");
   const [webgl, setWebgl] = useState<boolean | null>(null);
   useEffect(() => setWebgl(canDraw3D()), []);
@@ -152,7 +152,7 @@ export function NubiFace({ mood = "neutral", className = "", roll, busy = false 
         <div ref={spin} className="absolute inset-0 will-change-transform">
           {webgl ? (
             <Safe3D>
-              <SyncroMascot3D emotion={emotion} noSleep />
+              <SyncroMascot3D emotion={emotion} noSleep lookAt={lookAt} />
             </Safe3D>
           ) : (
             <Still />

@@ -16,7 +16,7 @@ export class ClientsController {
     return this.clientsService.findOne(clientId, businessId);
   }
 
-  /** Syncro Credit level (3 Chispa → 2 Cometa → 1 Galaxia) by the money paid on time. */
+  /** Syncro Credit level (4 Chispa → 3 Cometa → 2 Órbita → 1 Galaxia) by the money paid on time. */
   @Get('portal/level')
   async getPortalLevel(@Request() req: any) {
     const clientId = req.user.id || req.user.sub;

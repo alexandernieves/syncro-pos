@@ -12,7 +12,7 @@ import { PODIUM_DIGITS } from "./podium-digits";
 export type MascotPose = "idle" | "wave" | "point" | "think" | "celebrate";
 export type MascotEmotion = "neutral" | "happy" | "angry" | "sad" | "surprised" | "thinking" | "sleepy" | "laugh";
 /** What Syncro wears for the season: nothing, Santa's hat and beard, or a reindeer costume. */
-export type MascotOutfit = "none" | "santa" | "reindeer" | "tree" | "elf" | "snowman" | "podium1" | "podium2" | "podium3";
+export type MascotOutfit = "none" | "santa" | "reindeer" | "tree" | "elf" | "snowman" | "podium1" | "podium2" | "podium3" | "podium4";
 /** What the podium Nubi is doing, for the speech bubbles of the app */
 export type PodiumCue = "prank-up" | "prank-up-laugh" | "prank-down" | "prank-down-laugh" | "done";
 
@@ -61,13 +61,13 @@ const LOOKS: Record<MascotEmotion, Look> = {
 };
 
 /* ------------------------------------------------------------------------------------------------
- * Syncro Credit level podium (2 · 1 · 3): level 3 is where a client starts, 1 the top. A 4th, lower
- * step only shows up for a prank. Everything in "podium units": Nubi's head is ~2 wide, 1.9 tall.
+ * Syncro Credit level podium (2 · 1 · 3 · 4): every client starts at 4 and climbs to 1, the top.
+ * Everything in "podium units": Nubi's head is ~2 wide, 1.9 tall.
  * --------------------------------------------------------------------------------------------- */
 const STEP = {
   w: 1.95,
   d: 1.7,
-  h: { 1: 1.3, 2: 0.95, 3: 0.66, 4: 0.36 } as Record<number, number>,
+  h: { 1: 1.3, 2: 0.98, 3: 0.7, 4: 0.44 } as Record<number, number>,
   x: { 2: -1.95, 1: 0, 3: 1.95, 4: 3.9 } as Record<number, number>,
 };
 const FLOOR = -1.75;
@@ -96,7 +96,10 @@ type Seg =
   | { k: "puff" }
   | { k: "appear"; at: { x: number; y: number } }
   | { k: "step4"; on: boolean }
-  | { k: "cue"; cue: PodiumCue };
+  | { k: "cue"; cue: PodiumCue }
+  | { k: "hop"; h: number; dur: number; spin?: boolean }
+  | { k: "lean"; dir: 1 | -1; dur: number }
+  | { k: "mood"; m: MascotEmotion; dur: number };
 
 const POSE_EMOTION: Record<MascotPose, MascotEmotion> = { idle: "neutral", wave: "happy", celebrate: "happy", think: "thinking", point: "neutral" };
 
@@ -334,7 +337,7 @@ function treeParts() {
 
 type EyeParts = { bead: THREE.Mesh | null; arc: THREE.Mesh | null; brow: THREE.Mesh | null };
 
-function Head({ emotion, pose, still, anchor, poke, outfit, timeline, noSleep, onCue, follow }: { emotion?: MascotEmotion; pose: MascotPose; still: boolean; noSleep?: boolean; onCue?: (c: PodiumCue) => void; follow?: React.RefObject<HTMLDivElement | null>; anchor: React.RefObject<HTMLDivElement | null>; poke: React.RefObject<number>; outfit: MascotOutfit; timeline?: number }) {
+function Head({ emotion, pose, still, anchor, poke, outfit, timeline, noSleep, onCue, follow, lookAt }: { emotion?: MascotEmotion; pose: MascotPose; still: boolean; noSleep?: boolean; onCue?: (c: PodiumCue) => void; follow?: React.RefObject<HTMLDivElement | null>; lookAt?: React.RefObject<HTMLElement | null>; anchor: React.RefObject<HTMLDivElement | null>; poke: React.RefObject<number>; outfit: MascotOutfit; timeline?: number }) {
   // "Polished skin": white glazed ceramic with a clear coat; the emotion only tints it softly
   const mat = useMemo(
     () => ({
@@ -385,7 +388,6 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline, noSleep, o
   const elfHat = useRef<THREE.Group>(null);
   // ── Podium ──
   const podium = useRef<THREE.Group>(null);
-  const step4 = useRef<THREE.Group>(null);
   const actor = useRef<THREE.Group>(null);
   const puffs = useRef<(THREE.Mesh | null)[]>([]);
   const steps = useMemo(() => podiumSteps(), []);
@@ -401,7 +403,8 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline, noSleep, o
   const act = useRef({
     level: 0, x: 0, y: 0, rot: 0, queue: [] as Seg[], seg: null as Seg | null, t0: 0,
     from: { x: 0, y: 0, rot: 0 }, rotTo: 0, land: -10, laughUntil: 0, puffAt: -10, gone: false, appearAt: -10,
-    spinNext: false, step4: 0, step4On: false, nextAction: 0, showIdx: 0, lastShow: "", hopFreq: 1, hopT0: 0, hopUntil: 0, nextHops: 0, lastPoke: 0, offscreen: 6,
+    spinNext: false, nextAction: 0, nextIdle: 0, lastShow: "", lastPoke: 0,
+    crouchAt: 0, landPower: 0.3, leanRot: 0, lookX: null as number | null, wide: 0, wideOn: false,
   });
   const elfHatGeo = useMemo(() => elfHatGeometry(), []);
   const elfEarGeo = useMemo(() => elfEarGeometry(), []);
@@ -469,6 +472,9 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline, noSleep, o
     nextMood: 8 + Math.random() * 10,
     lastPoke: 0,
     eyeBlue: 0,
+    gx: 0,
+    gy: 0,
+    nextGaze: 0,
     cur: { mix: 0, bx: 1, by: 1, arc: 0, brow: 0, browSlant: 0, headTilt: 0 },
   });
 
@@ -504,6 +510,26 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline, noSleep, o
     if (rect && pointerFresh) {
       tx = THREE.MathUtils.clamp((pointer.x - (rect.left + rect.width / 2)) / 520, -1, 1);
       ty = THREE.MathUtils.clamp((pointer.y - (rect.top + rect.height * 0.45)) / 520, -1, 1);
+    } else if (level || noSleep) {
+      if (t > b.nextGaze) {
+        const r = Math.random();
+        const target = lookAt?.current?.getBoundingClientRect();
+        if (target && rect && r < 0.3) {
+          b.gx = THREE.MathUtils.clamp((target.left + target.width / 2 - (rect.left + rect.width / 2)) / 420, -1, 1);
+          b.gy = THREE.MathUtils.clamp((target.top + target.height * 0.35 - (rect.top + rect.height * 0.45)) / 420, -0.6, 1);
+          b.nextGaze = t + 1.2 + Math.random() * 2.4;
+        } else if (r < 0.45) {
+          b.gx = (Math.random() - 0.5) * 0.15; // back at you
+          b.gy = 0;
+          b.nextGaze = t + 0.8 + Math.random() * 2.6;
+        } else {
+          b.gx = (Math.random() * 2 - 1) * 0.85;
+          b.gy = (Math.random() * 2 - 1) * 0.45;
+          b.nextGaze = t + (Math.random() < 0.3 ? 0.3 + Math.random() * 0.5 : 1 + Math.random() * 3);
+        }
+      }
+      tx = act.current.lookX ?? b.gx;
+      ty = b.gy;
     } else {
       tx = Math.sin(t * 0.23) * 0.3;
       ty = Math.sin(t * 0.17) * 0.12;
@@ -680,138 +706,186 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline, noSleep, o
       if (elfHat.current) elfHat.current.rotation.z = 0.1 + (still ? 0 : Math.sin(t * 2.6) * 0.05);
     }
 
-    // ── Podium: where Nubi is and what it does ───────────────────────────────────────────────────
+    // ── Podium: where Nubi is and what it does — its own little decisions, never on a beat ──────
     if (level && frame.current) {
       const A = act.current;
+      const rnd = (a: number, z: number) => a + Math.random() * (z - a);
       const vw = state.viewport.width / 1.7; // the box (the canvas reaches 35% past it on every side)
       const vh = state.viewport.height / 1.7;
-      // while the 4th step is out, the view opens smoothly to the right so it is seen whole
-      const contentW = 6.3 + 2.1 * A.step4;
-      const centerX = 1.0 * A.step4;
+      // the view opens a little to the right while Nubi plays on the floor beside the lowest step
+      A.wide += ((A.wideOn ? 1 : 0) - A.wide) * ease(4);
+      const centerX = (STEP.x[2] + STEP.x[4]) / 2 + 1.15 * A.wide;
+      const contentW = 8.4 + 2.5 * A.wide;
       const contentH = 4.1;
       const sc = Math.min(vh * 1.04 / contentH, vw * 0.94 / contentW);
       frame.current.scale.setScalar(sc);
       frame.current.position.set(-centerX * sc, -(FLOOR + contentH / 2 - 0.2) * sc, 0);
-      A.offscreen = state.viewport.width / 2 / sc + 1.4;
+      const halfW = state.viewport.width / 2 / sc;
+      const offR = centerX + halfW + 1.4;
+      const offL = centerX - halfW - 1.4;
       const home = onStep(level);
+      const floorY = FLOOR + HALF_H;
       if (A.level !== level) {
         // first time, or the level changed: go (jump) to the new step
-        if (!A.level) { A.x = home.x; A.y = home.y; } else A.queue = [{ k: "jump", to: home, dur: 0.8, peak: FLOOR + STEP.h[1] + HALF_H * 2 + 1.2 }];
+        if (!A.level) { A.x = home.x; A.y = home.y; } else A.queue = [{ k: "jump", to: home, dur: 1.2, peak: FLOOR + STEP.h[1] + HALF_H * 2 + 1.2 }];
         A.level = level;
-        A.nextAction = t + 6 + Math.random() * 6;
+        A.nextAction = t + rnd(7, 16);
+        A.nextIdle = t + rnd(0.8, 2.5);
       }
-      const jumpPeak = (a: { y: number }, z: { y: number }, extra = 0.9) => Math.max(a.y, z.y) + extra;
+      const jumpPeak = (a: { y: number }, z: { y: number }, extra: number) => Math.max(a.y, z.y) + extra;
       const highPeak = FLOOR + STEP.h[1] + HALF_H * 2 + 1.1;
 
-      // Tap or time: one of the little shows
       const tapped = poke.current && poke.current !== A.lastPoke;
       if (tapped) A.lastPoke = poke.current;
-      if (!still && !A.seg && !A.queue.length && (tapped || t > A.nextAction)) {
-        // the shows take turns, so every one comes up: walk, fake level-up (levels 3 and 2), the 4th step
-        const canUp = level >= 2; // levels 3 and 2 can pretend to go up
-        // spontaneous: a weighted draw that never repeats the last show; a small twirl now and then
-        const pool: [string, number][] = [["walk", 3], ["twirl", 2], ["down", 2], ...(canUp ? [["up", 3] as [string, number]] : [])];
+      const free = !still && !A.seg && !A.queue.length;
+      if (free && (tapped || t > A.nextAction)) {
+        // A bigger show, drawn by weight and never the same twice in a row
+        const canUp = level >= 2;
+        const pool: [string, number][] = [["walk", 3], ["twirl", 1], ["down", 2], ...(canUp ? [["up", 3] as [string, number]] : [])];
         const options = pool.filter(([k]) => k !== A.lastShow);
         let roll = Math.random() * options.reduce((a, [, w]) => a + w, 0);
         const pick = (options.find(([, w]) => (roll -= w) < 0) || options[0])[0];
         A.lastShow = pick;
-        A.showIdx++;
-        const side = level === 2 ? -1 : 1;
-        const floorY = FLOOR + HALF_H;
         if (pick === "up") {
           const up = onStep(level - 1);
           A.queue = [
-            { k: "cue", cue: "prank-up" },
-            { k: "wait", dur: 1.2 },
-            { k: "jump", to: up, dur: 1.15, peak: jumpPeak(home, up, 1.2) },
-            { k: "wait", dur: 1.6 },
-            { k: "cue", cue: "prank-up-laugh" },
-            { k: "laugh", dur: 3 },
-            { k: "wait", dur: 0.4 },
-            { k: "jump", to: home, dur: 1.05, peak: jumpPeak(home, up, 0.8) },
-            { k: "cue", cue: "done" },
+            { k: "mood", m: "surprised", dur: 0.9 },
+            { k: "wait", dur: rnd(0.4, 1.2) },
+            { k: "jump", to: up, dur: rnd(1.0, 1.3), peak: jumpPeak(home, up, rnd(1, 1.4)) },
+            { k: "mood", m: "happy", dur: 1.6 },
+            { k: "wait", dur: rnd(1, 2) },
+            { k: "laugh", dur: rnd(2.2, 3.2) },
+            { k: "wait", dur: rnd(0.2, 0.7) },
+            { k: "jump", to: home, dur: rnd(0.95, 1.2), peak: jumpPeak(home, up, rnd(0.6, 1)) },
           ];
         } else if (pick === "down") {
-          const four = onStep(4);
+          // drops below its level (or to the floor from the lowest step), laughs, and vanishes in a puff
+          const below = level < 4 ? onStep(level + 1) : { x: STEP.x[4] + STEP.w / 2 + 1.15, y: floorY };
           A.queue = [
-            { k: "cue", cue: "prank-down" },
-            { k: "wait", dur: 2.2 },
-            { k: "step4", on: true },
-            { k: "wait", dur: 1 },
-            { k: "jump", to: four, dur: 1.15, peak: jumpPeak(home, four, 1) },
-            { k: "wait", dur: 0.5 },
-            { k: "cue", cue: "prank-down-laugh" },
-            { k: "laugh", dur: 2.6 },
+            { k: "mood", m: "thinking", dur: 1.3 },
+            { k: "step4", on: level === 4 },
+            { k: "wait", dur: rnd(0.6, 1.4) },
+            { k: "jump", to: below, dur: rnd(1.0, 1.25), peak: jumpPeak(home, below, rnd(0.7, 1.1)) },
+            { k: "mood", m: "surprised", dur: 0.8 },
+            { k: "wait", dur: rnd(0.5, 1) },
+            { k: "laugh", dur: rnd(2, 3) },
             { k: "puff" },
-            { k: "step4", on: false },
-            { k: "wait", dur: 0.9 },
+            { k: "wait", dur: rnd(0.5, 1.2) },
             { k: "appear", at: home },
-            { k: "cue", cue: "done" },
+            { k: "step4", on: false },
+            { k: "mood", m: "happy", dur: 1.2 },
           ];
         } else if (pick === "twirl") {
-          // a happy little spin-hop on its own step
-          A.queue = [{ k: "jump", to: home, dur: 1.1, peak: home.y + 0.9 }];
-          A.spinNext = true;
+          A.queue = [{ k: "hop", h: rnd(0.8, 1.15), dur: rnd(0.9, 1.15), spin: true }];
         } else {
-          // off the podium, roll out of the screen, back in from the other side and up again
-          const edge = STEP.x[3] + STEP.w / 2 + 1.25;
-          const left = STEP.x[2] - STEP.w / 2 - 1.25;
-          const out = side > 0 ? edge : left;
-          const back = side > 0 ? left : edge;
+          // off the podium, rolls out of the screen, back in from the other side and up again
+          const side = level >= 3 ? (Math.random() < 0.7 ? 1 : -1) : Math.random() < 0.5 ? 1 : -1;
+          const edgeR = STEP.x[4] + STEP.w / 2 + 1.25;
+          const edgeL = STEP.x[2] - STEP.w / 2 - 1.25;
+          const out = side > 0 ? edgeR : edgeL;
+          const back = side > 0 ? edgeL : edgeR;
           A.queue = [
-            { k: "jump", to: { x: out, y: floorY }, dur: 1.1, peak: jumpPeak(home, { y: floorY }, 0.9) },
-            { k: "wait", dur: 0.35 },
-            { k: "roll", toX: side * A.offscreen, speed: 2.6 },
-            { k: "wait", dur: 0.8 + Math.random() * 1.2 },
-            { k: "warp", x: -side * A.offscreen },
-            { k: "roll", toX: back, speed: 2.6 },
-            { k: "wait", dur: 0.5 },
-            { k: "jump", to: home, dur: 1.4, peak: highPeak },
+            { k: "jump", to: { x: out, y: floorY }, dur: rnd(1, 1.25), peak: jumpPeak(home, { y: floorY }, rnd(0.7, 1.1)) },
+            { k: "wait", dur: rnd(0.15, 0.7) },
+            { k: "roll", toX: side > 0 ? offR : offL, speed: rnd(2.1, 3.2) },
+            { k: "wait", dur: rnd(0.6, 2.4) },
+            { k: "warp", x: side > 0 ? offL : offR },
+            { k: "roll", toX: back, speed: rnd(2.1, 3.2) },
+            { k: "wait", dur: rnd(0.2, 0.9) },
+            { k: "jump", to: home, dur: rnd(1.25, 1.5), peak: highPeak },
           ];
         }
-        A.nextAction = t + 16 + Math.random() * 16;
+        A.nextAction = t + (Math.random() < 0.25 ? rnd(6, 12) : rnd(14, 42));
+        A.nextIdle = t + rnd(2, 5);
+      } else if (free && t > A.nextIdle) {
+        // Little things it decides on its own: a few hops (each different), a lean, a spin, or nothing
+        const r = Math.random();
+        if (r < 0.46) {
+          const n = 1 + Math.floor(Math.random() * Math.random() * 5);
+          const q: Seg[] = [];
+          for (let i = 0; i < n; i++) {
+            q.push({ k: "hop", h: rnd(0.14, 0.45), dur: rnd(0.4, 0.75) });
+            if (Math.random() < 0.4) q.push({ k: "wait", dur: rnd(0.05, 0.55) });
+          }
+          A.queue = q;
+        } else if (r < 0.64) {
+          A.queue = [{ k: "lean", dir: Math.random() < 0.5 ? -1 : 1, dur: rnd(0.9, 2.2) }];
+        } else if (r < 0.71) {
+          A.queue = [{ k: "hop", h: rnd(0.75, 1.05), dur: rnd(0.85, 1.1), spin: true }];
+        }
+        A.nextIdle = t + (Math.random() < 0.3 ? rnd(0.4, 1.5) : rnd(1.8, 6.5));
       }
 
       // Run the current piece
       if (!A.seg && A.queue.length) {
-        A.seg = A.queue.shift()!;
+        let next = A.queue.shift()!;
+        if (next.k === "hop") {
+          A.spinNext = !!next.spin;
+          next = { k: "jump", to: { x: A.x, y: home.y }, dur: next.dur, peak: home.y + next.h };
+        }
+        A.seg = next;
         A.t0 = t;
         A.from = { x: A.x, y: A.y, rot: A.rot };
-        if (A.seg.k === "jump" && A.spinNext && A.seg.to.x === A.x) {
-          A.spinNext = false;
-          A.rotTo = (Math.round(A.rot / (Math.PI * 2)) - (Math.random() < 0.5 ? 1 : -1)) * Math.PI * 2;
-        } else if (A.seg.k === "jump") {
-          // land upright: the spin of the flight ends on a whole turn
-          const dir = Math.sign(A.seg.to.x - A.x) || 1;
-          A.rotTo = A.seg.to.x === A.x ? Math.round(A.rot / (Math.PI * 2)) * Math.PI * 2 : (dir > 0 ? Math.floor(A.rot / (Math.PI * 2)) - (Math.abs(A.seg.to.x - A.x) > 2.5 ? 1 : 0) : Math.ceil(A.rot / (Math.PI * 2)) + (Math.abs(A.seg.to.x - A.x) > 2.5 ? 1 : 0)) * Math.PI * 2;
+        if (next.k === "jump") {
+          // crouch a moment before the take-off, then fly; it lands upright
+          A.crouchAt = t;
+          A.t0 = t + rnd(0.08, 0.16);
+          A.landPower = Math.min(0.5, Math.max(0.24, 0.22 + (next.peak - next.to.y) * 0.14));
+          const dx = next.to.x - A.x;
+          const turns = Math.round(A.rot / (Math.PI * 2));
+          if (A.spinNext) {
+            A.spinNext = false;
+            A.rotTo = (turns + (Math.random() < 0.5 ? 1 : -1)) * Math.PI * 2;
+          } else if (Math.abs(dx) < 0.01) {
+            A.rotTo = turns * Math.PI * 2;
+          } else {
+            const far = Math.abs(dx) > 2.5 ? 1 : 0;
+            A.rotTo = (dx > 0 ? Math.floor(A.rot / (Math.PI * 2)) - far : Math.ceil(A.rot / (Math.PI * 2)) + far) * Math.PI * 2;
+          }
         }
-        if (A.seg.k === "cue") { cueRef.current?.(A.seg.cue); A.seg = null; }
-        else if (A.seg.k === "warp") { A.x = A.seg.x; A.seg = null; }
-        else if (A.seg.k === "step4") { A.step4On = A.seg.on; A.seg = null; }
-        else if (A.seg.k === "laugh") A.laughUntil = t + A.seg.dur;
-        else if (A.seg.k === "puff") { A.puffAt = t; A.gone = true; }
-        else if (A.seg.k === "appear") { A.x = A.seg.at.x; A.y = A.seg.at.y; A.appearAt = t; A.gone = false; }
+        if (next.k === "warp") { A.x = next.x; A.seg = null; }
+        else if (next.k === "laugh") A.laughUntil = t + next.dur;
+        else if (next.k === "puff") { A.puffAt = t; A.gone = true; }
+        else if (next.k === "appear") { A.x = next.at.x; A.y = next.at.y; A.appearAt = t; A.gone = false; }
+        else if (next.k === "mood") { b.mood = next.m; b.moodUntil = t + next.dur; A.seg = null; }
+        else if (next.k === "step4") { A.wideOn = next.on; A.seg = null; }
+        else if (next.k === "cue") A.seg = null;
       }
       const seg = A.seg;
       let stretch = 0;
+      let crouch = 0;
+      A.lookX = null;
+      A.leanRot += (0 - A.leanRot) * ease(4);
       if (seg) {
         const el = t - A.t0;
         if (seg.k === "jump") {
-          const u = Math.min(1, el / seg.dur);
-          const cy = 2 * seg.peak - (A.from.y + seg.to.y) / 2; // quadratic curve through the peak
-          const ux = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2; // gentle take-off and landing
-          A.x = A.from.x + (seg.to.x - A.from.x) * (0.35 * u + 0.65 * ux);
-          A.y = (1 - u) * (1 - u) * A.from.y + 2 * (1 - u) * u * cy + u * u * seg.to.y;
-          A.rot = A.from.rot + (A.rotTo - A.from.rot) * (u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2);
-          stretch = Math.sin(u * Math.PI) * 0.12;
-          if (u >= 1) { A.seg = null; A.land = t; }
+          if (el < 0) {
+            crouch = Math.sin(Math.min(1, (t - A.crouchAt) / Math.max(0.01, A.t0 - A.crouchAt)) * Math.PI / 2) * 0.24;
+          } else {
+            const u = Math.min(1, el / seg.dur);
+            const cy = 2 * seg.peak - (A.from.y + seg.to.y) / 2; // quadratic curve through the peak
+            const ux = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+            A.x = A.from.x + (seg.to.x - A.from.x) * (0.35 * u + 0.65 * ux);
+            A.y = (1 - u) * (1 - u) * A.from.y + 2 * (1 - u) * u * cy + u * u * seg.to.y;
+            A.rot = A.from.rot + (A.rotTo - A.from.rot) * (u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2);
+            // stretched while it moves fast (take-off and fall), round at the top
+            stretch = Math.abs(1 - 2 * u) * 0.2;
+            if (Math.abs(seg.to.x - A.from.x) > 0.2) A.lookX = Math.sign(seg.to.x - A.from.x) * 0.7;
+            if (u >= 1) { A.seg = null; A.land = t; }
+          }
         } else if (seg.k === "roll") {
           const dx = seg.toX - A.x;
           const stepX = Math.sign(dx) * Math.min(Math.abs(dx), seg.speed * Math.min(delta, 0.05));
           A.x += stepX;
           A.rot -= stepX / 0.98; // rolling: turns as much as it travels
-          A.y = FLOOR + HALF_H + Math.abs(Math.sin(A.rot * 2)) * 0.02;
+          A.y = floorY + Math.abs(Math.sin(A.rot * 2)) * 0.02;
+          A.lookX = Math.sign(dx) * 0.8;
           if (Math.abs(seg.toX - A.x) < 1e-3) A.seg = null;
+        } else if (seg.k === "lean") {
+          const u = Math.min(1, el / seg.dur);
+          A.leanRot = seg.dir * 0.2 * Math.sin(u * Math.PI);
+          A.lookX = seg.dir * 0.9 * Math.sin(u * Math.PI);
+          if (u >= 1) A.seg = null;
         } else if (seg.k === "wait" || seg.k === "laugh") {
           if (el >= seg.dur) A.seg = null;
         } else if (seg.k === "puff") {
@@ -819,58 +893,28 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline, noSleep, o
         } else if (seg.k === "appear") {
           if (el >= 0.5) A.seg = null;
         }
-      } else if (!still) {
-        // Resting on its step: bursts of little bouncy hops
-        if (t > A.nextHops) {
-          A.hopFreq = 0.8 + Math.random() * 0.35;
-          A.hopUntil = t + (2 + Math.floor(Math.random() * 3)) / A.hopFreq;
-          A.nextHops = A.hopUntil + 3 + Math.random() * 5;
-          A.hopT0 = t;
-        }
-        if (t < A.hopUntil) {
-          const ph = (((t - A.hopT0) * A.hopFreq) % 1);
-          const prev = A.y;
-          A.y = home.y + Math.sin(ph * Math.PI) * 0.2;
-          if (prev > home.y + 0.02 && A.y <= home.y + 0.03 && ph < 0.1) A.land = t;
-          stretch = Math.sin(ph * Math.PI) * 0.06;
-        } else A.y += (home.y - A.y) * ease(10);
+      } else if (!A.gone) {
+        A.y += (home.y - A.y) * ease(10);
       }
 
-      // Squash on landing (a bouncy ball), stretch in the air, laugh shake, puff and pop-in
+      // Jelly: it squashes on landing (harder the higher it fell) and wobbles back; keeps its volume
       const sl = t - A.land;
-      const squash = sl >= 0 && sl < 0.5 ? Math.exp(-sl * 7) * Math.cos(sl * 18) * 0.2 : 0;
+      let squash = sl >= 0 && sl < 1.1 ? Math.exp(-sl * 5) * Math.cos(sl * 13) * A.landPower : 0;
+      squash = Math.max(squash, crouch);
       const shake = t < A.laughUntil ? Math.sin(t * 22) * 0.05 : 0;
       let size = 1;
       if (A.gone) size = Math.max(0.001, 1 - (t - A.puffAt) / 0.18);
       const ap = t - A.appearAt;
       if (!A.gone && ap >= 0 && ap < 0.5) size = Math.max(0.001, 1 + 2.4 * Math.pow(ap / 0.5 - 1, 3) + 1.4 * Math.pow(ap / 0.5 - 1, 2));
       if (actor.current) {
-        const sy = (1 - squash + stretch) * size;
-        const sx = (1 + squash * 0.9 - stretch * 0.5) * size;
+        const k = Math.max(0.35, 1 - squash + stretch);
+        const sy = k * size;
+        const sx = size / Math.sqrt(k);
         actor.current.scale.set(sx, sy, sx);
-        actor.current.position.set(A.x + shake * 0.3, A.y - (1 - sy / Math.max(size, 0.001)) * HALF_H * size + (t < A.laughUntil ? Math.abs(Math.sin(t * 11)) * 0.07 : 0), 0);
-        actor.current.rotation.z = A.rot + shake;
+        // stays on its feet while it squashes (the bottom doesn't lift)
+        actor.current.position.set(A.x + shake * 0.3, A.y - (1 - k) * HALF_H * size + (t < A.laughUntil ? Math.abs(Math.sin(t * 11)) * 0.07 : 0), 0);
+        actor.current.rotation.z = A.rot + shake + A.leanRot;
         actor.current.visible = size > 0.01;
-      }
-      // the thought bubble follows Nubi: project the top of its head to the canvas
-      if (follow?.current && actor.current) {
-        followV.set(0, HALF_H + 0.15, 0);
-        actor.current.localToWorld(followV);
-        followV.project(state.camera);
-        const W = state.size.width, H = state.size.height;
-        const nx = (followV.x + 1) / 2 * W;
-        const ny = (1 - followV.y) / 2 * H;
-        // keep the cloud inside the visible box (the canvas reaches 35% past it on every side)
-        const pad = W / 1.7 * 0.34;
-        const bx0 = W * (0.35 / 1.7) + pad, bx1 = W - W * (0.35 / 1.7) - pad;
-        const cx = Math.min(bx1, Math.max(bx0, nx));
-        const by0 = H * (0.35 / 1.7) + 58;
-        const cy = Math.max(by0, ny - 64);
-        const el = follow.current;
-        el.style.setProperty("--cx", `${cx}px`);
-        el.style.setProperty("--cy", `${cy}px`);
-        el.style.setProperty("--nx", `${nx - cx}px`);
-        el.style.setProperty("--ny", `${ny - cy}px`);
       }
       // the puff: little lacquered balls flying out and fading
       const pe = t - A.puffAt;
@@ -885,12 +929,6 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline, noSleep, o
         m.scale.setScalar(0.22 * (1 - u * 0.6) + 0.05);
       });
       mat.puff.opacity = pe >= 0 && pe < 0.7 ? 1 - pe / 0.7 : 0;
-      // the 4th step pops in and out
-      A.step4 += ((A.step4On ? 1 : 0) - A.step4) * ease(4);
-      if (step4.current) {
-        step4.current.scale.set(1, Math.max(0.001, A.step4), 1);
-        step4.current.visible = A.step4 > 0.01;
-      }
     } else if (actor.current && !level) {
       actor.current.position.set(0, 0, 0);
       actor.current.rotation.z = 0;
@@ -919,14 +957,7 @@ function Head({ emotion, pose, still, anchor, poke, outfit, timeline, noSleep, o
                 <mesh material={mat.podiumDigit} geometry={p.digit} position={[0, -p.h * 0.06, STEP.d / 2 + 0.03]} />
               </group>
             );
-            // the 4th step grows from the floor only for the prank
-            return p.n === 4 ? (
-              <group key={p.n} ref={step4} position={[0, FLOOR, 0]} scale={[1, 0.001, 1]} visible={false}>
-                <group position={[0, -FLOOR, 0]}>{body}</group>
-              </group>
-            ) : (
-              <group key={p.n}>{body}</group>
-            );
+            return <group key={p.n}>{body}</group>;
           })}
           {puffDirs.map((_, i) => (
             <mesh key={`puff${i}`} ref={(m) => { puffs.current[i] = m; }} material={mat.puff} visible={false}>
@@ -1203,7 +1234,7 @@ const CAMERA_Z = (5 * (1 + 2 * ROOM)) / 1.15;
  * its own: follows the cursor, smiles when the pointer is over it, gets startled when poked, dozes
  * off when nobody moves the mouse for a while, and shows a short mood now and then.
  */
-export function SyncroMascot3D({ pose = "idle", emotion, festive = false, outfit, timeline, noSleep, onCue, follow }: { pose?: MascotPose; emotion?: MascotEmotion; festive?: boolean; outfit?: MascotOutfit; /** Freezes the tree animation at this second (previews) */ timeline?: number; /** Never dozes off (phones: no mouse to wake it, e.g. the SyncroCredit PWA) */ noSleep?: boolean; /** Podium shows: when to show a speech bubble */ onCue?: (c: PodiumCue) => void; /** An element (laid over the canvas) kept on top of Nubi's head */ follow?: React.RefObject<HTMLDivElement | null> }) {
+export function SyncroMascot3D({ pose = "idle", emotion, festive = false, outfit, timeline, noSleep, onCue, follow, lookAt }: { pose?: MascotPose; emotion?: MascotEmotion; festive?: boolean; outfit?: MascotOutfit; /** Freezes the tree animation at this second (previews) */ timeline?: number; /** Never dozes off (phones: no mouse to wake it, e.g. the SyncroCredit PWA) */ noSleep?: boolean; /** Podium shows: when to show a speech bubble */ onCue?: (c: PodiumCue) => void; /** An element (laid over the canvas) kept on top of Nubi's head */ follow?: React.RefObject<HTMLDivElement | null>; /** Something on the page it glances at now and then */ lookAt?: React.RefObject<HTMLElement | null> }) {
   // `festive` is the older switch: Santa's outfit
   const wearing: MascotOutfit = outfit ?? (festive ? "santa" : "none");
   const anchor = useRef<HTMLDivElement>(null);
@@ -1233,7 +1264,7 @@ export function SyncroMascot3D({ pose = "idle", emotion, festive = false, outfit
         onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
       >
         <Studio />
-        <Head emotion={emotion} pose={pose} still={still} anchor={anchor} poke={poke} outfit={wearing} timeline={timeline} noSleep={noSleep} onCue={onCue} follow={follow} />
+        <Head emotion={emotion} pose={pose} still={still} anchor={anchor} poke={poke} outfit={wearing} timeline={timeline} noSleep={noSleep} onCue={onCue} follow={follow} lookAt={lookAt} />
       </Canvas>
       </div>
     </div>

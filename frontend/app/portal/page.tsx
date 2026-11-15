@@ -420,6 +420,7 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
     const [scLevel, setScLevel] = useState<any | null>(null);
     const [showLevel, setShowLevel] = useState(false);
     const [levelUp, setLevelUp] = useState<any | null>(null);
+    const creditCardRef = useRef<HTMLDivElement | null>(null);
     // Receipts already decided that the client closed (so "¡Pago aprobado!" shows once)
     const [seenSubs, setSeenSubs] = useState<string[]>(() => {
         try { return JSON.parse(localStorage.getItem("sc-seen-subs") || "[]"); } catch { return []; }
@@ -2184,7 +2185,7 @@ $1color: #8E3418 !important;
         setSelectedInstallmentOption(null);
         window.scrollTo({ top: 0 });
     };
-    const lvl = (scLevel?.level ?? 3) as 1 | 2 | 3;
+    const lvl = (scLevel?.level ?? 4) as 1 | 2 | 3 | 4;
     const lvlName: string = scLevel?.name ?? "Chispa";
     const openLevel = () => { setShowLevel(true); window.scrollTo({ top: 0 }); };
 
@@ -2215,8 +2216,9 @@ $1color: #8E3418 !important;
 
     // ── Mi nivel ──
     const LEVEL_INFO = [
-        { level: 3, name: "Chispa", from: 0, desc: "Tu comienzo en Syncro Credit" },
-        { level: 2, name: "Cometa", from: 500, desc: "Pagas a tiempo y tomas impulso" },
+        { level: 4, name: "Chispa", from: 0, desc: "Tu comienzo en Syncro Credit" },
+        { level: 3, name: "Cometa", from: 200, desc: "Pagas a tiempo y tomas impulso" },
+        { level: 2, name: "Órbita", from: 500, desc: "Cliente constante" },
         { level: 1, name: "Galaxia", from: 1500, desc: "Lo máximo: cliente estrella" },
     ];
     const renderLevel = () => {
@@ -2264,7 +2266,7 @@ $1color: #8E3418 !important;
     const renderLevelUp = () => (
         <div className="fixed inset-0 z-[250] grid place-items-center bg-black/45 p-6 animate-in fade-in duration-300" onClick={() => setLevelUp(null)}>
             <div className="w-full max-w-sm overflow-hidden rounded-[28px] bg-white px-6 pb-6 pt-2 text-center animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
-                <NubiPodium level={levelUp.level} bubbles={false} className="-mx-6 h-[190px]" />
+                <NubiPodium level={levelUp.level} className="-mx-6 h-[190px]" />
                 <p className="text-[13px] font-bold text-amber-600">¡Subiste de nivel!</p>
                 <h2 className="mt-1 text-[28px] leading-tight text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>Nivel {levelUp.level} · {levelUp.name}</h2>
                 <p className="mt-2 text-[14px] text-zinc-600">Pagaste a tiempo {money(levelUp.paidOnTime)}. ¡Sigue así!</p>
@@ -2314,16 +2316,16 @@ $1color: #8E3418 !important;
             // "Para ti" sits at the bottom so the PIN button floats over the cards, like in the design.
             <div className="flex flex-col animate-in fade-in duration-500" style={{ minHeight: "calc(100dvh - 166px - env(safe-area-inset-top))" }}>
                 {levelUp && renderLevelUp()}
-                {/* Hello, and Nubi on the level podium (tap Nubi and it plays) */}
-                <div className="relative text-white">
+                {/* Hello, with Nubi (it glances at the credit card now and then) */}
+                <div className="relative text-white pr-24">
                     <h1 className="text-[30px] leading-tight" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>Hola{firstName ? `, ${firstName}` : ""}</h1>
                     <p className="mt-1 text-[15px] font-medium text-white/90">Tienes <b className="font-bold">{money(availableCredit)}</b> para comprar hoy</p>
+                    <NubiFace lookAt={creditCardRef} className="!absolute -right-1 -top-4 h-[84px] w-[84px]" />
                 </div>
-                <NubiPodium level={lvl} className="-mx-6 mt-1 h-[150px]" />
 
                 <div aria-hidden className="flex-1 min-h-4 max-h-9" />
                 {/* Credit card */}
-                <div className="relative rounded-[26px] p-5 text-white overflow-hidden shadow-[0_18px_36px_-14px_rgba(40,20,10,0.55)]" style={{ background: "radial-gradient(90% 120% at 100% 0%, rgba(242,107,58,.55), rgba(242,107,58,0) 55%), linear-gradient(145deg,#2A2622,#151311)" }}>
+                <div ref={creditCardRef} className="relative rounded-[26px] p-5 text-white overflow-hidden shadow-[0_18px_36px_-14px_rgba(40,20,10,0.55)]" style={{ background: "radial-gradient(90% 120% at 100% 0%, rgba(242,107,58,.55), rgba(242,107,58,0) 55%), linear-gradient(145deg,#2A2622,#151311)" }}>
                     <button onClick={openLevel} className="absolute right-4 top-4 rounded-full bg-white/12 px-2.5 py-1 text-[12px] font-bold active:scale-95 transition">Nivel {lvl} · {lvlName} ›</button>
                     <p className="text-[12.5px] font-semibold text-white/60">Crédito disponible</p>
                     <p className="mt-0.5 text-[42px] leading-none" style={{ fontWeight: 800, letterSpacing: "-0.04em" }}>{money(availableCredit)}</p>

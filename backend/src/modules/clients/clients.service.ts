@@ -554,13 +554,15 @@ export class ClientsService {
    */
   /**
    * Syncro Credit level of a client, by the money paid on time: the installments paid on or before
-   * the day they were due. A client starts at 3 · Chispa; $500 → 2 · Cometa; $1500 → 1 · Galaxia.
+   * the day they were due. Everyone starts at 4 · Chispa; $200 → 3 · Cometa; $500 → 2 · Órbita;
+   * $1500 → 1 · Galaxia.
    * Only this client's own loans count (a client belongs to one business: golden rule).
    */
   async getPortalLevel(clientId: string) {
     const LEVELS = [
-      { level: 3, name: 'Chispa', from: 0 },
-      { level: 2, name: 'Cometa', from: 500 },
+      { level: 4, name: 'Chispa', from: 0 },
+      { level: 3, name: 'Cometa', from: 200 },
+      { level: 2, name: 'Órbita', from: 500 },
       { level: 1, name: 'Galaxia', from: 1500 },
     ];
     const paid = await this.prisma.loanInstallment.findMany({
