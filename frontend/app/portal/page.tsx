@@ -2279,7 +2279,6 @@ $1color: #8E3418 !important;
     // ── Inicio ──
     const renderHome = () => {
         if (showLevel) return renderLevel();
-        const usedPct = creditLimit > 0 ? Math.min(100, ((client?.currentDebt || 0) / creditLimit) * 100) : 0;
         const ownBiz = client?.businessId;
         const stores = [...portalBusinesses]
             .sort((a: any, b: any) => Number(b.businessId === ownBiz || b.business?.id === ownBiz) - Number(a.businessId === ownBiz || a.business?.id === ownBiz))
@@ -2324,18 +2323,56 @@ $1color: #8E3418 !important;
                 </div>
 
                 <div aria-hidden className="grow min-h-4" />
-                {/* Credit card */}
-                <div ref={creditCardRef} className="relative rounded-[26px] p-5 text-white overflow-hidden shadow-[0_18px_36px_-14px_rgba(40,20,10,0.55)]" style={{ background: "radial-gradient(90% 120% at 100% 0%, rgba(242,107,58,.55), rgba(242,107,58,0) 55%), linear-gradient(145deg,#2A2622,#151311)" }}>
-                    <button onClick={openLevel} className="absolute right-4 top-4 rounded-full bg-white/12 px-2.5 py-1 text-[12px] font-bold active:scale-95 transition">Nivel {lvl} · {lvlName} ›</button>
-                    <p className="text-[12.5px] font-semibold text-white/60">Crédito disponible</p>
-                    <p className="mt-0.5 text-[42px] leading-none" style={{ fontWeight: 800, letterSpacing: "-0.04em" }}>{money(availableCredit)}</p>
-                    <div className="mt-4 mb-2.5 h-2 rounded-full bg-white/15 overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${100 - usedPct}%`, background: "linear-gradient(90deg,#F6A27F,#F26B3A)" }} />
+                {/* Credit available: lacquered white like Nubi, a split bar (what you have / what you used)
+                    and a level button that looks pressable */}
+                <div
+                    ref={creditCardRef}
+                    className="relative overflow-hidden rounded-[26px] p-5 text-zinc-900"
+                    style={{
+                        background: "linear-gradient(160deg, #ffffff 0%, #fafbfc 42%, #eceff3 100%)",
+                        boxShadow: "0 18px 40px -16px rgba(90,30,5,0.45), inset 0 1px 0 #ffffff, inset 0 -12px 26px rgba(140,150,170,0.18), inset 0 0 0 1px rgba(255,255,255,0.7)",
+                    }}
+                >
+                    <style>{`@keyframes sc-glint { 0%, 78% { transform: translateX(-160%) skewX(-18deg); } 100% { transform: translateX(420%) skewX(-18deg); } }`}</style>
+                    {/* the lacquer's reflections: a soft band on top, a small bright spot and a passing glint */}
+                    <span aria-hidden className="pointer-events-none absolute left-5 right-28 top-1.5 h-9 rounded-full" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0))", filter: "blur(1px)" }} />
+                    <span aria-hidden className="pointer-events-none absolute right-[34%] top-3 h-2 w-7 rounded-full bg-white" style={{ filter: "blur(1.5px)" }} />
+                    <span aria-hidden className="pointer-events-none absolute -top-4 bottom-[-16px] left-0 w-16" style={{ background: "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.75), rgba(255,255,255,0))", animation: "sc-glint 7s ease-in-out 2s infinite" }} />
+
+                    <div className="relative flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-zinc-500">Crédito disponible</p>
+                            <p className="mt-1 text-[44px] leading-none text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.045em" }}>{money(availableCredit)}</p>
+                        </div>
+                        <button
+                            onClick={openLevel}
+                            aria-label={`Ver mi nivel: nivel ${lvl}, ${lvlName}`}
+                            className="mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-amber-200 bg-amber-50 py-1.5 pl-1.5 pr-1.5 text-[13px] font-bold text-amber-700 shadow-[0_2px_0_var(--color-amber-200)] transition active:translate-y-[2px] active:shadow-none"
+                        >
+                            <span className="grid size-[22px] place-items-center rounded-full text-[11.5px] text-white" style={{ fontWeight: 800, background: "radial-gradient(circle at 35% 30%, #F6A27F, #E8541F)", boxShadow: "inset 0 -2px 3px rgba(0,0,0,.18), inset 0 2px 3px rgba(255,255,255,.5)" }}>{lvl}</span>
+                            {lvlName}
+                            <span className="grid size-[18px] place-items-center rounded-full bg-primary text-white"><IconChevronRight size={12} stroke={3} /></span>
+                        </button>
                     </div>
-                    <div className="flex justify-between text-[13px] text-white/75">
-                        <span>Usado <b className="text-white">{money(client?.currentDebt || 0)}</b></span>
-                        <span>Límite <b className="text-white">{money(creditLimit)}</b></span>
-                    </div>
+
+                    {/* split bar: available (orange) and used (striped grey) */}
+                    {(() => {
+                        const availPct = creditLimit > 0 ? Math.max(0, Math.min(100, (availableCredit / creditLimit) * 100)) : 0;
+                        const used = client?.currentDebt || 0;
+                        return (
+                            <>
+                                <div className="relative mt-4 mb-2.5 flex h-3.5 gap-[3px]">
+                                    {availPct > 0 && <div className="h-full rounded-full" style={{ width: `${availPct}%`, background: "linear-gradient(90deg,#F6A27F,#F26B3A)", boxShadow: "inset 0 1px 0 rgba(255,255,255,.45)" }} />}
+                                    {availPct < 100 && <div className="h-full flex-1 rounded-full" style={{ background: "repeating-linear-gradient(135deg,#D3CEC4 0 4px,#E5E1D9 4px 8px)" }} />}
+                                </div>
+                                <div className="relative flex items-center gap-2.5 text-[12.5px] text-zinc-700">
+                                    <span className="whitespace-nowrap"><i className="mr-1 inline-block size-2 rounded-full bg-primary align-[0px]" />Disponible <b className="text-zinc-900">{Math.round(availPct)}%</b></span>
+                                    <span className="whitespace-nowrap"><i className="mr-1 inline-block size-2 rounded-full bg-zinc-300 align-[0px]" />Usado <b className="text-zinc-900">{money(used)}</b></span>
+                                    <span className="ml-auto whitespace-nowrap text-zinc-500">Límite <b className="text-zinc-900">{Number.isInteger(creditLimit) ? `$${creditLimit}` : money(creditLimit)}</b></span>
+                                </div>
+                            </>
+                        );
+                    })()}
                 </div>
 
                 <div aria-hidden className="grow-[0.6] min-h-3" />
