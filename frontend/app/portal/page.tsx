@@ -79,7 +79,9 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
     const [settings, setSettings] = useState<any>(null);
     const [mySubmissions, setMySubmissions] = useState<any[]>([]);
     const [selectedDebtForPayment, setSelectedDebtForPayment] = useState<any | null>(null);
-    const [paymentStep, setPaymentStep] = useState<"details" | "pago_movil" | "binance" | "zinli" | "paypal" | "upload" | "pending">("details");
+    const [paymentStep, setPaymentStep] = useState<"details" | "methods" | "pago_movil" | "binance" | "zinli" | "paypal" | "upload" | "pending">("details");
+    // Where a payment started, to come back there (home, or the installment plan of a purchase)
+    const [payFrom, setPayFrom] = useState<any | null>(null);
     const [paymentAmount, setPaymentAmount] = useState<string>(""); // always USD
     const [paymentAmountBs, setPaymentAmountBs] = useState<string>(""); // only for pago_movil (Bs)
     const [selectedInstallmentOption, setSelectedInstallmentOption] = useState<number | "custom" | null>(null);
@@ -1473,6 +1475,10 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
         return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
     }, [view, mySubmissions, loadPortalData]);
 
+    // Nothing to show on the payments tab anymore: back to the home
+    useEffect(() => {
+        if (activeTab === "payments" && !selectedDebtForPayment && !planDebt && !showHistory) setActiveTab("home");
+    }, [activeTab, selectedDebtForPayment, planDebt, showHistory]);
     const levelInfo = getClientLevel(client?.creditScore || 50);
 
     const availableCredit = Math.max(0, (client?.creditLimit || 0) - (client?.currentDebt || 0));
@@ -2204,21 +2210,44 @@ $1color: #8E3418 !important;
     const isOverdue = (d: any) => pendingInstsOf(d).some((i: any) => daysUntil(i.dueDate) < 0);
 
     // Pay: straight to the existing payment flow of that purchase, with the next installment chosen
-    const openPay = (debt: any, custom = false) => {
+    // The business's enabled methods (straight to the method: the amount was chosen before)
+    const payMethods = [
+        settings?.pagoMovilEnabled && { key: "pago_movil" as const, label: "Pago móvil", desc: "Transferencia en bolívares", icon: <IconDeviceMobile size={22} /> },
+        settings?.binanceEnabled && { key: "binance" as const, label: "Binance Pay", desc: "USDT", icon: <IconCoins size={22} /> },
+        settings?.zinliEnabled && { key: "zinli" as const, label: "Zinli", desc: "Dólares", icon: <IconWallet size={22} /> },
+        settings?.paypalEnabled && { key: "paypal" as const, label: "PayPal", desc: "Dólares", icon: <IconBrandPaypal size={22} /> },
+    ].filter(Boolean) as { key: "pago_movil" | "binance" | "zinli" | "paypal"; label: string; desc: string; icon: React.ReactNode }[];
+    const goMethod = (key: "pago_movil" | "binance" | "zinli" | "paypal", amountUsd: string) => {
+        if (key === "pago_movil") {
+            const bs = (parseFloat(amountUsd) || 0) * (settings?.exchangeRate || 1);
+            setPaymentAmountBs(bs > 0 ? bs.toFixed(2) : "");
+        }
+        setPaymentStep(key);
+    };
+    const enterPay = (debt: any, option: number | "custom", amountUsd: string) => {
+        if (!payMethods.length) { toast.error("El comercio aún no tiene métodos de pago configurados"); return; }
+        setPayFrom(planDebt);
         setActiveTab("payments");
         setPlanDebt(null);
         setShowHistory(false);
+        setShowLevel(false);
+        setPaySheet(null);
         setSelectedDebtForPayment(debt);
-        setPaymentStep("details");
         setReceiptFile(null);
         setReceiptPreview(null);
-        if (custom) {
-            setSelectedInstallmentOption("custom");
-            setPaymentAmount("");
-        } else {
-            setSelectedInstallmentOption(1);
-            setPaymentAmount(instLeft(pendingInstsOf(debt)[0]).toFixed(2));
-        }
+        setSelectedInstallmentOption(option);
+        setPaymentAmount(amountUsd);
+        if (payMethods.length === 1) goMethod(payMethods[0].key, amountUsd);
+        else setPaymentStep("methods");
+        window.scrollTo({ top: 0 });
+    };
+    const openPay = (debt: any, custom = false) =>
+        custom ? enterPay(debt, "custom", "") : enterPay(debt, 1, instLeft(pendingInstsOf(debt)[0]).toFixed(2));
+    const leavePay = () => {
+        setSelectedDebtForPayment(null);
+        setPaymentStep("details");
+        if (payFrom) { setActiveTab("payments"); setPlanDebt(payFrom); } else setActiveTab("home");
+        setPayFrom(null);
         window.scrollTo({ top: 0 });
     };
     // ── Grouping the installments: what's overdue, and everything due on the next day ──
@@ -2258,19 +2287,8 @@ $1color: #8E3418 !important;
             installments: sorted.map((i: any, k: number) => ({ id: i.id, number: k + 1, dueDate: i.dueDate, amount: i.remaining, paidAmount: 0, remaining: i.remaining, status: "PENDING" })),
             isGroup: true,
         };
-        setPaySheet(null);
-        setActiveTab("payments");
-        setPlanDebt(null);
-        setShowHistory(false);
-        setShowLevel(false);
-        setSelectedDebtForPayment(group);
-        setPaymentStep("details");
-        setReceiptFile(null);
-        setReceiptPreview(null);
-        if (mode === "all") { setSelectedInstallmentOption(sorted.length); setPaymentAmount(total.toFixed(2)); }
-        else if (mode === "other") { setSelectedInstallmentOption("custom"); setPaymentAmount(""); }
-        else { setSelectedInstallmentOption(null); setPaymentAmount(""); }
-        window.scrollTo({ top: 0 });
+        if (mode === "all") enterPay(group, sorted.length, total.toFixed(2));
+        else enterPay(group, "custom", "");
     };
     /** "Pagar": one installment goes straight to pay; several open the sheet */
     const askPay = (insts: any[], title: string) => {
@@ -2657,11 +2675,11 @@ $1color: #8E3418 !important;
                 <div aria-hidden className="h-6" />
                 <div className="mb-2.5 flex items-baseline justify-between">
                     <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Tus compras a crédito</h3>
-                    {pendingDebtsList.length > 0 && <button onClick={() => goTab("payments")} className="text-[13px] font-bold text-amber-600">Ver todas</button>}
+
                 </div>
                 {pendingDebtsList.length ? (
                     <div className="-mb-3 overflow-hidden rounded-[22px] border border-zinc-200 bg-white">
-                        {pendingDebtsList.slice(0, 3).map((d: any, i: number) => {
+                        {pendingDebtsList.map((d: any, i: number) => {
                             const late = isOverdue(d);
                             return (
                                 <button key={d.loanId} onClick={() => { goTab("payments"); setPlanPick(1); setPlanDebt(d); }} className={`flex w-full items-center gap-3 p-3.5 text-left active:bg-zinc-50 transition ${i ? "border-t border-zinc-100" : ""}`}>
@@ -2833,9 +2851,7 @@ $1color: #8E3418 !important;
         const pend = pendingInstsOf(debt);
         const k = Math.max(1, Math.min(n, pend.length));
         const sum = pend.slice(0, k).reduce((a: number, i: any) => a + instLeft(i), 0);
-        openPay(debt);
-        setSelectedInstallmentOption(k);
-        setPaymentAmount(sum.toFixed(2));
+        enterPay(debt, k, sum.toFixed(2));
     };
     const renderPlan = (debt: any) => {
         const insts = allInstsOf(debt);
@@ -2934,6 +2950,7 @@ $1color: #8E3418 !important;
     const renderPayments = () => {
         if (showHistory) return renderHistory();
         if (planDebt) return renderPlan(debts.find((d: any) => d.loanId === planDebt.loanId) || planDebt);
+        return null;
         const late = pendingDebtsList.filter((d: any) => isOverdue(d));
         const ok = pendingDebtsList.filter((d: any) => !isOverdue(d));
         const owed = pendingDebtsList.reduce((a: number, d: any) => a + (Number(d.remainingBalance) || 0), 0);
@@ -3255,16 +3272,14 @@ $1color: #8E3418 !important;
                             {/* Go Back Header */}
                             <div className="flex items-center justify-between pb-2">
                                 <button
-                                    onClick={() => {
-                                        setSelectedDebtForPayment(null);
-                                        setPaymentStep("details");
-                                    }}
+                                    onClick={leavePay}
                                     className="text-xs text-amber-800 hover:text-amber-800 font-extrabold h-8 px-3 rounded-full bg-amber-50 hover:bg-amber-100/60 border border-amber-200/50 flex items-center gap-1 transition-all duration-300"
                                 >
                                     ← Volver
                                 </button>
                                 <span className="text-xs font-bold text-white/90">
                                     {paymentStep === "details" && "Detalles de la compra"}
+                                    {paymentStep === "methods" && "Método de pago"}
                                     {paymentStep === "pago_movil" && "Pago Móvil"}
                                     {paymentStep === "binance" && "Binance Pay"}
                                     {paymentStep === "zinli" && "Zinli"}
@@ -3273,6 +3288,27 @@ $1color: #8E3418 !important;
                                     {paymentStep === "pending" && "Estado de Abono"}
                                 </span>
                             </div>
+
+                            {paymentStep === "methods" && (
+                                <div className="space-y-3 animate-in fade-in duration-300">
+                                    <div className="rounded-[24px] bg-white p-4 shadow-[0_14px_34px_-18px_rgba(90,40,10,0.35)]">
+                                        <p className="text-[12.5px] font-semibold text-zinc-600">Vas a pagar</p>
+                                        <p className="text-[30px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>{paymentAmount ? money(parseFloat(paymentAmount)) : "Otro monto"}</p>
+                                        <p className="text-[12.5px] text-zinc-600">{selectedDebtForPayment.description || storeOf(selectedDebtForPayment)}</p>
+                                    </div>
+                                    <p className="px-1 pt-2 text-[14px] font-bold text-zinc-800">¿Cómo vas a pagar?</p>
+                                    {payMethods.map((m) => (
+                                        <button key={m.key} onClick={() => goMethod(m.key, paymentAmount)} className="flex w-full items-center gap-3 rounded-[20px] bg-white p-4 text-left shadow-[0_10px_24px_-16px_rgba(90,40,10,0.35)] active:scale-[0.99] transition">
+                                            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-amber-100 text-amber-700">{m.icon}</span>
+                                            <span className="min-w-0">
+                                                <span className="block text-[15px] font-bold text-zinc-900">{m.label}</span>
+                                                <span className="block text-[12.5px] text-zinc-600">{m.desc}</span>
+                                            </span>
+                                            <IconChevronRight size={18} className="ml-auto text-zinc-400" />
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
 
                             {/* STEP 1: DETAILS */}
                             {paymentStep === "details" && (
