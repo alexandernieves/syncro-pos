@@ -2314,7 +2314,7 @@ $1color: #8E3418 !important;
         return (
             // Fills the screen: the gaps between blocks share the free height evenly (with limits), and
             // "Para ti" sits at the bottom so the PIN button floats over the cards, like in the design.
-            <div className="flex flex-col animate-in fade-in duration-500" style={{ minHeight: "calc(100dvh - 166px - env(safe-area-inset-top))" }}>
+            <div className="flex flex-col animate-in fade-in duration-500" style={{ minHeight: "calc(100dvh - 136px - env(safe-area-inset-top))" }}>
                 {levelUp && renderLevelUp()}
                 {/* Hello, with Nubi (it glances at the credit card now and then) */}
                 <div className="relative text-white pr-24">
@@ -2323,7 +2323,7 @@ $1color: #8E3418 !important;
                     <NubiFace lookAt={creditCardRef} className="!absolute -right-1 -top-4 h-[84px] w-[84px]" />
                 </div>
 
-                <div aria-hidden className="flex-1 min-h-4 max-h-9" />
+                <div aria-hidden className="grow min-h-4" />
                 {/* Credit card */}
                 <div ref={creditCardRef} className="relative rounded-[26px] p-5 text-white overflow-hidden shadow-[0_18px_36px_-14px_rgba(40,20,10,0.55)]" style={{ background: "radial-gradient(90% 120% at 100% 0%, rgba(242,107,58,.55), rgba(242,107,58,0) 55%), linear-gradient(145deg,#2A2622,#151311)" }}>
                     <button onClick={openLevel} className="absolute right-4 top-4 rounded-full bg-white/12 px-2.5 py-1 text-[12px] font-bold active:scale-95 transition">Nivel {lvl} · {lvlName} ›</button>
@@ -2338,7 +2338,7 @@ $1color: #8E3418 !important;
                     </div>
                 </div>
 
-                <div aria-hidden className="flex-1 min-h-3 max-h-6" />
+                <div aria-hidden className="grow-[0.6] min-h-3" />
                 {/* Next payment */}
                 {nextInst ? (
                     <div className="flex items-center gap-3 rounded-[20px] border border-zinc-200 bg-white p-3.5">
@@ -2362,7 +2362,7 @@ $1color: #8E3418 !important;
                 )}
 
                 {subBanner() && <div className="mt-3">{subBanner()}</div>}
-                <div aria-hidden className="flex-1 min-h-5 max-h-11" />
+                <div aria-hidden className="grow min-h-5" />
                 {/* Quick actions */}
                 <div className="grid grid-cols-4 gap-1.5">
                     {[
@@ -2381,7 +2381,7 @@ $1color: #8E3418 !important;
                 {/* For you */}
                 {ads.length > 0 && (
                     <>
-                        <div aria-hidden className="flex-1 min-h-5" />
+                        <div aria-hidden className="grow min-h-5" />
                         <div className="mb-3 flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Para ti</h3>
