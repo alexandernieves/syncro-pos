@@ -32,6 +32,7 @@ import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { NubiSplash, syncThemeColor } from "@/components/portal/nubi-splash";
 import { NubiFace, type NubiMood, type NubiRoll } from "@/components/portal/nubi-face";
 import { NubiPortal, type PortalFx } from "@/components/portal/nubi-portal";
+import { NubiPodium } from "@/components/portal/nubi-podium";
 
 /** Starts "Nubi's portal" (the screen between the login and the account) from inside the app. */
 type PortalControl = { start: (fx: PortalFx, onMid?: () => void) => void; ready: () => void };
@@ -415,6 +416,10 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
     const [planDebt, setPlanDebt] = useState<any | null>(null);
     const [showHistory, setShowHistory] = useState(false);
     const [adIndex, setAdIndex] = useState(0);
+    // Syncro Credit level (by money paid on time), the "Mi nivel" view and the level-up celebration
+    const [scLevel, setScLevel] = useState<any | null>(null);
+    const [showLevel, setShowLevel] = useState(false);
+    const [levelUp, setLevelUp] = useState<any | null>(null);
     // Receipts already decided that the client closed (so "¡Pago aprobado!" shows once)
     const [seenSubs, setSeenSubs] = useState<string[]>(() => {
         try { return JSON.parse(localStorage.getItem("sc-seen-subs") || "[]"); } catch { return []; }
@@ -558,6 +563,22 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
             const submissionsRes = await fetch(`${API}/clients/portal/payments/submissions`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+            const levelRes = await fetch(`${API}/clients/portal/level`, {
+                headers: { Authorization: `Bearer ${token}` }
+            }).catch(() => null);
+            if (levelRes?.ok) {
+                const lv = await levelRes.json();
+                setScLevel(lv);
+                // celebrate once when the client really went up (3 → 2 → 1)
+                try {
+                    const sub = JSON.parse(atob(token.split(".")[1])).sub;
+                    const key = `sc-level-${sub}`;
+                    const seen = Number(localStorage.getItem(key) || 0);
+                    if (seen && lv.level < seen) setLevelUp(lv);
+                    localStorage.setItem(key, String(lv.level));
+                } catch { /* private mode */ }
+            }
+
             if (submissionsRes.ok) {
                 setMySubmissions(await submissionsRes.json());
             }
@@ -2157,11 +2178,15 @@ $1color: #8E3418 !important;
         setActiveTab(tab);
         setPlanDebt(null);
         setShowHistory(false);
+        setShowLevel(false);
         setSelectedDebtForPayment(null);
         setPaymentStep("details");
         setSelectedInstallmentOption(null);
         window.scrollTo({ top: 0 });
     };
+    const lvl = (scLevel?.level ?? 3) as 1 | 2 | 3;
+    const lvlName: string = scLevel?.name ?? "Chispa";
+    const openLevel = () => { setShowLevel(true); window.scrollTo({ top: 0 }); };
 
     /** A tiny row of segments: paid (green), next (orange), the rest (grey) */
     const Segments = ({ debt }: { debt: any }) => {
@@ -2188,8 +2213,70 @@ $1color: #8E3418 !important;
         </div>
     );
 
+    // ── Mi nivel ──
+    const LEVEL_INFO = [
+        { level: 3, name: "Chispa", from: 0, desc: "Tu comienzo en Syncro Credit" },
+        { level: 2, name: "Cometa", from: 500, desc: "Pagas a tiempo y tomas impulso" },
+        { level: 1, name: "Galaxia", from: 1500, desc: "Lo máximo: cliente estrella" },
+    ];
+    const renderLevel = () => {
+        const paid = Number(scLevel?.paidOnTime || 0);
+        const next = scLevel?.next;
+        const base = LEVEL_INFO.find((l) => l.level === lvl)?.from ?? 0;
+        const pct = next ? Math.min(100, Math.max(0, ((paid - base) / Math.max(1, next.at - base)) * 100)) : 100;
+        return (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300 pb-6">
+                <BackBar title="Mi nivel" subtitle={`Nivel ${lvl} · ${lvlName}`} onBack={() => setShowLevel(false)} />
+                <NubiPodium level={lvl} className="-mx-6 mt-2 h-[250px]" />
+                <div className="mt-2 rounded-[24px] bg-white p-5 shadow-[0_16px_30px_-18px_rgba(90,40,10,0.45)]">
+                    <p className="text-[12.5px] font-semibold text-zinc-500">Pagado a tiempo</p>
+                    <p className="text-[34px] leading-tight text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>{money(paid)}</p>
+                    <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-zinc-100">
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "linear-gradient(90deg,#F6A27F,#F26B3A)" }} />
+                    </div>
+                    <p className="mt-2 text-[13px] text-zinc-600">
+                        {next ? <>Te faltan <b className="text-zinc-900">{money(next.missing)}</b> pagados a tiempo para subir a <b className="text-amber-600">{next.name}</b>.</> : <>¡Llegaste a <b className="text-amber-600">Galaxia</b>, el nivel más alto!</>}
+                    </p>
+                </div>
+                <h3 className="mt-6 mb-2 px-1 text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Los niveles</h3>
+                <div className="overflow-hidden rounded-[22px] border border-zinc-200 bg-white">
+                    {LEVEL_INFO.map((l, i) => {
+                        const here = l.level === lvl;
+                        const done = l.level > lvl;
+                        return (
+                            <div key={l.level} className={`flex items-center gap-3 p-3.5 ${i ? "border-t border-zinc-100" : ""} ${here ? "bg-amber-50" : ""}`}>
+                                <div className={`grid size-11 shrink-0 place-items-center rounded-[14px] text-lg ${here ? "bg-amber-400 text-white" : done ? "bg-emerald-50 text-emerald-600" : "bg-zinc-100 text-zinc-500"}`} style={{ fontWeight: 800 }}>{l.level}</div>
+                                <div className="min-w-0">
+                                    <p className="text-[15px] font-bold text-zinc-900">{l.name}</p>
+                                    <p className="text-[12.5px] text-zinc-500">{l.from ? `Desde ${money(l.from)} pagados a tiempo` : l.desc}</p>
+                                </div>
+                                <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${here ? "bg-amber-400 text-white" : done ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-500"}`}>
+                                    {here ? "Estás aquí" : done ? "Superado" : `Faltan ${money(Math.max(0, l.from - paid))}`}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+                <p className="mt-3 px-1 text-[12px] text-zinc-500">Cuentan las cuotas que pagas hasta el día de su vencimiento. Mientras más alto tu nivel, más confianza para tu crédito.</p>
+            </div>
+        );
+    };
+    const renderLevelUp = () => (
+        <div className="fixed inset-0 z-[250] grid place-items-center bg-black/45 p-6 animate-in fade-in duration-300" onClick={() => setLevelUp(null)}>
+            <div className="w-full max-w-sm overflow-hidden rounded-[28px] bg-white px-6 pb-6 pt-2 text-center animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+                <NubiPodium level={levelUp.level} bubbles={false} className="-mx-6 h-[190px]" />
+                <p className="text-[13px] font-bold text-amber-600">¡Subiste de nivel!</p>
+                <h2 className="mt-1 text-[28px] leading-tight text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>Nivel {levelUp.level} · {levelUp.name}</h2>
+                <p className="mt-2 text-[14px] text-zinc-600">Pagaste a tiempo {money(levelUp.paidOnTime)}. ¡Sigue así!</p>
+                <button onClick={() => { setLevelUp(null); openLevel(); }} className="mt-5 w-full rounded-full bg-primary py-3.5 text-[15px] font-bold text-white active:scale-[0.98] transition">Ver mi nivel</button>
+                <button onClick={() => setLevelUp(null)} className="mt-2 w-full py-2 text-sm font-semibold text-zinc-500">Cerrar</button>
+            </div>
+        </div>
+    );
+
     // ── Inicio ──
     const renderHome = () => {
+        if (showLevel) return renderLevel();
         const usedPct = creditLimit > 0 ? Math.min(100, ((client?.currentDebt || 0) / creditLimit) * 100) : 0;
         const ownBiz = client?.businessId;
         const stores = [...portalBusinesses]
@@ -2205,11 +2292,12 @@ $1color: #8E3418 !important;
                 <IconShoppingBag size={120} stroke={1.1} className="absolute -right-2 -bottom-3 text-white/15" />
             </div>,
         ));
-        if (levelInfo.level < 4) ads.push(
+        ads.push(
             <div key="lvl" className="sc-ad" style={{ background: "linear-gradient(135deg,#F26B3A,#F6A27F)" }}>
-                <span className="sc-ad-tag">Tu nivel · {levelInfo.name}</span>
-                <h4>Sube a Nivel {levelInfo.level + 1}</h4>
-                <p>Paga tus cuotas a tiempo y tu límite puede crecer</p>
+                <span className="sc-ad-tag">Tu nivel · {lvlName}</span>
+                <h4>{scLevel?.next ? `Sube a ${scLevel.next.name}` : "¡Estás en la cima!"}</h4>
+                <p>{scLevel?.next ? `Te faltan ${money(scLevel.next.missing)} pagados a tiempo` : "Galaxia: lo máximo en Syncro Credit"}</p>
+                <button className="sc-ad-go" onClick={openLevel}>Ver mi nivel →</button>
                 <img src="/nubi/nubi-happy.webp" alt="" className="absolute right-3 bottom-3 w-[74px] drop-shadow-[0_10px_12px_rgba(90,30,5,0.35)]" />
             </div>,
         );
@@ -2225,17 +2313,18 @@ $1color: #8E3418 !important;
             // Fills the screen: the gaps between blocks share the free height evenly (with limits), and
             // "Para ti" sits at the bottom so the PIN button floats over the cards, like in the design.
             <div className="flex flex-col animate-in fade-in duration-500" style={{ minHeight: "calc(100dvh - 166px - env(safe-area-inset-top))" }}>
-                {/* Hello, with Nubi */}
-                <div className="relative text-white pr-24">
+                {levelUp && renderLevelUp()}
+                {/* Hello, and Nubi on the level podium (tap Nubi and it plays) */}
+                <div className="relative text-white">
                     <h1 className="text-[30px] leading-tight" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>Hola{firstName ? `, ${firstName}` : ""}</h1>
                     <p className="mt-1 text-[15px] font-medium text-white/90">Tienes <b className="font-bold">{money(availableCredit)}</b> para comprar hoy</p>
-                    <NubiFace className="!absolute -right-1 -top-4 h-[84px] w-[84px]" />
                 </div>
+                <NubiPodium level={lvl} className="-mx-6 mt-1 h-[150px]" />
 
                 <div aria-hidden className="flex-1 min-h-4 max-h-9" />
                 {/* Credit card */}
                 <div className="relative rounded-[26px] p-5 text-white overflow-hidden shadow-[0_18px_36px_-14px_rgba(40,20,10,0.55)]" style={{ background: "radial-gradient(90% 120% at 100% 0%, rgba(242,107,58,.55), rgba(242,107,58,0) 55%), linear-gradient(145deg,#2A2622,#151311)" }}>
-                    <span className="absolute right-4 top-4 rounded-full bg-white/12 px-2.5 py-1 text-[12px] font-bold">Nivel {levelInfo.level} · {levelInfo.name}</span>
+                    <button onClick={openLevel} className="absolute right-4 top-4 rounded-full bg-white/12 px-2.5 py-1 text-[12px] font-bold active:scale-95 transition">Nivel {lvl} · {lvlName} ›</button>
                     <p className="text-[12.5px] font-semibold text-white/60">Crédito disponible</p>
                     <p className="mt-0.5 text-[42px] leading-none" style={{ fontWeight: 800, letterSpacing: "-0.04em" }}>{money(availableCredit)}</p>
                     <div className="mt-4 mb-2.5 h-2 rounded-full bg-white/15 overflow-hidden">
@@ -4649,7 +4738,7 @@ $1color: #8E3418 !important;
                             setTxSearchQuery("");
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
-                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false);
+                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false);
                         }} 
                         className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "home" && !requestLoanView ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
@@ -4668,7 +4757,7 @@ $1color: #8E3418 !important;
                             setTxSearchQuery("");
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
-                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false);
+                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false);
                         }} 
                         className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "payments" ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
@@ -4690,7 +4779,7 @@ $1color: #8E3418 !important;
                                 setTxSearchQuery("");
                                 setOnlyInStock(true);
                                 setSelectedProductForDetail(null);
-                                setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false);
+                                setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false);
                             }} 
                             className={`absolute -top-[34px] w-[72px] h-[72px] rounded-full flex flex-col items-center justify-center transition-all duration-300 transform active:scale-95 shadow-md z-10 ${
                                 activeTab === "auth-purchase" 
@@ -4714,7 +4803,7 @@ $1color: #8E3418 !important;
                             setTxSearchQuery("");
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
-                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false);
+                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false);
                         }} 
                         className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "rewards" ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
@@ -4733,7 +4822,7 @@ $1color: #8E3418 !important;
                             setTxSearchQuery("");
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
-                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false);
+                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false);
                         }} 
                         className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "profile" ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >

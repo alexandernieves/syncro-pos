@@ -16,6 +16,13 @@ export class ClientsController {
     return this.clientsService.findOne(clientId, businessId);
   }
 
+  /** Syncro Credit level (3 Chispa → 2 Cometa → 1 Galaxia) by the money paid on time. */
+  @Get('portal/level')
+  async getPortalLevel(@Request() req: any) {
+    const clientId = req.user.id || req.user.sub;
+    return this.clientsService.getPortalLevel(clientId);
+  }
+
   @Patch('portal/profile')
   async updatePortalProfile(@Body() body: any, @Request() req: any) {
     const clientId = req.user.id || req.user.sub;

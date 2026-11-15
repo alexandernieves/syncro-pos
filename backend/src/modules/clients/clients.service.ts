@@ -552,6 +552,36 @@ export class ClientsService {
    * linked to the original sale via creditTransactions.
    * Also synthesizes virtual loan records for legacy credit transactions lacking real Loan entries.
    */
+  /**
+   * Syncro Credit level of a client, by the money paid on time: the installments paid on or before
+   * the day they were due. A client starts at 3 · Chispa; $500 → 2 · Cometa; $1500 → 1 · Galaxia.
+   * Only this client's own loans count (a client belongs to one business: golden rule).
+   */
+  async getPortalLevel(clientId: string) {
+    const LEVELS = [
+      { level: 3, name: 'Chispa', from: 0 },
+      { level: 2, name: 'Cometa', from: 500 },
+      { level: 1, name: 'Galaxia', from: 1500 },
+    ];
+    const paid = await this.prisma.loanInstallment.findMany({
+      where: { status: 'PAID', paidAt: { not: null }, loan: { clientId } },
+      select: { amount: true, paidAmount: true, paidAt: true, dueDate: true },
+    });
+    const endOfDay = (d: Date) => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x.getTime(); };
+    const paidOnTime = Math.round(paid
+      .filter((i) => i.paidAt && i.paidAt.getTime() <= endOfDay(i.dueDate))
+      .reduce((sum, i) => sum + (i.paidAmount || i.amount || 0), 0) * 100) / 100;
+    const current = [...LEVELS].reverse().find((l) => paidOnTime >= l.from) ?? LEVELS[0];
+    const next = LEVELS.find((l) => l.level === current.level - 1) ?? null;
+    return {
+      level: current.level,
+      name: current.name,
+      paidOnTime,
+      next: next ? { level: next.level, name: next.name, at: next.from, missing: Math.max(0, Math.round((next.from - paidOnTime) * 100) / 100) } : null,
+      levels: LEVELS,
+    };
+  }
+
   async getPortalDebts(clientId: string) {
     const client = await this.prisma.client.findUnique({
       where: { id: clientId },
