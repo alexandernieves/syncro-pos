@@ -1,13 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { IconCash, IconCheck, IconPencil, IconPlus, IconRefresh, IconTrash, IconX } from "@tabler/icons-react";
+import {
+  IconAlertTriangle, IconCash, IconCheck, IconChevronRight, IconCoins, IconPencil, IconPlus, IconReceipt2,
+  IconRefresh, IconTrash, IconTrendingUp, IconX,
+} from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 import { useMyModules } from "@/lib/modules";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { StatCard, StatGrid } from "@/components/stat-card";
+import { GymPage as Page, GymPageHeader as PageHeader, MemberAvatar } from "@/components/gym/gym-ui";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -138,7 +146,7 @@ export default function PrestamosPage() {
   if (mods && !enabled) {
     return (
       <div className="flex flex-col items-center gap-3 p-16 text-center">
-        <IconCash size={40} className="text-muted-foreground" />
+        <IconCash size={40} className="text-primary" />
         <h1 className="text-xl font-bold">Préstamos no está activo</h1>
         <p className="max-w-md text-sm text-muted-foreground">Este módulo permite publicar ofertas de préstamo en Syncro Credit y entregar el efectivo en caja con PIN. Pídelo en la Tienda de módulos.</p>
       </div>
@@ -147,113 +155,181 @@ export default function PrestamosPage() {
 
   const statusChip = (l: Loan) => {
     const map: Record<string, [string, string]> = {
-      REQUESTED: ["Por responder", "bg-amber-100 text-amber-800"],
-      APPROVED_PENDING_DISBURSEMENT: ["Aprobado · espera retirar", "bg-blue-100 text-blue-800"],
-      PENDING: [l.lateAmount > 0 ? "Con atraso" : "Al día", l.lateAmount > 0 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"],
-      PAID: ["Pagado", "bg-green-100 text-green-700"],
-      REJECTED: ["Rechazado", "bg-muted text-muted-foreground"],
-      CANCELLED: ["Cancelado por el cliente", "bg-muted text-muted-foreground"],
+      REQUESTED: ["Por responder", "border-primary/30 bg-primary/10 text-primary"],
+      APPROVED_PENDING_DISBURSEMENT: ["Aprobado · espera retirar", "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300"],
+      PENDING: l.lateAmount > 0
+        ? ["Con atraso", "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300"]
+        : ["Al día", "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"],
+      PAID: ["Pagado", "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"],
+      REJECTED: ["Rechazado", "text-muted-foreground"],
+      CANCELLED: ["Cancelado por el cliente", "text-muted-foreground"],
     };
-    const [t, c] = map[l.status] ?? [l.status, "bg-muted"];
-    return <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", c)}>{t}</span>;
+    const [t, c] = map[l.status] ?? [l.status, ""];
+    return <Badge variant="outline" className={cn("rounded-full", c)}>{t}</Badge>;
   };
 
-  return (
-    <div className="flex flex-col gap-5 p-4 md:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Préstamos</h1>
-          <p className="text-sm text-muted-foreground">Tus ofertas se ven en Syncro Credit. Apruebas la solicitud, el cliente recibe un PIN y retira el efectivo en caja.</p>
-        </div>
-        <Button variant="outline" size="sm" className="gap-2" onClick={load}><IconRefresh size={16} /> Actualizar</Button>
-      </div>
+  const TABS: [Tab, string, number | undefined][] = [
+    ["requests", "Solicitudes", pf?.pendingRequests || undefined],
+    ["active", "Activos", pf?.activeLoans || undefined],
+    ["offers", "Mis ofertas", offers.length || undefined],
+    ["closed", "Cerrados", undefined],
+  ];
 
-      {pf && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-          {[
-            { k: "Prestado", v: money(pf.lent) },
-            { k: "Por cobrar", v: money(pf.toCollect) },
-            { k: "Cobrado", v: money(pf.collected) },
-            { k: "Intereses ganados", v: money(pf.interestEarned), c: "text-green-700" },
-            { k: "Vencido", v: money(pf.late), c: pf.late > 0 ? "text-red-600" : "" },
-          ].map((x) => (
-            <Card key={x.k}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{x.k}</p><p className={cn("text-xl font-bold tabular-nums", x.c)}>{x.v}</p></CardContent></Card>
-          ))}
-        </div>
+  return (
+    <Page>
+      <PageHeader
+        title="Préstamos"
+        description="Tus ofertas se ven en Syncro Credit. Apruebas la solicitud, el cliente recibe un PIN y retira el efectivo en caja."
+        actions={
+          <>
+            <Button variant="outline" className="gap-2" onClick={load}><IconRefresh size={16} /> Actualizar</Button>
+            <Button className="gap-2" onClick={() => { setTab("offers"); setDraft({ ...EMPTY_OFFER }); }}><IconPlus size={16} /> Nueva oferta</Button>
+          </>
+        }
+      />
+
+      {/* Portfolio: same cards as the dashboard */}
+      {!pf ? (
+        <StatGrid>{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[172px] rounded-xl" />)}</StatGrid>
+      ) : (
+        <StatGrid>
+          <StatCard
+            label="Prestado"
+            value={money(pf.lent)}
+            icon={<IconCash size={20} />}
+            title={`${pf.activeLoans} préstamo${pf.activeLoans === 1 ? "" : "s"} en curso`}
+            hint="Efectivo entregado en caja"
+            onClick={() => { setLoans(null); setTab("active"); }}
+          />
+          <StatCard
+            label="Por cobrar"
+            value={money(pf.toCollect)}
+            icon={<IconReceipt2 size={20} />}
+            tone="primary"
+            title={`Cobrado ${money(pf.collected)}`}
+            hint="Capital más intereses pendientes"
+          />
+          <StatCard
+            label="Intereses ganados"
+            value={money(pf.interestEarned)}
+            icon={<IconTrendingUp size={20} />}
+            tone="good"
+            title="Lo que ya cobraste de interés"
+            hint="Se suma con cada cuota pagada"
+          />
+          <StatCard
+            label="Vencido"
+            value={money(pf.late)}
+            icon={<IconAlertTriangle size={20} />}
+            tone={pf.late > 0 ? "bad" : "default"}
+            title={pf.late > 0 ? "Cuotas sin pagar a tiempo" : "Todo al día"}
+            hint={pf.pendingRequests ? `${pf.pendingRequests} solicitud${pf.pendingRequests === 1 ? "" : "es"} por responder` : "Sin solicitudes pendientes"}
+            onClick={pf.late > 0 ? () => { setLoans(null); setTab("active"); } : undefined}
+          />
+        </StatGrid>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {([["requests", `Solicitudes${pf?.pendingRequests ? ` · ${pf.pendingRequests}` : ""}`], ["active", "Préstamos activos"], ["offers", "Mis ofertas"], ["closed", "Cerrados"]] as [Tab, string][]).map(([k, t]) => (
-          <Button key={k} size="sm" variant={tab === k ? "default" : "outline"} onClick={() => { setLoans(null); setTab(k); }}>{t}</Button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={(v) => { setLoans(null); setTab(v as Tab); }}>
+        <TabsList>
+          {TABS.map(([k, t, n]) => (
+            <TabsTrigger key={k} value={k} className="gap-1.5">
+              {t}
+              {n ? <span className="rounded-full bg-primary/15 px-1.5 text-[11px] font-semibold text-primary tabular-nums">{n}</span> : null}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {tab === "offers" ? (
-        <div className="flex flex-col gap-3">
-          <div className="flex justify-end"><Button className="gap-2" onClick={() => setDraft({ ...EMPTY_OFFER })}><IconPlus size={16} /> Nueva oferta</Button></div>
-          {!offers.length ? (
-            <Card><CardContent className="p-10 text-center text-sm text-muted-foreground">Aún no tienes ofertas. Crea una para aparecer en “Pedir préstamo” de Syncro Credit.</CardContent></Card>
+        !offers.length ? (
+          <Card className="items-center gap-3 py-12 text-center">
+            <IconCoins size={36} className="text-primary" />
+            <div>
+              <p className="font-semibold">Aún no tienes ofertas</p>
+              <p className="text-sm text-muted-foreground">Crea una para aparecer en la pestaña Préstamos de Syncro Credit.</p>
+            </div>
+            <Button className="gap-2" onClick={() => setDraft({ ...EMPTY_OFFER })}><IconPlus size={16} /> Nueva oferta</Button>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-3">
+            {offers.map((o) => (
+              <Card key={o.id} className={cn("@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs", !o.active && "opacity-60")}>
+                <CardHeader>
+                  <CardDescription>{o.name}</CardDescription>
+                  <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+                    {money(o.minAmount).replace(".00", "")} – {money(o.maxAmount).replace(".00", "")}
+                  </CardTitle>
+                  <CardAction><Switch checked={o.active} onCheckedChange={(v) => toggleOffer(o, v)} aria-label={o.active ? "Publicada" : "Pausada"} /></CardAction>
+                </CardHeader>
+                <CardFooter className="flex-col items-start gap-1.5 text-sm">
+                  <div className="font-medium text-primary">{o.interestPct}% · {o.installments} cuota{o.installments > 1 ? "s" : ""} {freqText(o.frequencyDays)}</div>
+                  <div className="text-muted-foreground">
+                    {o.minLevel === 4 ? "Para todos los niveles" : `Desde nivel ${o.minLevel} · ${LEVELS[o.minLevel]}`} · {o.requests} solicitud{o.requests === 1 ? "" : "es"}
+                    {!o.active && " · Pausada"}
+                  </div>
+                  <div className="-ml-2 mt-1 flex gap-1">
+                    <Button size="sm" variant="ghost" className="gap-1" onClick={() => setDraft({ id: o.id, name: o.name, minAmount: String(o.minAmount), maxAmount: String(o.maxAmount), interestPct: String(o.interestPct), installments: String(o.installments), frequencyDays: String(o.frequencyDays), minLevel: String(o.minLevel) })}><IconPencil size={15} /> Editar</Button>
+                    <Button size="sm" variant="ghost" className="gap-1 text-destructive hover:text-destructive" onClick={() => removeOffer(o)}><IconTrash size={15} /> Eliminar</Button>
+                  </div>
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+        )
+      ) : (
+        <Card className="gap-0 overflow-hidden py-0 shadow-xs">
+          {loans === null ? (
+            <div className="space-y-3 p-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
+          ) : !loans.length ? (
+            <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
+              <IconCash size={32} className="text-muted-foreground/50" />
+              <p className="font-medium">{tab === "requests" ? "No hay solicitudes por responder" : tab === "active" ? "No tienes préstamos en curso" : "Nada por aquí todavía"}</p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                {tab === "requests" ? "Cuando un cliente pida un préstamo en Syncro Credit aparecerá aquí para que lo apruebes." : "Los préstamos aparecen aquí después de entregarse en caja."}
+              </p>
+            </CardContent>
           ) : (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {offers.map((o) => (
-                <Card key={o.id} className={cn(!o.active && "opacity-60")}>
-                  <CardContent className="flex flex-col gap-2 p-4">
-                    <div className="flex items-center justify-between"><p className="font-semibold">{o.name}</p><Switch checked={o.active} onCheckedChange={(v) => toggleOffer(o, v)} aria-label="Publicada" /></div>
-                    <p className="text-2xl font-bold tabular-nums">{money(o.minAmount).replace(".00", "")} – {money(o.maxAmount).replace(".00", "")}</p>
-                    <p className="text-sm text-muted-foreground">{o.interestPct}% · {o.installments} cuota{o.installments > 1 ? "s" : ""} {freqText(o.frequencyDays)}</p>
-                    <p className="text-xs text-muted-foreground">{o.minLevel === 4 ? "Para todos los niveles" : `Desde nivel ${o.minLevel} · ${LEVELS[o.minLevel]}`} · {o.requests} solicitud{o.requests === 1 ? "" : "es"}</p>
-                    <div className="mt-1 flex gap-1">
-                      <Button size="sm" variant="ghost" className="gap-1" onClick={() => setDraft({ id: o.id, name: o.name, minAmount: String(o.minAmount), maxAmount: String(o.maxAmount), interestPct: String(o.interestPct), installments: String(o.installments), frequencyDays: String(o.frequencyDays), minLevel: String(o.minLevel) })}><IconPencil size={15} /> Editar</Button>
-                      <Button size="sm" variant="ghost" className="gap-1 text-destructive" onClick={() => removeOffer(o)}><IconTrash size={15} /> Eliminar</Button>
-                    </div>
-                  </CardContent>
-                </Card>
+            <div className="divide-y">
+              {loans.map((l) => (
+                <div key={l.id} className="flex flex-wrap items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40">
+                  <button onClick={() => setOpen(l)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                    <MemberAvatar name={l.client.name} size={38} />
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">{l.client.name} <span className="font-normal text-muted-foreground">· {l.client.documentId}</span></span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        Nivel {l.level} · {LEVELS[l.level]} · {l.offerName ?? "Préstamo"} · {day(l.createdAt)}
+                        {l.status === "REQUESTED" && ` · límite disponible ${money(l.available)}`}
+                      </span>
+                    </span>
+                  </button>
+                  <div className="text-right">
+                    <p className="font-semibold tabular-nums">{money(l.amount)}</p>
+                    <p className="text-xs text-muted-foreground tabular-nums">devuelve {money(l.totalToPay)}{l.status === "PENDING" ? ` · resta ${money(l.remainingBalance)}` : ""}</p>
+                  </div>
+                  <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
+                    {statusChip(l)}
+                    {l.status === "REQUESTED" && (
+                      <>
+                        <Button size="sm" variant="outline" className="gap-1 text-destructive hover:text-destructive" disabled={busy === l.id} onClick={() => setRejecting(l)}><IconX size={15} /> Rechazar</Button>
+                        <Button size="sm" className="gap-1" disabled={busy === l.id || !l.fitsLimit} title={!l.fitsLimit ? "Pasa su límite: súbelo en Clientes" : undefined} onClick={() => approve(l)}><IconCheck size={15} /> Aprobar</Button>
+                      </>
+                    )}
+                    {l.status === "APPROVED_PENDING_DISBURSEMENT" && (
+                      <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" disabled={busy === l.id} onClick={() => setRejecting(l)}>Anular</Button>
+                    )}
+                    {l.status !== "REQUESTED" && l.status !== "APPROVED_PENDING_DISBURSEMENT" && (
+                      <Button size="icon" variant="ghost" className="size-8" aria-label="Ver detalle" onClick={() => setOpen(l)}><IconChevronRight size={16} /></Button>
+                    )}
+                  </div>
+                  {l.status === "REQUESTED" && !l.fitsLimit && (
+                    <p className="w-full rounded-md bg-primary/5 px-3 py-1.5 text-right text-xs text-primary">
+                      El préstamo suma {money(l.totalToPay)} y su límite disponible es {money(l.available)}: súbele el límite en Clientes para aprobarlo.
+                    </p>
+                  )}
+                </div>
               ))}
             </div>
           )}
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            {loans === null ? (
-              <p className="p-10 text-center text-sm text-muted-foreground">Cargando…</p>
-            ) : !loans.length ? (
-              <p className="p-10 text-center text-sm text-muted-foreground">{tab === "requests" ? "No hay solicitudes por responder." : "Nada por aquí."}</p>
-            ) : (
-              <div className="divide-y">
-                {loans.map((l) => (
-                  <div key={l.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                    <button onClick={() => setOpen(l)} className="min-w-0 flex-1 text-left">
-                      <p className="font-semibold">{l.client.name} <span className="font-normal text-muted-foreground">· {l.client.documentId}</span></p>
-                      <p className="text-xs text-muted-foreground">
-                        Nivel {l.level} · {LEVELS[l.level]} · {l.offerName ?? "Préstamo"} · {day(l.createdAt)}
-                        {l.status === "REQUESTED" && ` · límite disponible ${money(l.available)}`}
-                      </p>
-                    </button>
-                    <div className="text-right">
-                      <p className="font-bold tabular-nums">{money(l.amount)}</p>
-                      <p className="text-xs text-muted-foreground tabular-nums">devuelve {money(l.totalToPay)}{l.status === "PENDING" ? ` · resta ${money(l.remainingBalance)}` : ""}</p>
-                    </div>
-                    <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
-                      {statusChip(l)}
-                      {l.status === "REQUESTED" && (
-                        <>
-                          <Button size="sm" variant="outline" className="gap-1 text-destructive" disabled={busy === l.id} onClick={() => setRejecting(l)}><IconX size={15} /> Rechazar</Button>
-                          <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700" disabled={busy === l.id || !l.fitsLimit} title={!l.fitsLimit ? "Pasa su límite: súbelo en Clientes" : undefined} onClick={() => approve(l)}><IconCheck size={15} /> Aprobar</Button>
-                        </>
-                      )}
-                      {l.status === "APPROVED_PENDING_DISBURSEMENT" && (
-                        <Button size="sm" variant="outline" className="text-destructive" disabled={busy === l.id} onClick={() => setRejecting(l)}>Anular</Button>
-                      )}
-                    </div>
-                    {l.status === "REQUESTED" && !l.fitsLimit && (
-                      <p className="w-full text-right text-xs text-amber-700">El préstamo suma {money(l.totalToPay)} y su límite disponible es {money(l.available)}: súbele el límite en Clientes para aprobarlo.</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
         </Card>
       )}
 
@@ -308,9 +384,9 @@ export default function PrestamosPage() {
                 <DialogDescription>{open.client.documentId}{open.client.phone ? ` · ${open.client.phone}` : ""} · Nivel {open.level} {LEVELS[open.level]}</DialogDescription>
               </DialogHeader>
               <div className="grid grid-cols-3 gap-2 text-sm">
-                <div className="rounded-lg border p-2"><p className="text-xs text-muted-foreground">Prestado</p><p className="font-bold">{money(open.amount)}</p></div>
-                <div className="rounded-lg border p-2"><p className="text-xs text-muted-foreground">Devuelve</p><p className="font-bold">{money(open.totalToPay)}</p></div>
-                <div className="rounded-lg border p-2"><p className="text-xs text-muted-foreground">Resta</p><p className="font-bold">{money(open.remainingBalance)}</p></div>
+                <div className="rounded-lg border bg-gradient-to-t from-primary/5 to-card p-2.5"><p className="text-xs text-muted-foreground">Prestado</p><p className="font-bold">{money(open.amount)}</p></div>
+                <div className="rounded-lg border bg-gradient-to-t from-primary/5 to-card p-2.5"><p className="text-xs text-muted-foreground">Devuelve</p><p className="font-bold">{money(open.totalToPay)}</p></div>
+                <div className="rounded-lg border bg-gradient-to-t from-primary/5 to-card p-2.5"><p className="text-xs text-muted-foreground">Resta</p><p className="font-bold">{money(open.remainingBalance)}</p></div>
               </div>
               {open.installments.length ? (
                 <div className="divide-y rounded-lg border text-sm">
@@ -319,7 +395,7 @@ export default function PrestamosPage() {
                     return (
                       <div key={i.id} className="flex items-center justify-between px-3 py-2">
                         <span>Cuota {i.installmentNumber} · {day(i.dueDate)}</span>
-                        <span className={cn("font-semibold tabular-nums", i.status === "PAID" ? "text-green-700" : late ? "text-red-600" : "")}>{i.status === "PAID" ? "Pagada" : late ? `Vencida · ${money(i.amount - i.paidAmount)}` : money(i.amount - i.paidAmount)}</span>
+                        <span className={cn("font-semibold tabular-nums", i.status === "PAID" ? "text-emerald-600" : late ? "text-destructive" : "")}>{i.status === "PAID" ? "Pagada" : late ? `Vencida · ${money(i.amount - i.paidAmount)}` : money(i.amount - i.paidAmount)}</span>
                       </div>
                     );
                   })}
@@ -346,6 +422,6 @@ export default function PrestamosPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </Page>
   );
 }
