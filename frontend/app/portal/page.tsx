@@ -2591,57 +2591,68 @@ $1color: #8E3418 !important;
 
                 {subBanner() && <div className="mt-3">{subBanner()}</div>}
                 <div aria-hidden className="grow min-h-5" />
-                {/* Quick actions (paying already lives in the bar and the next-payment card): lacquered
-                    white like Nubi and the credit card */}
-                <div className="grid grid-cols-4 gap-1.5">
-                    {[
+                {/* Quick actions: credit only for now (shopping comes back later). Lacquered white like
+                    Nubi and the credit card */}
+                {(() => {
+                    const phone = String(settings?.phone || "").replace(/\D/g, "");
+                    const wa = phone ? `https://wa.me/${phone.startsWith("0") ? `58${phone.slice(1)}` : phone}` : null;
+                    const actions = [
                         { label: "Mi nivel", icon: <IconTrophy size={24} />, on: openLevel },
-                        { label: "Historial", icon: <IconHistory size={24} />, on: () => { goTab("payments"); setShowHistory(true); } },
-                        { label: "Mis pedidos", icon: <IconTruck size={24} />, on: () => setIsOrdersListOpen(true) },
-                        { label: "Tiendas", icon: <IconShoppingBag size={24} />, on: () => goTab("rewards") },
-                    ].map((a) => (
-                        <button key={a.label} onClick={a.on} className="group flex flex-col items-center gap-1.5 text-[12px] font-semibold text-zinc-700">
-                            <span
-                                className="relative grid size-14 place-items-center overflow-hidden rounded-[20px] text-amber-600 transition group-active:translate-y-[2px] group-active:scale-95"
-                                style={{
-                                    background: "linear-gradient(160deg, #ffffff 0%, #fafbfc 45%, #e9ecf1 100%)",
-                                    boxShadow: "0 8px 16px -10px rgba(90,40,10,0.45), inset 0 1px 0 #ffffff, inset 0 -6px 12px rgba(140,150,170,0.2), inset 0 0 0 1px rgba(255,255,255,0.75)",
-                                }}
-                            >
-                                {/* the lacquer's top reflection */}
-                                <span aria-hidden className="pointer-events-none absolute inset-x-2 top-1 h-4 rounded-full" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0))" }} />
-                                <span className="relative">{a.icon}</span>
-                            </span>
-                            {a.label}
-                        </button>
-                    ))}
-                </div>
+                        { label: "Mis compras", icon: <IconCreditCard size={24} />, on: () => goTab("payments") },
+                        ...(wa ? [{ label: "Escribir al comercio", icon: <IconPhone size={24} />, on: () => window.open(wa, "_blank") }] : []),
+                    ];
+                    return (
+                        <div className={`grid gap-1.5 ${actions.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+                            {actions.map((a) => (
+                                <button key={a.label} onClick={a.on} className="group flex flex-col items-center gap-1.5 text-[12px] font-semibold text-zinc-700">
+                                    <span
+                                        className="relative grid size-14 place-items-center overflow-hidden rounded-[20px] text-amber-600 transition group-active:translate-y-[2px] group-active:scale-95"
+                                        style={{
+                                            background: "linear-gradient(160deg, #ffffff 0%, #fafbfc 45%, #e9ecf1 100%)",
+                                            boxShadow: "0 8px 16px -10px rgba(90,40,10,0.45), inset 0 1px 0 #ffffff, inset 0 -6px 12px rgba(140,150,170,0.2), inset 0 0 0 1px rgba(255,255,255,0.75)",
+                                        }}
+                                    >
+                                        <span aria-hidden className="pointer-events-none absolute inset-x-2 top-1 h-4 rounded-full" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0))" }} />
+                                        <span className="relative">{a.icon}</span>
+                                    </span>
+                                    <span className="text-center leading-tight">{a.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    );
+                })()}
 
-                {/* For you */}
-                {ads.length > 0 && (
-                    <>
-                        <div aria-hidden className="grow min-h-5" />
-                        <div className="mb-3 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Para ti</h3>
-                                {ads.length > 1 && (
-                                    <div className="flex gap-1.5">
-                                        {ads.map((_, i) => <span key={i} className={`h-1.5 rounded-full transition-all ${i === adIndex ? "w-[18px] bg-primary" : "w-1.5 bg-zinc-300"}`} />)}
-                                    </div>
-                                )}
-                            </div>
-                            <button onClick={() => goTab("rewards")} className="text-[13px] font-bold text-amber-600">Ver todo</button>
-                        </div>
-                        <div
-                            className="-mx-6 px-6 scroll-px-6 -mb-3 flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-none"
-                            onScroll={(e) => {
-                                const el = e.currentTarget;
-                                setAdIndex(Math.round(el.scrollLeft / 292));
-                            }}
-                        >
-                            {ads}
-                        </div>
-                    </>
+                {/* Your credit purchases (where "Para ti" was; it comes back with shopping later) */}
+                <div aria-hidden className="grow min-h-5" />
+                <div className="mb-2.5 flex items-baseline justify-between">
+                    <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Tus compras a crédito</h3>
+                    {pendingDebtsList.length > 0 && <button onClick={() => goTab("payments")} className="text-[13px] font-bold text-amber-600">Ver todas</button>}
+                </div>
+                {pendingDebtsList.length ? (
+                    <div className="-mb-3 overflow-hidden rounded-[22px] border border-zinc-200 bg-white">
+                        {pendingDebtsList.slice(0, 3).map((d: any, i: number) => {
+                            const late = isOverdue(d);
+                            return (
+                                <button key={d.loanId} onClick={() => { goTab("payments"); setPlanDebt(d); }} className={`flex w-full items-center gap-3 p-3.5 text-left active:bg-zinc-50 transition ${i ? "border-t border-zinc-100" : ""}`}>
+                                    <span className="grid size-10 shrink-0 place-items-center rounded-[13px] text-[13px] text-white" style={{ background: avColor(d), fontWeight: 800 }}>{avLetter(d)}</span>
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block truncate text-[14.5px] font-bold text-zinc-900">{storeOf(d)}</span>
+                                        <span className="block text-[12px] text-zinc-500">{paidCountOf(d)} de {totalCountOf(d)} cuotas pagadas</span>
+                                        <Segments debt={d} />
+                                    </span>
+                                    <span className="shrink-0 text-right">
+                                        <span className={`block text-[11px] font-bold ${late ? "text-rose-600" : "text-emerald-600"}`}>{late ? "Vencida" : "Al día"}</span>
+                                        <span className="block text-[15px] text-zinc-900" style={{ fontWeight: 800 }}>{money(d.remainingBalance)}</span>
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="-mb-3 flex items-center gap-3 rounded-[22px] border border-zinc-200 bg-white p-4">
+                        <img src="/nubi/nubi-happy.webp" alt="" className="h-12 w-14 shrink-0 object-contain" />
+                        <p className="text-[13.5px] text-zinc-600">Aún no tienes compras a crédito. Pídelo en la caja de tu comercio y lo verás aquí.</p>
+                    </div>
                 )}
             </div>
         );
@@ -4993,9 +5004,9 @@ $1color: #8E3418 !important;
                             setSelectedProductForDetail(null);
                             setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false);
                         }} 
-                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "payments" ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
+                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "payments" && !showHistory ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
-                        <IconHistory size={18} />
+                        <IconWallet size={18} />
                         <span>Pagos</span>
                     </button>
 
@@ -5037,12 +5048,16 @@ $1color: #8E3418 !important;
                             setTxSearchQuery("");
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
-                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false);
+                            setPurchaseSuccessData(null); setPlanDebt(null); setShowLevel(false);
+                            // the app is credit-only for now: shopping is hidden; this slot is the history
+                            setActiveTab("payments");
+                            setShowHistory(true);
+                            window.scrollTo({ top: 0 });
                         }} 
-                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "rewards" ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
+                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "payments" && showHistory ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
-                        <IconShoppingBag size={18} />
-                        <span>Comprar</span>
+                        <IconHistory size={18} />
+                        <span>Historial</span>
                     </button>
                     <button 
                         onClick={() => { 
