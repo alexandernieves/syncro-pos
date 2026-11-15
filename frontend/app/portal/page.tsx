@@ -135,6 +135,23 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
     // Selected payment tab and collapse states
     const [selectedMonthTab, setSelectedMonthTab] = useState<string | null>(null);
     const [txSearchQuery, setTxSearchQuery] = useState("");
+    // History: filter, how many rows are drawn (it grows while scrolling), and the row that loads more
+    const [histFilter, setHistFilter] = useState<"all" | "debt" | "pay" | "subs">("all");
+    const [histLimit, setHistLimit] = useState(60);
+    const histObserver = useRef<IntersectionObserver | null>(null);
+    const histSentinel = useCallback((el: HTMLDivElement | null) => {
+        histObserver.current?.disconnect();
+        if (!el) return;
+        histObserver.current = new IntersectionObserver(([e]) => { if (e.isIntersecting) setHistLimit((n) => n + 60); }, { rootMargin: "400px" });
+        histObserver.current.observe(el);
+    }, []);
+    // Installment plan: how many installments are picked to pay
+    const [planPick, setPlanPick] = useState(1);
+    // Profile: birth date and the change-password sheet
+    const [editBirth, setEditBirth] = useState("");
+    const [pwOpen, setPwOpen] = useState(false);
+    const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
+    const [pwSaving, setPwSaving] = useState(false);
     const [isTotalCollapsed, setIsTotalCollapsed] = useState(false);
 
     // Shop / Catalog states
@@ -1140,7 +1157,27 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
         setEditEmail(client?.email || "");
         setEditPhone(client?.phone || "");
         setEditAddress(client?.address || "");
+        setEditBirth(client?.birthDate ? String(client.birthDate).slice(0, 10) : "");
         setIsEditingProfile(true);
+    };
+
+    const changePassword = async () => {
+        if (pwForm.next.length < 6) return toast.error("La nueva contraseña debe tener al menos 6 caracteres");
+        if (pwForm.next !== pwForm.confirm) return toast.error("Las contraseñas nuevas no coinciden");
+        setPwSaving(true);
+        try {
+            const res = await fetch(`${API}/clients/portal/password`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("client_token")}` },
+                body: JSON.stringify({ current: pwForm.current, next: pwForm.next }),
+            });
+            if (res.ok) { toast.success("Contraseña cambiada"); setPwOpen(false); }
+            else toast.error((await res.json().catch(() => ({}))).message || "No se pudo cambiar la contraseña");
+        } catch {
+            toast.error("Error de conexión");
+        } finally {
+            setPwSaving(false);
+        }
     };
 
     const handleSaveProfile = async () => {
@@ -1161,7 +1198,8 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
                     name: editName,
                     email: editEmail,
                     phone: editPhone,
-                    address: editAddress
+                    address: editAddress,
+                    birthDate: editBirth || null
                 })
             });
             if (res.ok) {
@@ -2590,7 +2628,7 @@ $1color: #8E3418 !important;
                 })()}
 
                 {subBanner() && <div className="mt-3">{subBanner()}</div>}
-                <div aria-hidden className="grow min-h-5" />
+                <div aria-hidden className="grow min-h-5 max-h-8" />
                 {/* Talk to the business (only when it has a phone set) */}
                 {(() => {
                     const phone = String(settings?.phone || "").replace(/\D/g, "");
@@ -2616,7 +2654,7 @@ $1color: #8E3418 !important;
                 })()}
 
                 {/* Your credit purchases (where "Para ti" was; it comes back with shopping later) */}
-                <div aria-hidden className="grow min-h-5" />
+                <div aria-hidden className="grow min-h-5 max-h-8" />
                 <div className="mb-2.5 flex items-baseline justify-between">
                     <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Tus compras a crédito</h3>
                     {pendingDebtsList.length > 0 && <button onClick={() => goTab("payments")} className="text-[13px] font-bold text-amber-600">Ver todas</button>}
@@ -2626,7 +2664,7 @@ $1color: #8E3418 !important;
                         {pendingDebtsList.slice(0, 3).map((d: any, i: number) => {
                             const late = isOverdue(d);
                             return (
-                                <button key={d.loanId} onClick={() => { goTab("payments"); setPlanDebt(d); }} className={`flex w-full items-center gap-3 p-3.5 text-left active:bg-zinc-50 transition ${i ? "border-t border-zinc-100" : ""}`}>
+                                <button key={d.loanId} onClick={() => { goTab("payments"); setPlanPick(1); setPlanDebt(d); }} className={`flex w-full items-center gap-3 p-3.5 text-left active:bg-zinc-50 transition ${i ? "border-t border-zinc-100" : ""}`}>
                                     <span className="grid size-10 shrink-0 place-items-center rounded-[13px] text-[13px] text-white" style={{ background: avColor(d), fontWeight: 800 }}>{avLetter(d)}</span>
                                     <span className="min-w-0 flex-1">
                                         <span className="block truncate text-[14.5px] font-bold text-zinc-900">{storeOf(d)}</span>
@@ -2651,284 +2689,376 @@ $1color: #8E3418 !important;
         );
     };
 
-    // ── Historial ──
+    // ── Shared look: lacquered white like Nubi ──
+    const LAC: React.CSSProperties = {
+        background: "linear-gradient(160deg, #ffffff 0%, #fafbfc 45%, #eceff3 100%)",
+        boxShadow: "0 16px 36px -16px rgba(90,30,5,0.4), inset 0 1px 0 #ffffff, inset 0 -10px 22px rgba(140,150,170,0.16), inset 0 0 0 1px rgba(255,255,255,0.7)",
+    };
+    const SOFT = "rounded-[24px] bg-white shadow-[0_14px_34px_-18px_rgba(90,40,10,0.35)]";
+    const H3 = ({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) => (
+        <div className="mb-2.5 mt-6 flex items-baseline justify-between px-1">
+            <h3 className="text-[16px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>{children}</h3>
+            {right}
+        </div>
+    );
+
+    // ── Historial (built for hundreds of records: filters, months that stay on top, loads by parts) ──
+    const txTitle = (tx: any) => {
+        const isDebt = tx.type === "DEBT";
+        const notes = String(tx.notes || "");
+        if (isDebt) return "Compra a crédito";
+        if (/pago m[oó]vil/i.test(notes)) return "Abono · Pago móvil";
+        return "Abono";
+    };
+    const txDetail = (tx: any) => {
+        const notes = String(tx.notes || "");
+        const ticket = notes.match(/#\s?([A-Za-z0-9]+)/)?.[1];
+        const ref = notes.match(/Ref:\s?([A-Za-z0-9]+)/)?.[1];
+        return ticket ? `Ticket #${ticket}` : ref ? `Ref. ${ref}` : "";
+    };
     const renderHistory = () => {
-        const txs = (client?.creditTransactions || []).filter((tx: any) => {
-            const isDebt = tx.type === "DEBT";
-            const notes = (tx.notes || (isDebt ? "Compra a crédito" : "Abono realizado")).toLowerCase();
-            const q = txSearchQuery.toLowerCase();
-            return !q || notes.includes(q) || String(tx.amount).includes(q) || fmtDay(tx.createdAt).toLowerCase().includes(q);
+        const all = [...(client?.creditTransactions || [])].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const year = new Date().getFullYear();
+        const inYear = all.filter((t: any) => new Date(t.createdAt).getFullYear() === year);
+        const boughtYear = inYear.filter((t: any) => t.type === "DEBT").reduce((a: number, t: any) => a + Math.abs(t.amount), 0);
+        const paidYear = inYear.filter((t: any) => t.type !== "DEBT").reduce((a: number, t: any) => a + Math.abs(t.amount), 0);
+        const q = txSearchQuery.trim().toLowerCase();
+        const subsMode = histFilter === "subs";
+        const rows: any[] = subsMode
+            ? mySubmissions.map((x: any) => ({ ...x, _sub: true }))
+            : all.filter((t: any) => histFilter === "all" || (histFilter === "debt" ? t.type === "DEBT" : t.type !== "DEBT"));
+        const filtered = rows.filter((t: any) => {
+            if (!q) return true;
+            const hay = `${t._sub ? `abono ${t.referenceNumber || ""}` : `${txTitle(t)} ${t.notes || ""}`} ${t.amount} ${fmtDay(t.createdAt)}`.toLowerCase();
+            return hay.includes(q);
         });
-        const groups: { label: string; items: any[] }[] = [];
-        txs.forEach((tx: any) => {
-            const label = new Date(tx.createdAt).toLocaleDateString("es-ES", { month: "long", year: "numeric" });
-            const g = groups.find((x) => x.label === label);
-            if (g) g.items.push(tx); else groups.push({ label, items: [tx] });
+        const shown = filtered.slice(0, histLimit);
+        // months → days
+        const months: { key: string; label: string; plus: number; minus: number; days: { label: string; items: any[] }[] }[] = [];
+        shown.forEach((t: any) => {
+            const d = new Date(t.createdAt);
+            const key = `${d.getFullYear()}-${d.getMonth()}`;
+            let m = months.find((x) => x.key === key);
+            if (!m) { m = { key, label: d.toLocaleDateString("es-ES", { month: "long", year: "numeric" }), plus: 0, minus: 0, days: [] }; months.push(m); }
+            if (!t._sub) { if (t.type === "DEBT") m.plus += Math.abs(t.amount); else m.minus += Math.abs(t.amount); }
+            const dl = daysUntil(d) === 0 ? "Hoy" : daysUntil(d) === -1 ? "Ayer" : fmtDay(d);
+            let day = m.days.find((x) => x.label === dl);
+            if (!day) { day = { label: dl, items: [] }; m.days.push(day); }
+            day.items.push(t);
         });
+        const count = (k: typeof histFilter) => k === "subs" ? mySubmissions.length : k === "all" ? all.length : all.filter((t: any) => (k === "debt" ? t.type === "DEBT" : t.type !== "DEBT")).length;
+        const filters: { k: typeof histFilter; t: string }[] = [{ k: "all", t: "Todo" }, { k: "debt", t: "Compras" }, { k: "pay", t: "Abonos" }, { k: "subs", t: "Comprobantes" }];
         return (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                <BackBar title="Historial" subtitle="Tus compras y abonos" onBack={() => setShowHistory(false)} />
-                <div className="relative mt-5">
-                    <IconSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-                    <input
-                        value={txSearchQuery}
-                        onChange={(e) => setTxSearchQuery(e.target.value)}
-                        placeholder="Buscar por tienda, monto o fecha"
-                        className="w-full h-12 rounded-full bg-white border border-zinc-200 pl-11 pr-4 text-[15px] font-medium outline-none focus:border-primary focus:ring-4 focus:ring-primary/15"
-                    />
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300 pb-32 pt-3">
+                <BackBar title="Historial" subtitle="Tus compras y abonos" onBack={() => goTab("home")} />
+                <div className="mt-5 grid grid-cols-2 gap-2.5">
+                    {[{ k: `Comprado en ${year}`, v: boughtYear }, { k: `Abonado en ${year}`, v: paidYear }].map((c) => (
+                        <div key={c.k} className="rounded-[22px] border border-white/40 bg-white/20 p-3.5 text-white backdrop-blur-md">
+                            <p className="text-[12px] font-semibold text-white/90">{c.k}</p>
+                            <p className="text-[22px] leading-tight" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>{money(c.v)}</p>
+                        </div>
+                    ))}
                 </div>
-                {mySubmissions.length > 0 && !txSearchQuery && (
-                    <div className="mt-5">
-                        <p className="mb-2 px-1 text-[12px] font-bold text-zinc-500">Comprobantes enviados</p>
-                        <div className="rounded-[22px] border border-zinc-200 bg-white overflow-hidden">
-                            {mySubmissions.slice(0, 10).map((x: any, i: number) => {
-                                const st = x.status === "APPROVED" ? { t: "Aprobado", c: "bg-emerald-50 text-emerald-700" } : x.status === "REJECTED" ? { t: "Rechazado", c: "bg-rose-50 text-rose-700" } : { t: "En revisión", c: "bg-amber-100 text-amber-800" };
-                                return (
-                                    <button key={x.id} onClick={() => x.receiptUrl && window.open(x.receiptUrl, "_blank")} className={`w-full text-left flex items-center gap-3 p-3.5 ${i ? "border-t border-zinc-100" : ""}`}>
-                                        <div className="size-11 shrink-0 overflow-hidden rounded-[15px] bg-zinc-100">
-                                            {x.receiptUrl ? <img src={x.receiptUrl} alt="" className="size-full object-cover" /> : <div className="grid size-full place-items-center text-zinc-400"><IconCamera size={20} /></div>}
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-[14.5px] font-semibold text-zinc-900">Abono de {money(x.amount)}</p>
-                                            <p className="text-[12.5px] text-zinc-500 truncate">{new Date(x.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}{x.referenceNumber ? ` · Ref. ${x.referenceNumber}` : ""}</p>
-                                        </div>
-                                        <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${st.c}`}>{st.t}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
+                <div className="relative mt-3">
+                    <IconSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+                    <input value={txSearchQuery} onChange={(e) => { setTxSearchQuery(e.target.value); setHistLimit(60); }} placeholder="Buscar monto, ticket, referencia o fecha"
+                        className="h-12 w-full rounded-full border border-zinc-200 bg-white pl-11 pr-4 text-[15px] font-medium text-zinc-900 outline-none shadow-[0_8px_20px_-14px_rgba(90,40,10,0.4)] placeholder:text-zinc-500 focus:border-primary focus:ring-4 focus:ring-primary/15" />
+                </div>
+                <div className="-mx-6 mt-3 flex gap-2 overflow-x-auto px-6 scrollbar-none">
+                    {filters.map((x) => (
+                        <button key={x.k} onClick={() => { setHistFilter(x.k); setHistLimit(60); }} className={`shrink-0 rounded-full border px-3.5 py-2 text-[13px] font-bold transition active:scale-95 ${histFilter === x.k ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-700"}`}>
+                            {x.t} <span className={histFilter === x.k ? "text-white/70" : "text-zinc-500"}>· {count(x.k)}</span>
+                        </button>
+                    ))}
+                </div>
+
+                {!months.length ? (
+                    <div className={`${SOFT} mt-5 flex flex-col items-center gap-2 p-8 text-center`}>
+                        <img src="/nubi/nubi-thinking.webp" alt="" className="h-14 w-16 object-contain" />
+                        <p className="text-[14px] font-semibold text-zinc-800">{q ? "Nada coincide con tu búsqueda" : "Aún no hay movimientos aquí"}</p>
                     </div>
-                )}
-                {groups.length === 0 ? (
-                    <div className="mt-8 text-center text-sm text-zinc-500">{(client?.creditTransactions || []).length ? "No hay movimientos con esa búsqueda." : "Aún no tienes movimientos."}</div>
-                ) : groups.map((g) => (
-                    <div key={g.label} className="mt-5">
-                        <p className="mb-2 px-1 text-[12px] font-bold text-zinc-500 first-letter:uppercase">{g.label}</p>
-                        <div className="rounded-[22px] border border-zinc-200 bg-white overflow-hidden">
-                            {g.items.map((tx: any, i: number) => {
-                                const isDebt = tx.type === "DEBT";
-                                return (
-                                    <div key={tx.id} className={`flex items-center gap-3 p-3.5 ${i ? "border-t border-zinc-100" : ""}`}>
-                                        <div className={`size-11 shrink-0 rounded-[15px] grid place-items-center ${isDebt ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"}`}>
-                                            {isDebt ? <IconShoppingBag size={20} /> : <IconCash size={20} />}
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-[14.5px] font-semibold text-zinc-900 truncate">{tx.notes || (isDebt ? "Compra a crédito" : "Abono realizado")}</p>
-                                            <p className="text-[12.5px] text-zinc-500">{new Date(tx.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
-                                        </div>
-                                        <span className={`ml-auto shrink-0 text-[15px] font-bold ${isDebt ? "text-zinc-900" : "text-emerald-600"}`}>{isDebt ? "" : "−"}{money(Math.abs(tx.amount))}</span>
-                                    </div>
-                                );
-                            })}
+                ) : months.map((m) => (
+                    <section key={m.key} className="mt-5">
+                        <div className="sticky top-0 z-20 -mx-6 flex items-center justify-between bg-background/90 px-7 py-2 backdrop-blur-md">
+                            <span className="text-[12.5px] font-extrabold uppercase tracking-wide text-zinc-700">{m.label}</span>
+                            {!subsMode && <span className="text-[12.5px] font-bold text-zinc-600">+{money(m.plus)} · <span className="text-emerald-700">−{money(m.minus)}</span></span>}
                         </div>
-                    </div>
+                        <div className={`${SOFT} px-4 py-1`}>
+                            {m.days.map((d) => (
+                                <div key={d.label}>
+                                    <p className="pt-3 text-[12px] font-bold text-zinc-600">{d.label}</p>
+                                    {d.items.map((t: any) => {
+                                        const time = new Date(t.createdAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+                                        if (t._sub) {
+                                            const st = t.status === "APPROVED" ? { t: "Aprobado", c: "text-emerald-700" } : t.status === "REJECTED" ? { t: "Rechazado", c: "text-rose-700" } : { t: "En revisión", c: "text-amber-700" };
+                                            return (
+                                                <button key={t.id} onClick={() => t.receiptUrl && window.open(t.receiptUrl, "_blank")} className="flex w-full items-center gap-3 border-b border-zinc-100 py-3 text-left last:border-0">
+                                                    <span className="size-10 shrink-0 overflow-hidden rounded-[13px] bg-zinc-100">{t.receiptUrl ? <img src={t.receiptUrl} alt="" className="size-full object-cover" /> : null}</span>
+                                                    <span className="min-w-0 flex-1">
+                                                        <span className="block text-[14px] font-bold text-zinc-900">Comprobante · {money(t.amount)}</span>
+                                                        <span className="block truncate text-[12.5px] text-zinc-600">{time}{t.referenceNumber ? ` · Ref. ${t.referenceNumber}` : ""} · <b className={st.c}>{st.t}</b></span>
+                                                    </span>
+                                                </button>
+                                            );
+                                        }
+                                        const isDebt = t.type === "DEBT";
+                                        const det = txDetail(t);
+                                        return (
+                                            <div key={t.id} className="flex items-center gap-3 border-b border-zinc-100 py-3 last:border-0">
+                                                <span className={`grid size-10 shrink-0 place-items-center rounded-[13px] ${isDebt ? "bg-amber-100 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
+                                                    {isDebt ? <IconShoppingBag size={19} /> : <IconCash size={19} />}
+                                                </span>
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="block truncate text-[14px] font-bold text-zinc-900">{txTitle(t)}</span>
+                                                    <span className="block truncate text-[12.5px] text-zinc-600">{time}{det ? ` · ${det}` : ""}</span>
+                                                </span>
+                                                <span className={`shrink-0 text-[15px] ${isDebt ? "text-zinc-900" : "text-emerald-700"}`} style={{ fontWeight: 800 }}>{isDebt ? "" : "−"}{money(Math.abs(t.amount))}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
                 ))}
+                {filtered.length > shown.length && (
+                    <div ref={histSentinel} className="py-5 text-center text-[12.5px] font-semibold text-zinc-600">Cargando más… ({shown.length} de {filtered.length})</div>
+                )}
             </div>
         );
     };
 
-    // ── Plan de cuotas ──
+    // ── Plan de cuotas: tap the installments to pay (in order) and the button adds them up ──
+    const payInstallments = (debt: any, n: number) => {
+        const pend = pendingInstsOf(debt);
+        const k = Math.max(1, Math.min(n, pend.length));
+        const sum = pend.slice(0, k).reduce((a: number, i: any) => a + instLeft(i), 0);
+        openPay(debt);
+        setSelectedInstallmentOption(k);
+        setPaymentAmount(sum.toFixed(2));
+    };
     const renderPlan = (debt: any) => {
         const insts = allInstsOf(debt);
         const total = totalCountOf(debt);
         const paid = paidCountOf(debt);
-        const next = pendingInstsOf(debt)[0];
-        const pct = total ? paid / total : 0;
+        const pend = pendingInstsOf(debt);
+        const pick = Math.max(1, Math.min(planPick, pend.length || 1));
+        const pickSum = pend.slice(0, pick).reduce((a: number, i: any) => a + instLeft(i), 0);
         const pendingSubmission = mySubmissions.find((s: any) => s.debtId === debt.loanId && s.status === "PENDING");
-        const R = 15, C = 2 * Math.PI * R;
         return (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-300 pb-36">
-                <BackBar title="Plan de cuotas" subtitle={`${storeOf(debt)}${ticketOf(debt) ? ` · Ticket #${ticketOf(debt)}` : ""}`} onBack={() => setPlanDebt(null)} />
-                <div className="mt-5 flex items-center gap-4 rounded-[24px] bg-white p-[18px] shadow-[0_16px_30px_-18px_rgba(90,40,10,0.45)]">
-                    <svg width="74" height="74" viewBox="0 0 36 36" className="shrink-0">
-                        <circle cx="18" cy="18" r={R} fill="none" stroke="#EDEAE4" strokeWidth="4" />
-                        <circle cx="18" cy="18" r={R} fill="none" stroke="#F26B3A" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${Math.max(pct * C, 0.01)} ${C}`} transform="rotate(-90 18 18)" />
-                        <text x="18" y="21" textAnchor="middle" fontSize="8.5" fontWeight="800" fill="#1A1815">{paid}/{total}</text>
-                    </svg>
-                    <div className="min-w-0">
-                        <p className="text-[12.5px] font-semibold text-zinc-500">Te falta pagar</p>
-                        <p className="text-[30px] leading-tight text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>{money(debt.remainingBalance)}</p>
-                        <p className="text-[12.5px] text-zinc-500">
-                            {total} cuota{total > 1 ? "s" : ""} · {isOverdue(debt) ? <b className="text-rose-600">con atraso</b> : <b className="text-emerald-600">al día</b>}
-                        </p>
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300 pb-44 pt-3">
+                <BackBar title={storeOf(debt)} subtitle={`${ticketOf(debt) ? `Ticket #${ticketOf(debt)} · ` : ""}${fmtDay(debt.createdAt)}`} onBack={() => setPlanDebt(null)} />
+                <div className="mt-5 rounded-[26px] p-[18px]" style={LAC}>
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <p className="text-[12.5px] font-semibold text-zinc-600">Te falta pagar</p>
+                            <p className="text-[34px] leading-tight text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>{money(debt.remainingBalance)}</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-[12.5px] font-semibold text-zinc-600">Pagadas</p>
+                            <p className="text-[24px] text-zinc-900" style={{ fontWeight: 800 }}>{paid}/{total}</p>
+                        </div>
                     </div>
+                    <div className="mt-3 flex gap-1">
+                        {Array.from({ length: Math.min(total, 24) }, (_, i) => (
+                            <span key={i} className={`h-2.5 flex-1 rounded-full transition-colors ${i < paid ? "bg-emerald-500" : i < paid + pick ? "bg-amber-400" : "bg-zinc-200"}`} />
+                        ))}
+                    </div>
+                    <p className="mt-2 text-[12.5px] text-zinc-600">{isOverdue(debt) ? <b className="text-rose-600">Tienes cuotas vencidas</b> : <b className="text-emerald-700">Al día</b>}</p>
+                    {(debt.items || []).length > 0 && (
+                        <details className="group mt-2">
+                            <summary className="cursor-pointer list-none text-[13px] font-bold text-amber-700">Ver productos ({debt.items.length}) <span className="inline-block transition group-open:rotate-180">▾</span></summary>
+                            <div className="mt-2 space-y-1.5 border-t border-zinc-200/70 pt-2">
+                                {debt.items.map((it: any, i: number) => (
+                                    <div key={i} className="flex justify-between text-[13px] text-zinc-700"><span className="truncate pr-3">{it.quantity}× {it.name}</span><span className="shrink-0 font-semibold">{money(it.subtotal ?? it.price * it.quantity)}</span></div>
+                                ))}
+                            </div>
+                        </details>
+                    )}
                 </div>
                 {pendingSubmission && (
-                    <div className="mt-3 flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-800">
-                        <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
-                        Abono de {money(pendingSubmission.amount)} en revisión por el comercio
+                    <div className="mt-3 flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-900">
+                        <span className="size-2 rounded-full bg-amber-500 animate-pulse" /> Abono de {money(pendingSubmission.amount)} en revisión
                     </div>
                 )}
 
-                <h3 className="mt-6 mb-2 px-1 text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Cuotas</h3>
-                <div>
-                    {insts.map((inst: any, idx: number) => {
+                <H3>{pend.length ? "Elige qué pagar" : "Cuotas"}</H3>
+                <div className={`${SOFT} px-4 py-1`}>
+                    {insts.map((inst: any) => {
                         const left = instLeft(inst);
                         const isPaid = inst.status === "PAID" || left <= 0.004;
-                        const isNext = !isPaid && next && inst.id === next.id;
+                        const idx = pend.findIndex((p: any) => p.id === inst.id);
+                        const on = !isPaid && idx >= 0 && idx < pick;
                         const late = !isPaid && daysUntil(inst.dueDate) < 0;
+                        const partial = !isPaid && left < inst.amount - 0.004;
                         return (
-                            <div key={inst.id} className="relative flex gap-3.5 pb-3">
-                                <div className="relative w-7 flex justify-center">
-                                    <span className={`z-10 mt-4 size-[18px] rounded-full border-[3px] ${isPaid ? "border-emerald-500 bg-emerald-500" : isNext ? "border-primary bg-primary shadow-[0_0_0_5px_#FDE6DA]" : late ? "border-rose-400 bg-background" : "border-zinc-300 bg-background"}`}>
-                                        {isPaid && <IconCheck size={12} stroke={3} className="text-white -m-[1px]" />}
+                            <button
+                                key={inst.id}
+                                disabled={isPaid}
+                                onClick={() => setPlanPick(on && idx === pick - 1 ? Math.max(1, idx) : idx + 1)}
+                                className={`flex w-full items-center gap-3 border-b border-zinc-100 py-3.5 text-left last:border-0 transition active:scale-[0.99] ${isPaid ? "opacity-60" : ""}`}
+                            >
+                                <span className={`grid size-[22px] shrink-0 place-items-center rounded-[8px] border-2 text-white transition ${isPaid ? "border-emerald-500 bg-emerald-500" : on ? "border-primary bg-primary scale-105" : "border-zinc-300"}`}>
+                                    {(isPaid || on) && <IconCheck size={13} stroke={3.2} />}
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                    <span className={`block text-[14.5px] font-bold text-zinc-900 ${isPaid ? "line-through" : ""}`}>
+                                        Cuota {inst.number}
+                                        {idx === 0 && !isPaid && <span className="ml-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800 align-[2px]">Próxima</span>}
+                                        {late && <span className="ml-1.5 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-700 align-[2px]">Vencida</span>}
                                     </span>
-                                    {idx < insts.length - 1 && <span className="absolute top-[34px] -bottom-3 w-0.5 bg-zinc-200" />}
-                                </div>
-                                <div className={`flex-1 flex items-center rounded-[18px] border bg-white px-3.5 py-3 ${isNext ? "border-amber-200 shadow-[0_10px_22px_-14px_rgba(242,107,58,0.6)]" : "border-zinc-200"} ${isPaid ? "opacity-70" : ""}`}>
-                                    <div>
-                                        <p className="text-[15px] font-bold text-zinc-900">
-                                            Cuota {inst.number}
-                                            {isNext && <span className="ml-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700 align-[2px]">Próxima</span>}
-                                            {isPaid && <span className="ml-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 align-[2px]">Pagada</span>}
-                                            {late && <span className="ml-1.5 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-700 align-[2px]">Vencida</span>}
-                                        </p>
-                                        <p className="text-[12.5px] text-zinc-500 mt-0.5">{isPaid ? `Venció el ${fmtDay(inst.dueDate)}` : `Vence el ${fmtDay(inst.dueDate)} · ${whenText(inst.dueDate)}`}</p>
-                                    </div>
-                                    <div className="ml-auto text-right">
-                                        <p className={`text-base font-extrabold ${isPaid ? "text-zinc-500 line-through" : isNext ? "text-zinc-900" : "text-zinc-700"}`} style={{ fontWeight: 800 }}>{money(isPaid ? inst.amount : left)}</p>
-                                        {!isPaid && left < inst.amount - 0.004 && <p className="text-[11px] text-zinc-500">de {money(inst.amount)}</p>}
-                                    </div>
-                                </div>
-                            </div>
+                                    <span className="block text-[12.5px] text-zinc-600">
+                                        {isPaid ? `Pagada · vencía el ${fmtDay(inst.dueDate)}` : `Vence el ${fmtDay(inst.dueDate)} · ${whenText(inst.dueDate)}`}
+                                        {partial ? ` · abonado ${money(inst.amount - left)}` : ""}
+                                    </span>
+                                </span>
+                                <span className="shrink-0 text-[15px] text-zinc-900" style={{ fontWeight: 800 }}>{money(isPaid ? inst.amount : left)}</span>
+                            </button>
                         );
                     })}
                 </div>
+                {pend.length > 0 && <p className="mt-2 px-1 text-[12px] text-zinc-600">Las cuotas se pagan en orden: toca hasta cuál quieres pagar.</p>}
 
-                {(debt.items || []).length > 0 && (
-                    <details className="mt-2 rounded-[18px] border border-zinc-200 bg-white p-3.5 group">
-                        <summary className="list-none flex justify-between text-[14px] font-bold text-zinc-900 cursor-pointer">
-                            <span>Productos ({debt.items.length})</span>
-                            <span className="text-amber-600 group-open:hidden">Ver</span>
-                            <span className="text-amber-600 hidden group-open:inline">Ocultar</span>
-                        </summary>
-                        <div className="mt-2 space-y-1.5">
-                            {debt.items.map((it: any, i: number) => (
-                                <div key={i} className="flex justify-between text-[13.5px] text-zinc-700">
-                                    <span className="truncate pr-3">{it.quantity}× {it.name}</span>
-                                    <span className="shrink-0">{money(it.subtotal ?? it.price * it.quantity)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </details>
-                )}
-
-                {/* Pay, always at hand */}
-                {next && (
-                    <div className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md px-5 pt-4" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 18px)", background: "linear-gradient(180deg, rgba(247,245,240,0), #F7F5F0 30%)" }}>
-                        <button onClick={() => openPay(debt)} className="w-full rounded-full bg-primary py-4 text-base font-extrabold text-white shadow-[0_10px_20px_-10px_rgba(242,107,58,0.8)] active:scale-[0.98] transition" style={{ fontWeight: 800 }}>
-                            Pagar cuota {next.number} · {money(instLeft(next))}
+                {pend.length > 0 && (
+                    <div className="fixed inset-x-0 z-[46] mx-auto max-w-md px-5" style={{ bottom: "calc(env(safe-area-inset-bottom) + 104px)" }}>
+                        <button onClick={() => payInstallments(debt, pick)} className="w-full rounded-full bg-primary py-4 text-[15.5px] text-white shadow-[0_12px_24px_-10px_rgba(242,107,58,0.85)] transition active:scale-[0.98]" style={{ fontWeight: 800 }}>
+                            Pagar {pick} cuota{pick > 1 ? "s" : ""} · {money(pickSum)}
                         </button>
-                        <button onClick={() => openPay(debt, true)} className="mt-2.5 w-full text-center text-sm font-bold text-zinc-500">Pagar otro monto</button>
                     </div>
                 )}
             </div>
         );
     };
 
-    // ── Pagos ──
+    // ── All the credit purchases ("Ver todas") ──
     const renderPayments = () => {
         if (showHistory) return renderHistory();
         if (planDebt) return renderPlan(debts.find((d: any) => d.loanId === planDebt.loanId) || planDebt);
-
-        const monthsFull = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
-        const groups: { key: string; m: number; y: number; insts: any[] }[] = [];
-        allPendingInsts.forEach((inst: any) => {
-            const d = new Date(inst.dueDate);
-            const key = `${d.getFullYear()}-${d.getMonth()}`;
-            const g = groups.find((x) => x.key === key);
-            if (g) g.insts.push(inst); else groups.push({ key, m: d.getMonth(), y: d.getFullYear(), insts: [inst] });
-        });
-        const active = groups.find((g) => g.key === selectedMonthTab) || groups[0];
-        const monthTotal = active ? active.insts.reduce((s, i) => s + i.remaining, 0) : 0;
-        const firstOfMonth = active?.insts[0];
-        const q = (inst: any) => (new Date(inst.dueDate).getDate() <= 15 ? "primera quincena" : "segunda quincena");
-        const thisYear = new Date().getFullYear();
-
+        const late = pendingDebtsList.filter((d: any) => isOverdue(d));
+        const ok = pendingDebtsList.filter((d: any) => !isOverdue(d));
+        const owed = pendingDebtsList.reduce((a: number, d: any) => a + (Number(d.remainingBalance) || 0), 0);
+        const row = (d: any, i: number) => (
+            <button key={d.loanId} onClick={() => { setPlanPick(1); setPlanDebt(d); window.scrollTo({ top: 0 }); }} className={`flex w-full items-center gap-3 py-3.5 text-left active:bg-zinc-50 ${i ? "border-t border-zinc-100" : ""}`}>
+                <span className="grid size-10 shrink-0 place-items-center rounded-[13px] text-[13px] text-white" style={{ background: avColor(d), fontWeight: 800 }}>{avLetter(d)}</span>
+                <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14.5px] font-bold text-zinc-900">{storeOf(d)}</span>
+                    <span className="block text-[12.5px] text-zinc-600">{ticketOf(d) ? `#${ticketOf(d)} · ` : ""}{paidCountOf(d)} de {totalCountOf(d)} pagadas</span>
+                    <Segments debt={d} />
+                </span>
+                <span className="shrink-0 text-right">
+                    <span className="block text-[15px] text-zinc-900" style={{ fontWeight: 800 }}>{money(d.remainingBalance)}</span>
+                    <IconChevronRight size={16} className="ml-auto text-zinc-400" />
+                </span>
+            </button>
+        );
         return (
-            <div className="animate-in fade-in duration-500">
-                <h1 className="text-[30px] leading-tight text-white" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>Tus pagos</h1>
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300 pb-32 pt-3">
+                <BackBar title="Tus compras" subtitle={`${pendingDebtsList.length} activa${pendingDebtsList.length === 1 ? "" : "s"} · debes ${money(owed)}`} onBack={() => goTab("home")} />
+                {late.length > 0 && (<><H3>Con cuotas vencidas</H3><div className={`${SOFT} px-4`}>{late.map(row)}</div></>)}
+                <H3>{late.length ? "Al día" : "Activas"}</H3>
+                {ok.length ? <div className={`${SOFT} px-4`}>{ok.map(row)}</div> : <p className="px-1 text-[13px] text-zinc-600">{pendingDebtsList.length ? "Todas tienen cuotas vencidas." : "No tienes compras a crédito activas."}</p>}
+            </div>
+        );
+    };
 
-                {groups.length > 0 ? (
-                    <>
-                        {groups.length > 1 && (
-                            <div className="mt-4 -mx-6 px-6 overflow-x-auto scrollbar-none">
-                                <div className="flex w-max gap-1.5 rounded-full bg-white/20 p-1">
-                                    {groups.map((g) => (
-                                        <button key={g.key} onClick={() => setSelectedMonthTab(g.key)} className={`rounded-full px-3.5 py-2 text-[13px] font-bold transition ${g.key === active?.key ? "bg-white text-amber-600" : "text-white"}`}>
-                                            <span className="first-letter:uppercase inline-block">{monthsFull[g.m]}{g.y !== thisYear ? ` ${g.y}` : ""}</span>
-                                            <span className="opacity-75 font-semibold"> · {g.insts.length}</span>
-                                        </button>
-                                    ))}
-                                </div>
+    // ── Perfil ──
+    const renderProfile = () => {
+        const txs = client?.creditTransactions || [];
+        const buys = txs.filter((t: any) => t.type === "DEBT").length;
+        const totalPays = Number(client?.totalPaymentsCount || 0);
+        const latePays = Number(client?.latePaymentsCount || 0);
+        const onTime = totalPays ? Math.round(((totalPays - latePays) / totalPays) * 100) : 100;
+        const since = client?.createdAt ? new Date(client.createdAt).toLocaleDateString("es-ES", { month: "short", year: "numeric" }) : "";
+        const birth = client?.birthDate ? new Date(client.birthDate).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "";
+        const phone = String(settings?.phone || "").replace(/\D/g, "");
+        const Field = ({ icon, label, value, empty, onClick }: { icon: React.ReactNode; label: string; value?: string; empty: string; onClick?: () => void }) => (
+            <button onClick={onClick} disabled={!onClick} className="flex w-full items-center gap-3 border-b border-zinc-100 py-3 text-left last:border-0">
+                <span className="grid size-9 shrink-0 place-items-center rounded-[12px] bg-zinc-100 text-zinc-600">{icon}</span>
+                <span className="min-w-0 flex-1">
+                    <span className="block text-[12px] font-semibold text-zinc-600">{label}</span>
+                    <span className={`block truncate text-[14.5px] font-semibold ${value ? "text-zinc-900" : "text-amber-700"}`}>{value || empty}</span>
+                </span>
+                {onClick && <IconChevronRight size={17} className="shrink-0 text-zinc-400" />}
+            </button>
+        );
+        return (
+            <div className="animate-in fade-in duration-300 pb-32 pt-3">
+                <div className="flex items-center gap-3.5">
+                    <div className="grid size-16 shrink-0 place-items-center rounded-[22px] border-2 border-white/70 bg-white/25 text-[26px] text-white backdrop-blur-md" style={{ fontWeight: 800 }}>{(firstName || "?").charAt(0).toUpperCase()}</div>
+                    <div className="min-w-0 flex-1 text-white">
+                        <h1 className="line-clamp-2 text-[21px] leading-tight" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>{client?.name}</h1>
+                        <button onClick={openLevel} className="mt-0.5 text-[13px] font-semibold text-white/90">Nivel {lvl} · {lvlName}{since ? ` · desde ${since}` : ""} ›</button>
+                    </div>
+                    <button onClick={handleStartEditProfile} className="shrink-0 rounded-full border border-white/50 bg-white/20 px-3.5 py-2 text-[13px] font-bold text-white backdrop-blur-md active:scale-95 transition">Editar</button>
+                </div>
+                <div className="mt-5 grid grid-cols-3 gap-2.5">
+                    {[{ k: "Límite", v: money(creditLimit).replace(".00", "") }, { k: "A tiempo", v: `${onTime}%` }, { k: "Compras", v: String(buys) }].map((c) => (
+                        <div key={c.k} className={`${SOFT} p-3`}>
+                            <p className="text-[12px] font-semibold text-zinc-600">{c.k}</p>
+                            <p className="text-[19px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>{c.v}</p>
+                        </div>
+                    ))}
+                </div>
+
+                <H3>Datos personales</H3>
+                <div className={`${SOFT} px-4`}>
+                    <Field icon={<IconUser size={18} />} label="Nombre" value={client?.name} empty="Agregar nombre" onClick={handleStartEditProfile} />
+                    <Field icon={<IconLock size={18} />} label="Cédula" value={client?.documentId} empty="—" />
+                    <Field icon={<IconDeviceMobile size={18} />} label="Teléfono" value={client?.phone} empty="Agregar teléfono" onClick={handleStartEditProfile} />
+                    <Field icon={<IconInfoCircle size={18} />} label="Correo" value={client?.email} empty="Agregar correo" onClick={handleStartEditProfile} />
+                    <Field icon={<IconCalendar size={18} />} label="Fecha de nacimiento" value={birth} empty="Agregar fecha" onClick={handleStartEditProfile} />
+                    <Field icon={<IconMapPin size={18} />} label="Dirección" value={client?.address} empty="Agregar dirección" onClick={handleStartEditProfile} />
+                </div>
+
+                <H3>Seguridad y ayuda</H3>
+                <div className={`${SOFT} px-4`}>
+                    <Field icon={<IconLock size={18} />} label="Contraseña" value="Cambiar contraseña" empty="" onClick={() => { setPwForm({ current: "", next: "", confirm: "" }); setPwOpen(true); }} />
+                    {phone && <Field icon={<IconPhone size={18} />} label="¿Dudas con tu crédito?" value="Escribir al comercio" empty="" onClick={() => window.open(`https://wa.me/${phone.startsWith("0") ? `58${phone.slice(1)}` : phone}`, "_blank")} />}
+                </div>
+
+                <div className="mt-7 flex justify-center">
+                    <button onClick={requestLogout} className="rounded-full bg-rose-50 px-6 py-3 text-[14px] font-bold text-rose-700 active:scale-95 transition">Cerrar sesión</button>
+                </div>
+
+                {/* Edit sheet */}
+                {isEditingProfile && createPortal(
+                    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 animate-in fade-in duration-200" onClick={() => setIsEditingProfile(false)}>
+                        <div className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-[28px] bg-background px-5 pt-3 animate-in slide-in-from-bottom duration-300" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }} onClick={(e) => e.stopPropagation()}>
+                            <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-zinc-300" />
+                            <h3 className="text-[19px] text-zinc-900" style={{ fontWeight: 800 }}>Editar perfil</h3>
+                            <div className="mt-4 space-y-3">
+                                {[
+                                    { l: "Nombre", v: editName, s: setEditName, t: "text", a: "name" },
+                                    { l: "Teléfono", v: editPhone, s: setEditPhone, t: "tel", a: "tel" },
+                                    { l: "Correo", v: editEmail, s: setEditEmail, t: "email", a: "email" },
+                                    { l: "Fecha de nacimiento", v: editBirth, s: setEditBirth, t: "date", a: "bday" },
+                                    { l: "Dirección", v: editAddress, s: setEditAddress, t: "text", a: "street-address" },
+                                ].map((x) => (
+                                    <label key={x.l} className="block">
+                                        <span className="mb-1 block px-1 text-[12.5px] font-semibold text-zinc-700">{x.l}</span>
+                                        <input type={x.t} autoComplete={x.a} value={x.v} onChange={(e) => x.s(e.target.value)} className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-[15px] text-zinc-900 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+                                    </label>
+                                ))}
                             </div>
-                        )}
-                        <div className="mt-5 text-white">
-                            <p className="text-[13px] font-semibold text-white/90">A pagar en {monthsFull[active.m]}</p>
-                            <p className="text-[52px] leading-[1.05]" style={{ fontWeight: 800, letterSpacing: "-0.045em" }}>{money(monthTotal)}</p>
-                            <p className="mt-1 text-[13.5px] font-medium text-white/90">
-                                {active.insts.length} cuota{active.insts.length > 1 ? "s" : ""}
-                                {active.insts.length === 1 ? ` · vence el ${fmtDay(firstOfMonth.dueDate)} (${q(firstOfMonth)})` : ` · la primera vence el ${fmtDay(firstOfMonth.dueDate)}`}
-                            </p>
+                            <button onClick={handleSaveProfile} disabled={isSavingProfile} className="mt-5 w-full rounded-full bg-primary py-3.5 text-[15px] text-white disabled:opacity-60" style={{ fontWeight: 800 }}>{isSavingProfile ? "Guardando…" : "Guardar cambios"}</button>
                         </div>
-                        <div className="mt-4 flex gap-2.5">
-                            <button onClick={() => (active.insts.length === 1 ? openPay(firstOfMonth.debt) : byBusiness(active.insts).length > 1 ? askPay(active.insts, `Todo lo de ${monthsFull[active.m]}`) : openGroupPay(active.insts, "all"))} className="flex-1 rounded-full bg-[#1A1815] py-3.5 text-[15px] font-bold text-white active:scale-[0.98] transition">
-                                Pagar {money(monthTotal)}
-                            </button>
-                            <button onClick={() => (active.insts.length === 1 ? openPay(firstOfMonth.debt, true) : byBusiness(active.insts).length > 1 ? askPay(active.insts, `Todo lo de ${monthsFull[active.m]}`) : openGroupPay(active.insts, "other"))} className="rounded-full bg-white/95 px-[18px] py-3.5 text-[15px] font-bold text-zinc-900 active:scale-[0.98] transition">
-                                Otro monto
-                            </button>
-                        </div>
-                    </>
-                ) : (
-                    <div className="mt-5 text-white">
-                        <p className="text-[13px] font-semibold text-white/90">Estás al día</p>
-                        <p className="text-[52px] leading-[1.05]" style={{ fontWeight: 800, letterSpacing: "-0.045em" }}>$0.00</p>
-                        <p className="mt-1 text-[13.5px] font-medium text-white/90">No tienes cuotas pendientes</p>
-                    </div>
-                )}
+                    </div>, document.body)}
 
-                {subBanner() && <div className="mt-5">{subBanner()}</div>}
-
-                {pendingDebtsList.length > 0 && (
-                    <>
-                        <div className="mt-8 mb-2.5 flex items-baseline justify-between">
-                            <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Compras a crédito</h3>
-                            <span className="text-[13px] font-bold text-amber-600">{pendingDebtsList.length} activa{pendingDebtsList.length > 1 ? "s" : ""}</span>
+                {/* Change password sheet */}
+                {pwOpen && createPortal(
+                    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 animate-in fade-in duration-200" onClick={() => setPwOpen(false)}>
+                        <div className="w-full max-w-md rounded-t-[28px] bg-background px-5 pt-3 animate-in slide-in-from-bottom duration-300" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }} onClick={(e) => e.stopPropagation()}>
+                            <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-zinc-300" />
+                            <h3 className="text-[19px] text-zinc-900" style={{ fontWeight: 800 }}>Cambiar contraseña</h3>
+                            <div className="mt-4 space-y-3">
+                                {([["current", "Contraseña actual", "current-password"], ["next", "Nueva contraseña", "new-password"], ["confirm", "Repite la nueva", "new-password"]] as const).map(([k, l, a]) => (
+                                    <input key={k} type={showPass ? "text" : "password"} autoComplete={a} placeholder={l} value={pwForm[k]} onChange={(e) => setPwForm((p) => ({ ...p, [k]: e.target.value }))} className="h-12 w-full rounded-full border border-zinc-200 bg-white px-5 text-[15px] text-zinc-900 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+                                ))}
+                                <button onClick={() => setShowPass((v) => !v)} className="px-2 text-[13px] font-semibold text-zinc-600">{showPass ? "Ocultar" : "Mostrar"} contraseñas</button>
+                            </div>
+                            <button onClick={changePassword} disabled={pwSaving} className="mt-4 w-full rounded-full bg-primary py-3.5 text-[15px] text-white disabled:opacity-60" style={{ fontWeight: 800 }}>{pwSaving ? "Guardando…" : "Cambiar contraseña"}</button>
                         </div>
-                        <div className="rounded-[22px] border border-zinc-200 bg-white overflow-hidden">
-                            {pendingDebtsList.map((d: any, i: number) => {
-                                const late = isOverdue(d);
-                                const sub = mySubmissions.find((s: any) => s.debtId === d.loanId && s.status === "PENDING");
-                                return (
-                                    <button key={d.loanId} onClick={() => { setPlanDebt(d); window.scrollTo({ top: 0 }); }} className={`w-full text-left flex items-center gap-3 p-3.5 active:bg-zinc-50 transition ${i ? "border-t border-zinc-100" : ""}`}>
-                                        <div className="size-[46px] shrink-0 rounded-[15px] bg-zinc-100 text-zinc-600 grid place-items-center"><IconBuildingStore size={22} /></div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-[15px] font-bold leading-tight text-zinc-900 line-clamp-2">{storeOf(d)}</p>
-                                            <p className="text-[12.5px] text-zinc-500 truncate">{ticketOf(d) ? `#${ticketOf(d)} · ` : ""}{fmtDay(d.createdAt)}{sub ? " · abono en revisión" : ""}</p>
-                                            <Segments debt={d} />
-                                        </div>
-                                        <div className="shrink-0 text-right">
-                                            <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${late ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>{late ? "Vencida" : "Al día"}</span>
-                                            <p className="mt-1 text-base text-zinc-900" style={{ fontWeight: 800 }}>{money(d.remainingBalance)}</p>
-                                            <p className="text-[11.5px] text-zinc-500">{paidCountOf(d)} de {totalCountOf(d)} pagadas</p>
-                                        </div>
-                                        <IconChevronRight size={18} stroke={2.4} className="shrink-0 text-zinc-300" />
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </>
-                )}
-
-                <button onClick={() => { setShowHistory(true); window.scrollTo({ top: 0 }); }} className="mt-3 w-full text-left flex items-center gap-3 rounded-[22px] border border-zinc-200 bg-white p-3.5 active:bg-zinc-50 transition">
-                    <div className="size-[46px] shrink-0 rounded-[15px] bg-amber-100 text-amber-600 grid place-items-center"><IconHistory size={22} /></div>
-                    <div className="min-w-0">
-                        <p className="text-[15px] font-bold text-zinc-900">Historial de movimientos</p>
-                        <p className="text-[12.5px] text-zinc-500">Compras y abonos · {(client?.creditTransactions || []).length} movimiento{(client?.creditTransactions || []).length === 1 ? "" : "s"}</p>
-                    </div>
-                    <IconChevronRight size={18} stroke={2.4} className="ml-auto shrink-0 text-zinc-300" />
-                </button>
+                    </div>, document.body)}
             </div>
         );
     };
@@ -2946,12 +3076,11 @@ $1color: #8E3418 !important;
                     </svg>
                     {/* room for the phone's status bar / notch */}
                     <div aria-hidden className="relative z-10" style={{ height: "calc(env(safe-area-inset-top) + 12px)" }} />
-                    {activeTab !== "home" && !(activeTab === "payments" && !selectedDebtForPayment) && (
+                    {activeTab !== "home" && activeTab !== "profile" && !(activeTab === "payments" && !selectedDebtForPayment) && (
                         <div className="relative z-10 max-w-md mx-auto px-6 mt-4">
                             <h1 className="text-[30px] leading-tight text-white" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>
                                 {activeTab === "payments" && "Pagar"}
                                 {activeTab === "rewards" && "Compra en tiendas"}
-                                {activeTab === "profile" && "Tu perfil"}
                                 {activeTab === "auth-purchase" && "Autoriza tu compra"}
                             </h1>
                         </div>
@@ -4613,119 +4742,8 @@ $1color: #8E3418 !important;
                 )}
 
                 {/* TAB 4: PROFILE */}
-                {activeTab === "profile" && (
-                    <div className="space-y-5 animate-in slide-in-from-bottom duration-500">
+                {activeTab === "profile" && renderProfile()}
 
-                        {isEditingProfile ? (
-                            <>
-                                <div className="rounded-xl bg-gradient-to-br from-amber-50 via-amber-50 to-amber-50/30 border border-amber-200/50 p-6 space-y-4">
-                                    <h3 className="text-sm font-black text-zinc-800 border-b border-zinc-100 pb-2">Editar perfil</h3>
-                                    <div className="space-y-3.5">
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-zinc-400">Nombre</label>
-                                            <Input 
-                                                value={editName} 
-                                                onChange={(e) => setEditName(e.target.value)} 
-                                                className="h-10 rounded-lg text-xs border-zinc-200 bg-white" 
-                                                disabled={isSavingProfile}
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-zinc-400">Email</label>
-                                            <Input 
-                                                value={editEmail} 
-                                                onChange={(e) => setEditEmail(e.target.value)} 
-                                                className="h-10 rounded-lg text-xs border-zinc-200 bg-white" 
-                                                disabled={isSavingProfile}
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-zinc-400">Teléfono</label>
-                                            <Input 
-                                                value={editPhone} 
-                                                onChange={(e) => setEditPhone(e.target.value)} 
-                                                className="h-10 rounded-lg text-xs border-zinc-200 bg-white" 
-                                                disabled={isSavingProfile}
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-zinc-400">Dirección</label>
-                                            <Input 
-                                                value={editAddress} 
-                                                onChange={(e) => setEditAddress(e.target.value)} 
-                                                className="h-10 rounded-lg text-xs border-zinc-200 bg-white" 
-                                                disabled={isSavingProfile}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-3 mt-4">
-                                    <Button 
-                                        onClick={() => setIsEditingProfile(false)} 
-                                        variant="outline" 
-                                        className="flex-1 h-12 rounded-xl text-xs font-black text-zinc-500 border-zinc-200 hover:bg-zinc-50"
-                                        disabled={isSavingProfile}
-                                    >
-                                        Cancelar
-                                    </Button>
-                                    <Button 
-                                        onClick={handleSaveProfile} 
-                                        className="flex-1 h-12 rounded-xl text-xs font-black bg-amber-400 hover:bg-amber-500 text-white shadow-md border-none"
-                                        disabled={isSavingProfile}
-                                    >
-                                        {isSavingProfile ? "Guardando..." : "Guardar"}
-                                    </Button>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div className="rounded-xl bg-gradient-to-br from-amber-50 via-amber-50 to-amber-50/30 border border-amber-200/50 p-6 space-y-5">
-                                    <div className="flex items-center gap-3.5">
-                                        <div className="size-12 rounded-full bg-amber-50 text-amber-950 flex items-center justify-center font-black">
-                                            {client?.name ? client.name.charAt(0).toUpperCase() : "A"}
-                                        </div>
-                                        <div>
-                                            <h4 className="font-extrabold text-sm text-zinc-700">{client?.name}</h4>
-                                            <p className="text-[10px] text-zinc-400 mt-0.5">ID: {client?.documentId || "No registrada"}</p>
-                                        </div>
-                                    </div>
-                                    <div className="border-t border-zinc-100 pt-4 space-y-3.5 text-xs">
-                                        <div className="flex justify-between">
-                                            <span className="text-zinc-400">Email</span>
-                                            <span className="font-semibold text-zinc-700">{client?.email || "No registrado"}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-zinc-400">Teléfono</span>
-                                            <span className="font-semibold text-zinc-700">{client?.phone || "No registrado"}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-zinc-400">Dirección</span>
-                                            <span className="font-semibold text-zinc-700 text-right truncate max-w-[200px]">{client?.address || "No registrada"}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <Button 
-                                    variant="outline" 
-                                    onClick={handleStartEditProfile} 
-                                    className="w-full h-12 rounded-xl text-xs font-black text-amber-950 hover:text-amber-950 border-amber-200 hover:bg-amber-50/50 transition-all duration-300 bg-transparent"
-                                >
-                                    Editar perfil
-                                </Button>
-
-                                <Button 
-                                    variant="outline" 
-                                    onClick={requestLogout} 
-                                    className="w-full h-12 rounded-xl text-xs font-black text-rose-600 hover:text-rose-700 border-rose-200 hover:bg-rose-50/50 transition-all duration-300 bg-transparent"
-                                >
-                                    Cerrar sesión
-                                </Button>
-                            </>
-                        )}
-                    </div>
-                )}
-                {/* TAB 5: AUTH PURCHASE (PIN) */}
                 {activeTab === "auth-purchase" && (
                     <div className="min-h-[calc(100vh-220px)] flex flex-col justify-center items-center space-y-5 animate-in slide-in-from-bottom duration-500 w-full">
                         {showCancelledScreen ? (
@@ -4941,7 +4959,7 @@ $1color: #8E3418 !important;
             </main>
 
             {/* CAPSULE BOTTOM NAV (GOOEY METABALLS DESIGN) */}
-            {selectedProductForDetail === null && !isCheckoutOpen && !isCartOpen && !(activeTab === "payments" && planDebt && !showHistory) && (
+            {selectedProductForDetail === null && !isCheckoutOpen && !isCartOpen && (
                 <div className="fixed bottom-6 left-6 right-6 h-16 max-w-sm mx-auto z-50 filter drop-shadow-[0_8px_20px_rgba(139,92,26,0.12)] animate-in slide-in-from-bottom duration-300">
                 {/* SVG Filter for Gooey Effect */}
                 <svg className="absolute w-0 h-0" width="0" height="0" version="1.1" xmlns="http://www.w3.org/2000/svg">
@@ -4978,7 +4996,7 @@ $1color: #8E3418 !important;
                             setSelectedProductForDetail(null);
                             setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false);
                         }} 
-                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "home" && !requestLoanView ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
+                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "home" && !requestLoanView && !showLevel ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
                         <IconCreditCard size={18} />
                         <span>Inicio</span>
@@ -4986,7 +5004,7 @@ $1color: #8E3418 !important;
                     <button 
                         onClick={() => { 
                             setRequestLoanView(false); 
-                            setActiveTab("payments"); 
+                            setActiveTab("home"); 
                             setIsOrdersListOpen(false);
                             setIsTrackingOpen(false);
                             setSelectedDebtForPayment(null);
@@ -4995,12 +5013,13 @@ $1color: #8E3418 !important;
                             setTxSearchQuery("");
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
-                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false);
-                        }} 
-                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "payments" && !showHistory ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
+                            setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false);
+                            setShowLevel(true); window.scrollTo({ top: 0 });
+                        }}
+                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "home" && showLevel ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
-                        <IconWallet size={18} />
-                        <span>Pagos</span>
+                        <IconTrophy size={18} />
+                        <span>Niveles</span>
                     </button>
 
                     {/* Central Large PIN/Pay Button Container (Enlarged) */}

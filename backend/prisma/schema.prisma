@@ -596,6 +596,8 @@ model InventoryMovement {
 model Client {
   id                          String              @id @default(uuid())
   name                        String
+  /// Syncro Credit profile
+  birthDate                   DateTime?
   documentId                  String?
   email                       String?
   phone                       String?

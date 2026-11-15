@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Query, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { ClientsService } from './clients.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -28,7 +28,20 @@ export class ClientsController {
     const clientId = req.user.id || req.user.sub;
     const businessId = req.user.businessId;
     const { name, email, phone, address } = body;
-    return this.clientsService.update(clientId, { name, email, phone, address }, businessId);
+    const data: any = { name, email, phone, address };
+    if (body.birthDate !== undefined) {
+      const d = body.birthDate ? new Date(body.birthDate) : null;
+      if (d && (isNaN(d.getTime()) || d > new Date() || d.getFullYear() < 1900)) throw new BadRequestException('Fecha de nacimiento no válida');
+      data.birthDate = d;
+    }
+    return this.clientsService.update(clientId, data, businessId);
+  }
+
+  /** The client changes its own password (asks for the current one) */
+  @Post('portal/password')
+  async changePortalPassword(@Body() body: any, @Request() req: any) {
+    const clientId = req.user.id || req.user.sub;
+    return this.clientsService.changePortalPassword(clientId, String(body?.current || ''), String(body?.next || ''));
   }
 
   @Get('portal/loans')

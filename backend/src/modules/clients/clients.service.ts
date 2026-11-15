@@ -558,6 +558,17 @@ export class ClientsService {
    * $1500 → 1 · Galaxia.
    * Only this client's own loans count (a client belongs to one business: golden rule).
    */
+  async changePortalPassword(clientId: string, current: string, next: string) {
+    if (next.length < 6) throw new BadRequestException('La nueva contraseña debe tener al menos 6 caracteres');
+    const client = await this.prisma.client.findUnique({ where: { id: clientId }, select: { password: true } });
+    if (!client?.password) throw new BadRequestException('Tu cuenta no tiene contraseña');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const bcrypt = require('bcrypt');
+    if (!(await bcrypt.compare(current, client.password))) throw new BadRequestException('La contraseña actual no es correcta');
+    await this.prisma.client.update({ where: { id: clientId }, data: { password: await bcrypt.hash(next, 10) } });
+    return { ok: true };
+  }
+
   async getPortalLevel(clientId: string) {
     const LEVELS = [
       { level: 4, name: 'Chispa', from: 0 },
