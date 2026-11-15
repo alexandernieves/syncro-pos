@@ -323,7 +323,7 @@ export default function PrestamosPage() {
                   </div>
                   {l.status === "REQUESTED" && !l.fitsLimit && (
                     <p className="w-full rounded-md bg-primary/5 px-3 py-1.5 text-right text-xs text-primary">
-                      El préstamo suma {money(l.totalToPay)} y su límite disponible es {money(l.available)}: súbele el límite en Clientes para aprobarlo.
+                      Pidió {money(l.amount)} y su límite disponible es {money(l.available)}: súbele el límite en Clientes para aprobarlo.
                     </p>
                   )}
                 </div>
@@ -340,13 +340,13 @@ export default function PrestamosPage() {
             <>
               <DialogHeader>
                 <DialogTitle>{draft.id ? "Editar oferta" : "Nueva oferta"}</DialogTitle>
-                <DialogDescription>Así la verán los clientes en “Pedir préstamo”. El interés es por todo el préstamo.</DialogDescription>
+                <DialogDescription>Así la verán los clientes en “Pedir préstamo”. El interés es por todo el préstamo (máximo 100%) y va aparte del límite del cliente.</DialogDescription>
               </DialogHeader>
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2 space-y-1.5"><Label>Nombre</Label><Input maxLength={40} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Ej. Express" /></div>
                 <div className="space-y-1.5"><Label>Monto mínimo ($)</Label><Input type="number" min={1} value={draft.minAmount} onChange={(e) => setDraft({ ...draft, minAmount: e.target.value })} /></div>
                 <div className="space-y-1.5"><Label>Monto máximo ($)</Label><Input type="number" min={1} value={draft.maxAmount} onChange={(e) => setDraft({ ...draft, maxAmount: e.target.value })} /></div>
-                <div className="space-y-1.5"><Label>Interés (%)</Label><Input type="number" min={0} value={draft.interestPct} onChange={(e) => setDraft({ ...draft, interestPct: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label>Interés (%)</Label><Input type="number" min={0} max={100} value={draft.interestPct} onChange={(e) => setDraft({ ...draft, interestPct: e.target.value })} /></div>
                 <div className="space-y-1.5"><Label>Cuotas</Label><Input type="number" min={1} max={52} value={draft.installments} onChange={(e) => setDraft({ ...draft, installments: e.target.value })} /></div>
                 <div className="space-y-1.5">
                   <Label>Cada cuánto</Label>

@@ -43,7 +43,7 @@ export class LendingService {
     if (!name) throw new BadRequestException('Ponle un nombre a la oferta');
     if (!(minAmount > 0) || !(maxAmount >= minAmount)) throw new BadRequestException('Revisa el monto mínimo y máximo');
     if (maxAmount > 100000) throw new BadRequestException('El monto máximo es demasiado alto');
-    if (!(interestPct >= 0 && interestPct <= 200)) throw new BadRequestException('El interés debe estar entre 0% y 200%');
+    if (!(interestPct >= 0 && interestPct <= 100)) throw new BadRequestException('El interés debe estar entre 0% y 100%');
     if (installments < 1 || installments > 52) throw new BadRequestException('Entre 1 y 52 cuotas');
     if (frequencyDays < 1 || frequencyDays > 90) throw new BadRequestException('La frecuencia debe estar entre 1 y 90 días');
     if (minLevel < 1 || minLevel > 4) throw new BadRequestException('Nivel no válido');
@@ -114,7 +114,8 @@ export class LendingService {
         level: levels.get(l.client.id) ?? 4,
         lateAmount: round2(late),
         available,
-        fitsLimit: available + 0.005 >= l.totalToPay,
+        // the limit covers the cash lent; the interest goes on top (what is already owed is subtracted whole)
+        fitsLimit: available + 0.005 >= l.amount,
       };
     });
   }
@@ -150,8 +151,8 @@ export class LendingService {
     if (loan.status !== 'REQUESTED') throw new BadRequestException('Esta solicitud ya fue respondida');
     if (loan.client.isSuspended) throw new BadRequestException('El cliente tiene la cuenta pausada');
     const available = (loan.client.creditLimit || 0) - (loan.client.currentDebt || 0);
-    if (available + 0.005 < loan.totalToPay) {
-      throw new BadRequestException(`Su límite disponible es $${available.toFixed(2)} y el préstamo suma $${loan.totalToPay.toFixed(2)}. Súbele el límite en Clientes o rechaza la solicitud.`);
+    if (available + 0.005 < loan.amount) {
+      throw new BadRequestException(`Su límite disponible es $${available.toFixed(2)} y pidió $${loan.amount.toFixed(2)}. Súbele el límite en Clientes o rechaza la solicitud.`);
     }
     // A PIN that isn't in use in this business
     let pin = '';
@@ -293,10 +294,10 @@ export class LendingService {
       const p = this.plan(a, o);
       const mineHere = myAt.get(o.businessId);
       const available = round2(mineHere ? (mineHere.isSuspended ? 0 : (mineHere.creditLimit || 0) - (mineHere.currentDebt || 0)) : startOf.get(o.businessId) ?? 30);
-      // the most this person can borrow here: what they return (with interest) must fit their limit
-      const maxForYou = Math.min(o.maxAmount, Math.floor((Math.max(0, available) / (1 + o.interestPct / 100)) * 100) / 100);
+      // the most this person can borrow here: the cash lent must fit their limit (interest goes on top)
+      const maxForYou = Math.min(o.maxAmount, Math.floor(Math.max(0, available) * 100) / 100);
       const levelOk = level <= o.minLevel;
-      const fits = available + 0.005 >= p.total;
+      const fits = available + 0.005 >= a;
       out.push({
         available, maxForYou, levelOk, fits,
         blocked: !levelOk ? 'level' : !fits ? 'limit' : null,
@@ -343,9 +344,8 @@ export class LendingService {
     if (client.isSuspended) throw new BadRequestException('Tu cuenta con este comercio está pausada');
     {
       const available = round2((client.creditLimit || 0) - (client.currentDebt || 0));
-      const total = this.plan(amount, offer).total;
-      if (available + 0.005 < total) {
-        const max = Math.floor((Math.max(0, available) / (1 + offer.interestPct / 100)) * 100) / 100;
+      if (available + 0.005 < amount) {
+        const max = Math.floor(Math.max(0, available) * 100) / 100;
         throw new BadRequestException(
           max >= offer.minAmount
             ? `Con tu límite en este comercio ($${available.toFixed(2)}) puedes pedir hasta $${max.toFixed(2)}`

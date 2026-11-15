@@ -1778,7 +1778,7 @@ export default function ConfiguracionPage() {
                 </CardHeader>
                 <CardContent className="divide-y divide-border/60">
                   {[
-                    { k: "initial" as const, label: "Límite inicial ($)", desc: "Con cuánto crédito empieza un cliente nuevo. En préstamos, lo que devuelve (monto + interés) debe caber en su límite" },
+                    { k: "initial" as const, label: "Límite inicial ($)", desc: "Con cuánto crédito empieza un cliente nuevo. En préstamos es lo máximo que se le puede prestar; el interés va aparte" },
                     { k: "step" as const, label: "Aumento por pago a tiempo ($)", desc: "Cuánto sube el límite cada vez que salda una deuda a tiempo" },
                     { k: "max" as const, label: "Límite máximo ($)", desc: "Hasta dónde puede subir el límite automáticamente" },
                   ].map((r) => (

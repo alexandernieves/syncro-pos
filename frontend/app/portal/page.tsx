@@ -2945,7 +2945,7 @@ $1color: #8E3418 !important;
                                 </div>
                                 {o.blocked === "limit" && (
                                     <p className="mt-2 text-[12px] leading-snug text-zinc-500">
-                                        Tu límite con este comercio es <b className="text-zinc-700">{money(o.available)}</b> y devolverías {money(o.total)}.
+                                        Tu límite disponible con este comercio es <b className="text-zinc-700">{money(o.available)}</b>.
                                         {o.maxForYou >= o.minAmount ? ` Puedes pedir hasta ${money(Math.floor(o.maxForYou))}.` : " Sube de nivel pagando a tiempo para que te aumenten el límite."}
                                     </p>
                                 )}
