@@ -15,7 +15,7 @@ import {
     IconCalendar, IconChevronRight, IconGift, IconMapPin, IconInfoCircle,
     IconShoppingBag, IconChevronLeft, IconSearch, IconBuildingStore, IconPhone,
     IconCamera, IconClock, IconTruck, IconCircleCheck, IconCircleX,
-    IconWallet, IconBrandPaypal, IconArrowRight, IconChevronDown, IconEye, IconEyeOff
+    IconWallet, IconBrandPaypal, IconTrophy, IconArrowRight, IconChevronDown, IconEye, IconEyeOff
 } from "@tabler/icons-react";
 
 import { toast } from "sonner";
@@ -65,11 +65,7 @@ export default function ClientPortal() {
 /** Small header used on every screen: the app name above the screen's title. */
 const PortalTitle = ({ children }: { children: React.ReactNode }) => (
     <div className="select-none">
-        <p className="text-[11px] font-semibold text-zinc-400 flex items-center gap-1.5">
-            <img src="/syncro.png" alt="" className="size-4 rounded-[5px]" />
-            Syncro <span className="text-primary -ml-1">Credit</span>
-        </p>
-        <h1 className="mt-1 text-[26px] font-bold leading-tight tracking-[-0.02em] text-zinc-900">{children}</h1>
+        <h1 className="text-[26px] font-bold leading-tight tracking-[-0.02em] text-zinc-900">{children}</h1>
     </div>
 );
 
@@ -2593,16 +2589,27 @@ $1color: #8E3418 !important;
 
                 {subBanner() && <div className="mt-3">{subBanner()}</div>}
                 <div aria-hidden className="grow min-h-5" />
-                {/* Quick actions */}
+                {/* Quick actions (paying already lives in the bar and the next-payment card): lacquered
+                    white like Nubi and the credit card */}
                 <div className="grid grid-cols-4 gap-1.5">
                     {[
-                        { label: "Pagar", icon: <IconWallet size={24} />, on: () => (nextInst ? openPay(nextInst.debt) : goTab("payments")) },
-                        { label: "Mis cuotas", icon: <IconCalendar size={24} />, on: () => goTab("payments") },
+                        { label: "Mi nivel", icon: <IconTrophy size={24} />, on: openLevel },
                         { label: "Historial", icon: <IconHistory size={24} />, on: () => { goTab("payments"); setShowHistory(true); } },
+                        { label: "Mis pedidos", icon: <IconTruck size={24} />, on: () => setIsOrdersListOpen(true) },
                         { label: "Tiendas", icon: <IconShoppingBag size={24} />, on: () => goTab("rewards") },
                     ].map((a) => (
-                        <button key={a.label} onClick={a.on} className="flex flex-col items-center gap-1.5 text-[12px] font-semibold text-zinc-700 active:scale-95 transition">
-                            <span className="size-14 rounded-[20px] border border-zinc-200 bg-white grid place-items-center text-amber-600">{a.icon}</span>
+                        <button key={a.label} onClick={a.on} className="group flex flex-col items-center gap-1.5 text-[12px] font-semibold text-zinc-700">
+                            <span
+                                className="relative grid size-14 place-items-center overflow-hidden rounded-[20px] text-amber-600 transition group-active:translate-y-[2px] group-active:scale-95"
+                                style={{
+                                    background: "linear-gradient(160deg, #ffffff 0%, #fafbfc 45%, #e9ecf1 100%)",
+                                    boxShadow: "0 8px 16px -10px rgba(90,40,10,0.45), inset 0 1px 0 #ffffff, inset 0 -6px 12px rgba(140,150,170,0.2), inset 0 0 0 1px rgba(255,255,255,0.75)",
+                                }}
+                            >
+                                {/* the lacquer's top reflection */}
+                                <span aria-hidden className="pointer-events-none absolute inset-x-2 top-1 h-4 rounded-full" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0))" }} />
+                                <span className="relative">{a.icon}</span>
+                            </span>
                             {a.label}
                         </button>
                     ))}
