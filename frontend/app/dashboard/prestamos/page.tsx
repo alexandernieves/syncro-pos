@@ -36,7 +36,7 @@ type Loan = {
   createdAt: string; decidedAt: string | null; disbursedAt: string | null; offerName: string | null; level: number; lateAmount: number;
   available: number; fitsLimit: boolean; rejectReason: string | null;
   client: { id: string; name: string; documentId: string | null; phone: string | null; creditLimit: number; currentDebt: number };
-  installments: { id: string; installmentNumber: number; dueDate: string; amount: number; paidAmount: number; status: string }[];
+  installments: { id: string; installmentNumber: number; dueDate: string; amount: number; paidAmount: number; status: string; lateCharges?: number }[];
 };
 type Portfolio = { lent: number; toCollect: number; collected: number; interestEarned: number; late: number; activeLoans: number; pendingRequests: number };
 
@@ -394,7 +394,7 @@ export default function PrestamosPage() {
                     const late = i.status === "PENDING" && new Date(i.dueDate) < new Date();
                     return (
                       <div key={i.id} className="flex items-center justify-between px-3 py-2">
-                        <span>Cuota {i.installmentNumber} · {day(i.dueDate)}</span>
+                        <span>Cuota {i.installmentNumber} · {day(i.dueDate)}{(i.lateCharges ?? 0) > 0.004 && <span className="ml-1 text-xs text-destructive">· recargo {money(i.lateCharges ?? 0)}</span>}</span>
                         <span className={cn("font-semibold tabular-nums", i.status === "PAID" ? "text-emerald-600" : late ? "text-destructive" : "")}>{i.status === "PAID" ? "Pagada" : late ? `Vencida · ${money(i.amount - i.paidAmount)}` : money(i.amount - i.paidAmount)}</span>
                       </div>
                     );

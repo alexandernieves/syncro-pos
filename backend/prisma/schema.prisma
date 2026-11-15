@@ -446,6 +446,8 @@ model Setting {
   syncroCreditVisible         Boolean   @default(true)
   /// Rate the app uses for the amount to transfer: usd (Bs at BCV dollar), eur (Bs at BCV euro), cop (pesos)
   syncroCreditRate            String    @default("usd")
+  /// Charges for late installments: {enabled, since, graceDays, fixedFee, percentFee, interestPct, interestEveryDays, capPct, extras[]}
+  syncroCreditLateFees        Json?
   /// Its own card in the app's "Para ti" carousel
   syncroCreditPromoTitle      String?
   syncroCreditPromoText       String?
@@ -991,7 +993,32 @@ model LoanInstallment {
   paidAmount        Float             @default(0)
   status            InstallmentStatus @default(PENDING)
   paidAt            DateTime?
+  /// Part of amount that is late charges (amount - lateCharges = the original installment)
+  lateCharges       Float             @default(0)
   loan              Loan              @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  charges           LoanLateCharge[]
+}
+
+/// A late charge applied to an installment (once per kind/ref/period)
+model LoanLateCharge {
+  id            String          @id @default(uuid())
+  installmentId String
+  loanId        String
+  clientId      String
+  businessId    String
+  /// FEE_FIXED, FEE_PCT, INTEREST or EXTRA
+  kind          String
+  /// Which rule: "fixed", "pct", "interest" or the custom charge id
+  ref           String
+  name          String
+  period        Int             @default(1)
+  amount        Float
+  createdAt     DateTime        @default(now())
+  installment   LoanInstallment @relation(fields: [installmentId], references: [id], onDelete: Cascade)
+
+  @@unique([installmentId, kind, ref, period], map: "LoanLateCharge_once")
+  @@index([businessId])
+  @@index([clientId])
 }
 
 model Reward {

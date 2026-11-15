@@ -2906,7 +2906,7 @@ $1color: #8E3418 !important;
                     {offers.map((o: any) => {
                         const taken = busyWith.has(o.business?.id);
                         return (
-                            <div key={o.id} className={`rounded-[22px] border border-zinc-200 bg-white p-4 ${o.eligible ? "" : "opacity-60"}`}>
+                            <div key={o.id} className={`rounded-[22px] border border-zinc-200 bg-white p-4 ${o.eligible || (o.blocked === "limit" && o.maxForYou >= o.minAmount) ? "" : "opacity-60"}`}>
                                 <div className="flex items-center gap-3">
                                     {bizAv(o.business)}
                                     <div className="min-w-0 flex-1">
@@ -2928,10 +2928,27 @@ $1color: #8E3418 !important;
                                         >
                                             {taken ? "Solicitado" : "Pedir"}
                                         </button>
+                                    ) : o.blocked === "limit" && o.maxForYou >= o.minAmount ? (
+                                        // the limit covers a smaller amount: one tap asks for that
+                                        <button
+                                            onClick={() => setLoanAmount(String(Math.floor(o.maxForYou)))}
+                                            className="ml-auto rounded-full border-[1.5px] border-primary px-3.5 py-1.5 text-[12.5px] font-bold text-primary transition active:scale-95"
+                                        >
+                                            Pedir {money(Math.floor(o.maxForYou))}
+                                        </button>
                                     ) : (
-                                        <span className="ml-auto flex items-center gap-1 text-[12px] font-semibold text-zinc-500"><IconLock size={13} />Desde nivel {o.minLevel} · {o.minLevelName}</span>
+                                        <span className="ml-auto flex items-center gap-1 text-[12px] font-semibold text-zinc-500">
+                                            <IconLock size={13} />
+                                            {o.blocked === "level" ? `Desde nivel ${o.minLevel} · ${o.minLevelName}` : "Tu límite no alcanza"}
+                                        </span>
                                     )}
                                 </div>
+                                {o.blocked === "limit" && (
+                                    <p className="mt-2 text-[12px] leading-snug text-zinc-500">
+                                        Tu límite con este comercio es <b className="text-zinc-700">{money(o.available)}</b> y devolverías {money(o.total)}.
+                                        {o.maxForYou >= o.minAmount ? ` Puedes pedir hasta ${money(Math.floor(o.maxForYou))}.` : " Sube de nivel pagando a tiempo para que te aumenten el límite."}
+                                    </p>
+                                )}
                             </div>
                         );
                     })}
@@ -3090,6 +3107,10 @@ $1color: #8E3418 !important;
                                     <p className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>
                                         {money(total)} <span className={`text-[13px] font-semibold ${late ? "text-rose-600" : "text-zinc-500"}`}>{late ? `desde el ${fmtDay(group[0].dueDate)}` : `· ${fmtDay(group[0].dueDate)}`}</span>
                                     </p>
+                                    {(() => {
+                                        const fees = group.reduce((a: number, i: any) => a + (Number(i.lateCharges) || 0), 0);
+                                        return fees > 0.004 ? <p className="text-[11.5px] font-semibold text-rose-600">Incluye {money(fees)} de recargo por atraso</p> : null;
+                                    })()}
                                 </div>
                                 <button
                                     onClick={() => askPay(group, title)}
@@ -3430,6 +3451,9 @@ $1color: #8E3418 !important;
                                         {isPaid ? `Pagada · vencía el ${fmtDay(inst.dueDate)}` : `Vence el ${fmtDay(inst.dueDate)} · ${whenText(inst.dueDate)}`}
                                         {partial ? ` · abonado ${money(inst.amount - left)}` : ""}
                                     </span>
+                                    {Number(inst.lateCharges) > 0.004 && (
+                                        <span className="block text-[12px] font-semibold text-rose-600">Incluye {money(inst.lateCharges)} de recargo por atraso</span>
+                                    )}
                                 </span>
                                 <span className="shrink-0 text-[15px] text-zinc-900" style={{ fontWeight: 800 }}>{money(isPaid ? inst.amount : left)}</span>
                             </button>

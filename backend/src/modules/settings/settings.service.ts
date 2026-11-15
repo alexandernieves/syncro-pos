@@ -4,6 +4,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizeAlerts } from '../whatsapp/whatsapp-alerts.config';
+import { cleanLateFees } from '../lending/late-fees';
 import { isTheme, normalizeThemes, type ThemeId } from './themes';
 
 @Injectable()
@@ -96,7 +97,7 @@ export class SettingsService {
       'paymentMethods', 'discountPin', 'pinPermissions',
       'syncroCreditMaxInstallments', 'syncroCreditFrequencyDays',
       'syncroCreditInitialLimit', 'syncroCreditMaxLimit', 'syncroCreditLimitStep',
-      'syncroCreditVisible', 'syncroCreditPromoTitle', 'syncroCreditPromoText', 'syncroCreditRate',
+      'syncroCreditVisible', 'syncroCreditPromoTitle', 'syncroCreditPromoText', 'syncroCreditRate', 'syncroCreditLateFees',
       'salesGoal', 'showSalesGoal', 'showNetMargin',
       'exchangeRate', 'exchangeRateEur', 'bcvUpdateDate',
       'exchangeRateDashboard', 'exchangeRateDashboardEur', 'bcvUpdateDateDashboard',
@@ -124,6 +125,14 @@ export class SettingsService {
     if (filteredData.syncroCreditRate !== undefined && !['usd', 'eur', 'cop'].includes(filteredData.syncroCreditRate)) filteredData.syncroCreditRate = 'usd';
     for (const [k, max] of [['syncroCreditPromoTitle', 40], ['syncroCreditPromoText', 90]] as const) {
       if (filteredData[k] !== undefined) filteredData[k] = String(filteredData[k] ?? '').trim().slice(0, max) || null;
+    }
+
+    // Late charges: clean values; turning them on stamps "since" so earlier late days are never charged
+    if (filteredData.syncroCreditLateFees !== undefined) {
+      const next = cleanLateFees(filteredData.syncroCreditLateFees);
+      const prev = cleanLateFees((await this.prisma.setting.findFirst({ where: { businessId }, select: { syncroCreditLateFees: true } }))?.syncroCreditLateFees);
+      next.since = next.enabled ? (prev.enabled && prev.since ? prev.since : new Date().toISOString()) : null;
+      filteredData.syncroCreditLateFees = next;
     }
 
     // Avisos por WhatsApp: only a valid configuration is stored

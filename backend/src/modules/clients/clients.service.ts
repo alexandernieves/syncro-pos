@@ -804,6 +804,7 @@ export class ClientsService {
           paidAmount: inst.paidAmount,
           remaining: inst.amount - inst.paidAmount,
           status: inst.status,
+          lateCharges: (inst as any).lateCharges ?? 0,
         })),
       };
     });

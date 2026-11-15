@@ -7,6 +7,8 @@ import { MascotSettingsPanel } from "@/components/mascot/mascot-settings";
 import { BiometricSettings } from "@/components/biometric-settings";
 import { ThemeSettings } from "@/components/theme-settings";
 import { AutoBagSettings, NO_AUTO_BAG, readAutoBag, type AutoBag } from "@/components/auto-bag-settings";
+import { LateFeesSettings, DEFAULT_LATE_FEES, readLateFees, type LateFees } from "@/components/late-fees-settings";
+import { useMyModules } from "@/lib/modules";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { 
@@ -270,6 +272,11 @@ export default function ConfiguracionPage() {
   const [syncroCreditVisible, setSyncroCreditVisible] = useState(true);
   const [scPromo, setScPromo] = useState({ title: "", text: "" });
   const [scRate, setScRate] = useState<"usd" | "eur" | "cop">("usd");
+  // Charges for late installments (Atrasos y recargos)
+  const [lateFees, setLateFees] = useState<LateFees>(DEFAULT_LATE_FEES);
+  // Syncro Credit (PWA) is configured only by businesses with the "Préstamos" module
+  const myModules = useMyModules();
+  const hasLoans = !!myModules?.find((m) => m.code === "loans")?.usable;
   // The business logo (shown to its clients in Syncro Credit)
   const [bizLogo, setBizLogo] = useState<string | null>(null);
   const [logoBusy, setLogoBusy] = useState(false);
@@ -925,6 +932,7 @@ export default function ConfiguracionPage() {
             setSyncroCreditVisible(data.syncroCreditVisible ?? true);
             setScPromo({ title: data.syncroCreditPromoTitle || "", text: data.syncroCreditPromoText || "" });
             setScRate(data.syncroCreditRate === "eur" || data.syncroCreditRate === "cop" ? data.syncroCreditRate : "usd");
+            setLateFees(readLateFees(data.syncroCreditLateFees));
             setBizLogo(data.businessLogo || null);
             setScRates({ usd: Number(data.exchangeRate) || 0, eur: Number(data.exchangeRateEur) || 0, cop: Number(data.copRateManual || data.exchangeRateCop) || 0 });
             setWhatsappBotEnabled(data.whatsappBotEnabled || false);
@@ -1141,6 +1149,7 @@ export default function ConfiguracionPage() {
           syncroCreditLimitStep: Math.max(0, Number(syncroCreditLimits.step) || 0),
           syncroCreditVisible,
           syncroCreditRate: scRate,
+          ...(hasLoans ? { syncroCreditLateFees: lateFees } : {}),
           salesGoal: Number(dashboardConfig.salesGoal) || 10000,
           showSalesGoal: !!dashboardConfig.showSalesGoal,
           showNetMargin: !!dashboardConfig.showNetMargin,
@@ -1268,7 +1277,7 @@ export default function ConfiguracionPage() {
       {/* LEFT NAV */}
       <aside className="w-full lg:w-64 shrink-0 border-r bg-muted/20 p-4 flex flex-col gap-1">
         <p className="text-xs font-semibold text-muted-foreground mb-3 px-2">Secciones</p>
-        {SECTIONS.map(({ id, label, icon: Icon }) => (
+        {SECTIONS.filter((x) => x.id !== "syncrocredit" || hasLoans).map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveSection(id)}
@@ -1684,7 +1693,7 @@ export default function ConfiguracionPage() {
         )}
 
         {/* ─── SYNCRO CREDIT (PWA) ─── */}
-        {activeSection === "syncrocredit" && (() => {
+        {activeSection === "syncrocredit" && hasLoans && (() => {
           const freqPresets = [
             { days: 7, label: "Semanal" },
             { days: 15, label: "Quincenal" },
@@ -1769,7 +1778,7 @@ export default function ConfiguracionPage() {
                 </CardHeader>
                 <CardContent className="divide-y divide-border/60">
                   {[
-                    { k: "initial" as const, label: "Límite inicial ($)", desc: "Con cuánto crédito empieza un cliente nuevo al activar Syncro Credit" },
+                    { k: "initial" as const, label: "Límite inicial ($)", desc: "Con cuánto crédito empieza un cliente nuevo. En préstamos, lo que devuelve (monto + interés) debe caber en su límite" },
                     { k: "step" as const, label: "Aumento por pago a tiempo ($)", desc: "Cuánto sube el límite cada vez que salda una deuda a tiempo" },
                     { k: "max" as const, label: "Límite máximo ($)", desc: "Hasta dónde puede subir el límite automáticamente" },
                   ].map((r) => (
@@ -1781,6 +1790,9 @@ export default function ConfiguracionPage() {
                   <p className="pt-3 text-xs text-muted-foreground">En la caja, la cajera solo activa Syncro Credit con el límite inicial. Para dar otro límite hace falta el PIN de supervisor.</p>
                 </CardContent>
               </Card>
+
+              {/* Late installments: grace, fees, late interest, the business's own charges, cap */}
+              <LateFeesSettings value={lateFees} onChange={setLateFees} />
 
               {/* The rate the app uses to tell the client how much to transfer */}
               <Card>
@@ -1907,7 +1919,7 @@ export default function ConfiguracionPage() {
               </CardContent>
             </Card>
 
-            <p className="text-xs text-muted-foreground">Las cuotas, los límites y la presencia en la app de clientes están en <button type="button" className="font-semibold text-primary underline-offset-2 hover:underline" onClick={() => setActiveSection("syncrocredit")}>Syncro Credit (PWA)</button>.</p>
+            {hasLoans && <p className="text-xs text-muted-foreground">Las cuotas, los límites, los recargos por atraso y la presencia en la app de clientes están en <button type="button" className="font-semibold text-primary underline-offset-2 hover:underline" onClick={() => setActiveSection("syncrocredit")}>Syncro Credit (PWA)</button>.</p>}
 
             <Button className="self-start gap-2" onClick={() => handleSave("Punto de Venta")}><IconDeviceFloppy size={16}/>Guardar</Button>
           </div>

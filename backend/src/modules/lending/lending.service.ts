@@ -275,16 +275,34 @@ export class LendingService {
       include: { business: { select: { id: true, name: true, logo: true } } },
       take: 200,
     });
+    // The person's limit with each lender: their client there (limit - debt), or that lender's starting limit
+    const mine = ids.length
+      ? await this.prisma.client.findMany({ where: { id: { in: ids } }, select: { businessId: true, creditLimit: true, currentDebt: true, isSuspended: true } })
+      : [];
+    const myAt = new Map(mine.map((c) => [c.businessId, c]));
+    const starts = await this.prisma.setting.findMany({
+      where: { businessId: { in: [...new Set(offers.map((o) => o.businessId))] } },
+      select: { businessId: true, syncroCreditInitialLimit: true },
+    });
+    const startOf = new Map(starts.map((x) => [x.businessId, x.syncroCreditInitialLimit ?? 30]));
     const out: any[] = [];
     for (const o of offers) {
       if (hidden.has(o.businessId)) continue;
       if (!(await usableModules(this.prisma, o.businessId)).has('loans')) continue;
       const a = amount > 0 ? amount : o.minAmount;
       const p = this.plan(a, o);
+      const mineHere = myAt.get(o.businessId);
+      const available = round2(mineHere ? (mineHere.isSuspended ? 0 : (mineHere.creditLimit || 0) - (mineHere.currentDebt || 0)) : startOf.get(o.businessId) ?? 30);
+      // the most this person can borrow here: what they return (with interest) must fit their limit
+      const maxForYou = Math.min(o.maxAmount, Math.floor((Math.max(0, available) / (1 + o.interestPct / 100)) * 100) / 100);
+      const levelOk = level <= o.minLevel;
+      const fits = available + 0.005 >= p.total;
       out.push({
+        available, maxForYou, levelOk, fits,
+        blocked: !levelOk ? 'level' : !fits ? 'limit' : null,
         id: o.id, name: o.name, business: o.business, minAmount: o.minAmount, maxAmount: o.maxAmount, interestPct: o.interestPct,
         installments: o.installments, frequencyDays: o.frequencyDays, minLevel: o.minLevel, minLevelName: LEVEL_NAMES[o.minLevel],
-        amount: a, total: p.total, each: p.each, eligible: level <= o.minLevel,
+        amount: a, total: p.total, each: p.each, eligible: levelOk && fits,
       });
     }
     out.sort((x, y) => Number(y.eligible) - Number(x.eligible) || x.total - y.total);
@@ -323,6 +341,18 @@ export class LendingService {
       }
     }
     if (client.isSuspended) throw new BadRequestException('Tu cuenta con este comercio está pausada');
+    {
+      const available = round2((client.creditLimit || 0) - (client.currentDebt || 0));
+      const total = this.plan(amount, offer).total;
+      if (available + 0.005 < total) {
+        const max = Math.floor((Math.max(0, available) / (1 + offer.interestPct / 100)) * 100) / 100;
+        throw new BadRequestException(
+          max >= offer.minAmount
+            ? `Con tu límite en este comercio ($${available.toFixed(2)}) puedes pedir hasta $${max.toFixed(2)}`
+            : `Tu límite en este comercio ($${available.toFixed(2)}) no alcanza para el mínimo de esta oferta`,
+        );
+      }
+    }
     const open = await this.prisma.loan.count({ where: { clientId: client.id, kind: 'CASH', status: { in: ['REQUESTED', 'APPROVED_PENDING_DISBURSEMENT'] } } });
     if (open) throw new BadRequestException('Ya tienes una solicitud abierta con este comercio');
 
