@@ -2092,7 +2092,7 @@ $1color: #8E3418 !important;
                                 <button
                                     onClick={handleRegisterPassword}
                                     disabled={loading}
-                                    className="w-full h-14 rounded-full bg-primary hover:bg-primary/90 text-white font-semibold text-[15px] shadow-sm active:scale-[0.98] transition disabled:opacity-60"
+                                    className="w-full h-14 rounded-full bg-primary hover:bg-primary/90 text-white font-semibold text-[15px] active:scale-[0.98] transition disabled:opacity-60"
                                 >
                                     {isResettingPassword ? "Restablecer contraseña" : "Activar cuenta"}
                                 </button>
@@ -2463,7 +2463,7 @@ $1color: #8E3418 !important;
                             </button>
                         ))}
                     </div>
-                    <button onClick={() => openGroupPay(paySheet.insts, sheetMode)} className="mt-4 w-full rounded-full bg-primary py-3.5 text-[15px] text-white shadow-[0_10px_20px_-10px_rgba(242,107,58,0.8)] active:scale-[0.98] transition" style={{ fontWeight: 800 }}>
+                    <button onClick={() => openGroupPay(paySheet.insts, sheetMode)} className="mt-4 w-full rounded-full bg-primary py-3.5 text-[15px] text-white active:scale-[0.98] transition" style={{ fontWeight: 800 }}>
                         {sheetMode === "all" ? `Continuar · ${money(total)}` : "Continuar"}
                     </button>
                     <p className="mt-2.5 text-center text-[12px] text-zinc-500">Haces una sola transferencia y subes un solo comprobante.</p>
@@ -2601,7 +2601,7 @@ $1color: #8E3418 !important;
                                 </div>
                                 <button
                                     onClick={() => askPay(group, title)}
-                                    className={`ml-auto shrink-0 rounded-full px-4 py-2.5 text-sm font-bold text-white active:scale-95 transition ${late ? "bg-rose-600 shadow-[0_6px_14px_-6px_rgba(214,69,53,0.7)]" : "bg-primary shadow-[0_6px_14px_-6px_rgba(242,107,58,0.7)]"}`}
+                                    className={`ml-auto shrink-0 rounded-full px-4 py-2.5 text-sm font-bold text-white active:scale-95 transition ${late ? "bg-rose-600" : "bg-primary"}`}
                                 >
                                     {one || late ? "Pagar" : "Pagar todo"}
                                 </button>
@@ -2948,7 +2948,7 @@ $1color: #8E3418 !important;
 
                 {pend.length > 0 && (
                     <div className="fixed inset-x-0 z-[46] mx-auto max-w-md px-5" style={{ bottom: "calc(env(safe-area-inset-bottom) + 104px)" }}>
-                        <button onClick={() => payInstallments(debt, pick)} className="w-full rounded-full bg-primary py-4 text-[15.5px] text-white shadow-[0_12px_24px_-10px_rgba(242,107,58,0.85)] transition active:scale-[0.98]" style={{ fontWeight: 800 }}>
+                        <button onClick={() => payInstallments(debt, pick)} className="w-full rounded-full bg-primary py-4 text-[15.5px] text-white transition active:scale-[0.98]" style={{ fontWeight: 800 }}>
                             Pagar {pick} cuota{pick > 1 ? "s" : ""} · {money(pickSum)}
                         </button>
                     </div>
@@ -3596,7 +3596,7 @@ $1color: #8E3418 !important;
                                                         ].filter(Boolean).join("\n");
                                                         copyToClipboard(text, "Datos del pago móvil");
                                                     }}
-                                                    className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-3 py-1.5 text-[12px] font-bold text-white shadow-sm active:scale-95 transition"
+                                                    className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-3 py-1.5 text-[12px] font-bold text-white active:scale-95 transition"
                                                 >
                                                     <IconCopy size={14} /> Copiar todo
                                                 </button>
@@ -3693,7 +3693,7 @@ $1color: #8E3418 !important;
                                                 const usdAmt = bsAmt / rate;
                                                 return !paymentAmountBs || bsAmt <= 0 || usdAmt > selectedDebtForPayment.remainingBalance + 0.005;
                                             })()}
-                                            className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-white font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
+                                            className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-white font-black text-sm transition-all duration-350 active:scale-95 border-none mt-2"
                                         >
                                             Ya pagué
                                         </Button>
@@ -3969,7 +3969,7 @@ $1color: #8E3418 !important;
                                                 }
                                             }}
                                             disabled={!receiptFile || isSubmittingPayment}
-                                            className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-white font-black text-sm shadow-sm transition-all duration-350 active:scale-95 border-none mt-2"
+                                            className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-white font-black text-sm transition-all duration-350 active:scale-95 border-none mt-2"
                                         >
                                             {isSubmittingPayment ? "Registrando abono..." : "Enviar comprobante"}
                                         </Button>
@@ -4424,7 +4424,7 @@ $1color: #8E3418 !important;
                                             <Button
                                                 onClick={() => handleCheckout([{ product, quantity: 1 }])}
                                                 disabled={!inStock}
-                                                className="h-14 rounded-xl bg-amber-400 hover:bg-amber-500 text-white font-black text-xs transition-all duration-200 border-none active:scale-[0.98] cursor-pointer shadow-md shadow-amber-400/10"
+                                                className="h-14 rounded-xl bg-amber-400 hover:bg-amber-500 text-white font-black text-xs transition-all duration-200 border-none active:scale-[0.98] cursor-pointer shadow-amber-400/10"
                                             >
                                                 Comprar
                                             </Button>
@@ -4443,7 +4443,7 @@ $1color: #8E3418 !important;
                                     </div>
                                     <Button
                                         onClick={() => setIsOrdersListOpen(true)}
-                                        className="w-full rounded-2xl bg-amber-400 hover:bg-amber-500 text-amber-900 font-black text-xs h-11 border-none shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 active:scale-[0.97] transition-all duration-200 cursor-pointer animate-in fade-in"
+                                        className="w-full rounded-2xl bg-amber-400 hover:bg-amber-500 text-amber-900 font-black text-xs h-11 border-none shadow-amber-500/20 flex items-center justify-center gap-2 active:scale-[0.97] transition-all duration-200 cursor-pointer animate-in fade-in"
                                     >
                                         <IconTruck size={18} />
                                         <span>Mis pedidos</span>
@@ -4506,7 +4506,7 @@ $1color: #8E3418 !important;
                                                                         {branch.name}
                                                                     </h4>
                                                                     {branch.isMain && (
-                                                                        <span className="inline-block text-[8px] bg-amber-500 text-white font-black px-2 py-0.5 rounded-full shadow-sm shadow-amber-500/10">
+                                                                        <span className="inline-block text-[8px] bg-amber-500 text-white font-black px-2 py-0.5 rounded-full">
                                                                             Principal
                                                                         </span>
                                                                     )}
@@ -4573,7 +4573,7 @@ $1color: #8E3418 !important;
                                                     {selectedBranchForShop.name}
                                                 </h3>
                                                 {selectedBranchForShop.isMain && (
-                                                    <span className="text-[9px] bg-amber-500 text-white font-black px-2.5 py-0.5 rounded-full shadow-sm shadow-amber-500/10">
+                                                    <span className="text-[9px] bg-amber-500 text-white font-black px-2.5 py-0.5 rounded-full">
                                                         Principal
                                                     </span>
                                                 )}
@@ -4869,7 +4869,7 @@ $1color: #8E3418 !important;
                                     <Button
                                         onClick={() => handleFetchPendingPurchase(authPin)}
                                         disabled={isLoadingPendingPurchase || authPin.length !== 6}
-                                        className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-white font-black text-xs shadow-sm border-none transition-all duration-350 active:scale-95"
+                                        className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-white font-black text-xs border-none transition-all duration-350 active:scale-95"
                                     >
                                         {isLoadingPendingPurchase ? "Buscando..." : "Buscar compra"}
                                     </Button>
@@ -5219,7 +5219,7 @@ $1color: #8E3418 !important;
                         setCheckoutItems(cart);
                         setIsCartOpen(true);
                     }}
-                    className="fixed bottom-[108px] right-6 z-40 size-14 rounded-full bg-amber-400 text-white flex items-center justify-center shadow-lg shadow-amber-400/25 active:scale-95 transition-all duration-200 border-none animate-in zoom-in-95 duration-200 cursor-pointer"
+                    className="fixed bottom-[108px] right-6 z-40 size-14 rounded-full bg-amber-400 text-white flex items-center justify-center active:scale-95 transition-all duration-200 border-none animate-in zoom-in-95 duration-200 cursor-pointer"
                 >
                     <div className="relative">
                         <IconShoppingBag size={24} />
@@ -5324,7 +5324,7 @@ $1color: #8E3418 !important;
 
                                 <Button
                                     onClick={() => handleCheckout(cart)}
-                                    className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-900 font-black text-xs transition-all duration-200 border-none shadow-md shadow-amber-400/10"
+                                    className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-900 font-black text-xs transition-all duration-200 border-none shadow-amber-400/10"
                                 >
                                     Proceder al pago
                                 </Button>
