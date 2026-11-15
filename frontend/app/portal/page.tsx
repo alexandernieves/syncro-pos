@@ -2474,7 +2474,7 @@ $1color: #8E3418 !important;
         return (
             // Fills the screen: the gaps between blocks share the free height evenly (with limits), and
             // "Para ti" sits at the bottom so the PIN button floats over the cards, like in the design.
-            <div className="flex flex-col animate-in fade-in duration-500" style={{ minHeight: "calc(100dvh - 136px - env(safe-area-inset-top))" }}>
+            <div className="flex flex-col animate-in fade-in duration-500 pb-28">
                 {levelUp && createPortal(renderLevelUp(), document.body)}
                 {paySheet && createPortal(renderPaySheet(), document.body)}
                 {/* Hello, with Nubi (it glances at the credit card now and then) */}
@@ -2484,7 +2484,7 @@ $1color: #8E3418 !important;
                     <NubiFace lookAt={creditCardRef} className="!absolute -right-1 -top-4 h-[84px] w-[84px]" />
                 </div>
 
-                <div aria-hidden className="grow min-h-4" />
+                <div aria-hidden className="h-6" />
                 {/* Credit available: lacquered white like Nubi, a split bar (what you have / what you used)
                     and a level button that looks pressable */}
                 <div
@@ -2537,7 +2537,7 @@ $1color: #8E3418 !important;
                     })()}
                 </div>
 
-                <div aria-hidden className="grow-[0.6] min-h-3" />
+                <div aria-hidden className="h-4" />
                 {/* Next payment: overdue first; otherwise everything due on the next day, added up */}
                 {(() => {
                     const late = overdueInsts.length > 0;
@@ -2628,7 +2628,7 @@ $1color: #8E3418 !important;
                 })()}
 
                 {subBanner() && <div className="mt-3">{subBanner()}</div>}
-                <div aria-hidden className="grow min-h-5 max-h-8" />
+                <div aria-hidden className="h-3" />
                 {/* Talk to the business (only when it has a phone set) */}
                 {(() => {
                     const phone = String(settings?.phone || "").replace(/\D/g, "");
@@ -2654,7 +2654,7 @@ $1color: #8E3418 !important;
                 })()}
 
                 {/* Your credit purchases (where "Para ti" was; it comes back with shopping later) */}
-                <div aria-hidden className="grow min-h-5 max-h-8" />
+                <div aria-hidden className="h-6" />
                 <div className="mb-2.5 flex items-baseline justify-between">
                     <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Tus compras a crédito</h3>
                     {pendingDebtsList.length > 0 && <button onClick={() => goTab("payments")} className="text-[13px] font-bold text-amber-600">Ver todas</button>}
@@ -2749,9 +2749,9 @@ $1color: #8E3418 !important;
         const count = (k: typeof histFilter) => k === "subs" ? mySubmissions.length : k === "all" ? all.length : all.filter((t: any) => (k === "debt" ? t.type === "DEBT" : t.type !== "DEBT")).length;
         const filters: { k: typeof histFilter; t: string }[] = [{ k: "all", t: "Todo" }, { k: "debt", t: "Compras" }, { k: "pay", t: "Abonos" }, { k: "subs", t: "Comprobantes" }];
         return (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-300 pb-32 pt-3">
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300 pb-32 pt-5">
                 <BackBar title="Historial" subtitle="Tus compras y abonos" onBack={() => goTab("home")} />
-                <div className="mt-5 grid grid-cols-2 gap-2.5">
+                <div className="mt-7 grid grid-cols-2 gap-3">
                     {[{ k: `Comprado en ${year}`, v: boughtYear }, { k: `Abonado en ${year}`, v: paidYear }].map((c) => (
                         <div key={c.k} className="rounded-[22px] border border-white/40 bg-white/20 p-3.5 text-white backdrop-blur-md">
                             <p className="text-[12px] font-semibold text-white/90">{c.k}</p>
@@ -2759,12 +2759,12 @@ $1color: #8E3418 !important;
                         </div>
                     ))}
                 </div>
-                <div className="relative mt-3">
+                <div className="relative mt-5">
                     <IconSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
                     <input value={txSearchQuery} onChange={(e) => { setTxSearchQuery(e.target.value); setHistLimit(60); }} placeholder="Buscar monto, ticket, referencia o fecha"
                         className="h-12 w-full rounded-full border border-zinc-200 bg-white pl-11 pr-4 text-[15px] font-medium text-zinc-900 outline-none shadow-[0_8px_20px_-14px_rgba(90,40,10,0.4)] placeholder:text-zinc-500 focus:border-primary focus:ring-4 focus:ring-primary/15" />
                 </div>
-                <div className="-mx-6 mt-3 flex gap-2 overflow-x-auto px-6 scrollbar-none">
+                <div className="-mx-6 mt-4 flex gap-2 overflow-x-auto px-6 scrollbar-none">
                     {filters.map((x) => (
                         <button key={x.k} onClick={() => { setHistFilter(x.k); setHistLimit(60); }} className={`shrink-0 rounded-full border px-3.5 py-2 text-[13px] font-bold transition active:scale-95 ${histFilter === x.k ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-700"}`}>
                             {x.t} <span className={histFilter === x.k ? "text-white/70" : "text-zinc-500"}>· {count(x.k)}</span>
@@ -2778,21 +2778,21 @@ $1color: #8E3418 !important;
                         <p className="text-[14px] font-semibold text-zinc-800">{q ? "Nada coincide con tu búsqueda" : "Aún no hay movimientos aquí"}</p>
                     </div>
                 ) : months.map((m) => (
-                    <section key={m.key} className="mt-5">
-                        <div className="sticky top-0 z-20 -mx-6 flex items-center justify-between bg-background/90 px-7 py-2 backdrop-blur-md">
+                    <section key={m.key} className="mt-8">
+                        <div className="sticky top-0 z-20 -mx-6 mb-3 flex items-center justify-between bg-background/90 px-7 py-2.5 backdrop-blur-md">
                             <span className="text-[12.5px] font-extrabold uppercase tracking-wide text-zinc-700">{m.label}</span>
                             {!subsMode && <span className="text-[12.5px] font-bold text-zinc-600">+{money(m.plus)} · <span className="text-emerald-700">−{money(m.minus)}</span></span>}
                         </div>
-                        <div className={`${SOFT} px-4 py-1`}>
+                        <div className={`${SOFT} px-4 pb-1.5 pt-1`}>
                             {m.days.map((d) => (
                                 <div key={d.label}>
-                                    <p className="pt-3 text-[12px] font-bold text-zinc-600">{d.label}</p>
+                                    <p className="pb-1 pt-4 text-[12px] font-bold text-zinc-600">{d.label}</p>
                                     {d.items.map((t: any) => {
                                         const time = new Date(t.createdAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
                                         if (t._sub) {
                                             const st = t.status === "APPROVED" ? { t: "Aprobado", c: "text-emerald-700" } : t.status === "REJECTED" ? { t: "Rechazado", c: "text-rose-700" } : { t: "En revisión", c: "text-amber-700" };
                                             return (
-                                                <button key={t.id} onClick={() => t.receiptUrl && window.open(t.receiptUrl, "_blank")} className="flex w-full items-center gap-3 border-b border-zinc-100 py-3 text-left last:border-0">
+                                                <button key={t.id} onClick={() => t.receiptUrl && window.open(t.receiptUrl, "_blank")} className="flex w-full items-center gap-3 border-b border-zinc-100 py-4 text-left last:border-0">
                                                     <span className="size-10 shrink-0 overflow-hidden rounded-[13px] bg-zinc-100">{t.receiptUrl ? <img src={t.receiptUrl} alt="" className="size-full object-cover" /> : null}</span>
                                                     <span className="min-w-0 flex-1">
                                                         <span className="block text-[14px] font-bold text-zinc-900">Comprobante · {money(t.amount)}</span>
@@ -2804,7 +2804,7 @@ $1color: #8E3418 !important;
                                         const isDebt = t.type === "DEBT";
                                         const det = txDetail(t);
                                         return (
-                                            <div key={t.id} className="flex items-center gap-3 border-b border-zinc-100 py-3 last:border-0">
+                                            <div key={t.id} className="flex items-center gap-3 border-b border-zinc-100 py-4 last:border-0">
                                                 <span className={`grid size-10 shrink-0 place-items-center rounded-[13px] ${isDebt ? "bg-amber-100 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
                                                     {isDebt ? <IconShoppingBag size={19} /> : <IconCash size={19} />}
                                                 </span>
