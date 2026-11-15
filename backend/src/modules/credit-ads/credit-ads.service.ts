@@ -1,5 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { UploadService } from '../upload/upload.service';
+import { CutoutError, removeBackground, safeImageUrl } from './cutout';
 
 /** Backgrounds an ad can wear (the PWA draws each one); keep in sync with the frontend. */
 export const AD_THEMES = ['sunset', 'mint', 'sky', 'lavender', 'lemon', 'berry', 'sand', 'night'] as const;
@@ -18,11 +22,56 @@ const productSelect = {
  */
 @Injectable()
 export class CreditAdsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly upload: UploadService) {}
+
+  /** The bytes of a product photo: our own uploads from disk, anything else from the internet */
+  private async loadImage(src: string): Promise<Buffer> {
+    const own = src.match(/\/uploads\/(.+)$/);
+    if (own && (src.startsWith('/') || (process.env.API_URL && src.startsWith(process.env.API_URL)) || /\/\/(localhost|127\.0\.0\.1)[:/]/.test(src))) {
+      const root = path.join(process.cwd(), 'uploads');
+      const file = path.join(root, path.normalize(decodeURIComponent(own[1])));
+      if (file.startsWith(root + path.sep) && fs.existsSync(file)) return fs.readFileSync(file);
+    }
+    if (!safeImageUrl(src)) throw new BadRequestException('La foto del producto no tiene una dirección válida');
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12_000);
+    try {
+      const r = await fetch(src, { signal: ctrl.signal });
+      if (!r.ok || !(r.headers.get('content-type') || '').startsWith('image/')) throw new BadRequestException('No se pudo descargar la foto del producto');
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length > 12 * 1024 * 1024) throw new BadRequestException('La foto es demasiado grande');
+      return buf;
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      throw new BadRequestException('No se pudo descargar la foto del producto');
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Background removed from the product's photo, uploaded as the ad's own image */
+  async cutout(productId: string) {
+    const product = await this.prisma.product.findUnique({ where: { id: productId }, select: { image: true } });
+    if (!product?.image) throw new BadRequestException('Este producto no tiene foto');
+    let png: Buffer;
+    try {
+      png = await removeBackground(await this.loadImage(product.image));
+    } catch (e: any) {
+      if (e instanceof CutoutError) throw new BadRequestException(e.message);
+      throw e;
+    }
+    const url = await this.upload.uploadFile({ buffer: png, mimetype: 'image/png', originalname: 'producto-sin-fondo.png' } as any, 'syncro-credit-ads');
+    return { url };
+  }
 
   private clean(body: any) {
     const data: any = {};
     if (body.headline !== undefined) data.headline = String(body.headline ?? '').trim().slice(0, 28) || null;
+    if (body.image !== undefined) {
+      const img = body.image ? String(body.image).slice(0, 600) : null;
+      if (img && !/^(https?:\/\/|\/uploads\/)/.test(img)) throw new BadRequestException('Foto no válida');
+      data.image = img;
+    }
     if (body.theme !== undefined) {
       if (!AD_THEMES.includes(body.theme)) throw new BadRequestException('Fondo no válido');
       data.theme = body.theme;
@@ -98,7 +147,7 @@ export class CreditAdsService {
         id: a.id,
         theme: a.theme,
         headline: a.headline,
-        product: { id: a.product.id, name: a.product.name, image: a.product.image, price: v?.price ?? null, promoPrice: v?.promoPrice ?? null },
+        product: { id: a.product.id, name: a.product.name, image: a.image || a.product.image, price: v?.price ?? null, promoPrice: v?.promoPrice ?? null },
         business: a.business,
         branch: branchOf.get(a.businessId) ?? null,
       };

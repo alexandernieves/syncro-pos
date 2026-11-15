@@ -2350,6 +2350,8 @@ model SyncroCreditAd {
   businessId String
   productId  String
   headline   String?
+  /// The ad's own photo (e.g. background removed); the catalog photo is never changed
+  image      String?
   theme      String    @default("sunset")
   active     Boolean   @default(true)
   sortOrder  Int       @default(0)

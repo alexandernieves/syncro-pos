@@ -24,6 +24,13 @@ export class CreditAdsAdminController {
     return this.ads.searchProducts(businessId, q);
   }
 
+  /** Removes the background of the product photo (for this ad only) */
+  @Post('cutout')
+  cutout(@Req() req: any, @Body() body: any) {
+    this.assertAdmin(req);
+    return this.ads.cutout(String(body?.productId || ''));
+  }
+
   @Post()
   create(@Req() req: any, @Body() body: any) {
     this.assertAdmin(req);

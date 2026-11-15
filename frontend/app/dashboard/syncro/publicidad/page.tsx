@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { IconArrowDown, IconArrowUp, IconPencil, IconPhoto, IconPlus, IconSearch, IconSpeakerphone, IconTrash } from "@tabler/icons-react";
+import { IconArrowDown, IconArrowBackUp, IconArrowUp, IconPencil, IconPhoto, IconPlus, IconScissors, IconSearch, IconSpeakerphone, IconTrash } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ type Ad = {
   businessId: string;
   productId: string;
   headline: string | null;
+  image: string | null;
   theme: AdTheme;
   active: boolean;
   sortOrder: number;
@@ -35,14 +36,14 @@ type Ad = {
   business: { id: string; name: string };
   product: { id: string; name: string; image: string | null; variants: { price: number; promoPrice: number | null }[] };
 };
-type Draft = { id?: string; businessId: string; product: Ad["product"] | null; theme: AdTheme; headline: string; endsAt: string };
+type Draft = { id?: string; businessId: string; product: Ad["product"] | null; theme: AdTheme; headline: string; endsAt: string; image: string | null };
 
 const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body), headers: { "Content-Type": "application/json" } });
-const toCard = (d: { theme: string; headline?: string | null; product: Ad["product"] | null; businessName?: string }) => ({
+const toCard = (d: { theme: string; headline?: string | null; image?: string | null; product: Ad["product"] | null; businessName?: string }) => ({
   theme: d.theme,
   headline: d.headline || null,
   business: d.businessName ? { name: d.businessName } : null,
-  product: { name: d.product?.name || "Elige un producto", image: d.product?.image || null, price: d.product?.variants?.[0]?.price ?? null, promoPrice: d.product?.variants?.[0]?.promoPrice ?? null },
+  product: { name: d.product?.name || "Elige un producto", image: d.image || d.product?.image || null, price: d.product?.variants?.[0]?.price ?? null, promoPrice: d.product?.variants?.[0]?.promoPrice ?? null },
 });
 
 export default function PublicidadPage() {
@@ -55,6 +56,22 @@ export default function PublicidadPage() {
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toDelete, setToDelete] = useState<Ad | null>(null);
+  const [cutting, setCutting] = useState(false);
+
+  // background removed from the product photo, for this ad only (the catalog photo stays as it is)
+  const cutout = async () => {
+    if (!draft?.product) return;
+    setCutting(true);
+    try {
+      const { url } = await adminApi<{ url: string }>("/credit-ads/cutout", { method: "POST", ...json({ productId: draft.product.id }) });
+      setDraft((d) => (d ? { ...d, image: url } : d));
+      toast.success("Fondo quitado");
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setCutting(false);
+    }
+  };
 
   const load = useCallback(() => {
     adminApi<Ad[]>("/credit-ads").then(setAds).catch((e) => { toast.error(e.message); setAds([]); });
@@ -82,10 +99,10 @@ export default function PublicidadPage() {
 
   const openNew = () => {
     setQ("");
-    setDraft({ businessId: "", product: null, theme: themes[(ads?.length ?? 0) % themes.length], headline: "", endsAt: "" });
+    setDraft({ businessId: "", product: null, theme: themes[(ads?.length ?? 0) % themes.length], headline: "", endsAt: "", image: null });
   };
   const openEdit = (ad: Ad) => {
-    setDraft({ id: ad.id, businessId: ad.businessId, product: ad.product, theme: ad.theme, headline: ad.headline || "", endsAt: ad.endsAt ? ad.endsAt.slice(0, 10) : "" });
+    setDraft({ id: ad.id, businessId: ad.businessId, product: ad.product, theme: ad.theme, headline: ad.headline || "", endsAt: ad.endsAt ? ad.endsAt.slice(0, 10) : "", image: ad.image });
   };
 
   const save = async () => {
@@ -93,7 +110,7 @@ export default function PublicidadPage() {
     if (!draft.id && (!draft.businessId || !draft.product)) return toast.error("Elige el comercio y el producto");
     setSaving(true);
     try {
-      const body = { theme: draft.theme, headline: draft.headline, endsAt: draft.endsAt ? new Date(`${draft.endsAt}T23:59:59`).toISOString() : null };
+      const body = { theme: draft.theme, headline: draft.headline, image: draft.image, endsAt: draft.endsAt ? new Date(`${draft.endsAt}T23:59:59`).toISOString() : null };
       if (draft.id) await adminApi(`/credit-ads/${draft.id}`, { method: "PUT", ...json(body) });
       else await adminApi("/credit-ads", { method: "POST", ...json({ ...body, businessId: draft.businessId, productId: draft.product!.id }) });
       toast.success(draft.id ? "Anuncio actualizado" : "Anuncio publicado en Syncro Credit");
@@ -210,7 +227,7 @@ export default function PublicidadPage() {
                             {products.map((p) => (
                               <button
                                 key={p.id}
-                                onClick={() => setDraft({ ...draft, product: p })}
+                                onClick={() => setDraft({ ...draft, product: p, image: null })}
                                 className={cn("flex items-center gap-2 rounded-lg border p-2 text-left text-xs transition hover:bg-muted", draft.product?.id === p.id && "border-primary ring-2 ring-primary/20")}
                               >
                                 <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-md bg-muted">
@@ -262,6 +279,18 @@ export default function PublicidadPage() {
                   <div className="rounded-[28px] bg-[#F7F5F0] p-3">
                     <ScAdCard ad={toCard({ ...draft, businessName: bizName.get(draft.businessId) })} />
                   </div>
+                  {draft.product?.image && (
+                    draft.image ? (
+                      <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => setDraft({ ...draft, image: null })}>
+                        <IconArrowBackUp size={16} /> Usar la foto original
+                      </Button>
+                    ) : (
+                      <Button variant="secondary" size="sm" className="w-full gap-2" disabled={cutting} onClick={cutout}>
+                        <IconScissors size={16} /> {cutting ? "Quitando el fondo…" : "Quitar fondo"}
+                      </Button>
+                    )
+                  )}
+                  <p className="text-center text-[11px] text-muted-foreground">Funciona con fotos de fondo liso (blanco o de un color). La foto del catálogo del comercio no cambia.</p>
                   <div className="mt-auto flex w-full gap-2">
                     <Button variant="outline" className="flex-1" onClick={() => setDraft(null)}>Cancelar</Button>
                     <Button className="flex-1" disabled={saving || (!draft.id && !draft.product)} onClick={save}>{saving ? "Guardando…" : draft.id ? "Guardar" : "Publicar"}</Button>
