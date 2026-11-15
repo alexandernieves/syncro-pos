@@ -1777,12 +1777,12 @@ export default function ConfiguracionPage() {
               {/* Limits */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-semibold">Límite de crédito</CardTitle>
-                  <CardDescription>Con cuánto empieza un cliente y cómo crece si paga a tiempo.</CardDescription>
+                  <CardTitle className="text-base font-semibold">Límite para compras a crédito</CardTitle>
+                  <CardDescription>Para lo que tus clientes compran a crédito en tu tienda. Lo que prestas en efectivo se configura por nivel en <a href="/dashboard/prestamos" className="font-semibold text-primary underline-offset-2 hover:underline">Préstamos → Ajustes</a>.</CardDescription>
                 </CardHeader>
                 <CardContent className="divide-y divide-border/60">
                   {[
-                    { k: "initial" as const, label: "Límite inicial ($)", desc: "Con cuánto crédito empieza un cliente nuevo. En préstamos es lo máximo que se le puede prestar; el interés va aparte" },
+                    { k: "initial" as const, label: "Límite inicial ($)", desc: "Con cuánto crédito para compras empieza un cliente nuevo" },
                     { k: "step" as const, label: "Aumento por pago a tiempo ($)", desc: "Cuánto sube el límite cada vez que salda una deuda a tiempo" },
                     { k: "max" as const, label: "Límite máximo ($)", desc: "Hasta dónde puede subir el límite automáticamente" },
                   ].map((r) => (

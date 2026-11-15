@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   IconAlertTriangle, IconCash, IconCheck, IconChevronRight, IconCoins, IconPencil, IconPlus, IconReceipt2,
-  IconRefresh, IconTrash, IconTrendingUp, IconX,
+  IconMessageCircle, IconRefresh, IconTrash, IconTrendingUp, IconX,
 } from "@tabler/icons-react";
+import { ClientLimitBox, ClientRepLine, LenderSettingsPanel, LoanChatDialog, ReviewClientBox, type Reputation } from "@/components/lending/lender-panels";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
@@ -34,11 +35,13 @@ type Offer = { id: string; name: string; minAmount: number; maxAmount: number; i
 type Loan = {
   id: string; status: string; amount: number; totalToPay: number; remainingBalance: number; installmentsCount: number; frequencyDays: number | null;
   createdAt: string; decidedAt: string | null; disbursedAt: string | null; offerName: string | null; level: number; lateAmount: number;
-  available: number; fitsLimit: boolean; rejectReason: string | null;
-  client: { id: string; name: string; documentId: string | null; phone: string | null; creditLimit: number; currentDebt: number };
+  available: number; fitsLimit: boolean; rejectReason: string | null; limitHere: number; levelLimit: number; blockedAnywhere: boolean;
+  reputation: Reputation; unread: number;
+  myReview: { stars: number; comment: string | null } | null; clientReview: { stars: number; comment: string | null } | null;
+  client: { id: string; name: string; documentId: string | null; phone: string | null; creditLimit: number; currentDebt: number; lendingLimit: number | null };
   installments: { id: string; installmentNumber: number; dueDate: string; amount: number; paidAmount: number; status: string; lateCharges?: number }[];
 };
-type Portfolio = { lent: number; toCollect: number; collected: number; interestEarned: number; late: number; activeLoans: number; pendingRequests: number };
+type Portfolio = { lent: number; toCollect: number; collected: number; interestEarned: number; late: number; activeLoans: number; pendingRequests: number; unreadMessages: number };
 
 const LEVELS: Record<number, string> = { 4: "Chispa", 3: "Cometa", 2: "Órbita", 1: "Galaxia" };
 const FREQ: Record<number, string> = { 7: "semanales", 15: "quincenales", 30: "mensuales" };
@@ -53,7 +56,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-type Tab = "requests" | "active" | "offers" | "closed";
+type Tab = "requests" | "active" | "offers" | "closed" | "settings";
 const EMPTY_OFFER = { name: "", minAmount: "20", maxAmount: "50", interestPct: "10", installments: "2", frequencyDays: "7", minLevel: "4" };
 
 export default function PrestamosPage() {
@@ -68,10 +71,11 @@ export default function PrestamosPage() {
   const [rejecting, setRejecting] = useState<Loan | null>(null);
   const [reason, setReason] = useState("");
   const [open, setOpen] = useState<Loan | null>(null);
+  const [chat, setChat] = useState<Loan | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const status = tab === "offers" ? null : tab === "requests" ? "requests" : tab === "active" ? "active" : "closed";
+      const status = tab === "offers" || tab === "settings" ? null : tab === "requests" ? "requests" : tab === "active" ? "active" : "closed";
       const [o, p, l, approved] = await Promise.all([
         call<Offer[]>("/lending/offers"),
         call<Portfolio>("/lending/portfolio"),
@@ -173,6 +177,7 @@ export default function PrestamosPage() {
     ["active", "Activos", pf?.activeLoans || undefined],
     ["offers", "Mis ofertas", offers.length || undefined],
     ["closed", "Cerrados", undefined],
+    ["settings", "Ajustes", undefined],
   ];
 
   return (
@@ -240,7 +245,9 @@ export default function PrestamosPage() {
         </TabsList>
       </Tabs>
 
-      {tab === "offers" ? (
+      {tab === "settings" ? (
+        <LenderSettingsPanel />
+      ) : tab === "offers" ? (
         !offers.length ? (
           <Card className="items-center gap-3 py-12 text-center">
             <IconCoins size={36} className="text-primary" />
@@ -298,8 +305,9 @@ export default function PrestamosPage() {
                       <span className="block truncate font-semibold">{l.client.name} <span className="font-normal text-muted-foreground">· {l.client.documentId}</span></span>
                       <span className="block truncate text-xs text-muted-foreground">
                         Nivel {l.level} · {LEVELS[l.level]} · {l.offerName ?? "Préstamo"} · {day(l.createdAt)}
-                        {l.status === "REQUESTED" && ` · límite disponible ${money(l.available)}`}
+                        {l.status === "REQUESTED" && ` · puede pedirte hasta ${money(l.available)}`}
                       </span>
+                      <span className="mt-0.5 block"><ClientRepLine r={l.reputation} /></span>
                     </span>
                   </button>
                   <div className="text-right">
@@ -308,10 +316,16 @@ export default function PrestamosPage() {
                   </div>
                   <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
                     {statusChip(l)}
+                    {l.status !== "CANCELLED" && (
+                      <Button size="sm" variant="outline" className="relative gap-1" onClick={() => setChat(l)} aria-label="Chat con el cliente">
+                        <IconMessageCircle size={15} /> Chat
+                        {l.unread > 0 && <span className="absolute -right-1.5 -top-1.5 grid min-w-[18px] place-items-center rounded-full bg-primary px-1 text-[10.5px] font-bold text-primary-foreground">{l.unread}</span>}
+                      </Button>
+                    )}
                     {l.status === "REQUESTED" && (
                       <>
                         <Button size="sm" variant="outline" className="gap-1 text-destructive hover:text-destructive" disabled={busy === l.id} onClick={() => setRejecting(l)}><IconX size={15} /> Rechazar</Button>
-                        <Button size="sm" className="gap-1" disabled={busy === l.id || !l.fitsLimit} title={!l.fitsLimit ? "Pasa su límite: súbelo en Clientes" : undefined} onClick={() => approve(l)}><IconCheck size={15} /> Aprobar</Button>
+                        <Button size="sm" className="gap-1" disabled={busy === l.id || !l.fitsLimit || l.blockedAnywhere} title={l.blockedAnywhere ? "Está atrasado en la plataforma" : !l.fitsLimit ? "Pasa lo que puede pedirte" : undefined} onClick={() => approve(l)}><IconCheck size={15} /> Aprobar</Button>
                       </>
                     )}
                     {l.status === "APPROVED_PENDING_DISBURSEMENT" && (
@@ -323,7 +337,7 @@ export default function PrestamosPage() {
                   </div>
                   {l.status === "REQUESTED" && !l.fitsLimit && (
                     <p className="w-full rounded-md bg-primary/5 px-3 py-1.5 text-right text-xs text-primary">
-                      Pidió {money(l.amount)} y su límite disponible es {money(l.available)}: súbele el límite en Clientes para aprobarlo.
+                      Pidió {money(l.amount)} y hoy puede pedirte hasta {money(l.available)}. Si confías en él, dale su propio límite en el detalle.
                     </p>
                   )}
                 </div>
@@ -404,10 +418,18 @@ export default function PrestamosPage() {
                 <p className="text-sm text-muted-foreground">Las cuotas empiezan cuando se entrega el efectivo en caja.</p>
               )}
               {open.rejectReason && <p className="text-sm text-muted-foreground">Motivo: {open.rejectReason}</p>}
+              <ClientRepLine r={open.reputation} />
+              {!["PAID", "REJECTED", "CANCELLED"].includes(open.status) && (
+                <ClientLimitBox key={open.client.id} clientId={open.client.id} current={open.client.lendingLimit} byLevel={open.levelLimit} onSaved={load} />
+              )}
+              {open.disbursedAt && <ReviewClientBox key={open.id} loanId={open.id} initial={open.myReview} theirs={open.clientReview} onSaved={load} />}
+              <Button variant="outline" className="gap-2" onClick={() => { setChat(open); setOpen(null); }}><IconMessageCircle size={16} /> Abrir chat</Button>
             </>
           )}
         </DialogContent>
       </Dialog>
+
+      <LoanChatDialog loan={chat} onClose={() => { setChat(null); load(); }} />
 
       <AlertDialog open={!!rejecting} onOpenChange={(o) => !o && setRejecting(null)}>
         <AlertDialogContent>

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { LoansMarket } from "@/components/portal/loans-market";
 import { creditPayRate, creditRates } from "@/lib/credit-rate";
 import { createPortal } from "react-dom";
 import { API_URL } from "@/lib/constants";
@@ -442,74 +443,22 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
     const [showLevel, setShowLevel] = useState(false);
     // Cash loans (P2P): lenders publish offers, the person picks one, gets a PIN and collects at the POS
     const [showLoans, setShowLoans] = useState(false);
-    const [loanAmount, setLoanAmount] = useState("50");
-    const [loanMarket, setLoanMarket] = useState<{ level: number; levelName: string; offers: any[] } | null>(null);
-    const [loanReqs, setLoanReqs] = useState<any[]>([]);
-    const [loanPick, setLoanPick] = useState<any | null>(null);
-    const [loanBusy, setLoanBusy] = useState(false);
-    const [loanLoading, setLoanLoading] = useState(false);
-    const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem("client_token") || ""}` });
-    const loadLoanRequests = useCallback(async () => {
-        try {
-            const res = await fetch(`${API}/portal-lending/requests`, { headers: authHeaders() });
-            if (res.ok) setLoanReqs(await res.json());
-        } catch { /* offline: keep what we had */ }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-    const loadLoanMarket = useCallback(async (amt: string) => {
-        setLoanLoading(true);
-        try {
-            const n = Number(amt) || 0;
-            const res = await fetch(`${API}/portal-lending/offers${n > 0 ? `?amount=${n}` : ""}`, { headers: authHeaders() });
-            if (res.ok) setLoanMarket(await res.json());
-        } catch { /* offline */ } finally {
-            setLoanLoading(false);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-    // the offers follow the amount (a short pause while typing)
+    // messages from lenders not read yet (the badge on the Préstamos tab)
+    const [loanUnread, setLoanUnread] = useState(0);
     useEffect(() => {
-        if (!showLoans) return;
-        const t = setTimeout(() => loadLoanMarket(loanAmount), 350);
-        return () => clearTimeout(t);
-    }, [showLoans, loanAmount, loadLoanMarket]);
-    // requests: on open, and every 20 s while open (to see the approval and the PIN arrive)
-    useEffect(() => {
-        if (!showLoans) return;
-        loadLoanRequests();
-        const t = setInterval(loadLoanRequests, 20000);
+        if (view !== "dashboard") return;
+        const check = () =>
+            fetch(`${API}/portal-lending/unread`, { headers: { Authorization: `Bearer ${localStorage.getItem("client_token") || ""}` } })
+                .then((r) => (r.ok ? r.json() : null))
+                .then((d) => d && setLoanUnread(Number(d.unread) || 0))
+                .catch(() => {});
+        check();
+        const t = setInterval(check, 30000);
         return () => clearInterval(t);
-    }, [showLoans, loadLoanRequests]);
+    }, [view]);
     const openLoans = () => {
         setPlanDebt(null); setShowHistory(false); setShowLevel(false);
         setActiveTab("home"); setShowLoans(true); window.scrollTo({ top: 0 });
-    };
-    const requestCashLoan = async () => {
-        if (!loanPick) return;
-        setLoanBusy(true);
-        try {
-            const res = await fetch(`${API}/portal-lending/request`, {
-                method: "POST",
-                headers: { ...authHeaders(), "Content-Type": "application/json" },
-                body: JSON.stringify({ offerId: loanPick.id, amount: Number(loanPick.amount) }),
-            });
-            const body = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(body.message || "No se pudo enviar la solicitud");
-            toast.success(`Solicitud enviada a ${loanPick.business?.name}. Te avisamos cuando la aprueben.`);
-            setLoanPick(null);
-            await loadLoanRequests();
-            window.scrollTo({ top: 0, behavior: "smooth" });
-        } catch (e: any) {
-            toast.error(e.message);
-        } finally {
-            setLoanBusy(false);
-        }
-    };
-    const cancelCashLoan = async (id: string) => {
-        if (!window.confirm("¿Cancelar esta solicitud?")) return;
-        const res = await fetch(`${API}/portal-lending/requests/${id}/cancel`, { method: "POST", headers: authHeaders() }).catch(() => null);
-        if (res?.ok) { toast.success("Solicitud cancelada"); loadLoanRequests(); }
-        else toast.error("No se pudo cancelar");
     };
 
     const [levelUp, setLevelUp] = useState<any | null>(null);
@@ -2758,209 +2707,13 @@ $1color: #8E3418 !important;
     };
 
     // ── Inicio ──
-    // ── Préstamos: the market of cash offers, and the person's requests ──
-    const bizAv = (b: any) => (
-        <span className="relative overflow-hidden grid size-11 shrink-0 place-items-center rounded-2xl text-[15px] text-white" style={{ background: AV_COLORS[[...String(b?.id || "")].reduce((a, c) => a + c.charCodeAt(0), 0) % AV_COLORS.length], fontWeight: 800 }}>
-            {b?.logo
-                // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={b.logo} alt="" className="absolute inset-0 size-full bg-white object-cover" />
-                : (String(b?.name || "?").trim().charAt(0) || "?").toUpperCase()}
-        </span>
+    const renderLoans = () => (
+        <LoansMarket
+            onBack={() => setShowLoans(false)}
+            onLevels={() => { setShowLoans(false); openLevel(); }}
+            onUnread={setLoanUnread}
+        />
     );
-    const every = (d: number) => (d === 7 ? "semanales" : d === 15 || d === 14 ? "quincenales" : d === 30 ? "mensuales" : `cada ${d} días`);
-    const renderLoanSheet = () => {
-        const o = loanPick;
-        if (!o) return null;
-        return (
-            <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 animate-in fade-in duration-200" onClick={() => !loanBusy && setLoanPick(null)}>
-                <div className="w-full max-w-md rounded-t-[28px] bg-background px-5 pt-3 animate-in slide-in-from-bottom duration-300" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }} onClick={(e) => e.stopPropagation()}>
-                    <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-zinc-300" />
-                    <div className="flex items-center gap-3">
-                        {bizAv(o.business)}
-                        <div className="min-w-0">
-                            <p className="truncate text-[13px] font-semibold text-zinc-500">{o.business?.name} · {o.name}</p>
-                            <h3 className="text-[22px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>Recibes {money(o.amount)}</h3>
-                        </div>
-                    </div>
-                    <div className="mt-4 divide-y divide-zinc-100 rounded-2xl border border-zinc-200 bg-white">
-                        {[
-                            ["Devuelves", money(o.total)],
-                            ["Cuotas", `${o.installments} ${every(o.frequencyDays)} de ${money(o.each)}`],
-                            ["Interés", `${o.interestPct}% · ${money(o.total - o.amount)}`],
-                            ["Primera cuota", `${o.frequencyDays} días después de retirar`],
-                        ].map(([k, v]) => (
-                            <div key={k} className="flex items-center justify-between gap-3 px-4 py-3 text-[14px]">
-                                <span className="text-zinc-500">{k}</span>
-                                <span className="text-right font-bold text-zinc-900">{v}</span>
-                            </div>
-                        ))}
-                    </div>
-                    <p className="mt-3 text-[12.5px] leading-relaxed text-zinc-500">
-                        El comercio revisa tu solicitud. Si la aprueba, aquí te aparece un <b className="text-zinc-700">PIN</b>: lo muestras en su caja y te entregan el efectivo.
-                    </p>
-                    <button
-                        onClick={requestCashLoan}
-                        disabled={loanBusy}
-                        className="mt-4 h-14 w-full rounded-full bg-primary text-[15px] font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
-                    >
-                        {loanBusy ? "Enviando…" : "Enviar solicitud"}
-                    </button>
-                    <button onClick={() => setLoanPick(null)} disabled={loanBusy} className="mt-2 h-11 w-full rounded-full text-[14px] font-semibold text-zinc-500">Ahora no</button>
-                </div>
-            </div>
-        );
-    };
-    const renderLoans = () => {
-        const amount = Number(loanAmount) || 0;
-        const offers = loanMarket?.offers || [];
-        const busyWith = new Set(loanReqs.filter((q) => q.status === "REQUESTED" || q.status === "APPROVED_PENDING_DISBURSEMENT").map((q) => q.business?.id));
-        return (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-300 pb-28">
-                {loanPick && createPortal(renderLoanSheet(), document.body)}
-                <BackBar title="Préstamos" subtitle="Efectivo de comercios cerca de ti" onBack={() => setShowLoans(false)} />
-
-                {/* Requests first: an approved one shows its PIN big */}
-                {loanReqs.length > 0 && (
-                    <div className="mt-5 space-y-2.5">
-                        {loanReqs.map((q) => {
-                            const approved = q.status === "APPROVED_PENDING_DISBURSEMENT";
-                            const until = q.pinExpiresAt ? new Date(q.pinExpiresAt) : null;
-                            return (
-                                <div key={q.id} className={`rounded-[22px] border bg-white p-4 ${approved ? "border-emerald-200" : q.status === "REJECTED" ? "border-rose-100" : "border-zinc-200"}`}>
-                                    <div className="flex items-center gap-3">
-                                        {bizAv(q.business)}
-                                        <div className="min-w-0 flex-1">
-                                            <p className="truncate text-[15px] font-bold text-zinc-900">{q.business?.name || "Comercio"}</p>
-                                            <p className="text-[12.5px] text-zinc-500">{money(q.amount)} · devuelves {money(q.totalToPay)} en {q.installments} cuota{q.installments > 1 ? "s" : ""}</p>
-                                        </div>
-                                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                                            approved ? "bg-emerald-50 text-emerald-700" : q.status === "REQUESTED" ? "bg-amber-50 text-amber-700" : q.status === "EXPIRED" ? "bg-zinc-100 text-zinc-500" : "bg-rose-50 text-rose-600"
-                                        }`}>
-                                            {approved ? "Aprobado" : q.status === "REQUESTED" ? "En revisión" : q.status === "EXPIRED" ? "PIN vencido" : "No aprobado"}
-                                        </span>
-                                    </div>
-                                    {approved && q.pin && (
-                                        <div className="mt-3 rounded-2xl bg-emerald-50 p-4 text-center">
-                                            <p className="text-[12px] font-semibold text-emerald-700">Muestra este PIN en la caja</p>
-                                            <p className="mt-1 font-mono text-[38px] tracking-[0.25em] text-zinc-900" style={{ fontWeight: 800 }}>{q.pin}</p>
-                                            <p className="mt-1 text-[12px] text-emerald-800/80">
-                                                {until ? `Vale hasta ${until.toLocaleString("es-VE", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}` : ""}
-                                            </p>
-                                            {q.branch?.location && (
-                                                <p className="mt-2 flex items-center justify-center gap-1 text-[12.5px] font-semibold text-zinc-700"><IconMapPin size={14} className="text-primary" />{q.branch.name ? `${q.branch.name} · ` : ""}{q.branch.location}</p>
-                                            )}
-                                        </div>
-                                    )}
-                                    {q.status === "REJECTED" && q.rejectReason && <p className="mt-2 text-[12.5px] text-rose-600">Motivo: {q.rejectReason}</p>}
-                                    {q.status === "EXPIRED" && <p className="mt-2 text-[12.5px] text-zinc-500">No lo retiraste a tiempo. Puedes pedirlo de nuevo.</p>}
-                                    {(q.status === "REQUESTED" || approved) && (
-                                        <button onClick={() => cancelCashLoan(q.id)} className="mt-2 text-[12.5px] font-semibold text-zinc-500 underline-offset-2 hover:underline">Cancelar solicitud</button>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-
-                {/* How much */}
-                <div className="mt-5 rounded-[26px] bg-white p-5 shadow-[0_18px_40px_-20px_rgba(90,30,5,0.35)]">
-                    <p className="text-[13px] font-semibold text-zinc-500">¿Cuánto necesitas?</p>
-                    <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-[34px] text-zinc-400" style={{ fontWeight: 800 }}>$</span>
-                        <input
-                            inputMode="decimal"
-                            aria-label="Monto del préstamo"
-                            value={loanAmount}
-                            onChange={(e) => setLoanAmount(e.target.value.replace(/[^\d.]/g, "").slice(0, 7))}
-                            className="w-full bg-transparent text-[44px] leading-none text-zinc-900 outline-none"
-                            style={{ fontWeight: 800, letterSpacing: "-0.045em" }}
-                        />
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                        {[20, 50, 100, 200, 500].map((v) => (
-                            <button
-                                key={v}
-                                onClick={() => setLoanAmount(String(v))}
-                                className={`rounded-full border-[1.5px] px-3.5 py-1.5 text-[13px] font-bold transition active:scale-95 ${amount === v ? "border-primary bg-primary text-white" : "border-zinc-200 bg-white text-zinc-700"}`}
-                            >
-                                ${v}
-                            </button>
-                        ))}
-                    </div>
-                    {loanMarket && (
-                        <p className="mt-3 flex items-center gap-1.5 text-[12.5px] text-zinc-500">
-                            <IconTrophy size={14} className="text-amber-500" /> Tu nivel: <b className="text-zinc-800">{loanMarket.level} · {loanMarket.levelName}</b>
-                            <button onClick={() => { setShowLoans(false); openLevel(); }} className="ml-auto font-semibold text-primary">Ver niveles</button>
-                        </p>
-                    )}
-                </div>
-
-                {/* Offers: the ones you can take first, cheapest first */}
-                <div className="mt-6 flex items-center justify-between">
-                    <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Ofertas{amount > 0 ? ` para ${money(amount)}` : ""}</h3>
-                    {loanLoading && <span className="text-[12px] font-semibold text-zinc-400">Buscando…</span>}
-                </div>
-                <div className="mt-3 space-y-2.5">
-                    {loanMarket && !offers.length && (
-                        <div className="rounded-[22px] border border-dashed border-zinc-300 bg-white/70 p-6 text-center">
-                            <img src="/nubi/nubi-thinking.webp" alt="" className="mx-auto h-16 w-16 object-contain" />
-                            <p className="mt-2 text-[15px] font-bold text-zinc-900">No hay ofertas para ese monto</p>
-                            <p className="mt-1 text-[13px] text-zinc-500">Prueba con otra cantidad: cada comercio presta en su propio rango.</p>
-                        </div>
-                    )}
-                    {offers.map((o: any) => {
-                        const taken = busyWith.has(o.business?.id);
-                        return (
-                            <div key={o.id} className={`rounded-[22px] border border-zinc-200 bg-white p-4 ${o.eligible || (o.blocked === "limit" && o.maxForYou >= o.minAmount) ? "" : "opacity-60"}`}>
-                                <div className="flex items-center gap-3">
-                                    {bizAv(o.business)}
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate text-[15px] font-bold text-zinc-900">{o.business?.name}</p>
-                                        <p className="truncate text-[12.5px] text-zinc-500">{o.name} · de {money(o.minAmount)} a {money(o.maxAmount)}</p>
-                                    </div>
-                                    <div className="shrink-0 text-right">
-                                        <p className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>{money(o.total)}</p>
-                                        <p className="text-[11px] font-semibold text-zinc-400">devuelves</p>
-                                    </div>
-                                </div>
-                                <div className="mt-3 flex items-center gap-2">
-                                    <span className="min-w-0 truncate whitespace-nowrap rounded-full bg-zinc-100 px-2.5 py-1 text-[12px] font-semibold text-zinc-700">{o.installments} × {money(o.each)} {every(o.frequencyDays)} · {o.interestPct}%</span>
-                                    {o.eligible ? (
-                                        <button
-                                            onClick={() => (taken ? toast.info("Ya tienes una solicitud abierta con este comercio.") : setLoanPick(o))}
-                                            disabled={amount <= 0}
-                                            className={`ml-auto rounded-full px-4 py-2 text-[13px] font-bold text-white transition active:scale-95 disabled:opacity-50 ${taken ? "bg-zinc-400" : "bg-primary"}`}
-                                        >
-                                            {taken ? "Solicitado" : "Pedir"}
-                                        </button>
-                                    ) : o.blocked === "limit" && o.maxForYou >= o.minAmount ? (
-                                        // the limit covers a smaller amount: one tap asks for that
-                                        <button
-                                            onClick={() => setLoanAmount(String(Math.floor(o.maxForYou)))}
-                                            className="ml-auto rounded-full border-[1.5px] border-primary px-3.5 py-1.5 text-[12.5px] font-bold text-primary transition active:scale-95"
-                                        >
-                                            Pedir {money(Math.floor(o.maxForYou))}
-                                        </button>
-                                    ) : (
-                                        <span className="ml-auto flex items-center gap-1 text-[12px] font-semibold text-zinc-500">
-                                            <IconLock size={13} />
-                                            {o.blocked === "level" ? `Desde nivel ${o.minLevel} · ${o.minLevelName}` : "Tu límite no alcanza"}
-                                        </span>
-                                    )}
-                                </div>
-                                {o.blocked === "limit" && (
-                                    <p className="mt-2 text-[12px] leading-snug text-zinc-500">
-                                        Tu límite disponible con este comercio es <b className="text-zinc-700">{money(o.available)}</b>.
-                                        {o.maxForYou >= o.minAmount ? ` Puedes pedir hasta ${money(Math.floor(o.maxForYou))}.` : " Sube de nivel pagando a tiempo para que te aumenten el límite."}
-                                    </p>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        );
-    };
 
     // an account signed up in the app that no business has given credit (and that owes nothing)
     const noCredit = !!client && client.hasCredit === false && !(debts || []).some((d: any) => Number(d.remainingBalance) > 0.004);
@@ -5604,7 +5357,10 @@ $1color: #8E3418 !important;
                         }}
                         className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "home" && showLoans ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
-                        <IconCash size={18} />
+                        <span className="relative">
+                            <IconCash size={18} />
+                            {loanUnread > 0 && <span className="absolute -right-2 -top-1.5 grid min-w-[16px] place-items-center rounded-full bg-primary px-1 text-[9.5px] font-bold leading-[16px] text-white">{loanUnread}</span>}
+                        </span>
                         <span>Préstamos</span>
                     </button>
 

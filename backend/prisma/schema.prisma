@@ -450,6 +450,8 @@ model Setting {
   syncroCreditRateCustom      Float?
   /// Charges for late installments: {enabled, since, graceDays, fixedFee, percentFee, interestPct, interestEveryDays, capPct, extras[]}
   syncroCreditLateFees        Json?
+  /// Loans module: how much this lender lends by level {"4": 30, "3": 100, "2": 250, "1": 500}
+  loanLevelLimits             Json?
   /// Its own card in the app's "Para ti" carousel
   syncroCreditPromoTitle      String?
   syncroCreditPromoText       String?
@@ -613,6 +615,8 @@ model Client {
   address                     String?
   isActive                    Boolean             @default(true)
   walletBalance               Float               @default(0)
+  /// Loans module: this lender's own limit for the client (null = its table by level)
+  lendingLimit                Float?
   creditLimit                 Float               @default(0)
   currentDebt                 Float               @default(0)
   downPaymentPercentage       Float               @default(50)
@@ -984,6 +988,49 @@ model Loan {
   updatedAt         DateTime          @updatedAt
   client            Client            @relation(fields: [clientId], references: [id])
   installments      LoanInstallment[]
+  messages          LoanMessage[]
+  reviews           LoanReview[]
+}
+
+/// Chat between the client and the lender about one loan
+model LoanMessage {
+  id           String    @id @default(uuid())
+  loanId       String
+  fromClient   Boolean
+  senderUserId String?
+  senderName   String
+  text         String
+  readAt       DateTime?
+  createdAt    DateTime  @default(now())
+  loan         Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([loanId, createdAt])
+}
+
+/// Stars and a comment, client → lender (fromClient) or lender → client, once per loan each way
+model LoanReview {
+  id           String   @id @default(uuid())
+  loanId       String
+  fromClient   Boolean
+  businessId   String
+  creditUserId String?
+  clientId     String
+  stars        Int
+  comment      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+  loan         Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@unique([loanId, fromClient], map: "LoanReview_once")
+  @@index([businessId])
+  @@index([creditUserId])
+}
+
+/// Settings of the whole platform (Syncro Central): key → JSON
+model PlatformSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 model LoanInstallment {
