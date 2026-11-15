@@ -97,7 +97,7 @@ export class SettingsService {
       'paymentMethods', 'discountPin', 'pinPermissions',
       'syncroCreditMaxInstallments', 'syncroCreditFrequencyDays',
       'syncroCreditInitialLimit', 'syncroCreditMaxLimit', 'syncroCreditLimitStep',
-      'syncroCreditVisible', 'syncroCreditPromoTitle', 'syncroCreditPromoText', 'syncroCreditRate', 'syncroCreditLateFees',
+      'syncroCreditVisible', 'syncroCreditPromoTitle', 'syncroCreditPromoText', 'syncroCreditRate', 'syncroCreditRateCustom', 'syncroCreditLateFees',
       'salesGoal', 'showSalesGoal', 'showNetMargin',
       'exchangeRate', 'exchangeRateEur', 'bcvUpdateDate',
       'exchangeRateDashboard', 'exchangeRateDashboardEur', 'bcvUpdateDateDashboard',
@@ -122,7 +122,11 @@ export class SettingsService {
     if (filteredData.syncroCreditFrequencyDays !== undefined) filteredData.syncroCreditFrequencyDays = Math.min(90, Math.max(1, Math.round(Number(filteredData.syncroCreditFrequencyDays) || 15)));
     if (filteredData.syncroCreditMaxInstallments !== undefined) filteredData.syncroCreditMaxInstallments = Math.min(24, Math.max(1, Math.round(Number(filteredData.syncroCreditMaxInstallments) || 3)));
     if (filteredData.syncroCreditVisible !== undefined) filteredData.syncroCreditVisible = !!filteredData.syncroCreditVisible;
-    if (filteredData.syncroCreditRate !== undefined && !['usd', 'eur', 'cop'].includes(filteredData.syncroCreditRate)) filteredData.syncroCreditRate = 'usd';
+    if (filteredData.syncroCreditRate !== undefined && !['usd', 'eur', 'cop', 'custom'].includes(filteredData.syncroCreditRate)) filteredData.syncroCreditRate = 'usd';
+    if (filteredData.syncroCreditRateCustom !== undefined) {
+      const n = Number(filteredData.syncroCreditRateCustom);
+      filteredData.syncroCreditRateCustom = Number.isFinite(n) && n > 1 && n < 10000000 ? Math.round(n * 10000) / 10000 : null;
+    }
     for (const [k, max] of [['syncroCreditPromoTitle', 40], ['syncroCreditPromoText', 90]] as const) {
       if (filteredData[k] !== undefined) filteredData[k] = String(filteredData[k] ?? '').trim().slice(0, max) || null;
     }

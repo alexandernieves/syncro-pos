@@ -9,6 +9,7 @@ import { ThemeSettings } from "@/components/theme-settings";
 import { AutoBagSettings, NO_AUTO_BAG, readAutoBag, type AutoBag } from "@/components/auto-bag-settings";
 import { LateFeesSettings, DEFAULT_LATE_FEES, readLateFees, type LateFees } from "@/components/late-fees-settings";
 import { useMyModules } from "@/lib/modules";
+import { creditRates, type CreditRateMode } from "@/lib/credit-rate";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { 
@@ -271,7 +272,8 @@ export default function ConfiguracionPage() {
   // Syncro Credit (PWA): presence in the clients' app and the business's own "Para ti" card
   const [syncroCreditVisible, setSyncroCreditVisible] = useState(true);
   const [scPromo, setScPromo] = useState({ title: "", text: "" });
-  const [scRate, setScRate] = useState<"usd" | "eur" | "cop">("usd");
+  const [scRate, setScRate] = useState<CreditRateMode>("usd");
+  const [scCustomRate, setScCustomRate] = useState("");
   // Charges for late installments (Atrasos y recargos)
   const [lateFees, setLateFees] = useState<LateFees>(DEFAULT_LATE_FEES);
   // Syncro Credit (PWA) is configured only by businesses with the "Préstamos" module
@@ -304,7 +306,7 @@ export default function ConfiguracionPage() {
     setBizLogo(url);
     toast.success(url ? "Logo actualizado" : "Logo quitado");
   };
-  const [scRates, setScRates] = useState({ usd: 0, eur: 0, cop: 0 });
+  const [scRates, setScRates] = useState({ usd: 0, eur: 0, cop: 0, custom: 0 });
 
   const [dashboardConfig, setDashboardConfig] = useState({
     salesGoal: "10000",
@@ -931,10 +933,11 @@ export default function ConfiguracionPage() {
             setSyncroCreditLimits({ initial: data.syncroCreditInitialLimit ?? 30, max: data.syncroCreditMaxLimit ?? 200, step: data.syncroCreditLimitStep ?? 10 });
             setSyncroCreditVisible(data.syncroCreditVisible ?? true);
             setScPromo({ title: data.syncroCreditPromoTitle || "", text: data.syncroCreditPromoText || "" });
-            setScRate(data.syncroCreditRate === "eur" || data.syncroCreditRate === "cop" ? data.syncroCreditRate : "usd");
+            setScRate(["eur", "cop", "custom"].includes(data.syncroCreditRate) ? data.syncroCreditRate : "usd");
+            setScCustomRate(data.syncroCreditRateCustom ? String(data.syncroCreditRateCustom) : "");
             setLateFees(readLateFees(data.syncroCreditLateFees));
             setBizLogo(data.businessLogo || null);
-            setScRates({ usd: Number(data.exchangeRate) || 0, eur: Number(data.exchangeRateEur) || 0, cop: Number(data.copRateManual || data.exchangeRateCop) || 0 });
+            setScRates(creditRates(data));
             setWhatsappBotEnabled(data.whatsappBotEnabled || false);
             setWhatsappAuthorizedPhones(data.whatsappAuthorizedPhones || []);
             setWhatsappAlerts(readWhatsAppAlerts(data.whatsappAlerts));
@@ -1148,7 +1151,8 @@ export default function ConfiguracionPage() {
           syncroCreditMaxLimit: Math.max(Number(syncroCreditLimits.initial) || 30, Number(syncroCreditLimits.max) || 200),
           syncroCreditLimitStep: Math.max(0, Number(syncroCreditLimits.step) || 0),
           syncroCreditVisible,
-          syncroCreditRate: scRate,
+          syncroCreditRate: scRate === "custom" && !(Number(scCustomRate) > 1) ? "usd" : scRate,
+          syncroCreditRateCustom: Number(scCustomRate) > 1 ? Number(scCustomRate) : null,
           ...(hasLoans ? { syncroCreditLateFees: lateFees } : {}),
           salesGoal: Number(dashboardConfig.salesGoal) || 10000,
           showSalesGoal: !!dashboardConfig.showSalesGoal,
@@ -1801,11 +1805,12 @@ export default function ConfiguracionPage() {
                   <CardDescription>Con qué tasa la app le calcula al cliente cuánto transferir por su cuota.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     {([
                       { k: "usd", t: "Dólar BCV", d: "Bolívares a la tasa del dólar", v: scRates.usd ? `${scRates.usd.toFixed(2)} Bs = $1` : "Sin tasa" },
-                      { k: "eur", t: "Euro BCV", d: "Bolívares a la tasa del euro", v: scRates.eur > 1 ? `${scRates.eur.toFixed(2)} Bs` : "Sin tasa" },
+                      { k: "eur", t: "Euro BCV", d: "Bolívares a la tasa del euro", v: scRates.eur ? `${scRates.eur.toFixed(2)} Bs = €1` : "Sin tasa" },
                       { k: "cop", t: "Pesos (COP)", d: "Para comercios del Táchira", v: scRates.cop ? `${scRates.cop.toFixed(0)} COP = $1` : "Sin tasa" },
+                      { k: "custom", t: "Personalizada", d: "Tu propia tasa en bolívares", v: Number(scCustomRate) > 1 ? `${Number(scCustomRate).toFixed(2)} Bs = $1` : "Escríbela abajo" },
                     ] as const).map((o) => (
                       <button key={o.k} type="button" onClick={() => setScRate(o.k)} className={cn("rounded-xl border-2 p-3 text-left transition", scRate === o.k ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50")}>
                         <p className="text-sm font-semibold">{o.t}</p>
@@ -1814,8 +1819,22 @@ export default function ConfiguracionPage() {
                       </button>
                     ))}
                   </div>
-                  {((scRate === "eur" && scRates.eur <= 1) || (scRate === "cop" && !scRates.cop)) && (
-                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">Esa tasa no está cargada todavía: mientras tanto la app usará la del dólar BCV. Actualízala desde las tasas del punto de venta.</p>
+                  {scRate === "custom" && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+                      <div>
+                        <p className="text-sm font-medium">Tu tasa</p>
+                        <p className="text-xs text-muted-foreground">Bolívares por cada dólar. La app la usa para todos los pagos de cuotas y préstamos; cámbiala cuando quieras.</p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Input type="number" min={1} step="any" inputMode="decimal" value={scCustomRate} onChange={(e) => setScCustomRate(e.target.value)} placeholder={scRates.usd ? scRates.usd.toFixed(2) : "0.00"} className="w-32 text-center font-mono font-bold" aria-label="Tasa personalizada en bolívares por dólar" />
+                        <span className="text-sm text-muted-foreground">Bs = $1</span>
+                      </div>
+                    </div>
+                  )}
+                  {((scRate === "eur" && !scRates.eur) || (scRate === "cop" && !scRates.cop) || (scRate === "custom" && !(Number(scCustomRate) > 1))) && (
+                    <p className="rounded-lg bg-primary/5 px-3 py-2 text-xs text-primary">
+                      {scRate === "custom" ? "Escribe tu tasa: mientras no esté, la app usará la del dólar BCV." : "Esa tasa no está cargada todavía: mientras tanto la app usará la del dólar BCV. Actualízala con el botón de tasas del encabezado."}
+                    </p>
                   )}
                 </CardContent>
               </Card>

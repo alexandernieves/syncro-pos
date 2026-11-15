@@ -446,6 +446,8 @@ model Setting {
   syncroCreditVisible         Boolean   @default(true)
   /// Rate the app uses for the amount to transfer: usd (Bs at BCV dollar), eur (Bs at BCV euro), cop (pesos)
   syncroCreditRate            String    @default("usd")
+  /// The business's own rate (Bs per $1) when syncroCreditRate is "custom"
+  syncroCreditRateCustom      Float?
   /// Charges for late installments: {enabled, since, graceDays, fixedFee, percentFee, interestPct, interestEveryDays, capPct, extras[]}
   syncroCreditLateFees        Json?
   /// Its own card in the app's "Para ti" carousel

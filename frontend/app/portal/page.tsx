@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { creditPayRate, creditRates } from "@/lib/credit-rate";
 import { createPortal } from "react-dom";
 import { API_URL } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
@@ -1642,13 +1643,14 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
         return () => { live = false; };
     }, [ownBiz, payBiz, paySettings?.businessId]);
     const paySet: any = ownBiz ? settings : paySettings?.businessId === payBiz ? paySettings!.data : {};
-    const rateUsdToVes = paySet?.exchangeRate || 40.0;
+    const rateUsdToVes = creditRates(paySet).usd || 40.0;
     // The rate the business chose for paying (Configuración → Syncro Credit): Bs at the BCV dollar,
     // Bs at the BCV euro, or Colombian pesos
-    const payRateMode: "usd" | "eur" | "cop" = paySet?.syncroCreditRate === "eur" || paySet?.syncroCreditRate === "cop" ? paySet.syncroCreditRate : "usd";
-    const payRate = (payRateMode === "eur" ? paySet?.exchangeRateEur : payRateMode === "cop" ? (paySet?.copRateManual || paySet?.exchangeRateCop) : paySet?.exchangeRate) || paySet?.exchangeRate || 1;
-    const payCur = payRateMode === "cop" ? "COP" : "Bs";
-    const payRateLabel = payRateMode === "eur" ? "Tasa euro BCV" : payRateMode === "cop" ? "Tasa del peso" : "Tasa BCV";
+    // the business's chosen rate (BCV dollar/euro with the dashboard's as backup, pesos, or its own)
+    const payRateInfo = creditPayRate(paySet);
+    const payRate = payRateInfo.rate;
+    const payCur = payRateInfo.cur;
+    const payRateLabel = payRateInfo.label;
     const rateUsdToCop = 4000;
 
     const pendingRequestLoan = loans.find(l => l.status === 'REQUESTED');
@@ -2050,6 +2052,7 @@ $1color: #8E3418 !important;
                 {showPass ? <IconEyeOff size={20} /> : <IconEye size={20} />}
             </button>
         );
+        const tallStep = shownStep === "signup" || shownStep === "register" || shownStep === "verify";
         const backToDocument = () => {
             rollNubi(-1);
             setLoginStep("document");
@@ -2065,19 +2068,21 @@ $1color: #8E3418 !important;
                 <div aria-hidden className="pointer-events-none absolute -top-1/4 left-1/2 -translate-x-1/2 size-[140vw] max-w-[900px] max-h-[900px] rounded-full" style={{ background: "radial-gradient(circle, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 62%)" }} />
 
                 {/* Brand on orange, the same as the splash it comes from */}
-                <div className="flex-1 flex flex-col items-center justify-center px-6 pt-8 pb-10 relative z-10 min-h-[260px]">
-                    {/* Still, but alive: blinks and reacts to what happens in the form */}
+                {/* the long steps (sign-up, codes) get a compact brand so the form fits without squeezing Nubi */}
+                <div className={`flex-1 flex flex-col items-center justify-center px-6 relative z-10 transition-all duration-300 ${tallStep ? "pt-6 pb-7 min-h-[200px]" : "pt-8 pb-10 min-h-[260px]"}`}>
+                    {/* Still, but alive: blinks and reacts to what happens in the form. shrink-0: its 3D canvas
+                        is an absolute layer, so without it the column squeezes the box and cuts Nubi off */}
                     <NubiFace
-                        className="h-[84px] w-[84px]"
+                        className={`shrink-0 transition-all duration-300 ${tallStep ? "h-[68px] w-[68px]" : "h-[84px] w-[84px]"}`}
                         roll={nubiRoll}
                         busy={loading}
                         mood={nubiFlash ?? (loading ? "thinking" : loginStep === "password" ? "happy" : "neutral")}
                     />
-                    <h1 className="mt-3 text-center select-none" style={{ fontWeight: 800, letterSpacing: "-0.045em", lineHeight: 0.92, fontSize: "clamp(46px, 14vw, 72px)" }}>
+                    <h1 className="mt-3 shrink-0 text-center select-none transition-all duration-300" style={{ fontWeight: 800, letterSpacing: "-0.045em", lineHeight: 0.92, fontSize: tallStep ? "clamp(38px, 11vw, 56px)" : "clamp(46px, 14vw, 72px)" }}>
                         <span className="block text-white">SYNCRO</span>
                         <span className="block text-[#1A1815]">CREDIT</span>
                     </h1>
-                    <p className="mt-4 text-[15px] font-medium text-white/90">Tu crédito, en tu bolsillo</p>
+                    <p className={`shrink-0 font-medium text-white/90 ${tallStep ? "mt-3 text-[14px]" : "mt-4 text-[15px]"}`}>Tu crédito, en tu bolsillo</p>
                 </div>
 
                 {/* The sheet that rises from the bottom with the form */}
