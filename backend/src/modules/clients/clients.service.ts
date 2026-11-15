@@ -681,6 +681,7 @@ export class ClientsService {
         nextPaymentAmount: nextInstallment?.amount ?? null,
         createdAt: loan.createdAt,
         storeName: (sale as any)?.business?.name || (sale as any)?.branch?.name || null,
+        businessId: (sale as any)?.businessId || client.businessId || null,
         installmentsCount: loan.installmentsCount,
         items: itemsSummary,
         installments: loan.installments.map(inst => ({
@@ -733,6 +734,7 @@ export class ClientsService {
           nextPaymentAmount: allocatedRemaining,
           createdAt: tx.createdAt,
           storeName: (sale as any)?.business?.name || (sale as any)?.branch?.name || null,
+          businessId: (sale as any)?.businessId || client.businessId || null,
           installmentsCount: 1,
           items: itemsSummary,
           installments: [

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { API_URL } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -421,6 +422,10 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
     const [showLevel, setShowLevel] = useState(false);
     const [levelUp, setLevelUp] = useState<any | null>(null);
     const creditCardRef = useRef<HTMLDivElement | null>(null);
+    // Next payment: the day's list unfolded, and the "¿Qué quieres pagar?" sheet
+    const [payDayOpen, setPayDayOpen] = useState(false);
+    const [paySheet, setPaySheet] = useState<{ insts: any[]; title: string } | null>(null);
+    const [sheetMode, setSheetMode] = useState<"all" | "pick" | "other">("all");
     // Receipts already decided that the client closed (so "¡Pago aprobado!" shows once)
     const [seenSubs, setSeenSubs] = useState<string[]>(() => {
         try { return JSON.parse(localStorage.getItem("sc-seen-subs") || "[]"); } catch { return []; }
@@ -2174,6 +2179,65 @@ $1color: #8E3418 !important;
         }
         window.scrollTo({ top: 0 });
     };
+    // ── Grouping the installments: what's overdue, and everything due on the next day ──
+    const overdueInsts = allPendingInsts.filter((i: any) => daysUntil(i.dueDate) < 0);
+    const upcomingInsts = allPendingInsts.filter((i: any) => daysUntil(i.dueDate) >= 0);
+    const nextDay = upcomingInsts[0] ? dayStart(new Date(upcomingInsts[0].dueDate)) : null;
+    const nextDayInsts = nextDay === null ? [] : upcomingInsts.filter((i: any) => dayStart(new Date(i.dueDate)) === nextDay);
+    const sumOf = (l: any[]) => l.reduce((a: number, i: any) => a + (Number(i.remaining) || 0), 0);
+    const instLabel = (i: any) => `Cuota ${i.number} de ${totalCountOf(i.debt)}`;
+    const AV_COLORS = ["#F26B3A", "#2F7DFF", "#1F9D5B", "#8C6CF0", "#E8A72B", "#45413A"];
+    const avColor = (d: any) => AV_COLORS[[...String(d?.loanId || "")].reduce((a, c) => a + c.charCodeAt(0), 0) % AV_COLORS.length];
+    const avLetter = (d: any) => (storeOf(d).trim().charAt(0) || "?").toUpperCase();
+
+    /**
+     * Pay several installments at once (one transfer, one receipt): the payment flow gets a
+     * "group" that behaves like one purchase whose installments are these, in due order. When the
+     * business approves the receipt, the money is applied to the client's installments by due date.
+     */
+    /** Installments split by the business they are owed to (each one has its own bank details) */
+    const byBusiness = (insts: any[]) => {
+        const m = new Map<string, any[]>();
+        insts.forEach((i: any) => { const k = i.debt?.businessId || "_"; if (!m.has(k)) m.set(k, []); m.get(k)!.push(i); });
+        return [...m.values()];
+    };
+    const openGroupPay = (instsIn: any[], mode: "all" | "pick" | "other") => {
+        // never mix businesses in one payment: one transfer and one receipt per business
+        const insts = byBusiness(instsIn)[0];
+        const sorted = [...insts].sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+        const first = sorted[0].debt;
+        const total = sumOf(sorted);
+        const sameDay = sorted.every((i: any) => dayStart(new Date(i.dueDate)) === dayStart(new Date(sorted[0].dueDate)));
+        const group = {
+            ...first,
+            description: `${sorted.length} cuota${sorted.length > 1 ? "s" : ""} ${sameDay ? `del ${fmtDay(sorted[0].dueDate)}` : "pendientes"}`,
+            remainingBalance: total,
+            items: [],
+            installments: sorted.map((i: any, k: number) => ({ id: i.id, number: k + 1, dueDate: i.dueDate, amount: i.remaining, paidAmount: 0, remaining: i.remaining, status: "PENDING" })),
+            isGroup: true,
+        };
+        setPaySheet(null);
+        setActiveTab("payments");
+        setPlanDebt(null);
+        setShowHistory(false);
+        setShowLevel(false);
+        setSelectedDebtForPayment(group);
+        setPaymentStep("details");
+        setReceiptFile(null);
+        setReceiptPreview(null);
+        if (mode === "all") { setSelectedInstallmentOption(sorted.length); setPaymentAmount(total.toFixed(2)); }
+        else if (mode === "other") { setSelectedInstallmentOption("custom"); setPaymentAmount(""); }
+        else { setSelectedInstallmentOption(null); setPaymentAmount(""); }
+        window.scrollTo({ top: 0 });
+    };
+    /** "Pagar": one installment goes straight to pay; several open the sheet */
+    const askPay = (insts: any[], title: string) => {
+        if (insts.length === 1) return openPay(insts[0].debt);
+        if (byBusiness(insts).length > 1) setSheetMode("all");
+        setSheetMode("all");
+        setPaySheet({ insts, title });
+    };
+
     const goTab = (tab: typeof activeTab) => {
         setRequestLoanView(false);
         setActiveTab(tab);
@@ -2276,6 +2340,67 @@ $1color: #8E3418 !important;
         </div>
     );
 
+    const renderPaySheet = () => {
+        if (!paySheet) return null;
+        const total = sumOf(paySheet.insts);
+        const parts = byBusiness(paySheet.insts);
+        if (parts.length > 1) {
+            // several businesses: one payment each, with that business's own bank details
+            return (
+                <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 animate-in fade-in duration-200" onClick={() => setPaySheet(null)}>
+                    <div className="w-full max-w-md rounded-t-[28px] bg-background px-5 pt-3 animate-in slide-in-from-bottom duration-300" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }} onClick={(e) => e.stopPropagation()}>
+                        <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-zinc-300" />
+                        <h3 className="text-[19px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>¿A qué comercio pagas?</h3>
+                        <p className="mt-1 text-[13px] text-zinc-500">Cada comercio tiene sus propios datos de pago: haces un pago y subes un comprobante por cada uno.</p>
+                        <div className="mt-3 space-y-2.5">
+                            {parts.map((p) => (
+                                <button key={p[0].debt.businessId || p[0].id} onClick={() => (p.length === 1 ? (setPaySheet(null), openPay(p[0].debt)) : openGroupPay(p, "all"))} className="flex w-full items-center gap-3 rounded-2xl border-[1.5px] border-zinc-200 bg-white p-3.5 text-left active:bg-zinc-50 transition">
+                                    <span className="grid size-9 shrink-0 place-items-center rounded-full text-[13px] text-white" style={{ background: avColor(p[0].debt), fontWeight: 800 }}>{avLetter(p[0].debt)}</span>
+                                    <span className="min-w-0">
+                                        <span className="block truncate text-[15px] font-bold text-zinc-900">{storeOf(p[0].debt)}</span>
+                                        <span className="block text-[12.5px] text-zinc-500">{p.length} cuota{p.length > 1 ? "s" : ""}</span>
+                                    </span>
+                                    <span className="ml-auto text-[15px] text-zinc-900" style={{ fontWeight: 800 }}>{money(sumOf(p))}</span>
+                                    <IconChevronRight size={18} className="shrink-0 text-zinc-400" />
+                                </button>
+                            ))}
+                        </div>
+                        <p className="mt-3 text-center text-[12px] text-zinc-500">Total: {money(total)}</p>
+                    </div>
+                </div>
+            );
+        }
+        const opts: { k: "all" | "pick" | "other"; t: string; d: string; right: string }[] = [
+            { k: "all", t: paySheet.title, d: `${paySheet.insts.length} cuotas`, right: money(total) },
+            { k: "pick", t: "Elegir cuántas cuotas", d: "Pagas desde la que vence primero", right: "›" },
+            { k: "other", t: "Otro monto", d: "Se aplica a la cuota que vence primero", right: "›" },
+        ];
+        return (
+            <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 animate-in fade-in duration-200" onClick={() => setPaySheet(null)}>
+                <div className="w-full max-w-md rounded-t-[28px] bg-background px-5 pt-3 animate-in slide-in-from-bottom duration-300" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }} onClick={(e) => e.stopPropagation()}>
+                    <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-zinc-300" />
+                    <h3 className="text-[19px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>¿Qué quieres pagar?</h3>
+                    <div className="mt-3 space-y-2.5" role="radiogroup">
+                        {opts.map((o) => (
+                            <button key={o.k} role="radio" aria-checked={sheetMode === o.k} onClick={() => setSheetMode(o.k)} className={`flex w-full items-center gap-3 rounded-2xl border-[1.5px] p-3.5 text-left transition ${sheetMode === o.k ? "border-primary bg-amber-50" : "border-zinc-200 bg-white"}`}>
+                                <span className={`size-[18px] shrink-0 rounded-full ${sheetMode === o.k ? "border-[5px] border-primary" : "border-2 border-zinc-300"}`} />
+                                <span className="min-w-0">
+                                    <span className="block text-[15px] font-bold text-zinc-900">{o.t}</span>
+                                    <span className="block text-[12.5px] text-zinc-500">{o.d}</span>
+                                </span>
+                                <span className="ml-auto text-[15px] text-zinc-900" style={{ fontWeight: 800 }}>{o.right}</span>
+                            </button>
+                        ))}
+                    </div>
+                    <button onClick={() => openGroupPay(paySheet.insts, sheetMode)} className="mt-4 w-full rounded-full bg-primary py-3.5 text-[15px] text-white shadow-[0_10px_20px_-10px_rgba(242,107,58,0.8)] active:scale-[0.98] transition" style={{ fontWeight: 800 }}>
+                        {sheetMode === "all" ? `Continuar · ${money(total)}` : "Continuar"}
+                    </button>
+                    <p className="mt-2.5 text-center text-[12px] text-zinc-500">Haces una sola transferencia y subes un solo comprobante.</p>
+                </div>
+            </div>
+        );
+    };
+
     // ── Inicio ──
     const renderHome = () => {
         if (showLevel) return renderLevel();
@@ -2314,7 +2439,8 @@ $1color: #8E3418 !important;
             // Fills the screen: the gaps between blocks share the free height evenly (with limits), and
             // "Para ti" sits at the bottom so the PIN button floats over the cards, like in the design.
             <div className="flex flex-col animate-in fade-in duration-500" style={{ minHeight: "calc(100dvh - 136px - env(safe-area-inset-top))" }}>
-                {levelUp && renderLevelUp()}
+                {levelUp && createPortal(renderLevelUp(), document.body)}
+                {paySheet && createPortal(renderPaySheet(), document.body)}
                 {/* Hello, with Nubi (it glances at the credit card now and then) */}
                 <div className="relative text-white pr-24">
                     <h1 className="text-[30px] leading-tight" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>Hola{firstName ? `, ${firstName}` : ""}</h1>
@@ -2376,27 +2502,94 @@ $1color: #8E3418 !important;
                 </div>
 
                 <div aria-hidden className="grow-[0.6] min-h-3" />
-                {/* Next payment */}
-                {nextInst ? (
-                    <div className="flex items-center gap-3 rounded-[20px] border border-zinc-200 bg-white p-3.5">
-                        <div className={`size-11 shrink-0 rounded-2xl grid place-items-center ${daysUntil(nextInst.dueDate) < 0 ? "bg-rose-50 text-rose-600" : "bg-amber-100 text-amber-600"}`}>
-                            <IconCalendar size={22} />
+                {/* Next payment: overdue first; otherwise everything due on the next day, added up */}
+                {(() => {
+                    const late = overdueInsts.length > 0;
+                    const group = late ? overdueInsts : nextDayInsts;
+                    const low = creditLimit > 0 && availableCredit < Math.max(5, creditLimit * 0.1);
+                    if (!group.length) return (
+                        <div className="flex items-center gap-3 rounded-[20px] border border-emerald-100 bg-emerald-50/60 p-3.5">
+                            <div className="size-11 shrink-0 rounded-2xl grid place-items-center bg-emerald-100 text-emerald-600"><IconCircleCheck size={22} /></div>
+                            <div>
+                                <p className="text-[12px] font-semibold text-emerald-700">Estás al día</p>
+                                <p className="text-[15px] font-bold text-zinc-900">No tienes pagos pendientes</p>
+                            </div>
                         </div>
-                        <div className="min-w-0">
-                            <p className={`text-[12px] font-semibold ${daysUntil(nextInst.dueDate) < 0 ? "text-rose-600" : "text-zinc-500"}`}>Próximo pago · {whenText(nextInst.dueDate)}</p>
-                            <p className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>{money(nextInst.remaining)} <span className="text-[13px] font-semibold text-zinc-500">· {fmtDay(nextInst.dueDate)}</span></p>
+                    );
+                    const one = group.length === 1;
+                    const total = sumOf(group);
+                    const after = late && nextDayInsts.length ? nextDayInsts : null;
+                    const title = late ? "Todo lo vencido" : `Todo lo del ${fmtDay(group[0].dueDate)}`;
+                    return (
+                        <div className={`rounded-[20px] border bg-white p-3.5 ${late ? "border-rose-200" : "border-zinc-200"}`}>
+                            <div className="flex items-center gap-3">
+                                <div className={`size-11 shrink-0 rounded-2xl grid place-items-center ${late ? "bg-rose-50 text-rose-600" : "bg-amber-100 text-amber-600"}`}>
+                                    {late ? <IconAlertCircle size={22} /> : <IconCalendar size={22} />}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className={`text-[12px] font-semibold ${late ? "text-rose-600" : "text-zinc-500"}`}>
+                                        {late ? `Vencido · ${group.length} cuota${one ? "" : "s"}` : `Próximo pago · ${whenText(group[0].dueDate)}`}
+                                    </p>
+                                    <p className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>
+                                        {money(total)} <span className={`text-[13px] font-semibold ${late ? "text-rose-600" : "text-zinc-500"}`}>{late ? `desde el ${fmtDay(group[0].dueDate)}` : `· ${fmtDay(group[0].dueDate)}`}</span>
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => askPay(group, title)}
+                                    className={`ml-auto shrink-0 rounded-full px-4 py-2.5 text-sm font-bold text-white active:scale-95 transition ${late ? "bg-rose-600 shadow-[0_6px_14px_-6px_rgba(214,69,53,0.7)]" : "bg-primary shadow-[0_6px_14px_-6px_rgba(242,107,58,0.7)]"}`}
+                                >
+                                    {one || late ? "Pagar" : "Pagar todo"}
+                                </button>
+                            </div>
+
+                            {/* who: one store, or the stack of them with the list on demand */}
+                            {one ? (
+                                <div className="mt-2.5 flex items-center gap-2 text-[12.5px] text-zinc-500">
+                                    <span className="grid size-6 place-items-center rounded-full text-[10.5px] text-white" style={{ background: avColor(group[0].debt), fontWeight: 800 }}>{avLetter(group[0].debt)}</span>
+                                    <span className="truncate">{storeOf(group[0].debt)} · {instLabel(group[0])}</span>
+                                </div>
+                            ) : (
+                                <>
+                                    <button onClick={() => setPayDayOpen((v) => !v)} aria-expanded={payDayOpen} className="mt-2.5 flex w-full items-center text-left">
+                                        <span className="flex">
+                                            {group.slice(0, 4).map((i: any, k: number) => (
+                                                <span key={i.id} className="grid size-[26px] place-items-center rounded-full border-2 border-white text-[10.5px] text-white" style={{ background: avColor(i.debt), marginLeft: k ? -7 : 0, fontWeight: 800 }}>{avLetter(i.debt)}</span>
+                                            ))}
+                                            {group.length > 4 && <span className="grid size-[26px] place-items-center rounded-full border-2 border-white bg-zinc-700 text-[10px] text-white" style={{ marginLeft: -7, fontWeight: 800 }}>+{group.length - 4}</span>}
+                                        </span>
+                                        <span className="ml-2 text-[12.5px] font-semibold text-zinc-500">{group.length} cuotas</span>
+                                        <span className="ml-auto text-[13px] font-bold text-amber-600">{payDayOpen ? "Ocultar ▴" : `Ver las ${group.length} ▾`}</span>
+                                    </button>
+                                    {payDayOpen && (
+                                        <div className="mt-2 border-t border-zinc-100 animate-in fade-in slide-in-from-top-1 duration-200">
+                                            {group.map((i: any) => (
+                                                <div key={i.id} className="flex items-center gap-2.5 border-b border-zinc-100 py-2.5 last:border-0">
+                                                    <span className="grid size-7 shrink-0 place-items-center rounded-[9px] text-[11px] text-white" style={{ background: avColor(i.debt), fontWeight: 800 }}>{avLetter(i.debt)}</span>
+                                                    <div className="min-w-0">
+                                                        <p className="truncate text-[13.5px] font-bold text-zinc-900">{storeOf(i.debt)}</p>
+                                                        <p className="text-[12px] text-zinc-500">{instLabel(i)}{ticketOf(i.debt) ? ` · #${ticketOf(i.debt)}` : ""}{late ? ` · ${fmtDay(i.dueDate)}` : ""}</p>
+                                                    </div>
+                                                    <span className="ml-auto text-[14px] text-zinc-900" style={{ fontWeight: 800 }}>{money(i.remaining)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {after && (
+                                <p className="mt-2 text-[12.5px] text-zinc-500">
+                                    Luego: <b className="text-zinc-800">{money(sumOf(after))}</b> el {fmtDay(after[0].dueDate)}{after.length > 1 ? ` (${after.length} cuotas)` : ""}
+                                </p>
+                            )}
+                            {low && (
+                                <div className="mt-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900">
+                                    Te quedan <b>{money(availableCredit)}</b> de crédito. {late ? "Pagando lo vencido se libera." : "Cada cuota que pagas lo libera."}
+                                </div>
+                            )}
                         </div>
-                        <button onClick={() => openPay(nextInst.debt)} className="ml-auto rounded-full bg-primary px-[18px] py-2.5 text-sm font-bold text-white shadow-[0_6px_14px_-6px_rgba(242,107,58,0.7)] active:scale-95 transition">Pagar</button>
-                    </div>
-                ) : (
-                    <div className="flex items-center gap-3 rounded-[20px] border border-emerald-100 bg-emerald-50/60 p-3.5">
-                        <div className="size-11 shrink-0 rounded-2xl grid place-items-center bg-emerald-100 text-emerald-600"><IconCircleCheck size={22} /></div>
-                        <div>
-                            <p className="text-[12px] font-semibold text-emerald-700">Estás al día</p>
-                            <p className="text-[15px] font-bold text-zinc-900">No tienes pagos pendientes</p>
-                        </div>
-                    </div>
-                )}
+                    );
+                })()}
 
                 {subBanner() && <div className="mt-3">{subBanner()}</div>}
                 <div aria-hidden className="grow min-h-5" />
@@ -2666,10 +2859,10 @@ $1color: #8E3418 !important;
                             </p>
                         </div>
                         <div className="mt-4 flex gap-2.5">
-                            <button onClick={() => openPay(firstOfMonth.debt)} className="flex-1 rounded-full bg-[#1A1815] py-3.5 text-[15px] font-bold text-white active:scale-[0.98] transition">
-                                Pagar {money(instLeft(firstOfMonth))}
+                            <button onClick={() => (active.insts.length === 1 ? openPay(firstOfMonth.debt) : byBusiness(active.insts).length > 1 ? askPay(active.insts, `Todo lo de ${monthsFull[active.m]}`) : openGroupPay(active.insts, "all"))} className="flex-1 rounded-full bg-[#1A1815] py-3.5 text-[15px] font-bold text-white active:scale-[0.98] transition">
+                                Pagar {money(monthTotal)}
                             </button>
-                            <button onClick={() => openPay(firstOfMonth.debt, true)} className="rounded-full bg-white/95 px-[18px] py-3.5 text-[15px] font-bold text-zinc-900 active:scale-[0.98] transition">
+                            <button onClick={() => (active.insts.length === 1 ? openPay(firstOfMonth.debt, true) : byBusiness(active.insts).length > 1 ? askPay(active.insts, `Todo lo de ${monthsFull[active.m]}`) : openGroupPay(active.insts, "other"))} className="rounded-full bg-white/95 px-[18px] py-3.5 text-[15px] font-bold text-zinc-900 active:scale-[0.98] transition">
                                 Otro monto
                             </button>
                         </div>
