@@ -2591,34 +2591,27 @@ $1color: #8E3418 !important;
 
                 {subBanner() && <div className="mt-3">{subBanner()}</div>}
                 <div aria-hidden className="grow min-h-5" />
-                {/* Quick actions: credit only for now (shopping comes back later). Lacquered white like
-                    Nubi and the credit card */}
+                {/* Talk to the business (only when it has a phone set) */}
                 {(() => {
                     const phone = String(settings?.phone || "").replace(/\D/g, "");
-                    const wa = phone ? `https://wa.me/${phone.startsWith("0") ? `58${phone.slice(1)}` : phone}` : null;
-                    const actions = [
-                        { label: "Mi nivel", icon: <IconTrophy size={24} />, on: openLevel },
-                        { label: "Mis compras", icon: <IconCreditCard size={24} />, on: () => goTab("payments") },
-                        ...(wa ? [{ label: "Escribir al comercio", icon: <IconPhone size={24} />, on: () => window.open(wa, "_blank") }] : []),
-                    ];
+                    if (!phone) return null;
+                    const wa = `https://wa.me/${phone.startsWith("0") ? `58${phone.slice(1)}` : phone}`;
                     return (
-                        <div className={`grid gap-1.5 ${actions.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
-                            {actions.map((a) => (
-                                <button key={a.label} onClick={a.on} className="group flex flex-col items-center gap-1.5 text-[12px] font-semibold text-zinc-700">
-                                    <span
-                                        className="relative grid size-14 place-items-center overflow-hidden rounded-[20px] text-amber-600 transition group-active:translate-y-[2px] group-active:scale-95"
-                                        style={{
-                                            background: "linear-gradient(160deg, #ffffff 0%, #fafbfc 45%, #e9ecf1 100%)",
-                                            boxShadow: "0 8px 16px -10px rgba(90,40,10,0.45), inset 0 1px 0 #ffffff, inset 0 -6px 12px rgba(140,150,170,0.2), inset 0 0 0 1px rgba(255,255,255,0.75)",
-                                        }}
-                                    >
-                                        <span aria-hidden className="pointer-events-none absolute inset-x-2 top-1 h-4 rounded-full" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0))" }} />
-                                        <span className="relative">{a.icon}</span>
-                                    </span>
-                                    <span className="text-center leading-tight">{a.label}</span>
-                                </button>
-                            ))}
-                        </div>
+                        <button
+                            onClick={() => window.open(wa, "_blank")}
+                            className="relative flex w-full items-center gap-3 overflow-hidden rounded-[20px] px-4 py-3 text-left transition active:translate-y-[1px]"
+                            style={{
+                                background: "linear-gradient(160deg, #ffffff 0%, #fafbfc 45%, #e9ecf1 100%)",
+                                boxShadow: "0 8px 16px -10px rgba(90,40,10,0.45), inset 0 1px 0 #ffffff, inset 0 -6px 12px rgba(140,150,170,0.2), inset 0 0 0 1px rgba(255,255,255,0.75)",
+                            }}
+                        >
+                            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-600"><IconPhone size={20} /></span>
+                            <span className="min-w-0">
+                                <span className="block text-[14px] font-bold text-zinc-900">Escribir al comercio</span>
+                                <span className="block text-[12px] text-zinc-500">Dudas sobre tu crédito o tus pagos</span>
+                            </span>
+                            <IconChevronRight size={18} className="ml-auto shrink-0 text-zinc-400" />
+                        </button>
                     );
                 })()}
 
