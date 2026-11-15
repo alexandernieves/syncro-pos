@@ -602,6 +602,10 @@ export class ClientsService {
     if (!client) {
       return [];
     }
+    // the business the client buys from: its name and logo show next to each purchase
+    const ownBusiness = client.businessId
+      ? await this.prisma.business.findUnique({ where: { id: client.businessId }, select: { name: true, logo: true } })
+      : null;
 
     // 1. Get all PENDING loans with installments
     const loans = await this.prisma.loan.findMany({
@@ -648,7 +652,7 @@ export class ClientsService {
       ? await this.prisma.sale.findMany({
           where: { id: { in: uniqueSaleIds } },
           include: {
-            business: { select: { name: true } },
+            business: { select: { name: true, logo: true } },
             branch: { select: { name: true } },
             items: {
               include: {
@@ -691,7 +695,8 @@ export class ClientsService {
         nextPaymentDate: nextInstallment?.dueDate ?? null,
         nextPaymentAmount: nextInstallment?.amount ?? null,
         createdAt: loan.createdAt,
-        storeName: (sale as any)?.business?.name || (sale as any)?.branch?.name || null,
+        storeName: (sale as any)?.business?.name || (sale as any)?.branch?.name || ownBusiness?.name || null,
+        storeLogo: (sale as any)?.business?.logo || ownBusiness?.logo || null,
         businessId: (sale as any)?.businessId || client.businessId || null,
         installmentsCount: loan.installmentsCount,
         items: itemsSummary,
@@ -744,7 +749,8 @@ export class ClientsService {
           nextPaymentDate: fallbackDueDate,
           nextPaymentAmount: allocatedRemaining,
           createdAt: tx.createdAt,
-          storeName: (sale as any)?.business?.name || (sale as any)?.branch?.name || null,
+          storeName: (sale as any)?.business?.name || (sale as any)?.branch?.name || ownBusiness?.name || null,
+        storeLogo: (sale as any)?.business?.logo || ownBusiness?.logo || null,
           businessId: (sale as any)?.businessId || client.businessId || null,
           installmentsCount: 1,
           items: itemsSummary,

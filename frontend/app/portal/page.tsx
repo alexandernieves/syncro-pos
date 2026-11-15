@@ -2260,6 +2260,11 @@ $1color: #8E3418 !important;
     const AV_COLORS = ["#F26B3A", "#2F7DFF", "#1F9D5B", "#8C6CF0", "#E8A72B", "#45413A"];
     const avColor = (d: any) => AV_COLORS[[...String(d?.loanId || "")].reduce((a, c) => a + c.charCodeAt(0), 0) % AV_COLORS.length];
     const avLetter = (d: any) => (storeOf(d).trim().charAt(0) || "?").toUpperCase();
+    /** The business's logo if it has one; otherwise its initial on a colour */
+    const avInner = (d: any) => d?.storeLogo
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <img src={d.storeLogo} alt="" className="absolute inset-0 size-full bg-white object-cover" />
+        : avLetter(d);
 
     /**
      * Pay several installments at once (one transfer, one receipt): the payment flow gets a
@@ -2415,7 +2420,7 @@ $1color: #8E3418 !important;
                         <div className="mt-3 space-y-2.5">
                             {parts.map((p) => (
                                 <button key={p[0].debt.businessId || p[0].id} onClick={() => (p.length === 1 ? (setPaySheet(null), openPay(p[0].debt)) : openGroupPay(p, "all"))} className="flex w-full items-center gap-3 rounded-2xl border-[1.5px] border-zinc-200 bg-white p-3.5 text-left active:bg-zinc-50 transition">
-                                    <span className="grid size-9 shrink-0 place-items-center rounded-full text-[13px] text-white" style={{ background: avColor(p[0].debt), fontWeight: 800 }}>{avLetter(p[0].debt)}</span>
+                                    <span className="relative overflow-hidden grid size-9 shrink-0 place-items-center rounded-full text-[13px] text-white" style={{ background: avColor(p[0].debt), fontWeight: 800 }}>{avInner(p[0].debt)}</span>
                                     <span className="min-w-0">
                                         <span className="block truncate text-[15px] font-bold text-zinc-900">{storeOf(p[0].debt)}</span>
                                         <span className="block text-[12.5px] text-zinc-500">{p.length} cuota{p.length > 1 ? "s" : ""}</span>
@@ -2599,7 +2604,7 @@ $1color: #8E3418 !important;
                             {/* who: one store, or the stack of them with the list on demand */}
                             {one ? (
                                 <div className="mt-2.5 flex items-center gap-2 text-[12.5px] text-zinc-500">
-                                    <span className="grid size-6 place-items-center rounded-full text-[10.5px] text-white" style={{ background: avColor(group[0].debt), fontWeight: 800 }}>{avLetter(group[0].debt)}</span>
+                                    <span className="relative overflow-hidden grid size-6 place-items-center rounded-full text-[10.5px] text-white" style={{ background: avColor(group[0].debt), fontWeight: 800 }}>{avInner(group[0].debt)}</span>
                                     <span className="truncate">{storeOf(group[0].debt)} · {instLabel(group[0])}</span>
                                 </div>
                             ) : (
@@ -2607,7 +2612,7 @@ $1color: #8E3418 !important;
                                     <button onClick={() => setPayDayOpen((v) => !v)} aria-expanded={payDayOpen} className="mt-2.5 flex w-full items-center text-left">
                                         <span className="flex">
                                             {group.slice(0, 4).map((i: any, k: number) => (
-                                                <span key={i.id} className="grid size-[26px] place-items-center rounded-full border-2 border-white text-[10.5px] text-white" style={{ background: avColor(i.debt), marginLeft: k ? -7 : 0, fontWeight: 800 }}>{avLetter(i.debt)}</span>
+                                                <span key={i.id} className="relative overflow-hidden grid size-[26px] place-items-center rounded-full border-2 border-white text-[10.5px] text-white" style={{ background: avColor(i.debt), marginLeft: k ? -7 : 0, fontWeight: 800 }}>{avInner(i.debt)}</span>
                                             ))}
                                             {group.length > 4 && <span className="grid size-[26px] place-items-center rounded-full border-2 border-white bg-zinc-700 text-[10px] text-white" style={{ marginLeft: -7, fontWeight: 800 }}>+{group.length - 4}</span>}
                                         </span>
@@ -2618,7 +2623,7 @@ $1color: #8E3418 !important;
                                         <div className="mt-2 border-t border-zinc-100 animate-in fade-in slide-in-from-top-1 duration-200">
                                             {group.map((i: any) => (
                                                 <div key={i.id} className="flex items-center gap-2.5 border-b border-zinc-100 py-2.5 last:border-0">
-                                                    <span className="grid size-7 shrink-0 place-items-center rounded-[9px] text-[11px] text-white" style={{ background: avColor(i.debt), fontWeight: 800 }}>{avLetter(i.debt)}</span>
+                                                    <span className="relative overflow-hidden grid size-7 shrink-0 place-items-center rounded-[9px] text-[11px] text-white" style={{ background: avColor(i.debt), fontWeight: 800 }}>{avInner(i.debt)}</span>
                                                     <div className="min-w-0">
                                                         <p className="truncate text-[13.5px] font-bold text-zinc-900">{storeOf(i.debt)}</p>
                                                         <p className="text-[12px] text-zinc-500">{instLabel(i)}{ticketOf(i.debt) ? ` · #${ticketOf(i.debt)}` : ""}{late ? ` · ${fmtDay(i.dueDate)}` : ""}</p>
@@ -2683,7 +2688,7 @@ $1color: #8E3418 !important;
                             const late = isOverdue(d);
                             return (
                                 <button key={d.loanId} onClick={() => { goTab("payments"); setPlanPick(1); setPlanDebt(d); }} className={`flex w-full items-center gap-3 p-3.5 text-left active:bg-zinc-50 transition ${i ? "border-t border-zinc-100" : ""}`}>
-                                    <span className="grid size-10 shrink-0 place-items-center rounded-[13px] text-[13px] text-white" style={{ background: avColor(d), fontWeight: 800 }}>{avLetter(d)}</span>
+                                    <span className="relative overflow-hidden grid size-10 shrink-0 place-items-center rounded-[13px] text-[13px] text-white" style={{ background: avColor(d), fontWeight: 800 }}>{avInner(d)}</span>
                                     <span className="min-w-0 flex-1">
                                         <span className="block truncate text-[14.5px] font-bold text-zinc-900">{storeOf(d)}</span>
                                         <span className="block text-[12px] text-zinc-500">{paidCountOf(d)} de {totalCountOf(d)} cuotas pagadas</span>
@@ -2956,7 +2961,7 @@ $1color: #8E3418 !important;
         const owed = pendingDebtsList.reduce((a: number, d: any) => a + (Number(d.remainingBalance) || 0), 0);
         const row = (d: any, i: number) => (
             <button key={d.loanId} onClick={() => { setPlanPick(1); setPlanDebt(d); window.scrollTo({ top: 0 }); }} className={`flex w-full items-center gap-3 py-3.5 text-left active:bg-zinc-50 ${i ? "border-t border-zinc-100" : ""}`}>
-                <span className="grid size-10 shrink-0 place-items-center rounded-[13px] text-[13px] text-white" style={{ background: avColor(d), fontWeight: 800 }}>{avLetter(d)}</span>
+                <span className="relative overflow-hidden grid size-10 shrink-0 place-items-center rounded-[13px] text-[13px] text-white" style={{ background: avColor(d), fontWeight: 800 }}>{avInner(d)}</span>
                 <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14.5px] font-bold text-zinc-900">{storeOf(d)}</span>
                     <span className="block text-[12.5px] text-zinc-600">{ticketOf(d) ? `#${ticketOf(d)} · ` : ""}{paidCountOf(d)} de {totalCountOf(d)} pagadas</span>
