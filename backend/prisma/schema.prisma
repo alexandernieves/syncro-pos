@@ -81,6 +81,7 @@ model Business {
   modules               BusinessModule[]
   moduleRequests        ModuleRequest[]
   features              BusinessFeature[]
+  syncroCreditAds       SyncroCreditAd[]
 }
 
 model Conversation {
@@ -140,6 +141,7 @@ model Product {
   images                  ProductImage[]
   reviews                 ProductReview[]
   shopOrderItems          ShopOrderItem[]
+  syncroCreditAds         SyncroCreditAd[]
 }
 
 model ProductVariant {
@@ -281,18 +283,18 @@ model Branch {
 }
 
 model User {
-  id                String              @id @default(uuid())
-  email             String              @unique
+  id                String                @id @default(uuid())
+  email             String                @unique
   password          String
   name              String?
-  role              String              @default("pos")
+  role              String                @default("pos")
   country           String?
   city              String?
   avatar            String?
-  permissions       String[]            @default([])
-  branchIds         String[]            @default([])
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  permissions       String[]              @default([])
+  branchIds         String[]              @default([])
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
   businessId        String?
   lastSeen          DateTime?
   accountingEntries AccountingEntry[]
@@ -300,13 +302,13 @@ model User {
   expenses          Expense[]
   transfers         InventoryTransfer[]
   messages          Message[]
-  notifications     Notification[]      @relation("UserNotifications")
+  notifications     Notification[]        @relation("UserNotifications")
   pushSubscriptions PushSubscription[]
   biometrics        BiometricCredential[]
   sales             Sale[]
   returns           SaleReturn[]
   shifts            Shift[]
-  business          Business?           @relation(fields: [businessId], references: [id])
+  business          Business?             @relation(fields: [businessId], references: [id])
   whatsAppChats     WhatsAppChat[]
   financeMovements  FinanceMovement[]
 }
@@ -721,26 +723,26 @@ model PurchaseOrder {
 }
 
 model PurchaseOrderItem {
-  id              String         @id @default(uuid())
-  purchaseOrderId String
-  variantId       String
+  id               String         @id @default(uuid())
+  purchaseOrderId  String
+  variantId        String
   /// In the ordered unit (cajas, bultos…); stock moves by quantity × unitFactor
-  quantity        Float
+  quantity         Float
   /// UNIDAD, CAJA, BULTO, PAQUETE, FARDO, DOCENA, KILO, LITRO
-  unit            String         @default("UNIDAD")
+  unit             String         @default("UNIDAD")
   /// Stock units in one ordered unit (a box of 24 → 24)
-  unitFactor      Float          @default(1)
+  unitFactor       Float          @default(1)
   /// How much has arrived so far, in the ordered unit (partial deliveries add up)
-  receivedQuantity Float         @default(0)
+  receivedQuantity Float          @default(0)
   /// Cost of one ordered unit (one box), before tax
-  cost            Float
-  taxRate         Float          @default(0)
-  taxAmount       Float          @default(0)
-  discountAmount  Float          @default(0)
-  subtotal        Float
-  total           Float          @default(0)
-  purchaseOrder   PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  variant         ProductVariant @relation(fields: [variantId], references: [id])
+  cost             Float
+  taxRate          Float          @default(0)
+  taxAmount        Float          @default(0)
+  discountAmount   Float          @default(0)
+  subtotal         Float
+  total            Float          @default(0)
+  purchaseOrder    PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  variant          ProductVariant @relation(fields: [variantId], references: [id])
 }
 
 model SupplierInvoice {
@@ -2210,20 +2212,20 @@ model SubscriptionPayment {
 
 /// A packaged module (catalog code, e.g. "gym") for one business and where it stands
 model BusinessModule {
-  id              String    @id @default(uuid())
-  businessId      String
-  moduleCode      String
+  id          String    @id @default(uuid())
+  businessId  String
+  moduleCode  String
   /// REQUESTED, IN_REVIEW, BUILDING, READY, TRIAL, ACTIVE, PAUSED, REJECTED
-  status          String    @default("REQUESTED")
+  status      String    @default("REQUESTED")
   /// REQUEST (the owner asked), OFFER (Syncro turned it on) or MIGRATION
-  origin          String    @default("REQUEST")
-  trialEndsAt     DateTime?
-  activatedAt     DateTime?
+  origin      String    @default("REQUEST")
+  trialEndsAt DateTime?
+  activatedAt DateTime?
   /// Internal note from the Syncro team
-  note            String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  business        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  note        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@unique([businessId, moduleCode])
   @@index([status])
@@ -2340,4 +2342,22 @@ model BiometricCredential {
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+/// Syncro Credit "Para ti": product ads picked from Syncro Central (products from the business's own catalog)
+model SyncroCreditAd {
+  id         String    @id @default(uuid())
+  businessId String
+  productId  String
+  headline   String?
+  theme      String    @default("sunset")
+  active     Boolean   @default(true)
+  sortOrder  Int       @default(0)
+  endsAt     DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([active, sortOrder])
 }

@@ -34,6 +34,7 @@ import { NubiSplash, syncThemeColor } from "@/components/portal/nubi-splash";
 import { NubiFace, type NubiMood, type NubiRoll } from "@/components/portal/nubi-face";
 import { NubiPortal, type PortalFx } from "@/components/portal/nubi-portal";
 import { NubiPodium } from "@/components/portal/nubi-podium";
+import { ScAdCard } from "@/components/portal/sc-ad-card";
 
 /** Starts "Nubi's portal" (the screen between the login and the account) from inside the app. */
 type PortalControl = { start: (fx: PortalFx, onMid?: () => void) => void; ready: () => void };
@@ -417,6 +418,7 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
     const [scLevel, setScLevel] = useState<any | null>(null);
     const [showLevel, setShowLevel] = useState(false);
     const [levelUp, setLevelUp] = useState<any | null>(null);
+    const [scAds, setScAds] = useState<any[]>([]);
     const creditCardRef = useRef<HTMLDivElement | null>(null);
     // Next payment: the day's list unfolded, and the "¿Qué quieres pagar?" sheet
     const [payDayOpen, setPayDayOpen] = useState(false);
@@ -565,6 +567,12 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
             const submissionsRes = await fetch(`${API}/clients/portal/payments/submissions`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+            // "Para ti" ads (Syncro Central)
+            fetch(`${API}/portal-ads`, { headers: { Authorization: `Bearer ${token}` } })
+                .then((r) => (r.ok ? r.json() : []))
+                .then((a) => setScAds(Array.isArray(a) ? a : []))
+                .catch(() => setScAds([]));
+
             const levelRes = await fetch(`${API}/clients/portal/level`, {
                 headers: { Authorization: `Bearer ${token}` }
             }).catch(() => null);
@@ -2400,34 +2408,28 @@ $1color: #8E3418 !important;
     // ── Inicio ──
     const renderHome = () => {
         if (showLevel) return renderLevel();
-        const ownBiz = client?.businessId;
-        const stores = [...portalBusinesses]
-            .sort((a: any, b: any) => Number(b.businessId === ownBiz || b.business?.id === ownBiz) - Number(a.businessId === ownBiz || a.business?.id === ownBiz))
-            .slice(0, 3);
-        const ads: React.ReactNode[] = [];
-        stores.forEach((b: any) => ads.push(
-            <div key={`s-${b.id}`} className="sc-ad" style={{ background: "radial-gradient(80% 90% at 100% 0%, rgba(242,107,58,.55), rgba(242,107,58,0) 60%), linear-gradient(135deg,#2E2A26,#45413A)" }}>
-                <span className="sc-ad-tag">{b.business?.name || b.name}</span>
-                <h4>{b.promo?.title || "Compra hoy y paga en cuotas"}</h4>
-                <p className="line-clamp-1">{b.promo?.text || `${b.name}${b.location ? ` · ${b.location}` : ""}`}</p>
-                <button className="sc-ad-go" onClick={() => { goTab("rewards"); setSelectedBranchForShop(b); setProductSearchQuery(""); setBusinessSearchQuery(""); }}>Ver tienda →</button>
-                <IconShoppingBag size={120} stroke={1.1} className="absolute -right-2 -bottom-3 text-white/15" />
-            </div>,
+        // "Para ti": product ads picked in Syncro Central (each with its own look); while there are
+        // none, the level card keeps the spot
+        const ads: React.ReactNode[] = scAds.map((ad: any) => (
+            <ScAdCard
+                key={ad.id}
+                ad={ad}
+                onClick={() => {
+                    if (!ad.branch) return goTab("rewards");
+                    goTab("rewards");
+                    setSelectedBranchForShop(ad.branch);
+                    setProductSearchQuery(ad.product?.name || "");
+                    setBusinessSearchQuery("");
+                }}
+            />
         ));
-        ads.push(
+        if (!ads.length) ads.push(
             <div key="lvl" className="sc-ad" style={{ background: "linear-gradient(135deg,#F26B3A,#F6A27F)" }}>
                 <span className="sc-ad-tag">Tu nivel · {lvlName}</span>
                 <h4>{scLevel?.next ? `Sube a ${scLevel.next.name}` : "¡Estás en la cima!"}</h4>
                 <p>{scLevel?.next ? `Te faltan ${money(scLevel.next.missing)} pagados a tiempo` : "Galaxia: lo máximo en Syncro Credit"}</p>
                 <button className="sc-ad-go" onClick={openLevel}>Ver mi nivel →</button>
                 <img src="/nubi/nubi-happy.webp" alt="" className="absolute right-3 bottom-3 w-[74px] drop-shadow-[0_10px_12px_rgba(90,30,5,0.35)]" />
-            </div>,
-        );
-        if (!nextInst) ads.push(
-            <div key="ok" className="sc-ad" style={{ background: "linear-gradient(135deg,#1F9D5B,#5BC48A)" }}>
-                <span className="sc-ad-tag">Estás al día</span>
-                <h4>¡Sin pagos pendientes!</h4>
-                <p>Tu crédito completo está listo para usar</p>
             </div>,
         );
 
@@ -2634,7 +2636,7 @@ $1color: #8E3418 !important;
                             className="-mx-6 px-6 scroll-px-6 -mb-3 flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-none"
                             onScroll={(e) => {
                                 const el = e.currentTarget;
-                                setAdIndex(Math.round(el.scrollLeft / 312));
+                                setAdIndex(Math.round(el.scrollLeft / 292));
                             }}
                         >
                             {ads}

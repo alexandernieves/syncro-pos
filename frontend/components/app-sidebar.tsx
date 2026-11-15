@@ -234,6 +234,7 @@ const data = {
         { title: "Notificaciones", url: "/dashboard/syncro/notificaciones" },
         { title: "Feedback de IA", url: "/dashboard/syncro/feedback" },
         { title: "Suscripciones", url: "/dashboard/syncro/subscriptions" },
+        { title: "Publicidad Syncro Credit", url: "/dashboard/syncro/publicidad" },
         { title: "Métricas globales", url: "/dashboard/syncro/stats" },
         { title: "Auditoría global", url: "/dashboard/syncro/audit" },
       ],
