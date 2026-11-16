@@ -94,7 +94,7 @@ const BLOCK_TEXT: Record<string, string> = {
     suspended: "Tu cuenta con este comercio está pausada",
 };
 
-export function LoansMarket({ onBack, onLevels, onUnread }: { onBack: () => void; onLevels: () => void; onUnread?: (n: number) => void }) {
+export function LoansMarket({ onBack, onLevels, onUnread, startView, onViewChange }: { onBack: () => void; onLevels: () => void; onUnread?: (n: number) => void; startView?: "market" | "mine"; onViewChange?: (v: "market" | "mine") => void }) {
     const [market, setMarket] = useState<any | null>(null);
     const [reqs, setReqs] = useState<any[]>([]);
     const [pick, setPick] = useState<any | null>(null);
@@ -104,7 +104,12 @@ export function LoansMarket({ onBack, onLevels, onUnread }: { onBack: () => void
     const [review, setReview] = useState<{ loan: any; stars: number; comment: string } | null>(null);
     const [chat, setChat] = useState<any | null>(null);
     // two views: the market (Anuncios) and the person's loans (Mis préstamos)
-    const [view, setView] = useState<"market" | "mine" | null>(null);
+    const [view, setViewRaw] = useState<"market" | "mine" | null>(startView ?? null);
+    const setView = (v: any) => setViewRaw((prev) => {
+        const next = typeof v === "function" ? v(prev) : v;
+        if (next && next !== prev) onViewChange?.(next);
+        return next;
+    });
 
     const loadMarket = useCallback(async () => {
         try {
@@ -118,7 +123,7 @@ export function LoansMarket({ onBack, onLevels, onUnread }: { onBack: () => void
             if (r.ok) {
                 const list = await r.json();
                 setReqs(list);
-                setView((v) => v ?? (list.some((l: any) => (l.status === "APPROVED_PENDING_DISBURSEMENT" && l.pin) || l.unread > 0) ? "mine" : "market"));
+                setView((v: any) => v ?? (list.some((l: any) => (l.status === "APPROVED_PENDING_DISBURSEMENT" && l.pin) || l.unread > 0) ? "mine" : "market"));
                 onUnread?.(list.reduce((a: number, l: any) => a + (l.unread || 0), 0));
             }
         } catch { /* offline */ }

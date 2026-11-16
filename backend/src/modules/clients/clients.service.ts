@@ -594,9 +594,8 @@ export class ClientsService {
   async portalProfile(user: any) {
     const cu = user?.cu ? await this.prisma.creditUser.findUnique({ where: { id: user.cu } }) : null;
     const ids = await this.portalClientIds(user);
-    const txs = ids.length
-      ? await this.prisma.creditTransaction.findMany({ where: { clientId: { in: ids } }, orderBy: { createdAt: 'desc' } })
-      : [];
+    // the app's history: cash loans only (received, installments paid, late charges)
+    const txs = await this.portalLoanHistory(ids);
     // The main business client: the session's, or (an account that got its first loan after logging
     // in) the person's client with the highest limit
     let mainId: string | null = user?.id ?? null;
@@ -619,7 +618,7 @@ export class ClientsService {
       email: base.email || cu?.email || null,
       creditTransactions: txs,
       account: cu ? { id: cu.id, phoneVerified: !!cu.phoneVerifiedAt, since: cu.createdAt } : null,
-      hasCredit: !!mainId,
+      hasCredit: ids.length ? (await this.prisma.loan.count({ where: { clientId: { in: ids }, kind: 'CASH', disbursedAt: { not: null } } })) > 0 : false,
     };
   }
 
@@ -639,10 +638,49 @@ export class ClientsService {
   }
 
   /** Every purchase and loan the person owes, with every business */
+  /** Syncro Credit is the cash-loans app: only those (store credit is paid at the shop) */
   async getPortalDebtsAll(user: any) {
     const ids = await this.portalClientIds(user);
     const lists = await Promise.all(ids.map((id) => this.getPortalDebts(id)));
-    return lists.flat().sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return lists.flat().filter((d: any) => d.kind === 'CASH').sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  /** What the person still owes shops on store credit ("fiado"): only to tell them it's paid at the shop */
+  async portalStoreCredit(user: any) {
+    const ids = await this.portalClientIds(user);
+    const lists = await Promise.all(ids.map((id) => this.getPortalDebts(id)));
+    const byShop = new Map<string, { businessId: string | null; storeName: string; storeLogo: string | null; owed: number }>();
+    for (const d of lists.flat() as any[]) {
+      if (d.kind === 'CASH' || !(Number(d.remainingBalance) > 0.004)) continue;
+      const k = d.businessId || d.storeName || '?';
+      const cur = byShop.get(k) ?? { businessId: d.businessId ?? null, storeName: d.storeName || 'Tienda', storeLogo: d.storeLogo ?? null, owed: 0 };
+      cur.owed = Math.round((cur.owed + Number(d.remainingBalance)) * 100) / 100;
+      byShop.set(k, cur);
+    }
+    return [...byShop.values()];
+  }
+
+  /** The person's history in the app: their cash loans (received, installments paid, late charges) */
+  private async portalLoanHistory(ids: string[]) {
+    if (!ids.length) return [];
+    const loans = await this.prisma.loan.findMany({
+      where: { clientId: { in: ids }, kind: 'CASH', disbursedAt: { not: null } },
+      include: { installments: { include: { charges: true } } },
+    });
+    const biz = await this.prisma.business.findMany({ where: { id: { in: [...new Set(loans.map((l) => l.businessId!).filter(Boolean))] } }, select: { id: true, name: true } });
+    const nameOf = new Map(biz.map((b) => [b.id, b.name]));
+    const out: any[] = [];
+    for (const l of loans) {
+      const shop = nameOf.get(l.businessId!) ?? 'Comercio';
+      out.push({ id: `loan-${l.id}`, type: 'DEBT', amount: l.amount, notes: `Préstamo recibido · ${shop}`, createdAt: l.disbursedAt, loanId: l.id });
+      for (const i of l.installments) {
+        for (const c of i.charges) out.push({ id: `fee-${c.id}`, type: 'DEBT', amount: c.amount, notes: `${c.name} · cuota ${i.installmentNumber} · ${shop}`, createdAt: c.createdAt, loanId: l.id });
+        if (i.paidAmount > 0.004) {
+          out.push({ id: `pay-${i.id}`, type: 'PAYMENT', amount: i.paidAmount, notes: `Cuota ${i.installmentNumber} de ${l.installmentsCount}${i.status === 'PAID' ? '' : ' (abono)'} · ${shop}`, createdAt: i.paidAt ?? l.updatedAt, loanId: l.id });
+        }
+      }
+    }
+    return out.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   /** Which of the person's clients (and business) a loan belongs to */
@@ -660,7 +698,10 @@ export class ClientsService {
 
   async getClientSubmissionsAll(clientIds: string[]) {
     if (!clientIds.length) return [];
-    return this.prisma.paymentSubmission.findMany({ where: { clientId: { in: clientIds } }, orderBy: { createdAt: 'desc' } });
+    // only receipts of cash loans (store credit is paid at the shop)
+    const cash = await this.prisma.loan.findMany({ where: { clientId: { in: clientIds }, kind: 'CASH' }, select: { id: true } });
+    if (!cash.length) return [];
+    return this.prisma.paymentSubmission.findMany({ where: { clientId: { in: clientIds }, loanId: { in: cash.map((l) => l.id) } }, orderBy: { createdAt: 'desc' } });
   }
 
   async getPortalLevel(clientIdOrIds: string | string[]) {
@@ -672,7 +713,7 @@ export class ClientsService {
       { level: 1, name: 'Galaxia', from: 1500 },
     ];
     const paid = await this.prisma.loanInstallment.findMany({
-      where: { status: 'PAID', paidAt: { not: null }, loan: { clientId: { in: clientIds } } },
+      where: { status: 'PAID', paidAt: { not: null }, loan: { clientId: { in: clientIds }, kind: 'CASH' } },
       select: { amount: true, paidAmount: true, paidAt: true, dueDate: true },
     });
     const endOfDay = (d: Date) => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x.getTime(); };

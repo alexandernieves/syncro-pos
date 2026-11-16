@@ -446,6 +446,12 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
     const [showLoans, setShowLoans] = useState(false);
     // messages from lenders not read yet (the badge on the Préstamos tab)
     const [loanUnread, setLoanUnread] = useState(0);
+    const [loansView, setLoansView] = useState<"market" | "mine">("market");
+    // the home's card: what the market says the person can borrow, and what they owe in loans
+    const [loanSummary, setLoanSummary] = useState<any | null>(null);
+    // store credit ("fiado") still owed: shown once, it's paid at the shop now
+    const [storeCredit, setStoreCredit] = useState<any[]>([]);
+    const [fiadoSeen, setFiadoSeen] = useState<string>(() => { try { return localStorage.getItem("sc-fiado-notice") || ""; } catch { return ""; } });
     useEffect(() => {
         if (view !== "dashboard") return;
         const check = () =>
@@ -457,8 +463,9 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
         const t = setInterval(check, 30000);
         return () => clearInterval(t);
     }, [view]);
-    const openLoans = () => {
+    const openLoans = (v: "market" | "mine" = "market") => {
         setPlanDebt(null); setShowHistory(false); setShowLevel(false);
+        setLoansView(v);
         setActiveTab("home"); setShowLoans(true); window.scrollTo({ top: 0 });
     };
 
@@ -612,6 +619,15 @@ function ClientPortalApp({ onReady, portal }: { onReady: () => void; portal: Por
             const submissionsRes = await fetch(`${API}/clients/portal/payments/submissions`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+            // what the person can borrow now (the market's rules) and their store credit, if any
+            fetch(`${API}/portal-lending/offers`, { headers: { Authorization: `Bearer ${token}` } })
+                .then((r) => (r.ok ? r.json() : null))
+                .then((m) => m && setLoanSummary(m))
+                .catch(() => {});
+            fetch(`${API}/clients/portal/store-credit`, { headers: { Authorization: `Bearer ${token}` } })
+                .then((r) => (r.ok ? r.json() : []))
+                .then((l) => setStoreCredit(Array.isArray(l) ? l : []))
+                .catch(() => setStoreCredit([]));
             // "Para ti" ads (Syncro Central)
             fetch(`${API}/portal-ads`, { headers: { Authorization: `Bearer ${token}` } })
                 .then((r) => (r.ok ? r.json() : []))
@@ -2710,6 +2726,9 @@ $1color: #8E3418 !important;
     // ── Inicio ──
     const renderLoans = () => (
         <LoansMarket
+            key={loansView}
+            startView={loansView}
+            onViewChange={setLoansView}
             onBack={() => setShowLoans(false)}
             onLevels={() => { setShowLoans(false); openLevel(); }}
             onUnread={setLoanUnread}
@@ -2718,6 +2737,9 @@ $1color: #8E3418 !important;
 
     // an account signed up in the app that no business has given credit (and that owes nothing)
     const noCredit = !!client && client.hasCredit === false && !(debts || []).some((d: any) => Number(d.remainingBalance) > 0.004);
+    const loanOwed = (debts || []).reduce((a: number, d: any) => a + Math.max(0, Number(d.remainingBalance) || 0), 0);
+    const fiadoSig = storeCredit.map((f: any) => `${f.businessId || f.storeName}:${f.owed}`).join("|");
+    const fiadoNotice = storeCredit.length > 0 && fiadoSeen !== fiadoSig;
     const renderHome = () => {
         if (showLoans) return renderLoans();
         if (showLevel) return renderLevel();
@@ -2752,37 +2774,29 @@ $1color: #8E3418 !important;
             <div className="flex flex-col animate-in fade-in duration-500 pb-28">
                 {levelUp && createPortal(renderLevelUp(), document.body)}
                 {paySheet && createPortal(renderPaySheet(), document.body)}
-                {/* Hello, with Nubi (it glances at the credit card now and then) */}
+                {/* Hello, with Nubi (it glances at the card now and then) */}
                 <div className="relative text-white pr-24">
                     <h1 className="text-[30px] leading-tight" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>Hola{firstName ? `, ${firstName}` : ""}</h1>
-                    {noCredit
-                        ? <p className="mt-1 text-[15px] font-medium text-white/90">Bienvenido a Syncro Credit</p>
-                        : <p className="mt-1 text-[15px] font-medium text-white/90">Tienes <b className="font-bold">{money(availableCredit)}</b> para comprar hoy</p>}
+                    <p className="mt-1 text-[15px] font-medium text-white/90">{loanOwed > 0.004 ? <>Debes <b className="font-bold">{money(loanOwed)}</b> en préstamos</> : "Tu efectivo, cuando lo necesitas"}</p>
                     <NubiFace lookAt={creditCardRef} className="!absolute -right-1 -top-4 h-[84px] w-[84px]" />
                 </div>
 
-                <div aria-hidden className="h-6" />
-                {noCredit ? (
-                    // A new account (signed up in the app): no business has given it credit yet
-                    <div
-                        ref={creditCardRef}
-                        className="relative overflow-hidden rounded-[26px] p-5 text-zinc-900"
-                        style={{
-                            background: "linear-gradient(160deg, #ffffff 0%, #fafbfc 42%, #eceff3 100%)",
-                            boxShadow: "0 18px 40px -16px rgba(90,30,5,0.45), inset 0 1px 0 #ffffff, inset 0 -12px 26px rgba(140,150,170,0.18), inset 0 0 0 1px rgba(255,255,255,0.7)",
-                        }}
-                    >
-                        <p className="text-[13px] font-semibold text-zinc-500">Aún no tienes crédito</p>
-                        <p className="mt-1 text-[26px] leading-tight text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.035em" }}>Pide tu primer préstamo</p>
-                        <p className="mt-2 text-[13.5px] leading-relaxed text-zinc-600">Elige entre los comercios que prestan efectivo. Si te aprueban, retiras el dinero en su caja con un PIN.</p>
-                        <div className="mt-4 flex items-center gap-2">
-                            <button onClick={openLoans} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-3 text-[14px] font-bold text-white transition active:scale-95">
-                                Ver ofertas <IconArrowRight size={16} />
-                            </button>
-                            <button onClick={openLevel} className="rounded-full px-4 py-3 text-[13px] font-semibold text-zinc-600">Nivel {lvl} · {lvlName}</button>
+                {/* Store credit moved to the shop: told once, with what is still owed */}
+                {fiadoNotice && (
+                    <div className="mt-5 rounded-[22px] border border-amber-200 bg-amber-50 p-4">
+                        <p className="text-[14px] font-bold text-amber-900">Tu fiado ahora se paga en la tienda</p>
+                        <p className="mt-1 text-[12.5px] leading-snug text-amber-900/80">Syncro Credit es ahora tu app de préstamos en efectivo. Lo que compraste fiado lo sigues pagando directo en la tienda:</p>
+                        <div className="mt-2 space-y-1">
+                            {storeCredit.map((f: any) => (
+                                <p key={f.businessId || f.storeName} className="flex justify-between text-[13px] text-amber-950"><span className="truncate">{f.storeName}</span><b className="shrink-0">{money(f.owed)}</b></p>
+                            ))}
                         </div>
+                        <button onClick={() => { try { localStorage.setItem("sc-fiado-notice", fiadoSig); } catch { /* private */ } setFiadoSeen(fiadoSig); }} className="mt-3 h-10 w-full rounded-full bg-amber-900 text-[13.5px] font-bold text-white">Entendido</button>
                     </div>
-                ) : (
+                )}
+
+                <div aria-hidden className="h-6" />
+                {/* What you can borrow now: lacquered white like Nubi */}
                 <div
                     ref={creditCardRef}
                     className="relative overflow-hidden rounded-[26px] p-5 text-zinc-900"
@@ -2792,15 +2806,12 @@ $1color: #8E3418 !important;
                     }}
                 >
                     <style>{`@keyframes sc-glint { 0%, 78% { transform: translateX(-160%) skewX(-18deg); } 100% { transform: translateX(420%) skewX(-18deg); } }`}</style>
-                    {/* the lacquer's reflections: a soft band on top, a small bright spot and a passing glint */}
                     <span aria-hidden className="pointer-events-none absolute left-5 right-28 top-1.5 h-9 rounded-full" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0))", filter: "blur(1px)" }} />
-                    <span aria-hidden className="pointer-events-none absolute right-[34%] top-3 h-2 w-7 rounded-full bg-white" style={{ filter: "blur(1.5px)" }} />
                     <span aria-hidden className="pointer-events-none absolute -top-4 bottom-[-16px] left-0 w-16" style={{ background: "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.75), rgba(255,255,255,0))", animation: "sc-glint 7s ease-in-out 2s infinite" }} />
-
                     <div className="relative flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                            <p className="text-[13px] font-semibold text-zinc-500">Crédito disponible</p>
-                            <p className="mt-1 text-[44px] leading-none text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.045em" }}>{money(availableCredit)}</p>
+                            <p className="text-[13px] font-semibold text-zinc-500">{loanSummary?.block ? (loanSummary.block === "late" ? "Ponte al día para pedir" : "Llegaste a tu límite por ahora") : "Puedes pedir hasta"}</p>
+                            <p className="mt-1 text-[44px] leading-none text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.045em" }}>{loanSummary ? money(loanSummary.block ? 0 : loanSummary.maxAnywhere) : "—"}</p>
                         </div>
                         <button
                             onClick={openLevel}
@@ -2812,34 +2823,28 @@ $1color: #8E3418 !important;
                             <span className="grid size-[18px] place-items-center rounded-full bg-primary text-white"><IconChevronRight size={12} stroke={3} /></span>
                         </button>
                     </div>
-
-                    {/* split bar: available (orange) and used (striped grey) */}
-                    {(() => {
-                        const availPct = creditLimit > 0 ? Math.max(0, Math.min(100, (availableCredit / creditLimit) * 100)) : 0;
-                        const used = client?.currentDebt || 0;
-                        return (
-                            <>
-                                <div className="relative mt-4 mb-2.5 flex h-3.5 gap-[3px]">
-                                    {availPct > 0 && <div className="h-full rounded-full" style={{ width: `${availPct}%`, background: "linear-gradient(90deg,#F6A27F,#F26B3A)", boxShadow: "inset 0 1px 0 rgba(255,255,255,.45)" }} />}
-                                    {availPct < 100 && <div className="h-full flex-1 rounded-full" style={{ background: "repeating-linear-gradient(135deg,#D3CEC4 0 4px,#E5E1D9 4px 8px)" }} />}
-                                </div>
-                                <div className="relative flex items-center gap-2.5 text-[12.5px] text-zinc-700">
-                                    <span className="whitespace-nowrap"><i className="mr-1 inline-block size-2 rounded-full bg-primary align-[0px]" />Disponible <b className="text-zinc-900">{Math.round(availPct)}%</b></span>
-                                    <span className="whitespace-nowrap"><i className="mr-1 inline-block size-2 rounded-full bg-zinc-300 align-[0px]" />Usado <b className="text-zinc-900">{money(used)}</b></span>
-                                    <span className="ml-auto whitespace-nowrap text-zinc-500">Límite <b className="text-zinc-900">{Number.isInteger(creditLimit) ? `$${creditLimit}` : money(creditLimit)}</b></span>
-                                </div>
-                            </>
-                        );
-                    })()}
+                    <p className="relative mt-2 text-[12.5px] leading-snug text-zinc-500">
+                        {loanSummary?.blockText
+                            ? loanSummary.blockText
+                            : loanSummary && loanSummary.maxAnywhere > 0
+                                ? "Elige entre los comercios que prestan efectivo y retíralo en su caja con un PIN."
+                                : "Por ahora ningún anuncio te alcanza. Pagando a tiempo subes de nivel."}
+                    </p>
+                    <div className="relative mt-4 flex items-center gap-2">
+                        <button onClick={() => openLoans("market")} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-3 text-[14px] font-bold text-white transition active:scale-95">
+                            Pedir préstamo <IconArrowRight size={16} />
+                        </button>
+                        {loanSummary?.active > 0 && (
+                            <span className="text-[12.5px] text-zinc-500">{loanSummary.active} de {loanSummary.maxActive} abiertos</span>
+                        )}
+                    </div>
                 </div>
-                )}
 
                 <div aria-hidden className="h-4" />
                 {/* Next payment: overdue first; otherwise everything due on the next day, added up */}
                 {(() => {
                     const late = overdueInsts.length > 0;
                     const group = late ? overdueInsts : nextDayInsts;
-                    const low = creditLimit > 0 && availableCredit < Math.max(5, creditLimit * 0.1);
                     if (!group.length) return (
                         <div className="flex items-center gap-3 rounded-[20px] border border-emerald-100 bg-emerald-50/60 p-3.5">
                             <div className="size-11 shrink-0 rounded-2xl grid place-items-center bg-emerald-100 text-emerald-600"><IconCircleCheck size={22} /></div>
@@ -2919,46 +2924,17 @@ $1color: #8E3418 !important;
                                     Luego: <b className="text-zinc-800">{money(sumOf(after))}</b> el {fmtDay(after[0].dueDate)}{after.length > 1 ? ` (${after.length} cuotas)` : ""}
                                 </p>
                             )}
-                            {low && (
-                                <div className="mt-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900">
-                                    Te quedan <b>{money(availableCredit)}</b> de crédito. {late ? "Pagando lo vencido se libera." : "Cada cuota que pagas lo libera."}
-                                </div>
-                            )}
                         </div>
                     );
                 })()}
 
                 {subBanner() && <div className="mt-3">{subBanner()}</div>}
                 <div aria-hidden className="h-3" />
-                {/* Talk to the business (only when it has a phone set) */}
-                {(() => {
-                    const phone = String(settings?.phone || "").replace(/\D/g, "");
-                    if (!phone) return null;
-                    const wa = `https://wa.me/${phone.startsWith("0") ? `58${phone.slice(1)}` : phone}`;
-                    return (
-                        <button
-                            onClick={() => window.open(wa, "_blank")}
-                            className="relative flex w-full items-center gap-3 overflow-hidden rounded-[20px] px-4 py-3 text-left transition active:translate-y-[1px]"
-                            style={{
-                                background: "linear-gradient(160deg, #ffffff 0%, #fafbfc 45%, #e9ecf1 100%)",
-                                boxShadow: "0 8px 16px -10px rgba(90,40,10,0.45), inset 0 1px 0 #ffffff, inset 0 -6px 12px rgba(140,150,170,0.2), inset 0 0 0 1px rgba(255,255,255,0.75)",
-                            }}
-                        >
-                            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-600"><IconPhone size={20} /></span>
-                            <span className="min-w-0">
-                                <span className="block text-[14px] font-bold text-zinc-900">Escribir al comercio</span>
-                                <span className="block text-[12px] text-zinc-500">Dudas sobre tu crédito o tus pagos</span>
-                            </span>
-                            <IconChevronRight size={18} className="ml-auto shrink-0 text-zinc-400" />
-                        </button>
-                    );
-                })()}
-
-                {/* Your credit purchases (where "Para ti" was; it comes back with shopping later) */}
+                {/* Your loans */}
                 <div aria-hidden className="h-6" />
                 <div className="mb-2.5 flex items-baseline justify-between">
-                    <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Tus compras a crédito</h3>
-
+                    <h3 className="text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Tus préstamos</h3>
+                    <button onClick={() => openLoans("mine")} className="text-[13px] font-bold text-primary">Ver todo</button>
                 </div>
                 {pendingDebtsList.length ? (
                     <div className="-mb-3 overflow-hidden rounded-[22px] border border-zinc-200 bg-white">
@@ -2983,7 +2959,7 @@ $1color: #8E3418 !important;
                 ) : (
                     <div className="-mb-3 flex items-center gap-3 rounded-[22px] border border-zinc-200 bg-white p-4">
                         <img src="/nubi/nubi-happy.webp" alt="" className="h-12 w-14 shrink-0 object-contain" />
-                        <p className="text-[13.5px] text-zinc-600">Aún no tienes compras a crédito. Pídelo en la caja de tu comercio y lo verás aquí.</p>
+                        <p className="text-[13.5px] text-zinc-600">Aún no tienes préstamos. Pide el primero y aquí verás tus cuotas.</p>
                     </div>
                 )}
             </div>
@@ -3007,15 +2983,14 @@ $1color: #8E3418 !important;
     const txTitle = (tx: any) => {
         const isDebt = tx.type === "DEBT";
         const notes = String(tx.notes || "");
-        if (isDebt) return "Compra a crédito";
-        if (/pago m[oó]vil/i.test(notes)) return "Abono · Pago móvil";
-        return "Abono";
+        if (isDebt) return /^recargo|interés por mora|cargo/i.test(notes) ? "Recargo por atraso" : "Préstamo recibido";
+        return /abono/i.test(notes) ? "Abono a cuota" : "Cuota pagada";
     };
     const txDetail = (tx: any) => {
         const notes = String(tx.notes || "");
-        const ticket = notes.match(/#\s?([A-Za-z0-9]+)/)?.[1];
-        const ref = notes.match(/Ref:\s?([A-Za-z0-9]+)/)?.[1];
-        return ticket ? `Ticket #${ticket}` : ref ? `Ref. ${ref}` : "";
+        // "Préstamo recibido · Mercado" / "Cuota 1 de 4 · Mercado": what comes after the title
+        const parts = notes.split(" · ");
+        return parts.length > 1 ? (/^cuota|^recargo|interés|cargo/i.test(parts[0]) ? parts.join(" · ") : parts.slice(1).join(" · ")) : "";
     };
     const renderHistory = () => {
         const all = [...(client?.creditTransactions || [])].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -3048,12 +3023,12 @@ $1color: #8E3418 !important;
             day.items.push(t);
         });
         const count = (k: typeof histFilter) => k === "subs" ? mySubmissions.length : k === "all" ? all.length : all.filter((t: any) => (k === "debt" ? t.type === "DEBT" : t.type !== "DEBT")).length;
-        const filters: { k: typeof histFilter; t: string }[] = [{ k: "all", t: "Todo" }, { k: "debt", t: "Compras" }, { k: "pay", t: "Abonos" }, { k: "subs", t: "Comprobantes" }];
+        const filters: { k: typeof histFilter; t: string }[] = [{ k: "all", t: "Todo" }, { k: "debt", t: "Préstamos" }, { k: "pay", t: "Pagos" }, { k: "subs", t: "Comprobantes" }];
         return (
             <div className="animate-in fade-in slide-in-from-right-4 duration-300 pb-32 pt-5">
-                <BackBar title="Historial" subtitle="Tus compras y abonos" onBack={() => goTab("home")} />
+                <BackBar title="Historial" subtitle="Tus préstamos y pagos" onBack={() => goTab("home")} />
                 <div className="mt-7 grid grid-cols-2 gap-3">
-                    {[{ k: `Comprado en ${year}`, v: boughtYear }, { k: `Abonado en ${year}`, v: paidYear }].map((c) => (
+                    {[{ k: `Recibido en ${year}`, v: boughtYear }, { k: `Pagado en ${year}`, v: paidYear }].map((c) => (
                         <div key={c.k} className="rounded-[22px] border border-white/40 bg-white/20 p-3.5 text-white backdrop-blur-md">
                             <p className="text-[12px] font-semibold text-white/90">{c.k}</p>
                             <p className="text-[22px] leading-tight" style={{ fontWeight: 800, letterSpacing: "-0.03em" }}>{money(c.v)}</p>
@@ -3107,7 +3082,7 @@ $1color: #8E3418 !important;
                                         return (
                                             <div key={t.id} className="flex items-center gap-3 border-b border-zinc-100 py-4 last:border-0">
                                                 <span className={`grid size-10 shrink-0 place-items-center rounded-[13px] ${isDebt ? "bg-amber-100 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
-                                                    {isDebt ? <IconShoppingBag size={19} /> : <IconCash size={19} />}
+                                                    {isDebt ? (/recargo|mora|cargo/i.test(String(t.notes || "")) ? <IconAlertCircle size={19} /> : <IconCash size={19} />) : <IconCircleCheck size={19} />}
                                                 </span>
                                                 <span className="min-w-0 flex-1">
                                                     <span className="block truncate text-[14px] font-bold text-zinc-900">{txTitle(t)}</span>
@@ -3295,7 +3270,7 @@ $1color: #8E3418 !important;
                     <button onClick={handleStartEditProfile} className="shrink-0 rounded-full border border-white/50 bg-white/20 px-3.5 py-2 text-[13px] font-bold text-white backdrop-blur-md active:scale-95 transition">Editar</button>
                 </div>
                 <div className="mt-5 grid grid-cols-3 gap-2.5">
-                    {[{ k: "Límite", v: money(creditLimit).replace(".00", "") }, { k: "A tiempo", v: `${onTime}%` }, { k: "Compras", v: String(buys) }].map((c) => (
+                    {[{ k: "Nivel", v: lvlName }, { k: "Préstamos", v: String(txs.filter((t: any) => t.type === "DEBT" && /^Préstamo/.test(String(t.notes || ""))).length) }, { k: "Debes", v: money(loanOwed).replace(".00", "") }].map((c) => (
                         <div key={c.k} className={`${SOFT} p-3`}>
                             <p className="text-[12px] font-semibold text-zinc-600">{c.k}</p>
                             <p className="text-[19px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>{c.v}</p>
@@ -3316,7 +3291,6 @@ $1color: #8E3418 !important;
                 <H3>Seguridad y ayuda</H3>
                 <div className={`${SOFT} px-4`}>
                     <Field icon={<IconLock size={18} />} label="Contraseña" value="Cambiar contraseña" empty="" onClick={() => { setPwForm({ current: "", next: "", confirm: "" }); setPwOpen(true); }} />
-                    {phone && <Field icon={<IconPhone size={18} />} label="¿Dudas con tu crédito?" value="Escribir al comercio" empty="" onClick={() => window.open(`https://wa.me/${phone.startsWith("0") ? `58${phone.slice(1)}` : phone}`, "_blank")} />}
                 </div>
 
                 <div className="mt-7 flex justify-center">
@@ -5357,9 +5331,9 @@ $1color: #8E3418 !important;
                             setOnlyInStock(true);
                             setSelectedProductForDetail(null);
                             setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false);
-                            openLoans();
+                            openLoans("mine");
                         }}
-                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "home" && showLoans ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
+                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "home" && showLoans && loansView === "mine" ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
                     >
                         <span className="relative">
                             <IconCash size={18} />
@@ -5368,12 +5342,13 @@ $1color: #8E3418 !important;
                         <span>Préstamos</span>
                     </button>
 
-                    {/* Central Large PIN/Pay Button Container (Enlarged) */}
+                    {/* Central button: ask for a loan (the market) */}
                     <div className="relative w-[84px] h-full flex items-center justify-center shrink-0">
                         <button 
+                            aria-label="Pedir préstamo"
                             onClick={() => { 
                                 setRequestLoanView(false); 
-                                setActiveTab("auth-purchase"); 
+                                openLoans("market"); 
                                 setIsOrdersListOpen(false);
                                 setIsTrackingOpen(false);
                                 setSelectedDebtForPayment(null);
@@ -5382,16 +5357,16 @@ $1color: #8E3418 !important;
                                 setTxSearchQuery("");
                                 setOnlyInStock(true);
                                 setSelectedProductForDetail(null);
-                                setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false); setShowLoans(false);
+                                setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false);
                             }} 
                             className={`absolute -top-[34px] w-[72px] h-[72px] rounded-full flex flex-col items-center justify-center transition-all duration-300 transform active:scale-95 shadow-md z-10 ${
-                                activeTab === "auth-purchase" 
+                                showLoans && loansView === "market" 
                                     ? "bg-amber-400 text-white scale-105 shadow-amber-400/35 border-none" 
                                     : "bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100/40 shadow-zinc-200"
                             }`}
                         >
-                            <IconLock size={22} className={activeTab === "auth-purchase" ? "animate-pulse" : ""} />
-                            <span className="text-[10px] font-black mt-0.5">PIN</span>
+                            <IconCash size={22} />
+                            <span className="text-[10px] font-black mt-0.5">Pedir</span>
                         </button>
                     </div> 
                     <button 

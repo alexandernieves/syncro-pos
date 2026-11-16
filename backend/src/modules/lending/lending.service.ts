@@ -91,7 +91,7 @@ export class LendingService {
   private async paidOnTime(ids: string[]) {
     if (!ids.length) return 0;
     const paid = await this.prisma.loanInstallment.findMany({
-      where: { status: 'PAID', paidAt: { not: null }, loan: { clientId: { in: ids } } },
+      where: { status: 'PAID', paidAt: { not: null }, loan: { clientId: { in: ids }, kind: 'CASH' } },
       select: { amount: true, paidAmount: true, paidAt: true, dueDate: true, lateCharges: true },
     });
     const endOfDay = (d: Date) => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x.getTime(); };
@@ -134,7 +134,7 @@ export class LendingService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const late = ids.length
-      ? (await this.prisma.loanInstallment.count({ where: { status: 'PENDING', dueDate: { lt: today }, loan: { clientId: { in: ids }, status: { in: RUNNING as any } } } })) > 0
+      ? (await this.prisma.loanInstallment.count({ where: { status: 'PENDING', dueDate: { lt: today }, loan: { clientId: { in: ids }, kind: 'CASH', status: { in: RUNNING as any } } } })) > 0
       : false;
     const cap = caps.levels[level];
     const globalRoom = round2(Math.max(0, cap.maxDebt - owed));
@@ -202,7 +202,7 @@ export class LendingService {
     const [agg, pos, inst] = await Promise.all([
       this.prisma.loanReview.aggregate({ where, _avg: { stars: true }, _count: { _all: true } }),
       this.prisma.loanReview.count({ where: { ...where, stars: { gte: 4 } } }),
-      this.prisma.loanInstallment.findMany({ where: { status: 'PAID', paidAt: { not: null }, loan: { clientId: { in: ids } } }, select: { paidAt: true, dueDate: true } }),
+      this.prisma.loanInstallment.findMany({ where: { status: 'PAID', paidAt: { not: null }, loan: { clientId: { in: ids }, kind: 'CASH' } }, select: { paidAt: true, dueDate: true } }),
     ]);
     const endOfDay = (d: Date) => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x.getTime(); };
     const onTime = inst.filter((i) => i.paidAt!.getTime() <= endOfDay(i.dueDate)).length;

@@ -4189,35 +4189,7 @@ export default function POSPage() {
                     </div>
                   )}
 
-                  {/* Selector de Tipo de Fiado: Tradicional vs SyncroCredit */}
-                  {(tempPaymentMethod === 'CREDIT' || addedPayments.some((p: any) => p.method === 'CREDIT')) && selectedClientId !== "consumidor-final" && selectedClient?.hasAccount && (
-                    <div className="flex flex-col gap-2 p-2 bg-muted/40 border border-border/40 rounded-xl animate-in fade-in duration-200">
-                      <span className="text-[10px] font-bold text-muted-foreground px-1">Modalidad de fiado</span>
-                      <div className="grid grid-cols-2 gap-1.5 p-1 bg-muted rounded-lg border">
-                        <button
-                          type="button"
-                          onClick={() => setCreditType("traditional")}
-                          className={`py-2 rounded-md text-xs font-bold transition-all ${creditType === "traditional"
-                              ? "bg-amber-600 text-white shadow-sm"
-                              : "text-muted-foreground hover:text-foreground"
-                            }`}
-                        >
-                          Fiado tradicional (libreta)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCreditType("syncrocredit")}
-                          className={`py-2 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${creditType === "syncrocredit"
-                              ? "bg-emerald-600 text-white shadow-sm"
-                              : "text-muted-foreground hover:text-foreground"
-                            }`}
-                        >
-                          <IconDevices size={14} /> SyncroCredit (digital)
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
+                  {/* Fiado is always the shop's notebook now (Syncro Credit, the app, is for cash loans only) */}
                   {/* Informacion de Fiado Tradicional */}
                   {(tempPaymentMethod === 'CREDIT' || addedPayments.some((p: any) => p.method === 'CREDIT')) && selectedClientId !== "consumidor-final" && selectedClient?.hasAccount && creditType === 'traditional' && (
                     <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl flex items-start gap-2.5 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
@@ -4514,7 +4486,8 @@ export default function POSPage() {
               onClick={() => {
                 setIsConfirmPaymentOpen(false);
                 const hasCredit = paymentsToProcess?.some((p: any) => p.method === 'CREDIT');
-                if (hasCredit && selectedClientId !== "consumidor-final" && selectedClient?.hasAccount && creditType === 'syncrocredit') {
+                // fiado goes straight to the notebook: no authorization from the app anymore
+                if (false && hasCredit && creditType === 'syncrocredit') {
                   initiatePinAuthorization(paymentsToProcess);
                 } else {
                   if (paymentsToProcess) {

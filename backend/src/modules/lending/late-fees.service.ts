@@ -52,7 +52,8 @@ export class LateFeesService {
       where: {
         status: 'PENDING',
         dueDate: { lt: cutoff },
-        loan: { client: { businessId }, status: { in: ['PENDING', 'OVERDUE'] } },
+        // cash loans only: store credit is the shop's own notebook
+        loan: { client: { businessId }, kind: 'CASH', status: { in: ['PENDING', 'OVERDUE'] } },
       },
       select: { id: true, installmentNumber: true, dueDate: true, amount: true, paidAmount: true, lateCharges: true, loanId: true, loan: { select: { clientId: true } } },
       take: 5000,

@@ -173,7 +173,8 @@ const SECTIONS = [
   { id: "facturacion", label: "Facturación e IVA", icon: IconReceipt },
   { id: "factura", label: "Diseño de factura", icon: IconFileInvoice },
   { id: "pagos", label: "Métodos de pago", icon: IconCreditCard },
-  { id: "syncrocredit", label: "Syncro Credit (PWA)", icon: IconDevices },
+  { id: "fiado", label: "Fiado (crédito en tienda)", icon: IconReceipt },
+  { id: "syncrocredit", label: "Syncro Credit (préstamos)", icon: IconDevices },
   { id: "pos", label: "Punto de venta", icon: IconCash },
   { id: "usuarios", label: "Usuarios y roles", icon: IconShieldLock },
   { id: "sucursales", label: "Sucursales", icon: IconMapPin },
@@ -1697,7 +1698,9 @@ export default function ConfiguracionPage() {
         )}
 
         {/* ─── SYNCRO CREDIT (PWA) ─── */}
-        {activeSection === "syncrocredit" && hasLoans && (() => {
+        {/* Fiado (store credit, the shop's notebook) for every business; Syncro Credit (cash loans app) with the module */}
+        {((activeSection === "syncrocredit" && hasLoans) || activeSection === "fiado") && (() => {
+          const isFiado = activeSection === "fiado";
           const freqPresets = [
             { days: 7, label: "Semanal" },
             { days: 15, label: "Quincenal" },
@@ -1716,19 +1719,24 @@ export default function ConfiguracionPage() {
           return (
             <div className="max-w-2xl flex flex-col gap-6">
               <div>
-                <h2 className="text-xl font-bold">Syncro Credit (PWA)</h2>
-                <p className="text-sm text-muted-foreground">La app donde tus clientes ven su crédito, pagan sus cuotas y compran en tu tienda.</p>
+                <h2 className="text-xl font-bold">{isFiado ? "Fiado (crédito en tienda)" : "Syncro Credit (préstamos)"}</h2>
+                <p className="text-sm text-muted-foreground">
+                  {isFiado
+                    ? "Lo que tus clientes se llevan y pagan después. Se lleva en Clientes → Créditos y se cobra en tu caja, como una libreta."
+                    : "La app de préstamos en efectivo: tus anuncios, cómo te pagan las cuotas y los recargos por atraso."}
+                </p>
               </div>
 
+              {!isFiado && <>
               {/* Presence */}
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="font-semibold">Mostrar mi negocio en Syncro Credit</p>
+                      <p className="font-semibold">Mostrar mis anuncios en Syncro Credit</p>
                       <p className="text-xs text-muted-foreground mt-1 max-w-md">
-                        Tu tienda aparece en la sección de tiendas de la app (cuando esté disponible). Tus clientes con crédito
-                        siempre pueden entrar a la app, ver sus cuotas y pagar, aunque lo apagues.
+                        Tus ofertas de préstamo aparecen en la app. Si lo apagas dejan de verse, pero quien ya tiene un préstamo
+                        contigo sigue viendo sus cuotas y pagándolas.
                       </p>
                     </div>
                     <Switch checked={syncroCreditVisible} onCheckedChange={setSyncroCreditVisible} aria-label="Mostrar mi negocio en Syncro Credit" />
@@ -1736,11 +1744,14 @@ export default function ConfiguracionPage() {
                 </CardContent>
               </Card>
 
+              </>}
+
+              {isFiado && <>
               {/* Installments */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base font-semibold">Cuotas</CardTitle>
-                  <CardDescription>Cómo se reparte una compra a crédito.</CardDescription>
+                  <CardDescription>Cómo se reparte lo que el cliente se lleva fiado.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
                   <div className="space-y-2">
@@ -1777,12 +1788,12 @@ export default function ConfiguracionPage() {
               {/* Limits */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-semibold">Límite para compras a crédito</CardTitle>
-                  <CardDescription>Para lo que tus clientes compran a crédito en tu tienda. Lo que prestas en efectivo se configura por nivel en <a href="/dashboard/prestamos" className="font-semibold text-primary underline-offset-2 hover:underline">Préstamos → Ajustes</a>.</CardDescription>
+                  <CardTitle className="text-base font-semibold">Límite de fiado</CardTitle>
+                  <CardDescription>Cuánto le fías a un cliente nuevo y cómo crece si paga a tiempo.</CardDescription>
                 </CardHeader>
                 <CardContent className="divide-y divide-border/60">
                   {[
-                    { k: "initial" as const, label: "Límite inicial ($)", desc: "Con cuánto crédito para compras empieza un cliente nuevo" },
+                    { k: "initial" as const, label: "Límite inicial ($)", desc: "Con cuánto fiado empieza un cliente nuevo" },
                     { k: "step" as const, label: "Aumento por pago a tiempo ($)", desc: "Cuánto sube el límite cada vez que salda una deuda a tiempo" },
                     { k: "max" as const, label: "Límite máximo ($)", desc: "Hasta dónde puede subir el límite automáticamente" },
                   ].map((r) => (
@@ -1791,10 +1802,13 @@ export default function ConfiguracionPage() {
                       <Input type="number" min={0} value={syncroCreditLimits[r.k]} onChange={(e) => setSyncroCreditLimits((p) => ({ ...p, [r.k]: Number(e.target.value) }))} className="w-24 text-center font-mono font-bold" />
                     </div>
                   ))}
-                  <p className="pt-3 text-xs text-muted-foreground">En la caja, la cajera solo activa Syncro Credit con el límite inicial. Para dar otro límite hace falta el PIN de supervisor.</p>
+                  <p className="pt-3 text-xs text-muted-foreground">En la caja, la cajera solo puede fiar hasta el límite inicial. Para dar otro límite hace falta el PIN de supervisor.</p>
                 </CardContent>
               </Card>
 
+              </>}
+
+              {!isFiado && <>
               {/* Late installments: grace, fees, late interest, the business's own charges, cap */}
               <LateFeesSettings value={lateFees} onChange={setLateFees} />
 
@@ -1861,7 +1875,9 @@ export default function ConfiguracionPage() {
                 </CardContent>
               </Card>
 
-              <Button className="self-start gap-2" onClick={() => handleSave("Syncro Credit")}><IconDeviceFloppy size={16} />Guardar Syncro Credit</Button>
+              </>}
+
+              <Button className="self-start gap-2" onClick={() => handleSave(isFiado ? "Fiado" : "Syncro Credit")}><IconDeviceFloppy size={16} />{isFiado ? "Guardar fiado" : "Guardar Syncro Credit"}</Button>
             </div>
           );
         })()}
@@ -1938,7 +1954,7 @@ export default function ConfiguracionPage() {
               </CardContent>
             </Card>
 
-            {hasLoans && <p className="text-xs text-muted-foreground">Las cuotas, los límites, los recargos por atraso y la presencia en la app de clientes están en <button type="button" className="font-semibold text-primary underline-offset-2 hover:underline" onClick={() => setActiveSection("syncrocredit")}>Syncro Credit (PWA)</button>.</p>}
+            <p className="text-xs text-muted-foreground">Las cuotas y el límite de lo que fías están en <button type="button" className="font-semibold text-primary underline-offset-2 hover:underline" onClick={() => setActiveSection("fiado")}>Fiado</button>.</p>
 
             <Button className="self-start gap-2" onClick={() => handleSave("Punto de Venta")}><IconDeviceFloppy size={16}/>Guardar</Button>
           </div>

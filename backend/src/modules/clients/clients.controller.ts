@@ -23,6 +23,12 @@ export class ClientsController {
   }
 
   /** Syncro Credit level (4 Chispa → 3 Cometa → 2 Órbita → 1 Galaxia) by the money paid on time. */
+  /** Store credit ("fiado") still owed: the app only tells the person to pay it at the shop */
+  @Get('portal/store-credit')
+  async getPortalStoreCredit(@Request() req: any) {
+    return this.clientsService.portalStoreCredit(req.user);
+  }
+
   @Get('portal/level')
   async getPortalLevel(@Request() req: any) {
     return this.clientsService.getPortalLevel(await this.clientsService.portalClientIds(req.user));
