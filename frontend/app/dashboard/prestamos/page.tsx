@@ -72,6 +72,8 @@ export default function PrestamosPage() {
   const [reason, setReason] = useState("");
   const [open, setOpen] = useState<Loan | null>(null);
   const [chat, setChat] = useState<Loan | null>(null);
+  // Approving: with the offer's plan, or one of its own for this client (installments, how often)
+  const [approving, setApproving] = useState<{ loan: Loan; custom: boolean; installments: string; frequencyDays: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -97,10 +99,11 @@ export default function PrestamosPage() {
     return () => clearInterval(t);
   }, [enabled, tab, load]);
 
-  const approve = async (l: Loan) => {
+  const approve = async (l: Loan, plan?: { installments: number; frequencyDays: number }) => {
     setBusy(l.id);
     try {
-      await call(`/lending/loans/${l.id}/approve`, { method: "POST" });
+      await call(`/lending/loans/${l.id}/approve`, plan ? json(plan) : { method: "POST" });
+      setApproving(null);
       toast.success(`Aprobado. ${l.client.name} ya tiene su PIN para retirar ${money(l.amount)} en caja.`);
       load();
     } catch (e: any) { toast.error(e.message); } finally { setBusy(null); }
@@ -325,7 +328,7 @@ export default function PrestamosPage() {
                     {l.status === "REQUESTED" && (
                       <>
                         <Button size="sm" variant="outline" className="gap-1 text-destructive hover:text-destructive" disabled={busy === l.id} onClick={() => setRejecting(l)}><IconX size={15} /> Rechazar</Button>
-                        <Button size="sm" className="gap-1" disabled={busy === l.id || !l.fitsLimit || l.blockedAnywhere} title={l.blockedAnywhere ? "Está atrasado en la plataforma" : !l.fitsLimit ? "Pasa lo que puede pedirte" : undefined} onClick={() => approve(l)}><IconCheck size={15} /> Aprobar</Button>
+                        <Button size="sm" className="gap-1" disabled={busy === l.id || !l.fitsLimit || l.blockedAnywhere} title={l.blockedAnywhere ? "Está atrasado en la plataforma" : !l.fitsLimit ? "Pasa lo que puede pedirte" : undefined} onClick={() => setApproving({ loan: l, custom: false, installments: String(l.installmentsCount), frequencyDays: String(l.frequencyDays ?? 7) })}><IconCheck size={15} /> Aprobar</Button>
                       </>
                     )}
                     {l.status === "APPROVED_PENDING_DISBURSEMENT" && (
@@ -426,6 +429,62 @@ export default function PrestamosPage() {
               <Button variant="outline" className="gap-2" onClick={() => { setChat(open); setOpen(null); }}><IconMessageCircle size={16} /> Abrir chat</Button>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Approve: the offer's plan or one of its own for this client */}
+      <Dialog open={!!approving} onOpenChange={(o) => !o && setApproving(null)}>
+        <DialogContent className="sm:max-w-md">
+          {approving && (() => {
+            const l = approving.loan;
+            const n = Math.max(1, Math.round(Number(approving.custom ? approving.installments : l.installmentsCount) || 1));
+            const f = Math.max(1, Math.round(Number(approving.custom ? approving.frequencyDays : l.frequencyDays ?? 7) || 7));
+            const valid = n >= 1 && n <= 52 && f >= 1 && f <= 90;
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Aprobar a {l.client.name}</DialogTitle>
+                  <DialogDescription>Recibe {money(l.amount)} y devuelve {money(l.totalToPay)}. Al aprobar le llega un PIN para retirar en tu caja.</DialogDescription>
+                </DialogHeader>
+                <div className="grid grid-cols-2 gap-2">
+                  {[false, true].map((c) => (
+                    <button key={String(c)} type="button" onClick={() => setApproving({ ...approving, custom: c })} className={cn("rounded-xl border-2 p-3 text-left transition", approving.custom === c ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50")}>
+                      <p className="text-sm font-semibold">{c ? "Plan personalizado" : "Plan del anuncio"}</p>
+                      <p className="text-xs text-muted-foreground">{c ? "Elige cuotas y cada cuánto paga" : `${l.installmentsCount} cuota${l.installmentsCount > 1 ? "s" : ""} ${freqText(l.frequencyDays ?? 7)}`}</p>
+                    </button>
+                  ))}
+                </div>
+                {approving.custom && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Cuotas</Label>
+                      <div className="flex flex-wrap gap-1">
+                        {[1, 2, 3, 4, 6, 8].map((x) => <Button key={x} type="button" size="sm" variant={Number(approving.installments) === x ? "default" : "outline"} className="h-8 px-2.5" onClick={() => setApproving({ ...approving, installments: String(x) })}>{x}</Button>)}
+                        <Input type="number" min={1} max={52} className="h-8 w-16" value={approving.installments} onChange={(e) => setApproving({ ...approving, installments: e.target.value })} aria-label="Número de cuotas" />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Cada cuánto</Label>
+                      <div className="flex flex-wrap gap-1">
+                        {[7, 15, 30].map((d) => <Button key={d} type="button" size="sm" variant={Number(approving.frequencyDays) === d ? "default" : "outline"} className="h-8 px-2.5" onClick={() => setApproving({ ...approving, frequencyDays: String(d) })}>{d} d</Button>)}
+                        <Input type="number" min={1} max={90} className="h-8 w-16" value={approving.frequencyDays} onChange={(e) => setApproving({ ...approving, frequencyDays: e.target.value })} aria-label="Días entre cuotas" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <p className="rounded-lg bg-muted px-3 py-2 text-sm">
+                  {valid ? <>Pagará <b>{n} cuota{n > 1 ? "s" : ""} de {money(l.totalToPay / n)}</b> {freqText(f)}, la primera {f} días después de retirar.</> : "Entre 1 y 52 cuotas, cada 1 a 90 días."}
+                </p>
+                {approving.custom && <p className="text-xs text-muted-foreground">El total a devolver no cambia. El cliente ve el nuevo plan en su app y le llega un mensaje en el chat.</p>}
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setApproving(null)}>Cancelar</Button>
+                  <Button className="gap-1" disabled={!valid || busy === l.id} onClick={() => approve(l, approving.custom ? { installments: n, frequencyDays: f } : undefined)}>
+                    <IconCheck size={15} /> {busy === l.id ? "Aprobando…" : "Aprobar"}
+                  </Button>
+                </div>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

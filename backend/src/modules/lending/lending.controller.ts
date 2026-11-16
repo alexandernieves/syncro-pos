@@ -52,7 +52,7 @@ export class LendingController {
   portfolio(@Req() req: any) { return this.lending.portfolio(staff(req)); }
 
   @Post('loans/:id/approve')
-  approve(@Req() req: any, @Param('id') id: string) { return this.lending.approve(manager(req), req.user.id, id); }
+  approve(@Req() req: any, @Param('id') id: string, @Body() body: any) { return this.lending.approve(manager(req), req.user.id, id, body); }
 
   @Post('loans/:id/reject')
   reject(@Req() req: any, @Param('id') id: string, @Body() body: any) { return this.lending.reject(manager(req), req.user.id, id, body?.reason); }

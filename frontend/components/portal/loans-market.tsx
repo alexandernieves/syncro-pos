@@ -103,6 +103,8 @@ export function LoansMarket({ onBack, onLevels, onUnread }: { onBack: () => void
     const [profile, setProfile] = useState<any | null>(null);
     const [review, setReview] = useState<{ loan: any; stars: number; comment: string } | null>(null);
     const [chat, setChat] = useState<any | null>(null);
+    // two views: the market (Anuncios) and the person's loans (Mis préstamos)
+    const [view, setView] = useState<"market" | "mine" | null>(null);
 
     const loadMarket = useCallback(async () => {
         try {
@@ -116,6 +118,7 @@ export function LoansMarket({ onBack, onLevels, onUnread }: { onBack: () => void
             if (r.ok) {
                 const list = await r.json();
                 setReqs(list);
+                setView((v) => v ?? (list.some((l: any) => (l.status === "APPROVED_PENDING_DISBURSEMENT" && l.pin) || l.unread > 0) ? "mine" : "market"));
                 onUnread?.(list.reduce((a: number, l: any) => a + (l.unread || 0), 0));
             }
         } catch { /* offline */ }
@@ -158,6 +161,7 @@ export function LoansMarket({ onBack, onLevels, onUnread }: { onBack: () => void
             if (!r.ok) throw new Error(b.message || "No se pudo enviar la solicitud");
             toast.success(`Solicitud enviada a ${pick.business?.name}. Puedes escribirle por el chat.`);
             setPick(null);
+            setView("mine");
             await Promise.all([loadReqs(), loadMarket()]);
             window.scrollTo({ top: 0, behavior: "smooth" });
         } catch (e: any) {
@@ -213,8 +217,24 @@ export function LoansMarket({ onBack, onLevels, onUnread }: { onBack: () => void
                 </div>
             </div>
 
+            {/* Anuncios | Mis préstamos */}
+            <div className="mt-5 grid grid-cols-2 gap-1 rounded-full bg-white/30 p-1 backdrop-blur-sm">
+                {([["market", "Anuncios"], ["mine", "Mis préstamos"]] as const).map(([k, t]) => {
+                    const unread = k === "mine" ? reqs.reduce((a, l) => a + (l.unread || 0), 0) : 0;
+                    const waiting = k === "mine" && reqs.some((l) => l.status === "APPROVED_PENDING_DISBURSEMENT" && l.pin);
+                    return (
+                        <button key={k} onClick={() => { setView(k); window.scrollTo({ top: 0 }); }} className={`relative flex items-center justify-center gap-1.5 rounded-full py-2.5 text-[13.5px] font-bold transition ${(view ?? "market") === k ? "bg-white text-zinc-900 shadow-sm" : "text-white"}`}>
+                            {t}
+                            {k === "mine" && reqs.length > 0 && <span className={`rounded-full px-1.5 text-[11px] ${(view ?? "market") === k ? "bg-zinc-100 text-zinc-600" : "bg-white/25 text-white"}`}>{reqs.length}</span>}
+                            {(unread > 0 || waiting) && <span className="absolute right-3 top-2 size-2 rounded-full bg-emerald-400 ring-2 ring-white" />}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {(view ?? "market") === "market" && <>
             {/* What you can borrow now */}
-            <div className="mt-5 rounded-[26px] bg-white p-5 shadow-[0_18px_40px_-20px_rgba(90,30,5,0.35)]">
+            <div className="mt-4 rounded-[26px] bg-white p-5 shadow-[0_18px_40px_-20px_rgba(90,30,5,0.35)]">
                 {!m ? (
                     <div className="h-[132px] animate-pulse rounded-2xl bg-zinc-100" />
                 ) : m.block ? (
@@ -253,73 +273,6 @@ export function LoansMarket({ onBack, onLevels, onUnread }: { onBack: () => void
                     </div>
                 )}
             </div>
-
-            {/* My loans: requests, approved with PIN, running; chat and rating */}
-            {reqs.length > 0 && (
-                <>
-                    <h3 className="mt-6 text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Mis préstamos</h3>
-                    <div className="mt-3 space-y-2.5">
-                        {reqs.map((q) => {
-                            const approved = q.status === "APPROVED_PENDING_DISBURSEMENT";
-                            const until = q.pinExpiresAt ? new Date(q.pinExpiresAt) : null;
-                            const chip: Record<string, [string, string]> = {
-                                REQUESTED: ["En revisión", "bg-amber-50 text-amber-700"],
-                                APPROVED_PENDING_DISBURSEMENT: ["Aprobado", "bg-emerald-50 text-emerald-700"],
-                                EXPIRED: ["PIN vencido", "bg-zinc-100 text-zinc-500"],
-                                REJECTED: ["No aprobado", "bg-rose-50 text-rose-600"],
-                                PENDING: ["En curso", "bg-sky-50 text-sky-700"],
-                                OVERDUE: ["Atrasado", "bg-rose-50 text-rose-600"],
-                                PAID: ["Pagado", "bg-emerald-50 text-emerald-700"],
-                            };
-                            const [label, cls] = chip[q.status] ?? [q.status, "bg-zinc-100 text-zinc-600"];
-                            return (
-                                <div key={q.id} className={`rounded-[22px] border bg-white p-4 ${approved ? "border-emerald-200" : "border-zinc-200"}`}>
-                                    <div className="flex items-center gap-3">
-                                        <BizAvatar b={q.business} />
-                                        <div className="min-w-0 flex-1">
-                                            <p className="truncate text-[15px] font-bold text-zinc-900">{q.business?.name || "Comercio"}</p>
-                                            <p className="text-[12.5px] text-zinc-500">
-                                                {money(q.amount)} · {q.status === "PENDING" || q.status === "OVERDUE" ? `resta ${money(q.remainingBalance)}` : `devuelves ${money(q.totalToPay)}`}
-                                            </p>
-                                        </div>
-                                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${cls}`}>{label}</span>
-                                    </div>
-                                    {approved && q.pin && (
-                                        <div className="mt-3 rounded-2xl bg-emerald-50 p-4 text-center">
-                                            <p className="text-[12px] font-semibold text-emerald-700">Muestra este PIN en la caja</p>
-                                            <p className="mt-1 font-mono text-[38px] tracking-[0.25em] text-zinc-900" style={{ fontWeight: 800 }}>{q.pin}</p>
-                                            {until && <p className="mt-1 text-[12px] text-emerald-800/80">Vale hasta {until.toLocaleString("es-VE", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</p>}
-                                            {q.branch?.location && (
-                                                <p className="mt-2 flex items-center justify-center gap-1 text-[12.5px] font-semibold text-zinc-700"><IconMapPin size={14} className="text-primary" />{q.branch.name ? `${q.branch.name} · ` : ""}{q.branch.location}</p>
-                                            )}
-                                        </div>
-                                    )}
-                                    {q.status === "REJECTED" && q.rejectReason && <p className="mt-2 text-[12.5px] text-rose-600">Motivo: {q.rejectReason}</p>}
-                                    {q.status === "EXPIRED" && <p className="mt-2 text-[12.5px] text-zinc-500">No lo retiraste a tiempo. Puedes pedirlo de nuevo.</p>}
-                                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                                        <button onClick={() => setChat(q)} className="relative inline-flex items-center gap-1.5 rounded-full border-[1.5px] border-zinc-200 px-3.5 py-1.5 text-[12.5px] font-bold text-zinc-700 transition active:scale-95">
-                                            <IconMessageCircle size={15} /> Chat
-                                            {q.unread > 0 && <span className="grid min-w-[18px] place-items-center rounded-full bg-primary px-1 text-[10.5px] text-white">{q.unread}</span>}
-                                        </button>
-                                        {q.canReview && (q.myReview ? (
-                                            <button onClick={() => setReview({ loan: q, stars: q.myReview.stars, comment: q.myReview.comment || "" })} className="inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[12.5px] font-semibold text-zinc-500">
-                                                Tu calificación <Stars value={q.myReview.stars} size={12} />
-                                            </button>
-                                        ) : (
-                                            <button onClick={() => setReview({ loan: q, stars: 0, comment: "" })} className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3.5 py-1.5 text-[12.5px] font-bold text-amber-700 transition active:scale-95">
-                                                <IconStarFilled size={13} /> Calificar
-                                            </button>
-                                        ))}
-                                        {(q.status === "REQUESTED" || approved) && (
-                                            <button onClick={() => cancel(q.id)} className="ml-auto text-[12.5px] font-semibold text-zinc-500">Cancelar</button>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </>
-            )}
 
             {/* The market */}
             <h3 className="mt-6 text-[17px] text-zinc-900" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>Anuncios</h3>
@@ -364,6 +317,90 @@ export function LoansMarket({ onBack, onLevels, onUnread }: { onBack: () => void
                     );
                 })}
             </div>
+
+            </>}
+
+            {/* My loans: requests, approved with PIN, running; chat and rating */}
+            {view === "mine" && (
+                <>
+                    {reqs.length === 0 && (
+                        <div className="mt-4 rounded-[22px] border border-dashed border-zinc-300 bg-white/80 p-6 text-center">
+                            <img src="/nubi/nubi-happy.webp" alt="" className="mx-auto h-16 w-16 object-contain" />
+                            <p className="mt-2 text-[15px] font-bold text-zinc-900">Aún no tienes préstamos</p>
+                            <p className="mt-1 text-[13px] text-zinc-500">Elige un anuncio y pide el tuyo. Aquí verás el PIN para retirarlo, tus cuotas y el chat con el comercio.</p>
+                            <button onClick={() => setView("market")} className="mt-4 rounded-full bg-primary px-5 py-2.5 text-[13.5px] font-bold text-white">Ver anuncios</button>
+                        </div>
+                    )}
+                    <div className="mt-4 space-y-2.5">
+                        {reqs.map((q) => {
+                            const approved = q.status === "APPROVED_PENDING_DISBURSEMENT";
+                            const until = q.pinExpiresAt ? new Date(q.pinExpiresAt) : null;
+                            const chip: Record<string, [string, string]> = {
+                                REQUESTED: ["En revisión", "bg-amber-50 text-amber-700"],
+                                APPROVED_PENDING_DISBURSEMENT: ["Aprobado", "bg-emerald-50 text-emerald-700"],
+                                EXPIRED: ["PIN vencido", "bg-zinc-100 text-zinc-500"],
+                                REJECTED: ["No aprobado", "bg-rose-50 text-rose-600"],
+                                PENDING: ["En curso", "bg-sky-50 text-sky-700"],
+                                OVERDUE: ["Atrasado", "bg-rose-50 text-rose-600"],
+                                PAID: ["Pagado", "bg-emerald-50 text-emerald-700"],
+                            };
+                            const [label, cls] = chip[q.status] ?? [q.status, "bg-zinc-100 text-zinc-600"];
+                            return (
+                                <div key={q.id} className={`rounded-[22px] border bg-white p-4 ${approved ? "border-emerald-200" : "border-zinc-200"}`}>
+                                    <div className="flex items-center gap-3">
+                                        <BizAvatar b={q.business} />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-[15px] font-bold text-zinc-900">{q.business?.name || "Comercio"}</p>
+                                            <p className="text-[12.5px] text-zinc-500">
+                                                {money(q.amount)} · {q.status === "PENDING" || q.status === "OVERDUE" ? `resta ${money(q.remainingBalance)}` : `devuelves ${money(q.totalToPay)}`}
+                                            </p>
+                                        </div>
+                                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${cls}`}>{label}</span>
+                                    </div>
+                                    {approved && q.pin && (
+                                        <div className="mt-3 rounded-2xl bg-emerald-50 p-4 text-center">
+                                            <p className="text-[12px] font-semibold text-emerald-700">Muestra este PIN en la caja</p>
+                                            <p className="mt-1 font-mono text-[38px] tracking-[0.25em] text-zinc-900" style={{ fontWeight: 800 }}>{q.pin}</p>
+                                            {until && <p className="mt-1 text-[12px] text-emerald-800/80">Vale hasta {until.toLocaleString("es-VE", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</p>}
+                                            {q.branch?.location && (
+                                                <p className="mt-2 flex items-center justify-center gap-1 text-[12.5px] font-semibold text-zinc-700"><IconMapPin size={14} className="text-primary" />{q.branch.name ? `${q.branch.name} · ` : ""}{q.branch.location}</p>
+                                            )}
+                                        </div>
+                                    )}
+                                    {q.status === "REJECTED" && q.rejectReason && <p className="mt-2 text-[12.5px] text-rose-600">Motivo: {q.rejectReason}</p>}
+                                    {q.status === "EXPIRED" && <p className="mt-2 text-[12.5px] text-zinc-500">No lo retiraste a tiempo. Puedes pedirlo de nuevo.</p>}
+                                    {!["REJECTED", "EXPIRED"].includes(q.status) && (
+                                        <p className="mt-2 text-[12.5px] text-zinc-600">Plan: <b className="text-zinc-800">{q.installments} cuota{q.installments > 1 ? "s" : ""} {every(q.frequencyDays ?? 7)} de {money(q.each)}</b></p>
+                                    )}
+                                    {Array.isArray(q.received) && q.received.length > 0 && (
+                                        <p className="mt-1 text-[12px] text-zinc-500">
+                                            Recibiste: {q.received.map((p: any) => `${money(p.amount)} ${({ CASH: "en efectivo", PAGO_MOVIL: "por pago móvil", TRANSFER: "por transferencia", BINANCE: "por Binance", ZELLE: "por Zelle" } as Record<string, string>)[p.method] ?? ""}${p.ves ? ` (Bs ${Number(p.ves).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ""}`).join(" + ")}
+                                        </p>
+                                    )}
+                                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                                        <button onClick={() => setChat(q)} className="relative inline-flex items-center gap-1.5 rounded-full border-[1.5px] border-zinc-200 px-3.5 py-1.5 text-[12.5px] font-bold text-zinc-700 transition active:scale-95">
+                                            <IconMessageCircle size={15} /> Chat
+                                            {q.unread > 0 && <span className="grid min-w-[18px] place-items-center rounded-full bg-primary px-1 text-[10.5px] text-white">{q.unread}</span>}
+                                        </button>
+                                        {q.canReview && (q.myReview ? (
+                                            <button onClick={() => setReview({ loan: q, stars: q.myReview.stars, comment: q.myReview.comment || "" })} className="inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[12.5px] font-semibold text-zinc-500">
+                                                Tu calificación <Stars value={q.myReview.stars} size={12} />
+                                            </button>
+                                        ) : (
+                                            <button onClick={() => setReview({ loan: q, stars: 0, comment: "" })} className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3.5 py-1.5 text-[12.5px] font-bold text-amber-700 transition active:scale-95">
+                                                <IconStarFilled size={13} /> Calificar
+                                            </button>
+                                        ))}
+                                        {(q.status === "REQUESTED" || approved) && (
+                                            <button onClick={() => cancel(q.id)} className="ml-auto text-[12.5px] font-semibold text-zinc-500">Cancelar</button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </>
+            )}
 
             {/* Request: pick the amount inside the range open to you */}
             {pick && (

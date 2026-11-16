@@ -339,7 +339,7 @@ export class LendingService {
     });
   }
 
-  async approve(businessId: string, userId: string, id: string) {
+  async approve(businessId: string, userId: string, id: string, body?: any) {
     await assertModule(this.prisma, businessId, 'loans');
     const loan = await this.prisma.loan.findFirst({ where: { id, businessId, kind: 'CASH' }, include: { client: true } });
     if (!loan) throw new NotFoundException('Solicitud no encontrada');
@@ -354,16 +354,38 @@ export class LendingService {
     if (room + 0.005 < loan.amount) {
       throw new BadRequestException(`Hoy puede pedirte hasta $${room.toFixed(2)} y pidió $${loan.amount.toFixed(2)}. Súbele su límite o rechaza la solicitud.`);
     }
+    // A plan of its own for this client (the total to pay stays: the interest is for the whole loan)
+    let plan: { installmentsCount: number; frequencyDays: number } | null = null;
+    if (body?.installments !== undefined || body?.frequencyDays !== undefined) {
+      const n = Math.round(Number(body?.installments ?? loan.installmentsCount));
+      const f = Math.round(Number(body?.frequencyDays ?? loan.frequencyDays ?? 7));
+      if (!(n >= 1 && n <= 52)) throw new BadRequestException('Entre 1 y 52 cuotas');
+      if (!(f >= 1 && f <= 90)) throw new BadRequestException('La frecuencia debe estar entre 1 y 90 días');
+      if (n !== loan.installmentsCount || f !== (loan.frequencyDays ?? 7)) plan = { installmentsCount: n, frequencyDays: f };
+    }
     // A PIN that isn't in use in this business
     let pin = '';
     for (let i = 0; i < 8; i++) {
       pin = Math.floor(100000 + Math.random() * 900000).toString();
       if (!(await this.prisma.loan.findFirst({ where: { businessId, pin } }))) break;
     }
-    return this.prisma.loan.update({
+    const updated = await this.prisma.loan.update({
       where: { id },
-      data: { status: 'APPROVED_PENDING_DISBURSEMENT', pin, pinExpiresAt: new Date(Date.now() + PIN_HOURS * 3600 * 1000), decidedAt: new Date(), decidedBy: userId },
+      data: { status: 'APPROVED_PENDING_DISBURSEMENT', pin, pinExpiresAt: new Date(Date.now() + PIN_HOURS * 3600 * 1000), decidedAt: new Date(), decidedBy: userId, ...(plan ?? {}) },
     });
+    if (plan) {
+      // the client learns the new plan in the chat (and sees it on the loan)
+      const each = round2(loan.totalToPay / plan.installmentsCount);
+      const every = plan.frequencyDays === 7 ? 'semanales' : plan.frequencyDays === 15 ? 'quincenales' : plan.frequencyDays === 30 ? 'mensuales' : `cada ${plan.frequencyDays} días`;
+      const biz = await this.prisma.business.findUnique({ where: { id: businessId }, select: { name: true } });
+      await this.prisma.loanMessage.create({
+        data: {
+          loanId: id, fromClient: false, senderUserId: userId, senderName: biz?.name || 'Comercio',
+          text: `Te aprobamos el préstamo con un plan a tu medida: ${plan.installmentsCount} cuota${plan.installmentsCount > 1 ? 's' : ''} ${every} de $${each.toFixed(2)} (devuelves $${loan.totalToPay.toFixed(2)} en total).`,
+        },
+      });
+    }
+    return updated;
   }
 
   async reject(businessId: string, userId: string, id: string, reason?: string) {
@@ -413,18 +435,50 @@ export class LendingService {
     return { id: loan.id, amount: loan.amount, totalToPay: loan.totalToPay, installments: loan.installmentsCount, each, frequencyDays: loan.frequencyDays ?? 7, client: loan.client };
   }
 
+  /**
+   * How the loan was handed over: one or several parts that add up to it.
+   *  - CASH: dollars in bills from the drawer {bills: {"20": 1}}
+   *  - PAGO_MOVIL / TRANSFER: bolívares at a rate {amount (in $), rate, rateLabel, reference}
+   *  - BINANCE / ZELLE: {amount, reference}
+   * The old body {bills} still means "all in cash".
+   */
+  private cleanParts(body: any, loanAmount: number) {
+    const raw: any[] = Array.isArray(body?.parts) ? body.parts : body?.bills ? [{ method: 'CASH', bills: body.bills }] : [];
+    if (!raw.length) throw new BadRequestException('Indica cómo entregas el préstamo');
+    const parts: any[] = [];
+    for (const p of raw.slice(0, 6)) {
+      const method = String(p?.method || '').toUpperCase();
+      if (method === 'CASH') {
+        const bills: Record<string, number> = {};
+        let sum = 0;
+        for (const [k, v] of Object.entries(p?.bills || {})) {
+          const value = Number(k), n = Math.round(Number(v));
+          if (!(value > 0) || !(n > 0)) continue;
+          bills[String(value)] = n;
+          sum += value * n;
+        }
+        if (sum > 0) parts.push({ method, amount: round2(sum), bills });
+      } else if (method === 'PAGO_MOVIL' || method === 'TRANSFER') {
+        const amount = round2(Number(p?.amount));
+        const rate = Number(p?.rate);
+        if (!(amount > 0)) continue;
+        if (!(rate > 1)) throw new BadRequestException('Indica la tasa para la parte en bolívares');
+        parts.push({ method, amount, rate: round2(rate), rateLabel: String(p?.rateLabel || 'Tasa').slice(0, 30), ves: round2(amount * rate), reference: String(p?.reference || '').trim().slice(0, 60) || null });
+      } else if (method === 'BINANCE' || method === 'ZELLE') {
+        const amount = round2(Number(p?.amount));
+        if (amount > 0) parts.push({ method, amount, reference: String(p?.reference || '').trim().slice(0, 60) || null });
+      } else {
+        throw new BadRequestException('Método de entrega no válido');
+      }
+    }
+    const total = round2(parts.reduce((x, p) => x + p.amount, 0));
+    if (Math.abs(total - loanAmount) > 0.01) throw new BadRequestException(`Lo que entregas suma $${total.toFixed(2)} y el préstamo es de $${loanAmount.toFixed(2)}`);
+    return parts;
+  }
+
   async disburse(businessId: string, user: any, pin: string, body: any) {
     const info = await this.byPin(businessId, pin);
-    // Bills handed over: {"20": 2, "10": 1}; they must add up to the loan
-    const bills: Record<string, number> = {};
-    let sum = 0;
-    for (const [k, v] of Object.entries(body?.bills || {})) {
-      const value = Number(k), n = Math.round(Number(v));
-      if (!(value > 0) || !(n > 0)) continue;
-      bills[String(value)] = n;
-      sum += value * n;
-    }
-    if (Math.abs(round2(sum) - info.amount) > 0.005) throw new BadRequestException(`Los billetes suman $${sum.toFixed(2)} y el préstamo es de $${info.amount.toFixed(2)}`);
+    const parts = this.cleanParts(body, info.amount);
 
     const shift = await this.prisma.shift.findFirst({ where: { userId: user.id, status: 'OPEN' }, orderBy: { openedAt: 'desc' } });
     if (!shift) throw new BadRequestException('Abre tu turno de caja antes de entregar un préstamo');
@@ -435,11 +489,12 @@ export class LendingService {
     const freq = info.frequencyDays;
     const n = Math.max(1, info.installments);
     const each = round2(info.totalToPay / n);
+    const label: Record<string, string> = { CASH: 'efectivo', PAGO_MOVIL: 'pago móvil', TRANSFER: 'transferencia', BINANCE: 'Binance', ZELLE: 'Zelle' };
     return this.prisma.$transaction(async (tx) => {
       // claim it first, so two cashiers can't hand the same loan over twice
       const claimed = await tx.loan.updateMany({
         where: { id: info.id, status: 'APPROVED_PENDING_DISBURSEMENT' },
-        data: { status: 'PENDING', disbursedAt: now, disbursedBy: user.id, disbursedBranchId: branch.id, bills, pin: null, pinExpiresAt: null },
+        data: { status: 'PENDING', disbursedAt: now, disbursedBy: user.id, disbursedBranchId: branch.id, bills: { parts } as any, pin: null, pinExpiresAt: null },
       });
       if (!claimed.count) throw new BadRequestException('Ese préstamo ya fue entregado');
       for (let i = 1; i <= n; i++) {
@@ -448,15 +503,20 @@ export class LendingService {
       }
       await tx.client.update({ where: { id: info.client.id }, data: { currentDebt: { increment: info.totalToPay } } });
       await tx.creditTransaction.create({ data: { clientId: info.client.id, type: 'DEBT', amount: info.totalToPay, notes: `Préstamo en efectivo de $${info.amount.toFixed(2)} (#${info.id.slice(0, 8)})` } });
-      // the cash leaves the drawer of this shift (not a sale: the shift close counts it)
-      await tx.financeMovement.create({
-        data: {
-          businessId, branchId: branch.id, userId: user.id, userName: user.name ?? null,
-          type: 'OUT', category: 'LOAN', categoryLabel: 'Préstamo entregado', amount: info.amount, currency: 'USD', amountCurrency: info.amount,
-          method: 'CASH_DRAWER', description: `Préstamo a ${info.client.name} (#${info.id.slice(0, 8)})`, source: 'POS', shiftId: shift.id,
-        },
-      });
-      return { ok: true, loanId: info.id, each, installments: n };
+      // one movement per way it left: only the cash comes out of this shift's drawer
+      for (const p of parts) {
+        await tx.financeMovement.create({
+          data: {
+            businessId, branchId: branch.id, userId: user.id, userName: user.name ?? null,
+            type: 'OUT', category: 'LOAN', categoryLabel: 'Préstamo entregado', amount: p.amount,
+            currency: p.ves ? 'VES' : 'USD', amountCurrency: p.ves ?? p.amount,
+            method: p.method === 'CASH' ? 'CASH_DRAWER' : p.method,
+            description: `Préstamo a ${info.client.name} (#${info.id.slice(0, 8)}) · ${label[p.method]}${p.ves ? ` Bs ${p.ves.toFixed(2)} a ${p.rate}` : ''}${p.reference ? ` · ref ${p.reference}` : ''}`,
+            source: 'POS', shiftId: shift.id,
+          },
+        });
+      }
+      return { ok: true, loanId: info.id, each, installments: n, parts };
     });
   }
 
@@ -635,6 +695,7 @@ export class LendingService {
           business: bizOf.get(l.businessId!) ?? null, branch: branchOf.get(l.businessId!) ?? null, lender: stats.get(l.businessId!) ?? null,
           unread: unreadOf.get(l.id) ?? 0,
           canReview: !!l.disbursedAt,
+          received: Array.isArray((l.bills as any)?.parts) ? (l.bills as any).parts.map((p: any) => ({ method: p.method, amount: p.amount, ves: p.ves ?? null, rate: p.rate ?? null })) : l.disbursedAt ? [{ method: 'CASH', amount: l.amount }] : null,
           myReview: l.reviews.find((r) => r.fromClient) ?? null,
         };
       });
