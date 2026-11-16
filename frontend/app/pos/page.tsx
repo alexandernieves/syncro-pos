@@ -2657,9 +2657,6 @@ export default function POSPage() {
             </Button>
 
             <BranchSwitcher disabled={!!activeShift} />
-
-          {/* Cash loans (module "loans"): hand the cash over with the client's PIN */}
-          <LoanDisburseButton shiftOpen={!!activeShift} />
           </div>
         </header>
 
@@ -2889,29 +2886,19 @@ export default function POSPage() {
 
           <BranchSwitcher disabled={!!activeShift} />
 
-          {/* Staff: their own POS theme, and one menu with Cerrar turno / Cerrar sesión */}
-          {!isOwnerUser ? (
-            <PosAccountMenu
-              shiftOpen={!!activeShift}
-              onCloseShift={() => {
-                checkShift();
-                setIsClosingShift(true);
-              }}
-            />
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 px-3 gap-1.5 font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-lg shadow-xs transition-all ml-1"
-              onClick={() => {
-                checkShift();
-                setIsClosingShift(true);
-              }}
-            >
-              <IconCash size={15} />
-              <span>Cerrar turno</span>
-            </Button>
-          )}
+          {/* Cash loans (module "loans"): hand the cash over with the client's PIN */}
+          <LoanDisburseButton shiftOpen={!!activeShift} />
+
+          {/* One "Turno" menu with Cerrar turno / Cerrar sesión for everyone; staff also get their own
+              POS theme (the owner changes the business theme in Configuración → Temas) */}
+          <PosAccountMenu
+            showTheme={!isOwnerUser}
+            shiftOpen={!!activeShift}
+            onCloseShift={() => {
+              checkShift();
+              setIsClosingShift(true);
+            }}
+          />
         </div>
       </header>
 

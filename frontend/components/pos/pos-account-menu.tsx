@@ -22,10 +22,10 @@ import {
 } from "@/components/ui/alert-dialog";
 
 /**
- * POS header for staff who aren't the owner: a theme button (their own colours, only for the
- * POS) and one menu with "Cerrar turno" and "Cerrar sesión".
+ * POS header: one menu with "Cerrar turno" and "Cerrar sesión" for everyone, and for staff who
+ * aren't the owner a theme button (their own colours, only for the POS).
  */
-export function PosAccountMenu({ onCloseShift, shiftOpen }: { onCloseShift: () => void; shiftOpen: boolean }) {
+export function PosAccountMenu({ onCloseShift, shiftOpen, showTheme = true }: { onCloseShift: () => void; shiftOpen: boolean; showTheme?: boolean }) {
   const [themesOpen, setThemesOpen] = useState(false);
   const [confirmOut, setConfirmOut] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -38,7 +38,7 @@ export function PosAccountMenu({ onCloseShift, shiftOpen }: { onCloseShift: () =
 
   return (
     <>
-      <Button
+      {showTheme && <Button
         variant="outline"
         size="icon"
         className="h-9 w-9 rounded-lg border-[#DAD5CC] bg-[#FAF7F2] text-[#16140F] shadow-xs hover:bg-[#F5F1E8]"
@@ -47,7 +47,7 @@ export function PosAccountMenu({ onCloseShift, shiftOpen }: { onCloseShift: () =
         title="Tema del punto de venta"
       >
         <IconPalette size={16} className="text-primary" />
-      </Button>
+      </Button>}
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -98,7 +98,7 @@ export function PosAccountMenu({ onCloseShift, shiftOpen }: { onCloseShift: () =
         </AlertDialogContent>
       </AlertDialog>
 
-      <PosThemeDialog open={themesOpen} onOpenChange={setThemesOpen} />
+      {showTheme && <PosThemeDialog open={themesOpen} onOpenChange={setThemesOpen} />}
     </>
   );
 }
