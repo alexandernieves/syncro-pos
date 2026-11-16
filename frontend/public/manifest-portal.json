@@ -1,27 +1,20 @@
 {
+  "id": "/portal",
   "name": "Syncro Credit",
-  "short_name": "SyncroCredit",
-  "description": "Gestiona tus créditos y realiza pagos en línea",
+  "short_name": "Syncro Credit",
+  "description": "Tus préstamos y cuotas en un solo lugar. Pide, paga y sube de nivel.",
+  "lang": "es",
   "start_url": "/portal?pwa=true",
-  "display": "standalone",
-  "background_color": "#F26B3A",
-  "theme_color": "#F7F5F0",
   "scope": "/portal",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F26B3A",
+  "theme_color": "#F26B3A",
+  "categories": ["finance"],
   "icons": [
-    {
-      "src": "/syncrocredit.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/syncrocredit.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    },
-    {
-      "src": "/syncrocredit.png",
-      "sizes": "1254x1254",
-      "type": "image/png"
-    }
+    { "src": "/sc-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/sc-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/sc-icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/sc-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

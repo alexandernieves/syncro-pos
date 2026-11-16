@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { InstallPrompt } from "@/components/portal/install-prompt";
 import { LoansMarket } from "@/components/portal/loans-market";
 import { creditPayRate, creditRates } from "@/lib/credit-rate";
 import { createPortal } from "react-dom";
@@ -5296,6 +5297,9 @@ $1color: #8E3418 !important;
                 </>
                 )}
             </main>
+
+            {/* "Instala Syncro Credit" (hidden once it is installed) */}
+            <InstallPrompt />
 
             {/* CAPSULE BOTTOM NAV (GOOEY METABALLS DESIGN) */}
             {selectedProductForDetail === null && !isCheckoutOpen && !isCartOpen && (
