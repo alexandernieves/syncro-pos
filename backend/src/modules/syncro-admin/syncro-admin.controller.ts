@@ -94,6 +94,18 @@ export class SyncroAdminController {
     return this.modules.setFeature(id, code, key, !!body?.enabled, adminId);
   }
 
+  @Get('modules/catalog')
+  catalogVisibility(@Req() req: any) {
+    this.assertAdmin(req);
+    return this.modules.catalogVisibility();
+  }
+
+  @Put('modules/catalog/:code')
+  setCatalogVisibility(@Param('code') code: string, @Body() body: { private?: boolean }, @Req() req: any) {
+    this.assertAdmin(req);
+    return this.modules.setCatalogVisibility(code, body?.private);
+  }
+
   @Get('modules/trials')
   moduleTrials(@Req() req: any) {
     this.assertAdmin(req);

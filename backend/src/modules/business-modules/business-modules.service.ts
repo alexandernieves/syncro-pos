@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ChatGateway } from '../chat/chat.gateway';
 import { SettingsService } from '../settings/settings.service';
 import { CATALOG_CODES, MODULE_CATALOG, TRIAL_DAYS, USABLE_STATUSES, type ModuleStatus, catalogModule } from './catalog';
+import { privateCatalogModules, visibilityKey } from './catalog-visibility';
 import { forgetModules } from './module-access';
 
 const DAY = 86_400_000;
@@ -47,7 +48,8 @@ export class BusinessModulesService {
   // ── Business side ──────────────────────────────────────────────────────────
 
   async catalog() {
-    return MODULE_CATALOG.map(({ features, ...m }) => ({ ...m, features: features.filter((f) => !f.custom).map((f) => ({ key: f.key, label: f.label, description: f.description })) }));
+    const privateModules = await privateCatalogModules(this.prisma);
+    return MODULE_CATALOG.filter((mod) => !privateModules.has(mod.code)).map(({ features, ...m }) => ({ ...m, features: features.filter((f) => !f.custom).map((f) => ({ key: f.key, label: f.label, description: f.description })) }));
   }
 
   /** The business's modules, their status and which features are on (the sidebar uses it). */
@@ -75,6 +77,23 @@ export class BusinessModulesService {
   }
 
   // ── Syncro central ─────────────────────────────────────────────────────────
+
+  async catalogVisibility() {
+    const privateModules = await privateCatalogModules(this.prisma);
+    return MODULE_CATALOG.map(({ code, name }) => ({ code, name, private: privateModules.has(code) }));
+  }
+
+  async setCatalogVisibility(code: string, isPrivate: unknown) {
+    if (!catalogModule(code)) throw new NotFoundException('Módulo no encontrado');
+    if (typeof isPrivate !== 'boolean') throw new BadRequestException('Visibilidad no válida');
+    const key = visibilityKey(code);
+    await this.prisma.platformSetting.upsert({
+      where: { key },
+      create: { key, value: isPrivate },
+      update: { value: isPrivate },
+    });
+    return { code, private: isPrivate };
+  }
 
   async forBusiness(businessId: string) {
     const [modules, features] = await Promise.all([

@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ChatGateway } from '../chat/chat.gateway';
 import { USABLE_STATUSES, type ModuleStatus, catalogModule } from './catalog';
 
+import { visibilityKey } from './catalog-visibility';
+
 /** Syncro's base functions (products, inventory, sales…), not a catalog module. */
 export const CORE_MODULE = { code: 'core', name: 'Syncro' } as const;
 const moduleName = (code: string) => (code === CORE_MODULE.code ? CORE_MODULE.name : catalogModule(code)?.name ?? code);
@@ -55,6 +57,19 @@ export class ModuleRequestsService {
     } else if (kind === 'CATALOG' || kind === 'CUSTOM_FEATURE') {
       const mod = catalogModule(String(body?.moduleCode ?? ''));
       if (!mod) throw new BadRequestException('Módulo no encontrado');
+      const visibility = await this.prisma.platformSetting.findUnique({ where: { key: visibilityKey(mod.code) } });
+      if (visibility?.value === true) {
+        // Businesses with access can still ask for improvements to their own module.
+        const access = kind === 'CUSTOM_FEATURE'
+          ? await this.prisma.businessModule.findUnique({
+              where: { businessId_moduleCode: { businessId, moduleCode: mod.code } },
+              select: { status: true },
+            })
+          : null;
+        if (!access || !USABLE_STATUSES.includes(access.status as ModuleStatus)) {
+          throw new BadRequestException('Módulo no disponible');
+        }
+      }
       moduleCode = mod.code;
       if (kind === 'CATALOG') title = `Módulo ${mod.name}`;
     }

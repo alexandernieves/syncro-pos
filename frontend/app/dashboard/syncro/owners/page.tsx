@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { PosTable } from "@/components/pos-table";
 import { StatCard, StatGrid } from "@/components/stat-card";
 import { BusinessSheet } from "@/components/syncro-admin/business-sheet";
+import { CatalogVisibility } from "@/components/syncro-admin/catalog-visibility";
 import { MODULE_STATUS_CLASS, MODULE_STATUS_LABEL } from "@/components/syncro-admin/modules-section";
 import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
 import { type AdminBusiness, PLAN_LABEL, STATUS_CLASS, STATUS_LABEL, adminApi, ago, shortDate, usd } from "@/lib/syncro-admin";
@@ -105,6 +106,8 @@ export default function OwnersManagementPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Gestión de negocios</h1>
         <p className="text-sm text-muted-foreground">Todos los negocios registrados en Syncro. Toca uno para ver su ficha, su suscripción y su actividad.</p>
       </div>
+
+      <CatalogVisibility />
 
       {trials.length > 0 && (
         <div className="rounded-xl border border-amber-600/30 bg-amber-500/10 p-4">
