@@ -65,15 +65,8 @@ export function SessionMonitor({ timeoutMinutes = 30 }: SessionMonitorProps) {
     // Eventos que reinician el contador de inactividad, incluyendo evento custom de actividad
     const events = ["mousedown", "mousemove", "keydown", "scroll", "touchstart", "syncro_session_activity"]
     
-    const token = window.location.pathname.startsWith("/finanzas") && window.matchMedia("(display-mode: standalone)").matches
-      ? sessionStorage.getItem("token") : localStorage.getItem("token")
-    if (token) {
-      resetTimer()
-      
-      events.forEach((event) => {
-        window.addEventListener(event, resetTimer)
-      })
-    }
+    resetTimer()
+    events.forEach(event => window.addEventListener(event, resetTimer))
 
     return () => {
       if (timeoutId.current) {

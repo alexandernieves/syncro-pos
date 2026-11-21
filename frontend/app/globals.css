@@ -553,7 +553,7 @@ html {
    neutros calidos del panel. Los dialogos se montan en <body>, por eso va en
    <html> y no en un contenedor de la pagina.
    ───────────────────────────────────────────────────────────────────────── */
-html.syncro-credit {
+:is(html.syncro-credit, html:has(.syncro-finance-theme)) {
   --color-amber-50: #FEF4EF;
   --color-amber-100: #FDE6DA;
   --color-amber-200: #FACBB4;
@@ -587,9 +587,9 @@ html.syncro-credit {
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
-html.syncro-credit body,
-html.syncro-credit .font-sans-ui,
-html.syncro-credit .font-mono {
+:is(html.syncro-credit, html:has(.syncro-finance-theme)) body,
+:is(html.syncro-credit, html:has(.syncro-finance-theme)) .font-sans-ui,
+:is(html.syncro-credit, html:has(.syncro-finance-theme)) .font-mono {
   font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif !important;
 }
 /* Syncro escribe con peso medio: las negritas extremas se suavizan */
@@ -800,7 +800,7 @@ html.syncro-credit h3 { letter-spacing: -0.015em; }
 }
 
 /* Syncro Credit: header that melts into the page, and the "Para ti" cards */
-html.syncro-credit .sc-hero {
+:is(html.syncro-credit, html:has(.syncro-finance-theme)) .sc-hero {
   height: 470px;
   background:
     radial-gradient(120% 70% at 85% 0%, rgba(255,255,255,.28), rgba(255,255,255,0) 55%),
@@ -815,3 +815,21 @@ html.syncro-credit .sc-ad .sc-ad-tag { display: inline-block; max-width: 220px; 
 html.syncro-credit .sc-ad h4 { position: relative; font-size: 19px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; margin-top: 10px; max-width: 200px; }
 html.syncro-credit .sc-ad p { position: relative; font-size: 12.5px; opacity: .85; margin-top: 4px; max-width: 200px; }
 html.syncro-credit .sc-ad .sc-ad-go { position: absolute; left: 18px; bottom: 18px; z-index: 1; background: #fff; color: #1A1815; font-size: 12px; font-weight: 800; border-radius: 999px; padding: 7px 12px; }
+
+@media (max-width: 639px) {
+  .syncro-finance-theme [data-finance-mobile] form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .syncro-finance-theme [data-finance-mobile] form > button[type="submit"] {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 9999px;
+  }
+
+  .syncro-finance-theme [data-finance-mobile] input,
+  .syncro-finance-theme [data-finance-mobile] [role="combobox"] {
+    font-size: 16px;
+  }
+}

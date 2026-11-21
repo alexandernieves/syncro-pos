@@ -31,7 +31,7 @@ export function syncThemeColor() {
 
 type Pt = { x: number; y: number };
 
-export function NubiSplash({ ready }: { ready: boolean }) {
+export function NubiSplash({ ready, subtitle = BOTTOM, description = "Tu crédito, en tu bolsillo" }: { ready: boolean; subtitle?: string; description?: string }) {
   const readyRef = useRef(ready);
   readyRef.current = ready;
   const [out, setOut] = useState(false);
@@ -230,7 +230,7 @@ export function NubiSplash({ ready }: { ready: boolean }) {
       data-out={out ? "" : undefined}
       style={{ background: SPLASH_ORANGE, opacity: out ? 0 : 1, transition: `opacity ${FADE_MS}ms ease`, pointerEvents: out ? "none" : "auto" }}
       role="status"
-      aria-label="Cargando Syncro Credit"
+      aria-label={`Cargando Syncro ${subtitle.toLowerCase()}`}
     >
       {/* soft light in the orange */}
       <div aria-hidden className="absolute -top-1/4 left-1/2 -translate-x-1/2 size-[140vw] max-w-[900px] max-h-[900px] rounded-full" style={{ background: "radial-gradient(circle, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 62%)" }} />
@@ -243,13 +243,13 @@ export function NubiSplash({ ready }: { ready: boolean }) {
               <span key={i} ref={(el) => { top.current[i] = el; }} className={letter} style={{ opacity: 0.32 }}>{l}</span>
             ))}
           </div>
-          <div className="text-[#1A1815]" style={{ fontSize: "clamp(54px, 18vw, 96px)" }}>
-            {BOTTOM.split("").map((l, i) => (
+          <div className="text-[#1A1815]" style={{ fontSize: subtitle.length > 6 ? "clamp(40px, 11.5vw, 82px)" : "clamp(54px, 18vw, 96px)" }}>
+            {subtitle.split("").map((l, i) => (
               <span key={i} ref={(el) => { bottom.current[i] = el; }} className={letter} style={{ opacity: 0 }}>{l}</span>
             ))}
           </div>
           <p ref={tag} className="mt-5 text-[15px] text-white/90" style={{ opacity: 0, fontWeight: 500, letterSpacing: "0" }}>
-            Tu crédito, en tu bolsillo
+            {description}
           </p>
 
           {/* Dashed line drawing the path of the bounces */}

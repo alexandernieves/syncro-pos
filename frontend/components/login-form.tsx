@@ -85,9 +85,8 @@ function getClientId(): string {
  */
 export function LoginForm({
   className,
-  financeTarget,
   ...props
-}: React.ComponentProps<"div"> & { financeTarget?: "/finanzas/" | "/finanzas/instalar/" }) {
+}: React.ComponentProps<"div">) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -250,7 +249,7 @@ export function LoginForm({
     if (refreshProfile) handleLoginSuccess(data.user, targetEmail, token)
     const p = data.user.permissions || []
     const isPosOnly = p.includes("pos") && !p.some((perm: string) => perm !== "pos")
-    const targetPath = financeTarget ?? (isPosOnly || data.user.role === "pos" ? "/pos" : standalone ? "/dashboard/soporte" : "/dashboard")
+    const targetPath = isPosOnly || data.user.role === "pos" ? "/pos" : standalone ? "/dashboard/soporte" : "/dashboard"
     setTimeout(() => window.location.assign(targetPath), 500)
   }
 
@@ -327,12 +326,12 @@ export function LoginForm({
         const p = data.user.permissions || []
         const isPosOnly =
           p.includes("pos") && !p.some((perm: string) => perm !== "pos")
-        const targetPath = financeTarget ?? (
+        const targetPath =
           isPosOnly || data.user.role === "pos"
             ? "/pos"
             : window.matchMedia("(display-mode: standalone)").matches
             ? "/dashboard/soporte"
-            : "/dashboard")
+            : "/dashboard"
         // A full load: the new account starts with nothing in memory from the previous one
         setTimeout(() => window.location.assign(targetPath), 500)
         return "¡Inicio de sesión exitoso!"

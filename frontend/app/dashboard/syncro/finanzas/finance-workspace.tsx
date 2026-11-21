@@ -41,14 +41,14 @@ const emptyPlan: Plan = { income: 0, payday1: 15, payday2: 31, grocery: 0, dinin
 export default function FinanceWorkspace({ section, mobile = false }: { section: FinanceSection; mobile?: boolean }) {
   useRequireSyncroAdmin(!mobile);
 
-  return <main className="mx-auto w-full max-w-6xl space-y-5 p-3 sm:p-6">
-    <header className="flex flex-wrap items-end justify-between gap-2">
+  return <main data-finance-mobile={mobile ? "" : undefined} className={mobile ? "space-y-4 px-4 pb-3 pt-4 sm:px-5" : "mx-auto w-full max-w-6xl space-y-5 p-3 sm:p-6"}>
+    {!mobile && <header className="flex flex-wrap items-end justify-between gap-2">
       <div>
         <p className="text-sm text-muted-foreground">{section.group}{section.workspace === "company" && " · Empresa Syncro"}</p>
         <h1 className="text-2xl font-semibold">{section.title}</h1>
       </div>
       {!mobile && section.tab === "Resumen" && <Button asChild size="sm" variant="outline"><Link href="/finanzas/instalar/">Instalar app de Finanzas</Link></Button>}
-    </header>
+    </header>}
     <Workspace key={section.slug} workspace={section.workspace} tab={section.tab} mobile={mobile} />
   </main>;
 }
@@ -219,6 +219,25 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
     {success && <p role="status">{success}</p>}
     <fieldset disabled={busy} className="min-w-0 space-y-4">
       {tab === "Resumen" && <>
+        {mobile && <section className="space-y-3">
+          <div className="relative overflow-hidden rounded-[26px] bg-[linear-gradient(160deg,#ffffff_0%,#fafbfc_42%,#eceff3_100%)] p-5 text-zinc-900 shadow-[0_18px_40px_-16px_rgba(90,30,5,0.45),inset_0_1px_0_#fff,inset_0_-12px_26px_rgba(140,150,170,0.18)]">
+            <div className="relative z-10">
+              <p className="text-sm font-semibold text-zinc-500">Saldo disponible</p>
+              <p className="mt-1 text-[clamp(28px,8vw,44px)] font-bold leading-tight tracking-[-0.045em] tabular-nums">{money(available)}</p>
+              <p className="mt-2 text-xs text-zinc-600">{hasCurrentQuotes ? "Equivalente en USD a tasa de referencia" : "Equivalente contable en USD"}</p>
+            </div>
+            <Wallet className="absolute -bottom-4 -right-2 size-28 -rotate-12 text-zinc-900/5" aria-hidden />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {([{ label: "Ingresos del mes", value: income, icon: ArrowDownLeft }, { label: "Gastos del mes", value: monthlyExpenses, icon: ArrowUpRight }]).map(({ label, value, icon: MetricIcon }) =>
+              <div key={label} className="min-w-0 rounded-[22px] border bg-card p-3 shadow-xs">
+                <MetricIcon className="mb-2 size-4 text-primary" aria-hidden />
+                <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                <p className="mt-0.5 break-all font-semibold tabular-nums">{money(value)}</p>
+              </div>
+            )}
+          </div>
+        </section>}
         {personal && <section className="rounded-2xl border bg-card p-5 sm:p-6">
           <h2 className="text-xl font-semibold">{hasCashActivity ? "¿Qué quieres registrar?" : "Empieza por tu saldo de hoy"}</h2>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">
@@ -243,7 +262,7 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
           <div><h2 className="font-semibold">Organiza tus próximos cobros</h2><p className="text-sm text-muted-foreground">Configura cuándo cobras y cuánto quieres apartar para comida.</p></div>
           <Button asChild variant="outline"><Link href={budgetUrl}>Configurar presupuesto</Link></Button>
         </div>}
-        <div className="grid gap-3 sm:grid-cols-3">
+        {!mobile && <div className="grid gap-3 sm:grid-cols-3">
           {[
             { label: "Saldo disponible", value: available, hint: hasCurrentQuotes ? "Equivalente en USD a tasa de referencia" : "Equivalente contable en USD", icon: Wallet },
             { label: "Ingresos del mes", value: income, hint: "Cobros registrados", icon: ArrowDownLeft },
@@ -256,7 +275,7 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
               </CardHeader>
               <CardFooter className="text-sm text-muted-foreground">{hint}</CardFooter>
             </Card>)}
-        </div>
+        </div>}
         <FinanceDetails title="Saldos por cuenta y moneda">
           <p className="text-sm text-muted-foreground">El saldo inicial es el dinero registrado al comenzar. El saldo disponible refleja lo que entró y salió después. Cada movimiento conserva su tasa. El saldo usa la referencia vigente cuando está disponible para todas tus monedas.</p>
           {opening > 0 && <p>Saldo inicial registrado <strong>{money(opening)}</strong></p>}
