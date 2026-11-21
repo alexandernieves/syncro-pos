@@ -47,7 +47,7 @@ export default function FinanceWorkspace({ section, mobile = false }: { section:
         <p className="text-sm text-muted-foreground">{section.group}{section.workspace === "company" && " · Empresa Syncro"}</p>
         <h1 className="text-2xl font-semibold">{section.title}</h1>
       </div>
-      {!mobile && section.tab === "Resumen" && <Button asChild size="sm" variant="outline"><Link href="/finanzas/">Abrir app de Finanzas</Link></Button>}
+      {!mobile && section.tab === "Resumen" && <Button asChild size="sm" variant="outline"><Link href="/finanzas/instalar/">Instalar app de Finanzas</Link></Button>}
     </header>
     <Workspace key={section.slug} workspace={section.workspace} tab={section.tab} mobile={mobile} />
   </main>;

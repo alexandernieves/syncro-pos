@@ -87,7 +87,7 @@ export function LoginForm({
   className,
   financeTarget,
   ...props
-}: React.ComponentProps<"div"> & { financeTarget?: "/finanzas/" }) {
+}: React.ComponentProps<"div"> & { financeTarget?: "/finanzas/" | "/finanzas/instalar/" }) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)

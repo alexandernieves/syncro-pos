@@ -245,6 +245,7 @@ const data = {
         { title: "Préstamos P2P", url: "/dashboard/syncro/prestamos" },
         { title: "Métricas globales", url: "/dashboard/syncro/stats" },
         { title: "Auditoría global", url: "/dashboard/syncro/audit" },
+        { title: "Instalar Finanzas", url: "/finanzas/instalar/" },
       ],
     },
     ...financeGroups.map((group, index) => ({
