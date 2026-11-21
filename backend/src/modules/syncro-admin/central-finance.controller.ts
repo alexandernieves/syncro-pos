@@ -122,7 +122,30 @@ export class CentralFinanceController {
     if (new Set(incomeOverrides.map(row => `${row.month}:${row.slot}`)).size !== incomeOverrides.length) {
       throw new BadRequestException('Hay ajustes duplicados para una quincena');
     }
+    const frequency = body.frequency ?? 'twice-monthly';
+    if (!['weekly', 'twice-monthly', 'monthly'].includes(frequency)) throw new BadRequestException('Frecuencia inválida');
+    const weeklyPayday = amount(body.weeklyPayday ?? 5);
+    if (weeklyPayday > 6) throw new BadRequestException('Día de la semana inválido');
+    const monthlyOverrides = body.monthlyOverrides ?? [];
+    if (!Array.isArray(monthlyOverrides) || monthlyOverrides.length > 200) throw new BadRequestException('Ajustes mensuales inválidos');
+    const monthlyIncome = monthlyOverrides.map((row: any) => ({
+      month: date(`${row?.month}-01`).slice(0, 7),
+      cents: amount(row.cents),
+    }));
+    if (new Set(monthlyIncome.map(row => row.month)).size !== monthlyIncome.length) {
+      throw new BadRequestException('Hay ajustes duplicados para un mes');
+    }
+    const paydayOverrides = body.paydayOverrides ?? [];
+    if (!Array.isArray(paydayOverrides) || paydayOverrides.length > 200) throw new BadRequestException('Ajustes por fecha inválidos');
+    const paydayIncome = paydayOverrides.map((row: any) => ({ date: date(row?.date), cents: amount(row.cents) }));
+    if (new Set(paydayIncome.map(row => row.date)).size !== paydayIncome.length) {
+      throw new BadRequestException('Hay ajustes duplicados para una fecha');
+    }
     const data = {
+      frequency,
+      weeklyPayday,
+      monthlyOverrides: monthlyIncome,
+      paydayOverrides: paydayIncome,
       incomeOverrides,
       smallSpendLimit: amount(body.smallSpendLimit ?? 0),
       debts: body.debts.map((row: any) => {
@@ -144,7 +167,7 @@ export class CentralFinanceController {
         monthly: row.monthly === true,
       })),
     };
-    if (data.payday1 >= data.payday2 || data.payday2 > 31) throw new BadRequestException('Días de cobro inválidos');
+    if (data.payday1 > 31 || data.payday2 > 31 || (frequency === 'twice-monthly' && data.payday1 >= data.payday2)) throw new BadRequestException('Días de cobro inválidos');
     await this.prisma.centralFinancePlan.upsert({ where: { scope }, create: { scope, data }, update: { data } });
     return data;
   }

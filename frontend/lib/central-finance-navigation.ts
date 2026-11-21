@@ -20,7 +20,7 @@ export const financeGroups = [
     title: "Mis finanzas",
     workspace: "personal",
     sections: [
-      { slug: "resumen-personal", title: "Resumen de quincena", tab: "Resumen" },
+      { slug: "resumen-personal", title: "Resumen personal", tab: "Resumen" },
       { slug: "gastos-personales", title: "Gastos y gastos hormiga", tab: "Gastos" },
       { slug: "presupuesto-personal", title: "Presupuesto y alimentos", tab: "Presupuesto" },
       { slug: "movimientos-personales", title: "Cuentas y movimientos", tab: "Libro diario" },

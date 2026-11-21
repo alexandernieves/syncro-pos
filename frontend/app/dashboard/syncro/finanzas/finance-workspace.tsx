@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
-import type { FinanceSection } from "@/lib/central-finance-navigation";
+import { financeUrl, type FinanceSection } from "@/lib/central-finance-navigation";
 import { adminApi, usd } from "@/lib/syncro-admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { expectedIncome, projection, simulateDebts, type Entry, type Plan } from "./calculations";
+import { CashForecast, FinanceOverview } from "./finance-overview";
+import { FinanceDate } from "./finance-calendar";
+import { projection, simulateDebts, type Entry, type Frequency, type Plan } from "./calculations";
 
 const names: Record<string, string> = {
   cash: "Caja", bank: "Banco", receivable: "Cuentas por cobrar", payable: "Cuentas por pagar",
@@ -17,9 +20,9 @@ const names: Record<string, string> = {
 const expenseAccounts = ["food", "dining", "housing", "transport", "health", "subscriptions", "shopping", "leisure", "interest", "expense"];
 
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Caracas", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-const money = (cents: number) => usd(cents / 100);
+const money = (cents: number) => usd((cents || 0) / 100);
 const cents = (value: FormDataEntryValue | null) => Math.round(Number(value) * 100);
-const emptyPlan = (personal: boolean): Plan => ({ income: personal ? 80000 : 0, payday1: 15, payday2: 31, grocery: 0, dining: 0, reserve: 0, obligations: [], debts: [] });
+const emptyPlan: Plan = { income: 0, payday1: 15, payday2: 31, grocery: 0, dining: 0, reserve: 0, obligations: [], debts: [] };
 
 export default function FinanceWorkspace({ section }: { section: FinanceSection }) {
   useRequireSyncroAdmin();
@@ -36,7 +39,9 @@ export default function FinanceWorkspace({ section }: { section: FinanceSection 
 function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"]; tab: FinanceSection["tab"] }) {
   const path = "/finance/" + workspace;
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [plan, setPlan] = useState<Plan>(() => emptyPlan(workspace === "personal"));
+  const [plan, setPlan] = useState<Plan>(emptyPlan);
+  const [hasPlan, setHasPlan] = useState(false);
+  const [frequency, setFrequency] = useState<Frequency>("twice-monthly");
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -51,7 +56,11 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
     adminApi<{ entries: Entry[]; plan: Plan | null }>(path).then(data => {
       if (!current) return;
       setEntries(data.entries);
-      if (data.plan) setPlan(data.plan);
+      if (data.plan) {
+        setPlan(data.plan);
+        setHasPlan(true);
+        setFrequency(data.plan.frequency ?? "twice-monthly");
+      }
       setReady(true);
     }).catch(err => { if (current) setError(err.message); });
     return () => { current = false; };
@@ -74,6 +83,7 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
   function savePlan(next: Plan) {
     return perform(async () => {
       setPlan(await adminApi<Plan>(path + "/plan", { method: "PUT", body: JSON.stringify(next) }));
+      setHasPlan(true);
     }, "Plan guardado");
   }
 
@@ -134,15 +144,7 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
       spending[entry.credit] = (spending[entry.credit] ?? 0) - entry.cents;
     }
   }
-  const monthlyPayments = plan.obligations.filter(row =>
-    row.kind === "payment" && (row.date.startsWith(month) || (row.monthly && row.date.slice(0, 7) < month)),
-  ).reduce((sum, row) => sum + row.cents, 0);
-  const monthlyMinimums = plan.debts.filter(debt => debt.date.slice(0, 7) <= month)
-    .reduce((sum, debt) => sum + Math.min(debt.minimum, debt.balance + Math.round(debt.balance * debt.apr / 120_000)), 0);
   const income = -(spending.income ?? 0);
-  const firstIncome = expectedIncome(plan, month, 1);
-  const secondIncome = expectedIncome(plan, month, 2);
-  const monthlyIncome = firstIncome + secondIncome;
   const purchases = entries.filter(entry =>
     entry.date <= asOf && entry.date.startsWith(month) && expenseAccounts.includes(entry.debit),
   );
@@ -165,23 +167,23 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
     {success && <p role="status">{success}</p>}
     <fieldset disabled={busy} className="min-w-0 space-y-4">
       {tab === "Resumen" && <>
+        {!hasPlan && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 p-4">
+          <p>Configura tus fechas de cobro e importes para verlos en la proyección.</p>
+          <Button asChild variant="outline">
+            <Link href={financeUrl(workspace === "personal" ? "presupuesto-personal" : "presupuesto-empresa")}>Configurar presupuesto</Link>
+          </Button>
+        </div>}
         <div className="grid gap-3 sm:grid-cols-3">
           {[["Caja y banco registrados", available], ["Mercado disponible este mes", grocery], ["Comidas fuera disponibles este mes", dining]].map(([label, value]) =>
             <div className="rounded-lg border p-4" key={label}><p>{label}</p><p className="text-2xl font-semibold">{money(Number(value))}</p></div>)}
         </div>
-        {workspace === "personal" && <div className="rounded border p-4">
-          <h2 className="font-semibold">Distribución mensual de tus dos cobros</h2>
-          <p>Primera quincena: {money(firstIncome)} · Segunda quincena: {money(secondIncome)} · Total previsto: {money(monthlyIncome)}</p>
-          <p>Ingresos registrados este mes: {money(income)}</p>
-          <p>Mercado y comidas fuera: {money(plan.grocery + plan.dining)} · Pagos previstos: {money(monthlyPayments)} · Cuotas de deuda: {money(monthlyMinimums)}</p>
-          <p>Margen mensual antes de la reserva: {money(monthlyIncome - plan.grocery - plan.dining - monthlyPayments - monthlyMinimums)}</p>
-          <p>Capacidad estimada para abono inmediato: <strong>{money(extra)}</strong></p>
-        </div>}
+        <FinanceOverview plan={plan} entries={entries} today={asOf} expenseAccounts={expenseAccounts} />
+        <p>Capacidad estimada para abono inmediato <strong>{money(extra)}</strong></p>
         <h2 className="text-lg font-semibold">Flujo de caja de 13 semanas</h2>
-        <p className="text-sm text-muted-foreground">Parte de los movimientos registrados hasta hoy. Confirma que los compromisos de hoy siguen pendientes. Los cobros quincenales de hoy cuentan al registrar el ingreso.</p>
+        <p className="text-sm text-muted-foreground">Parte de los movimientos registrados hasta hoy. Confirma que los compromisos de hoy siguen pendientes. Los cobros de hoy cuentan al registrar el ingreso.</p>
         <label className="flex items-center gap-2"><input type="checkbox" checked={stress} onChange={e => setStress(e.target.checked)} /> Escenario con cobros 10 % menores</label>
         <p>{forecast.shortfall ? `Primer faltante frente a la reserva: ${forecast.shortfall.date} · ${money(forecast.shortfall.cents)}` : "La proyección cubre la reserva configurada."}</p>
-        <ul className="grid gap-2 sm:grid-cols-3">{forecast.weeks.map(week => <li className="rounded border p-2" key={week.date}>{week.date} · {money(week.balance)}</li>)}</ul>
+        <CashForecast weeks={forecast.weeks} />
       </>}
       {(tab === "Estados financieros" || (tab === "Resumen" && workspace === "personal")) && <>
         <h2 className="text-lg font-semibold">Resumen contable</h2>
@@ -208,7 +210,7 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
       {tab === "Gastos" && <>
         <h2 className="text-lg font-semibold">Registrar gasto</h2>
         <form className="flex flex-wrap items-end gap-3" onSubmit={event => postEntry(event, "expense")}>
-          <label>Fecha<Input name="date" type="date" max={asOf} defaultValue={asOf} required /></label>
+          <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
           <label>Concepto<Input name="description" maxLength={200} placeholder="Ej. Café camino al trabajo" required /></label>
           <Account name="debit" label="Categoría" options={expenseAccounts} />
           <Account name="credit" label="Pagado desde" options={["cash", "bank"]} />
@@ -240,17 +242,67 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
         <form className="grid gap-3 sm:grid-cols-3" onSubmit={event => {
           event.preventDefault();
           const fields = new FormData(event.currentTarget);
-          void savePlan({ ...plan, income: cents(fields.get("income")), grocery: cents(fields.get("grocery")), dining: cents(fields.get("dining")), reserve: cents(fields.get("reserve")), smallSpendLimit: cents(fields.get("smallSpendLimit")), payday1: Number(fields.get("payday1")), payday2: Number(fields.get("payday2")) });
+          void savePlan({ ...plan, frequency, weeklyPayday: Number(fields.get("weeklyPayday") ?? plan.weeklyPayday ?? 5), income: cents(fields.get("income")), grocery: cents(fields.get("grocery")), dining: cents(fields.get("dining")), reserve: cents(fields.get("reserve")), smallSpendLimit: cents(fields.get("smallSpendLimit")), payday1: Number(fields.get("payday1") ?? plan.payday1), payday2: Number(fields.get("payday2") ?? plan.payday2) });
         }}>
-          <Dollar name="income" label="Ingreso habitual por quincena" value={plan.income} />
+          <label>Frecuencia de cobro
+            <select value={frequency} onChange={event => setFrequency(event.target.value as Frequency)} className="block w-full rounded border bg-background p-2">
+              <option value="weekly">Semanal</option><option value="twice-monthly">Quincenal</option><option value="monthly">Mensual</option>
+            </select>
+          </label>
+          <Dollar name="income" label="Ingreso habitual por cobro" value={plan.income} />
           <Dollar name="grocery" label="Mercado mensual" value={plan.grocery} />
           <Dollar name="dining" label="Comidas fuera al mes" value={plan.dining} />
           <Dollar name="smallSpendLimit" label="Tope mensual de gastos hormiga" value={smallLimit} />
           <Dollar name="reserve" label="Reserva mínima" value={plan.reserve} />
-          <label>Día del primer cobro<Input name="payday1" type="number" min="1" max="30" defaultValue={plan.payday1} required /></label>
-          <label>Día del segundo cobro<Input name="payday2" type="number" min="2" max="31" defaultValue={plan.payday2} required /></label>
+          {frequency === "weekly" ? <label>Día de cobro
+            <select name="weeklyPayday" defaultValue={plan.weeklyPayday ?? 5} className="block w-full rounded border bg-background p-2">
+              {["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"].map((day, index) => <option key={day} value={index}>{day}</option>)}
+            </select>
+          </label> : <>
+            {frequency === "twice-monthly" && <label>Día del primer cobro<Input name="payday1" type="number" min="1" max="30" defaultValue={plan.payday1} required /></label>}
+            <label>{frequency === "monthly" ? "Día de cobro" : "Día del segundo cobro"}
+              <Input name="payday2" type="number" min={frequency === "monthly" ? 1 : 2} max="31" defaultValue={plan.payday2} required />
+            </label>
+          </>}
           <Button type="submit">Guardar presupuesto</Button>
         </form>
+        <h2 className="text-lg font-semibold">Ajustar el ingreso de un mes</h2>
+        <p className="text-sm text-muted-foreground">Distribuye el total entre las fechas de cobro programadas de ese mes.</p>
+        <form className="flex flex-wrap items-end gap-3" onSubmit={event => {
+          event.preventDefault();
+          const fields = new FormData(event.currentTarget);
+          const adjustment = { month: String(fields.get("month")), cents: cents(fields.get("amount")) };
+          const other = (plan.monthlyOverrides ?? []).filter(row => row.month !== adjustment.month);
+          void savePlan({ ...plan, monthlyOverrides: [...other, adjustment] });
+        }}>
+          <label>Mes<Input name="month" type="month" defaultValue={month} required /></label>
+          <Dollar name="amount" label="Ingreso total previsto del mes" />
+          <Button type="submit">Guardar ajuste mensual</Button>
+        </form>
+        <ul className="space-y-2">{(plan.monthlyOverrides ?? []).map(row =>
+          <li className="flex items-center justify-between gap-2 rounded border p-2" key={row.month}>
+            <span>{row.month} · {money(row.cents)}</span>
+            <Button variant="outline" type="button" onClick={() => void savePlan({ ...plan, monthlyOverrides: (plan.monthlyOverrides ?? []).filter(item => item.month !== row.month) })}>Restaurar habitual</Button>
+          </li>)}</ul>
+        <h2 className="text-lg font-semibold">Ajustar un cobro por fecha</h2>
+        <p className="text-sm text-muted-foreground">El importe de esa fecha tiene prioridad sobre el cálculo mensual. Puedes usar $0 para cancelar un cobro previsto.</p>
+        <form className="flex flex-wrap items-end gap-3" onSubmit={event => {
+          event.preventDefault();
+          const fields = new FormData(event.currentTarget);
+          const adjustment = { date: String(fields.get("date")), cents: cents(fields.get("amount")) };
+          const other = (plan.paydayOverrides ?? []).filter(row => row.date !== adjustment.date);
+          void savePlan({ ...plan, paydayOverrides: [...other, adjustment] });
+        }}>
+          <FinanceDate label="Fecha del cobro" />
+          <Dollar name="amount" label="Importe previsto ese día" />
+          <Button type="submit">Guardar fecha e importe</Button>
+        </form>
+        <ul className="space-y-2">{(plan.paydayOverrides ?? []).map(row =>
+          <li className="flex items-center justify-between gap-2 rounded border p-2" key={row.date}>
+            <span>{row.date} · {money(row.cents)}</span>
+            <Button variant="outline" type="button" onClick={() => void savePlan({ ...plan, paydayOverrides: (plan.paydayOverrides ?? []).filter(item => item !== row) })}>Quitar ajuste</Button>
+          </li>)}</ul>
+        {(plan.frequency ?? "twice-monthly") === "twice-monthly" && <>
         <h2 className="text-lg font-semibold">Ajustar un cobro quincenal previsto</h2>
         <form className="flex flex-wrap items-end gap-3" onSubmit={event => {
           event.preventDefault();
@@ -269,10 +321,11 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
             <span>{row.month} · Quincena {row.slot} · {money(row.cents)}</span>
             <Button variant="outline" type="button" onClick={() => void savePlan({ ...plan, incomeOverrides: (plan.incomeOverrides ?? []).filter(item => item !== row) })}>Restaurar habitual</Button>
           </li>)}</ul>
+        </>}
         <h2 className="text-lg font-semibold">Registrar ingreso recibido</h2>
-        <p className="text-sm text-muted-foreground">Si cobraste antes de la fecha prevista, pon esa quincena en $0 para que el flujo de caja cuente el dinero una sola vez.</p>
+        <p className="text-sm text-muted-foreground">Registra aquí el importe que llegó a tu cuenta. Ajusta el plan si ya recibiste un cobro que sigue previsto para una fecha futura.</p>
         <form className="flex flex-wrap items-end gap-3" onSubmit={event => postEntry(event, "income")}>
-          <label>Fecha<Input name="date" type="date" max={asOf} defaultValue={asOf} required /></label>
+          <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
           <label>Concepto<Input name="description" maxLength={200} required /></label>
           <Account name="debit" label="Recibido en" options={["cash", "bank"]} />
           <Dollar name="amount" label="Importe recibido" min={0.01} />
@@ -285,7 +338,7 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
           void savePlan({ ...plan, obligations: [...plan.obligations, { name: String(fields.get("name")), date: String(fields.get("date")), cents: cents(fields.get("amount")), kind: fields.get("kind") === "income" ? "income" : "payment", monthly: fields.has("monthly") }] });
         }}>
           <label>Concepto<Input name="name" maxLength={200} required /></label>
-          <label>Vencimiento<Input name="date" type="date" required /></label>
+          <FinanceDate label="Vencimiento" />
           <Dollar name="amount" label="Importe" min={0.01} />
           <label>Tipo <select name="kind" className="block rounded border bg-background p-2"><option value="payment">Pago</option><option value="income">Cobro</option></select></label>
           <label className="flex gap-2"><input type="checkbox" name="monthly" /> Repetir cada mes</label>
@@ -300,7 +353,7 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
       {tab === "Libro diario" && <>
         <p>Registra saldos iniciales y movimientos en USD. Para corregir un asiento, registra su reversión con las cuentas invertidas.</p>
         <form className="flex flex-wrap items-end gap-3" onSubmit={event => postEntry(event)}>
-          <label>Fecha<Input name="date" type="date" max={asOf} defaultValue={asOf} required /></label>
+          <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
           <label>Descripción<Input name="description" maxLength={200} required /></label>
           <Account name="debit" label="Debe" />
           <Account name="credit" label="Haber" />
@@ -310,7 +363,7 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
         {workspace === "company" && <form className="space-y-3 rounded border p-4" onSubmit={postOwnerPayment}>
           <h2 className="font-semibold">Registrar un pago de Syncro a mi cuenta personal</h2>
           <div className="flex flex-wrap items-end gap-3">
-            <label>Fecha<Input name="date" type="date" max={asOf} defaultValue={asOf} required /></label>
+            <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
             <label>Descripción<Input name="description" maxLength={200} required /></label>
             <label>Contrapartida<select name="classification" required defaultValue="" className="block rounded border bg-background p-2">
               <option value="" disabled>Seleccionar</option><option value="expense">Remuneración</option><option value="equity">Retiro de patrimonio</option>
@@ -335,7 +388,7 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
           void savePlan({ ...plan, debts: [...plan.debts, { name: String(fields.get("name")), date: String(fields.get("date")), balance: cents(fields.get("balance")), minimum: cents(fields.get("minimum")), apr: cents(fields.get("apr")) }] });
         }}>
           <label>Acreedor<Input name="name" maxLength={200} required /></label>
-          <label>Próximo vencimiento<Input name="date" type="date" min={asOf} required /></label>
+          <FinanceDate label="Próximo vencimiento" min={asOf} />
           <Dollar name="balance" label="Saldo pendiente" min={0.01} />
           <Dollar name="minimum" label="Cuota mensual" min={0.01} />
           <label>Tasa anual (%)<Input name="apr" type="number" min="0" max="1000" step="0.01" required /></label>
