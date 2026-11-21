@@ -1,3 +1,4 @@
+import { CentralFinanceController } from './central-finance.controller';
 import { Module } from '@nestjs/common';
 import { SyncroAdminService } from './syncro-admin.service';
 import { SyncroAdminController } from './syncro-admin.controller';
@@ -6,7 +7,7 @@ import { BusinessModulesModule } from '../business-modules/business-modules.modu
 
 @Module({
   imports: [PrismaModule, BusinessModulesModule],
-  controllers: [SyncroAdminController],
+  controllers: [SyncroAdminController, CentralFinanceController],
   providers: [SyncroAdminService],
   exports: [SyncroAdminService],
 })

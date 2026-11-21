@@ -240,6 +240,7 @@ const data = {
         { title: "Notificaciones", url: "/dashboard/syncro/notificaciones" },
         { title: "Feedback de IA", url: "/dashboard/syncro/feedback" },
         { title: "Suscripciones", url: "/dashboard/syncro/subscriptions" },
+        { title: "Finanzas", url: "/dashboard/syncro/finanzas" },
         { title: "Publicidad Syncro Credit", url: "/dashboard/syncro/publicidad" },
         { title: "Préstamos P2P", url: "/dashboard/syncro/prestamos" },
         { title: "Métricas globales", url: "/dashboard/syncro/stats" },

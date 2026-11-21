@@ -1,0 +1,2 @@
+ALTER TABLE "CentralFinanceEntry"
+  ADD COLUMN IF NOT EXISTS "smallSpend" BOOLEAN NOT NULL DEFAULT false;

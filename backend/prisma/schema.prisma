@@ -2503,3 +2503,24 @@ model CreditUser {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @default(now()) @updatedAt
 }
+
+model CentralFinanceEntry {
+  scope       String
+  id          String
+  date        String
+  description String
+  debit       String
+  credit      String
+  cents       Int
+  actorId     String
+  smallSpend  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@id([scope, id])
+  @@index([scope, date])
+}
+
+model CentralFinancePlan {
+  scope   String @id
+  data    Json
+}
