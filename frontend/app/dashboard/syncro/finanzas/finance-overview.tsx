@@ -98,7 +98,7 @@ export function CashForecast({ weeks }: { weeks: { date: string; balance: number
       </ResponsiveContainer>
     </div>
     <details className="rounded-lg border p-3">
-      <summary className="cursor-pointer text-sm font-medium">Ver los 13 saldos semanales</summary>
+      <summary className="cursor-pointer text-sm font-medium">Ver los {weeks.length} saldos semanales</summary>
       <ul className="mt-3 grid gap-2 sm:grid-cols-3">{weeks.map(week => <li key={week.date}>{readableDate(week.date)} · {money(week.balance)}</li>)}</ul>
     </details>
   </>;

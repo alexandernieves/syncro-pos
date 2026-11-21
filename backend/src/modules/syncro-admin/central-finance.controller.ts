@@ -1,15 +1,42 @@
-import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Header, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { BcvService } from '../settings/bcv.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 
 const accounts = ['cash', 'bank', 'receivable', 'payable', 'debt', 'equity', 'income', 'food', 'dining', 'housing', 'transport', 'health', 'interest', 'expense', 'subscriptions', 'shopping', 'leisure'];
 const expenseAccounts = accounts.slice(accounts.indexOf('food'));
+const wallets = ['cash', 'bank', 'binance'];
+accounts.push('binance');
+
+function currency(value: unknown) {
+  if (typeof value !== 'string' || !/^(?:[A-Z]{3}|USDT)$/.test(value)) {
+    throw new BadRequestException('Moneda inválida');
+  }
+  return value;
+}
+
+function exchangeRate(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0.00000001 || value > 1_000_000_000) {
+    throw new BadRequestException('Ingresa una tasa válida en unidades de moneda por USD');
+  }
+  return new Prisma.Decimal(value).toDecimalPlaces(8);
+}
 
 function amount(value: unknown, min = 0) {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > 2_000_000_000) {
     throw new BadRequestException('Importe inválido en centavos');
   }
   return value;
+}
+
+function monetary(value: any, fallback: unknown, min = 0) {
+  if (value == null) return { cents: amount(fallback, min), original: null };
+  const code = currency(value.currency);
+  const nativeCents = amount(value.nativeCents, min);
+  const rate = exchangeRate(code === 'USD' ? 1 : value.rate);
+  const cents = amount(new Prisma.Decimal(nativeCents).div(rate).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP).toNumber(), min);
+  return { cents, original: { currency: code, nativeCents, rate: rate.toNumber() } };
 }
 
 function date(value: unknown) {
@@ -33,7 +60,24 @@ function label(value: unknown) {
 @Controller('syncro-admin/finance')
 @UseGuards(JwtAuthGuard)
 export class CentralFinanceController {
-  constructor(private readonly prisma: PrismaService) {}
+  private quotes?: { expires: number; data: Promise<unknown> };
+
+  constructor(private readonly prisma: PrismaService, private readonly bcv: BcvService) {}
+
+  @Get('rates')
+  async rates(@Req() req: any) {
+    this.scope(req, 'personal');
+    if (!this.quotes || this.quotes.expires < Date.now()) {
+      const data = Promise.all([this.bcv.fetchBcv().catch(() => null), this.bcv.fetchTrm().catch(() => null)])
+        .then(([bcv, trm]) => ({
+          VES: bcv?.rateUsd ? { rate: bcv.rateUsd, source: 'BCV', date: bcv.updateDate } : null,
+          EUR: bcv?.rateUsd && bcv.rateEur ? { rate: bcv.rateUsd / bcv.rateEur, source: 'BCV', date: bcv.updateDate } : null,
+          COP: trm ? { ...trm, source: 'TRM' } : null,
+        }));
+      this.quotes = { expires: Date.now() + 5 * 60_000, data };
+    }
+    return this.quotes.data;
+  }
 
   private scope(req: any, workspace: string) {
     const user = req.user;
@@ -45,10 +89,11 @@ export class CentralFinanceController {
   }
 
   @Get(':workspace')
+  @Header('Cache-Control', 'private, no-store')
   async read(@Req() req: any, @Param('workspace') workspace: string) {
     const scope = this.scope(req, workspace);
     const [entries, plan] = await this.prisma.$transaction([
-      this.prisma.centralFinanceEntry.findMany({ where: { scope }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }], select: { id: true, date: true, description: true, debit: true, credit: true, cents: true, smallSpend: true } }),
+      this.prisma.centralFinanceEntry.findMany({ where: { scope }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }], select: { id: true, date: true, description: true, debit: true, credit: true, cents: true, smallSpend: true, currency: true, nativeCents: true, rate: true, toCurrency: true, toCents: true } }),
       this.prisma.centralFinancePlan.findUnique({ where: { scope } }),
     ]);
     return { entries, plan: plan?.data ?? null };
@@ -58,20 +103,40 @@ export class CentralFinanceController {
   async post(@Req() req: any, @Param('workspace') workspace: string, @Body() body: any) {
     const scope = this.scope(req, workspace);
     const { id, debit, credit } = body ?? {};
-    if (typeof id !== 'string' || !/^[a-f0-9-]{36}$/i.test(id) || debit === credit || !accounts.includes(debit) || !accounts.includes(credit)) {
+    const originalCurrency = currency(body?.currency ?? 'USD');
+    const toCurrency = body?.toCurrency == null ? null : currency(body.toCurrency);
+    if (typeof id !== 'string' || !/^[a-f0-9-]{36}$/i.test(id) ||
+        !accounts.includes(debit) || !accounts.includes(credit) ||
+        (debit === credit && (!toCurrency || toCurrency === originalCurrency)) ||
+        (toCurrency && (!wallets.includes(debit) || !wallets.includes(credit)))) {
       throw new BadRequestException('Identificador o cuentas inválidas');
     }
     const smallSpend = body.smallSpend === true;
-    if (smallSpend && (!expenseAccounts.includes(debit) || !['cash', 'bank'].includes(credit))) {
+    if (smallSpend && (!expenseAccounts.includes(debit) || !wallets.includes(credit))) {
       throw new BadRequestException('Marca como gasto hormiga un egreso de caja o banco');
     }
-    const entry = { scope, id, debit, credit, smallSpend, date: date(body.date), description: label(body.description), cents: amount(body.cents, 1), actorId: req.user.id };
+    if (body.nativeCents == null && (originalCurrency !== 'USD' || toCurrency)) {
+      throw new BadRequestException('Falta el importe original');
+    }
+    const { cents, original } = monetary(body.nativeCents == null ? null : body, body.cents, 1);
+    const nativeCents = original?.nativeCents ?? null;
+    const rate = original ? new Prisma.Decimal(original.rate) : null;
+    const toCents = toCurrency ? amount(body.toCents, 1) : null;
+    if (toCurrency === originalCurrency && toCents !== nativeCents) {
+      throw new BadRequestException('Registra cualquier comisión como un gasto separado');
+    }
+    const entry = {
+      scope, id, debit, credit, smallSpend, currency: originalCurrency, nativeCents, rate, toCurrency, toCents,
+      date: date(body.date), description: label(body.description), cents, actorId: req.user.id,
+    };
     const saved = await this.prisma.centralFinanceEntry.upsert({
       where: { scope_id: { scope, id } },
       create: entry,
       update: {},
     });
-    if (saved.debit !== debit || saved.credit !== credit || saved.date !== entry.date || saved.description !== entry.description || saved.cents !== entry.cents || saved.smallSpend !== smallSpend) {
+    if (saved.debit !== debit || saved.credit !== credit || saved.date !== entry.date || saved.description !== entry.description || saved.cents !== entry.cents || saved.smallSpend !== smallSpend ||
+        saved.currency !== originalCurrency || saved.nativeCents !== nativeCents || saved.toCurrency !== toCurrency ||
+        saved.toCents !== toCents || String(saved.rate) !== String(rate)) {
       throw new ConflictException('El identificador ya corresponde a otro asiento');
     }
     return { id: saved.id };
@@ -83,10 +148,15 @@ export class CentralFinanceController {
     const personal = this.scope(req, 'personal');
     const { id, account, classification } = body ?? {};
     if (typeof id !== 'string' || !/^[a-f0-9-]{36}$/i.test(id) ||
-        !['cash', 'bank'].includes(account) || !['expense', 'equity'].includes(classification)) {
+        !wallets.includes(account) || !['expense', 'equity'].includes(classification)) {
       throw new BadRequestException('Cuenta o clasificación inválida');
     }
-    const shared = { id, date: date(body.date), description: label(body.description), cents: amount(body.cents, 1), actorId: req.user.id };
+    const { cents, original } = monetary(body.nativeCents == null ? null : body, body.cents, 1);
+    const shared = {
+      id, date: date(body.date), description: label(body.description), cents, actorId: req.user.id,
+      currency: original?.currency ?? 'USD', nativeCents: original?.nativeCents ?? null,
+      rate: original ? new Prisma.Decimal(original.rate) : null,
+    };
     await this.prisma.$transaction(async tx => {
       const entries = [
         { ...shared, scope: company, debit: classification, credit: account },
@@ -99,7 +169,8 @@ export class CentralFinanceController {
           update: {},
         });
         if (saved.actorId !== shared.actorId || saved.debit !== entry.debit || saved.credit !== entry.credit ||
-            saved.date !== shared.date || saved.description !== shared.description || saved.cents !== shared.cents) {
+            saved.date !== shared.date || saved.description !== shared.description || saved.cents !== shared.cents ||
+            saved.currency !== shared.currency || saved.nativeCents !== shared.nativeCents || String(saved.rate) !== String(shared.rate)) {
           throw new ConflictException('El identificador ya corresponde a otro asiento');
         }
       }
@@ -141,9 +212,11 @@ export class CentralFinanceController {
     if (new Set(paydayIncome.map(row => row.date)).size !== paydayIncome.length) {
       throw new BadRequestException('Hay ajustes duplicados para una fecha');
     }
+    const income = monetary(body.incomeOriginal, body.income);
     const data = {
       frequency,
       weeklyPayday,
+      horizonWeeks: amount(body.horizonWeeks ?? 13, 1),
       monthlyOverrides: monthlyIncome,
       paydayOverrides: paydayIncome,
       incomeOverrides,
@@ -151,22 +224,24 @@ export class CentralFinanceController {
       debts: body.debts.map((row: any) => {
         const apr = amount(row?.apr);
         if (apr > 100_000) throw new BadRequestException('Tasa anual fuera de rango');
-        return { name: label(row.name), balance: amount(row.balance, 1), minimum: amount(row.minimum, 1), apr, date: date(row.date) };
+        const balance = monetary(row.balanceOriginal, row.balance, 1);
+        const minimum = monetary(row.minimumOriginal, row.minimum, 1);
+        return { name: label(row.name), balance: balance.cents, minimum: minimum.cents, balanceOriginal: balance.original, minimumOriginal: minimum.original, apr, date: date(row.date) };
       }),
-      income: amount(body.income),
+      income: income.cents,
+      incomeOriginal: income.original,
       grocery: amount(body.grocery),
       dining: amount(body.dining),
       reserve: amount(body.reserve),
       payday1: amount(body.payday1, 1),
       payday2: amount(body.payday2, 1),
-      obligations: body.obligations.map((row: any) => ({
-        name: label(row?.name),
-        date: date(row.date),
-        cents: amount(row.cents, 1),
-        kind: row.kind === 'income' ? 'income' : 'payment',
-        monthly: row.monthly === true,
-      })),
+      obligations: body.obligations.map((row: any) => {
+        const value = monetary(row?.original, row?.cents, 1);
+        return { name: label(row?.name), date: date(row.date), cents: value.cents, original: value.original,
+          kind: row.kind === 'income' ? 'income' : 'payment', monthly: row.monthly === true };
+      }),
     };
+    if (data.horizonWeeks > 52) throw new BadRequestException('El horizonte máximo es de 52 semanas');
     if (data.payday1 > 31 || data.payday2 > 31 || (frequency === 'twice-monthly' && data.payday1 >= data.payday2)) throw new BadRequestException('Días de cobro inválidos');
     await this.prisma.centralFinancePlan.upsert({ where: { scope }, create: { scope, data }, update: { data } });
     return data;

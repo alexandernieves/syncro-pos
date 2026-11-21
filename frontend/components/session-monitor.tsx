@@ -21,7 +21,7 @@ export function SessionMonitor({ timeoutMinutes = 30 }: SessionMonitorProps) {
     })
     try { sessionStorage.setItem("syncro_suspended_message", "Tu sesión se cerró por inactividad. Vuelve a iniciar sesión.") } catch { /* ignore */ }
     // Everything of the account goes, and the app reloads so nothing stays in memory
-    await signOutAndReload("/login")
+    await signOutAndReload(window.location.pathname.startsWith("/finanzas") ? "/finanzas/" : "/login")
   }, [])
 
   // Another tab signed in as someone else (or signed out): this tab must not keep showing the
@@ -43,7 +43,8 @@ export function SessionMonitor({ timeoutMinutes = 30 }: SessionMonitorProps) {
     }
     
     // Solo si hay un token (usuario logueado)
-    const token = localStorage.getItem("token")
+    const token = window.location.pathname.startsWith("/finanzas") && window.matchMedia("(display-mode: standalone)").matches
+      ? sessionStorage.getItem("token") : localStorage.getItem("token")
     if (token) {
       // Si hay una grabación de lección en curso, postergamos el cierre de sesión
       const isRecording = localStorage.getItem("syncro_recording_active") === "true"
@@ -64,7 +65,8 @@ export function SessionMonitor({ timeoutMinutes = 30 }: SessionMonitorProps) {
     // Eventos que reinician el contador de inactividad, incluyendo evento custom de actividad
     const events = ["mousedown", "mousemove", "keydown", "scroll", "touchstart", "syncro_session_activity"]
     
-    const token = localStorage.getItem("token")
+    const token = window.location.pathname.startsWith("/finanzas") && window.matchMedia("(display-mode: standalone)").matches
+      ? sessionStorage.getItem("token") : localStorage.getItem("token")
     if (token) {
       resetTimer()
       

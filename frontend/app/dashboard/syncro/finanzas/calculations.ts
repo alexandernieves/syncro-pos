@@ -1,9 +1,10 @@
-export type Debt = { name: string; balance: number; minimum: number; apr: number; date: string };
-export type Obligation = { name: string; date: string; cents: number; kind: "income" | "payment"; monthly: boolean };
+export type OriginalMoney = { currency: string; nativeCents: number; rate: number };
+export type Debt = { balanceOriginal?: OriginalMoney | null; minimumOriginal?: OriginalMoney | null; name: string; balance: number; minimum: number; apr: number; date: string };
+export type Obligation = { original?: OriginalMoney | null; name: string; date: string; cents: number; kind: "income" | "payment"; monthly: boolean };
 export type IncomeOverride = { month: string; slot: 1 | 2; cents: number };
 export type Frequency = "weekly" | "twice-monthly" | "monthly";
-export type Plan = { paydayOverrides?: { date: string; cents: number }[]; frequency?: Frequency; weeklyPayday?: number; monthlyOverrides?: { month: string; cents: number }[]; smallSpendLimit?: number; incomeOverrides?: IncomeOverride[]; income: number; payday1: number; payday2: number; grocery: number; dining: number; reserve: number; obligations: Obligation[]; debts: Debt[] };
-export type Entry = { id: string; date: string; description: string; debit: string; credit: string; cents: number; smallSpend?: boolean };
+export type Plan = { incomeOriginal?: OriginalMoney | null; horizonWeeks?: number; paydayOverrides?: { date: string; cents: number }[]; frequency?: Frequency; weeklyPayday?: number; monthlyOverrides?: { month: string; cents: number }[]; smallSpendLimit?: number; incomeOverrides?: IncomeOverride[]; income: number; payday1: number; payday2: number; grocery: number; dining: number; reserve: number; obligations: Obligation[]; debts: Debt[] };
+export type Entry = { id: string; date: string; description: string; debit: string; credit: string; cents: number; smallSpend?: boolean; currency?: string; nativeCents?: number | null; rate?: string | null; toCurrency?: string | null; toCents?: number | null };
 
 export function monthDate(month: string, day: number) {
   const [year, index] = month.split("-").map(Number);
@@ -46,13 +47,13 @@ export function obligationOccursOn(row: Obligation, date: string) {
     (row.monthly && row.date < date && monthDate(date.slice(0, 7), Number(row.date.slice(8))) === date);
 }
 
-export function projection(plan: Plan, from: string, balance: number, foodRemaining: number, stress: boolean) {
+export function projection(plan: Plan, from: string, balance: number, foodRemaining: number, stress: boolean, horizon = plan.horizonWeeks ?? 13) {
   const incomeByMonth = new Map<string, ReturnType<typeof scheduledIncome>>();
   let lowest = balance;
   let shortfall: { date: string; cents: number } | undefined;
   const weeks = [];
   const debts = plan.debts.map(debt => ({ ...debt }));
-  for (let offset = 0; offset < 91; offset++) {
+  for (let offset = 0; offset < horizon * 7; offset++) {
     const date = shiftDay(from, offset);
     const month = date.slice(0, 7);
     if (!incomeByMonth.has(month)) incomeByMonth.set(month, scheduledIncome(plan, month));
@@ -112,4 +113,22 @@ export function simulateDebts(input: Debt[], extra: number) {
     }
   }
   return null;
+}
+
+export const walletAccounts = ["bank", "cash", "binance"];
+
+export function walletBalances(entries: Entry[], asOf: string) {
+  const balances = new Map<string, { account: string; currency: string; cents: number }>();
+  function add(account: string, currency: string, cents: number) {
+    if (!walletAccounts.includes(account)) return;
+    const key = account + ":" + currency;
+    balances.set(key, { account, currency, cents: (balances.get(key)?.cents ?? 0) + cents });
+  }
+  for (const entry of entries) {
+    if (entry.date > asOf) continue;
+    const source = entry.currency ?? "USD";
+    add(entry.credit, source, -(entry.nativeCents ?? entry.cents));
+    add(entry.debit, entry.toCurrency ?? source, entry.toCents ?? entry.nativeCents ?? entry.cents);
+  }
+  return [...balances.values()].filter(row => row.cents !== 0);
 }

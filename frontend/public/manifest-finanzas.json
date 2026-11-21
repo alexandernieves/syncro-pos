@@ -1,0 +1,15 @@
+{
+  "id": "/finanzas/",
+  "name": "Syncro Finanzas",
+  "short_name": "Finanzas",
+  "description": "Registra ingresos, gastos, saldos y transferencias.",
+  "start_url": "/finanzas/",
+  "scope": "/finanzas/",
+  "display": "standalone",
+  "background_color": "#f6f3ee",
+  "theme_color": "#F26B3A",
+  "icons": [
+    { "src": "/finance-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/syncro.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

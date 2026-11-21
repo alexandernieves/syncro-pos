@@ -2514,6 +2514,11 @@ model CentralFinanceEntry {
   cents       Int
   actorId     String
   smallSpend  Boolean  @default(false)
+  currency    String   @default("USD")
+  nativeCents Int?
+  rate        Decimal? @db.Decimal(20, 8)
+  toCurrency  String?
+  toCents     Int?
   createdAt   DateTime @default(now())
 
   @@id([scope, id])
