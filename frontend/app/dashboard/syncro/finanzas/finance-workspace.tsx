@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { ArrowDownLeft, ArrowUpRight, ChevronDown, Wallet } from "lucide-react";
 import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
 import { financeUrl, type FinanceSection } from "@/lib/central-finance-navigation";
 import { adminApi, usd } from "@/lib/syncro-admin";
@@ -50,6 +51,7 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
   const [entryIds, setEntryIds] = useState<Record<string, string>>({});
   const [stress, setStress] = useState(false);
   const [statementBalance, setStatementBalance] = useState("");
+  const [quickAction, setQuickAction] = useState<"opening" | "income" | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -96,9 +98,9 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
     const entry = {
       id,
       date: String(fields.get("date")),
-      description: String(fields.get("description")),
+      description: kind === "opening" ? "Saldo inicial" : String(fields.get("description")),
       debit: String(fields.get("debit")),
-      credit: kind === "income" ? "income" : String(fields.get("credit")),
+      credit: kind === "income" ? "income" : kind === "opening" ? "equity" : String(fields.get("credit")),
       cents: cents(fields.get("amount")),
       smallSpend: fields.has("smallSpend"),
     };
@@ -108,7 +110,8 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
       setEntries(data.entries);
       setEntryIds(ids => ({ ...ids, [kind]: "" }));
       form.reset();
-    }, "Asiento registrado");
+      if (kind === quickAction) setQuickAction(null);
+    }, kind === "opening" ? "Saldo inicial registrado" : kind === "income" ? "Ingreso registrado" : kind === "expense" ? "Gasto registrado" : "Asiento registrado");
   }
 
   function postOwnerPayment(event: FormEvent<HTMLFormElement>) {
@@ -161,31 +164,64 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
   const baseline = simulateDebts(plan.debts, 0);
   const extra = stress ? forecast.extra : Math.min(forecast.extra, projection(plan, asOf, available, grocery + dining, true).extra);
   const accelerated = simulateDebts(plan.debts, extra);
+  const personal = workspace === "personal";
+  const hasCashActivity = entries.some(entry => entry.date <= asOf &&
+    [entry.debit, entry.credit].some(account => account === "cash" || account === "bank"));
+  const budgetUrl = financeUrl(personal ? "presupuesto-personal" : "presupuesto-empresa");
+
+  const quickForm = quickAction && <form key={quickAction} className="mt-5 flex flex-wrap items-end gap-3 border-t pt-4" onSubmit={event => postEntry(event, quickAction)}>
+    <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
+    {quickAction === "income" && <label>Concepto<Input name="description" placeholder="Ej. Sueldo" maxLength={200} required /></label>}
+    <Account name="debit" label="Dónde está el dinero" options={["bank", "cash"]} />
+    <Dollar name="amount" label={quickAction === "opening" ? "Saldo actual" : "Importe recibido"} min={0.01} />
+    <Button type="submit">Guardar {quickAction === "opening" ? "saldo" : "ingreso"}</Button>
+  </form>;
 
   return <div className="space-y-5">
     {error && <p role="alert" className="text-destructive">{error}</p>}
     {success && <p role="status">{success}</p>}
     <fieldset disabled={busy} className="min-w-0 space-y-4">
       {tab === "Resumen" && <>
-        {!hasPlan && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 p-4">
-          <p>Configura tus fechas de cobro e importes para verlos en la proyección.</p>
-          <Button asChild variant="outline">
-            <Link href={financeUrl(workspace === "personal" ? "presupuesto-personal" : "presupuesto-empresa")}>Configurar presupuesto</Link>
-          </Button>
+        {personal && <section className="rounded-2xl border bg-card p-5 sm:p-6">
+          <h2 className="text-xl font-semibold">{hasCashActivity ? "¿Qué quieres registrar?" : "Empieza por tu saldo de hoy"}</h2>
+          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+            {hasCashActivity
+              ? "Anota lo que entra y sale para tener tu saldo al día."
+              : "Anota el dinero que ya tienes en el banco o en efectivo. Luego registra cada cobro y cada gasto a medida que ocurran."}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {!hasCashActivity && <Button type="button" aria-expanded={quickAction === "opening"} onClick={() => setQuickAction(quickAction === "opening" ? null : "opening")}><Wallet /> Anotar saldo inicial</Button>}
+            <Button type="button" variant={hasCashActivity ? "default" : "outline"} aria-expanded={quickAction === "income"} onClick={() => setQuickAction(quickAction === "income" ? null : "income")}><ArrowDownLeft /> Registrar ingreso</Button>
+            <Button asChild variant="outline"><Link href={financeUrl("gastos-personales")}><ArrowUpRight /> Registrar gasto</Link></Button>
+          </div>
+          {quickForm}
+          {quickAction === "opening" && <p className="mt-2 text-sm text-muted-foreground">Incluye en el saldo el dinero que ya está en esa cuenta. Registra por separado los cobros que recibas después.</p>}
+        </section>}
+        {!hasPlan && (hasCashActivity || !personal) && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+          <div><h2 className="font-semibold">Organiza tus próximos cobros</h2><p className="text-sm text-muted-foreground">Configura cuándo cobras y cuánto quieres apartar para comida.</p></div>
+          <Button asChild variant="outline"><Link href={budgetUrl}>Configurar presupuesto</Link></Button>
         </div>}
         <div className="grid gap-3 sm:grid-cols-3">
-          {[["Caja y banco registrados", available], ["Mercado disponible este mes", grocery], ["Comidas fuera disponibles este mes", dining]].map(([label, value]) =>
+          {[["Saldo de hoy", available], ["Ingresos del mes", income], ["Gastos del mes", monthlyExpenses]].map(([label, value]) =>
             <div className="rounded-lg border p-4" key={label}><p>{label}</p><p className="text-2xl font-semibold">{money(Number(value))}</p></div>)}
         </div>
-        <FinanceOverview plan={plan} entries={entries} today={asOf} expenseAccounts={expenseAccounts} />
-        <p>Capacidad estimada para abono inmediato <strong>{money(extra)}</strong></p>
-        <h2 className="text-lg font-semibold">Flujo de caja de 13 semanas</h2>
-        <p className="text-sm text-muted-foreground">Parte de los movimientos registrados hasta hoy. Confirma que los compromisos de hoy siguen pendientes. Los cobros de hoy cuentan al registrar el ingreso.</p>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={stress} onChange={e => setStress(e.target.checked)} /> Escenario con cobros 10 % menores</label>
-        <p>{forecast.shortfall ? `Primer faltante frente a la reserva: ${forecast.shortfall.date} · ${money(forecast.shortfall.cents)}` : "La proyección cubre la reserva configurada."}</p>
-        <CashForecast weeks={forecast.weeks} />
+        {personal && (plan.grocery > 0 || plan.dining > 0) && <div className="flex flex-wrap justify-between gap-2 rounded-lg border p-4">
+          <div><p className="text-sm text-muted-foreground">Disponible para comida este mes</p>
+            <p>Mercado <strong>{money(grocery)}</strong> · Comidas fuera <strong>{money(dining)}</strong></p></div>
+          <Button asChild variant="ghost"><Link href={budgetUrl}>Ver presupuesto</Link></Button>
+        </div>}
+        <FinanceDetails title="Calendario e historial por período">
+          <FinanceOverview plan={plan} entries={entries} today={asOf} expenseAccounts={expenseAccounts} />
+        </FinanceDetails>
+        <FinanceDetails title="Proyección de las próximas 13 semanas">
+          {plan.debts.length > 0 && <p>Capacidad estimada para abono inmediato <strong>{money(extra)}</strong></p>}
+          <p className="text-sm text-muted-foreground">Parte de los movimientos registrados hasta hoy. Confirma que los compromisos de hoy siguen pendientes. Los cobros de hoy cuentan al registrar el ingreso.</p>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={stress} onChange={e => setStress(e.target.checked)} /> Escenario con cobros 10 % menores</label>
+          <p>{forecast.shortfall ? `Primer faltante frente a la reserva: ${forecast.shortfall.date} · ${money(forecast.shortfall.cents)}` : "La proyección cubre la reserva configurada."}</p>
+          <CashForecast weeks={forecast.weeks} />
+        </FinanceDetails>
       </>}
-      {(tab === "Estados financieros" || (tab === "Resumen" && workspace === "personal")) && <>
+      {tab === "Estados financieros" && <>
         <h2 className="text-lg font-semibold">Resumen contable</h2>
         <dl className="grid gap-2 sm:grid-cols-3">
           {[
@@ -195,18 +231,16 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
           ].map(([label, value]) => <div className="rounded border p-3" key={label}><dt>{label}</dt><dd>{money(Number(value))}</dd></div>)}
         </dl>
       </>}
-      {tab === "Resumen" && <>
-        <h2 className="text-lg font-semibold">Comparar saldo bancario</h2>
+      {tab === "Resumen" && !personal && <FinanceDetails title="Comparar saldo bancario">
         <label className="block max-w-xs">Saldo del extracto al día de hoy (USD)
           <Input type="number" step="0.01" value={statementBalance} onChange={event => setStatementBalance(event.target.value)} />
         </label>
         {statementBalance !== "" && <p>Diferencia entre extracto y libro: {money(cents(statementBalance) - (totals.bank ?? 0))}</p>}
-      </>}
-      {(tab === "Estados financieros" || tab === "Libro diario" || (tab === "Resumen" && workspace === "personal")) && <>
-        <h2 className="text-lg font-semibold">Saldos contables</h2>
+      </FinanceDetails>}
+      {(tab === "Estados financieros" || tab === "Libro diario") && <FinanceDetails title="Saldos por cuenta">
         <dl className="grid gap-2 sm:grid-cols-2">{Object.entries(names).map(([key, label]) =>
           <div className="flex justify-between gap-3 rounded border p-2" key={key}><dt>{label}</dt><dd>{money((totals[key] ?? 0) * (["payable", "debt", "equity", "income"].includes(key) ? -1 : 1))}</dd></div>)}</dl>
-      </>}
+      </FinanceDetails>}
       {tab === "Gastos" && <>
         <h2 className="text-lg font-semibold">Registrar gasto</h2>
         <form className="flex flex-wrap items-end gap-3" onSubmit={event => postEntry(event, "expense")}>
@@ -239,6 +273,8 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
           </li>)}</ul>
       </>}
       {tab === "Presupuesto" && <>
+        <section className="space-y-4 rounded-xl border bg-card p-5">
+        <div><h2 className="text-lg font-semibold">Tu plan habitual</h2><p className="text-sm text-muted-foreground">Elige cuándo cobras y cuánto quieres apartar cada mes.</p></div>
         <form className="grid gap-3 sm:grid-cols-3" onSubmit={event => {
           event.preventDefault();
           const fields = new FormData(event.currentTarget);
@@ -266,7 +302,9 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
           </>}
           <Button type="submit">Guardar presupuesto</Button>
         </form>
-        <h2 className="text-lg font-semibold">Ajustar el ingreso de un mes</h2>
+        </section>
+        <FinanceDetails title="Cambiar un cobro o un mes">
+        <h2 className="font-semibold">Ajustar el ingreso de un mes</h2>
         <p className="text-sm text-muted-foreground">Distribuye el total entre las fechas de cobro programadas de ese mes.</p>
         <form className="flex flex-wrap items-end gap-3" onSubmit={event => {
           event.preventDefault();
@@ -322,7 +360,8 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
             <Button variant="outline" type="button" onClick={() => void savePlan({ ...plan, incomeOverrides: (plan.incomeOverrides ?? []).filter(item => item !== row) })}>Restaurar habitual</Button>
           </li>)}</ul>
         </>}
-        <h2 className="text-lg font-semibold">Registrar ingreso recibido</h2>
+        </FinanceDetails>
+        <FinanceDetails title="Registrar un ingreso recibido">
         <p className="text-sm text-muted-foreground">Registra aquí el importe que llegó a tu cuenta. Ajusta el plan si ya recibiste un cobro que sigue previsto para una fecha futura.</p>
         <form className="flex flex-wrap items-end gap-3" onSubmit={event => postEntry(event, "income")}>
           <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
@@ -331,7 +370,8 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
           <Dollar name="amount" label="Importe recibido" min={0.01} />
           <Button type="submit">Registrar ingreso</Button>
         </form>
-        <h2 className="text-lg font-semibold">Cobros y pagos previstos</h2>
+        </FinanceDetails>
+        <FinanceDetails title="Programar cobros y pagos">
         <form className="flex flex-wrap items-end gap-3" onSubmit={event => {
           event.preventDefault();
           const fields = new FormData(event.currentTarget);
@@ -349,9 +389,16 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
             <span>{row.name} · {row.date} · {row.kind === "payment" ? "Pago" : "Cobro"} {money(row.cents)} {row.monthly && "· Mensual"}</span>
             <Button variant="outline" type="button" onClick={() => void savePlan({ ...plan, obligations: plan.obligations.filter((_, i) => i !== index) })}>Quitar</Button>
           </li>)}</ul>
+        </FinanceDetails>
       </>}
       {tab === "Libro diario" && <>
-        <p>Registra saldos iniciales y movimientos en USD. Para corregir un asiento, registra su reversión con las cuentas invertidas.</p>
+        {personal && <FinanceDetails title="Anotar el saldo inicial de otra cuenta">
+          <p className="text-sm text-muted-foreground">Úsalo cuando comiences a llevar una cuenta de banco o efectivo.</p>
+          <Button type="button" variant="outline" aria-expanded={quickAction === "opening"} onClick={() => setQuickAction(quickAction === "opening" ? null : "opening")}>Anotar saldo inicial</Button>
+          {quickForm}
+        </FinanceDetails>}
+        <FinanceDetails title="Registrar asiento manual">
+        <p className="text-sm text-muted-foreground">Para corregir un asiento, registra su reversión con las cuentas invertidas.</p>
         <form className="flex flex-wrap items-end gap-3" onSubmit={event => postEntry(event)}>
           <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
           <label>Descripción<Input name="description" maxLength={200} required /></label>
@@ -360,6 +407,7 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
           <Dollar name="amount" label="Importe" min={0.01} />
           <Button type="submit">Registrar asiento</Button>
         </form>
+        </FinanceDetails>
         {workspace === "company" && <form className="space-y-3 rounded border p-4" onSubmit={postOwnerPayment}>
           <h2 className="font-semibold">Registrar un pago de Syncro a mi cuenta personal</h2>
           <div className="flex flex-wrap items-end gap-3">
@@ -408,6 +456,15 @@ function Workspace({ workspace, tab }: { workspace: FinanceSection["workspace"];
       </>}
     </fieldset>
   </div>;
+}
+
+function FinanceDetails({ title, children }: { title: string; children: React.ReactNode }) {
+  return <details className="group rounded-xl border bg-card">
+    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 font-medium [&::-webkit-details-marker]:hidden">
+      {title}<ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden />
+    </summary>
+    <div className="space-y-4 border-t p-4">{children}</div>
+  </details>;
 }
 
 function Dollar({ name, label, value, min = 0 }: { name: string; label: string; value?: number; min?: number }) {

@@ -21,10 +21,10 @@ export const financeGroups = [
     workspace: "personal",
     sections: [
       { slug: "resumen-personal", title: "Resumen personal", tab: "Resumen" },
-      { slug: "gastos-personales", title: "Gastos y gastos hormiga", tab: "Gastos" },
-      { slug: "presupuesto-personal", title: "Presupuesto y alimentos", tab: "Presupuesto" },
-      { slug: "movimientos-personales", title: "Cuentas y movimientos", tab: "Libro diario" },
-      { slug: "deudas-personales", title: "Plan de pago de deudas", tab: "Deudas" },
+      { slug: "gastos-personales", title: "Gastos", tab: "Gastos" },
+      { slug: "presupuesto-personal", title: "Presupuesto", tab: "Presupuesto" },
+      { slug: "movimientos-personales", title: "Movimientos", tab: "Libro diario" },
+      { slug: "deudas-personales", title: "Deudas", tab: "Deudas" },
     ],
   },
 ] as const;
