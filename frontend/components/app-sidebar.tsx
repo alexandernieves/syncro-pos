@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { financeGroups, financeUrl } from "@/lib/central-finance-navigation";
 import { API_URL } from "@/lib/constants"
 import {
   IconPackage,
@@ -240,13 +241,18 @@ const data = {
         { title: "Notificaciones", url: "/dashboard/syncro/notificaciones" },
         { title: "Feedback de IA", url: "/dashboard/syncro/feedback" },
         { title: "Suscripciones", url: "/dashboard/syncro/subscriptions" },
-        { title: "Finanzas", url: "/dashboard/syncro/finanzas" },
         { title: "Publicidad Syncro Credit", url: "/dashboard/syncro/publicidad" },
         { title: "Préstamos P2P", url: "/dashboard/syncro/prestamos" },
         { title: "Métricas globales", url: "/dashboard/syncro/stats" },
         { title: "Auditoría global", url: "/dashboard/syncro/audit" },
       ],
     },
+    ...financeGroups.map((group, index) => ({
+      title: group.title,
+      url: financeUrl(group.sections[0].slug),
+      icon: [IconReportAnalytics, IconCash, IconChartBar][index],
+      items: group.sections.map(section => ({ title: section.title, url: financeUrl(section.slug) })),
+    })),
   ],
 };
 
