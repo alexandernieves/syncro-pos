@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { financeGroups, type FinanceSection } from "@/lib/central-finance-navigation";
 import FinanceWorkspace from "../dashboard/syncro/finanzas/finance-workspace";
+import { FinanceSkeleton } from "../dashboard/syncro/finanzas/finance-skeleton";
 import FinanceInstallation from "./finance-installation";
 import FinanceLogin, { financeSessionStore, type FinanceUser } from "./finance-login";
 
@@ -47,7 +48,7 @@ export default function FinanceApp({ section }: { section?: FinanceSection }) {
     setUser(null);
   }
 
-  if (user === undefined) return <p className="p-6" role="status">Abriendo Syncro Finanzas…</p>;
+  if (user === undefined) return <main className="mx-auto max-w-md px-4 pt-[calc(env(safe-area-inset-top)+14px)]"><FinanceSkeleton mobile session /></main>;
   if (!user) return <FinanceLogin onLogin={setUser} />;
   if (!section) return <FinanceInstallation />;
 
@@ -101,9 +102,8 @@ export default function FinanceApp({ section }: { section?: FinanceSection }) {
         const href = "/finanzas/" + item.slug;
         if (personal && item.tab === "Libro diario") {
           return <div key={item.slug} className={nubiCenterSlotClass}>
-            <Link href={href} aria-current={active ? "page" : undefined} className={nubiCenterTabClass(active)}>
-              <Icon className="size-[22px]" aria-hidden />
-              <span className="mt-0.5 text-[9px] font-black">Movimientos</span>
+            <Link href={href} aria-label="Movimientos" aria-current={active ? "page" : undefined} className={nubiCenterTabClass(active)}>
+              <Icon className="size-[26px]" aria-hidden />
             </Link>
           </div>;
         }

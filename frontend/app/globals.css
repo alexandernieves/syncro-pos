@@ -836,14 +836,41 @@ html.syncro-credit .sc-ad .sc-ad-go { position: absolute; left: 18px; bottom: 18
 
 html:has(.syncro-finance-theme),
 html:has(.syncro-finance-theme) body {
+  height: 100%;
   max-inline-size: 100%;
-  overflow-x: clip;
-  overscroll-behavior-x: none;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background-color: var(--background);
 }
 
 .syncro-finance-theme {
-  width: 100%;
+  position: fixed;
+  inset: 0;
   min-width: 0;
-  overflow-x: clip;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background-color: var(--background);
+}
+
+.syncro-finance-scroll {
+  height: 100%;
+  min-width: 0;
+  overflow: hidden auto;
+  overscroll-behavior: none;
   touch-action: pan-y;
+}
+
+.syncro-finance-scroll .overflow-x-auto {
+  touch-action: pan-x pan-y;
+  overscroll-behavior-inline: contain;
+}
+
+[data-finance-workspace] :is(input:not([type="hidden"], [type="checkbox"]), [role="combobox"]) {
+  background-color: #fffdfa;
+  border-color: #b6ab9f;
+  color: #211d17;
+}
+
+[data-finance-workspace] :is(input, [role="combobox"]):focus-visible {
+  border-color: var(--primary);
 }

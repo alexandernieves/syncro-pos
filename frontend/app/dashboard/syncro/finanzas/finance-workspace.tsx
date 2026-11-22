@@ -12,6 +12,7 @@ import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } 
 import { FinanceCheck, FinanceSelect, MoneyFields, type Quotes } from "./finance-fields";
 import { CashForecast, FinanceOverview } from "./finance-overview";
 import { FinanceDate } from "./finance-calendar";
+import { FinanceSkeleton } from "./finance-skeleton";
 import { projection, simulateDebts, walletAccounts, walletBalances, type Entry, type Frequency, type OriginalMoney, type Plan } from "./calculations";
 
 const names: Record<string, string> = {
@@ -41,7 +42,7 @@ const emptyPlan: Plan = { income: 0, payday1: 15, payday2: 31, grocery: 0, dinin
 export default function FinanceWorkspace({ section, mobile = false }: { section: FinanceSection; mobile?: boolean }) {
   useRequireSyncroAdmin(!mobile);
 
-  return <main data-finance-mobile={mobile ? "" : undefined} className={mobile ? "space-y-4 px-4 pb-3 pt-4 sm:px-5" : "mx-auto w-full max-w-6xl space-y-5 p-3 sm:p-6"}>
+  return <main data-finance-workspace="" data-finance-mobile={mobile ? "" : undefined} className={mobile ? "space-y-4 px-4 pb-3 pt-4 sm:px-5" : "mx-auto w-full max-w-6xl space-y-5 p-3 sm:p-6"}>
     {!mobile && <header className="flex flex-wrap items-end justify-between gap-2">
       <div>
         <p className="text-sm text-muted-foreground">{section.group}{section.workspace === "company" && " · Empresa Syncro"}</p>
@@ -159,7 +160,9 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
     }, "Pago registrado en los dos espacios");
   }
 
-  if (!ready) return <p role="status">{error || "Cargando finanzas…"}</p>;
+  if (!ready) return error
+    ? <p role="alert" className="rounded-xl border bg-card p-4 text-destructive">{error}</p>
+    : <FinanceSkeleton tab={tab} mobile={mobile} />;
 
   const asOf = today();
   const month = asOf.slice(0, 7);
@@ -521,7 +524,7 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
           const fields = new FormData(event.currentTarget);
           void savePlan({ ...plan, debts: [...plan.debts, { name: String(fields.get("name")), date: String(fields.get("date")), balance: 0, minimum: 0, balanceOriginal: originalMoney(fields, "balance"), minimumOriginal: originalMoney(fields, "minimum"), apr: cents(fields.get("apr")) }] });
         }}>
-          <label>Acreedor<Input name="name" maxLength={200} required /></label>
+          <label className="block space-y-1.5 text-sm font-medium"><span>Acreedor</span><Input className="h-11 rounded-xl" name="name" placeholder="Ej. Banco o persona" maxLength={200} required /></label>
           <FinanceDate label="Próximo vencimiento" min={asOf} />
           <MoneyFields quotes={quotes} prefix="balance" label="Saldo pendiente" />
           <MoneyFields quotes={quotes} prefix="minimum" label="Cuota mensual" />
