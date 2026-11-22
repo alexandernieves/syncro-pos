@@ -3,14 +3,18 @@
 import { useId, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-export function NubiTabBar({ label, children, raised = true }: {
+export function NubiTabBar({ label, children, raised = true, docked = false }: {
   label: string;
   children: ReactNode;
   raised?: boolean;
+  docked?: boolean;
 }) {
   const filterId = "nubi-tabs-" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
 
-  return <nav aria-label={label} className="fixed inset-x-6 bottom-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.5rem))] z-50 mx-auto h-16 max-w-sm drop-shadow-[0_8px_20px_rgba(139,92,26,0.12)] motion-safe:animate-in motion-safe:slide-in-from-bottom motion-safe:duration-300">
+  return <nav aria-label={label} className={cn(
+    "fixed inset-x-6 z-50 mx-auto h-16 max-w-sm drop-shadow-[0_8px_20px_rgba(139,92,26,0.12)] motion-safe:animate-in motion-safe:slide-in-from-bottom motion-safe:duration-300",
+    docked ? "bottom-[max(0.25rem,calc(env(safe-area-inset-bottom)-0.5rem))]" : "bottom-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.5rem))]",
+  )}>
     {raised && <svg aria-hidden="true" className="absolute size-0">
       <defs>
         <filter id={filterId}>

@@ -59,7 +59,7 @@ export default function FinanceApp({ section }: { section?: FinanceSection }) {
   const firstName = user.name?.trim().split(/\s+/)[0];
   const personalHome = section.slug === "resumen-personal";
 
-  return <div className="relative isolate min-h-dvh min-w-0 w-full pb-[calc(env(safe-area-inset-bottom)+116px)]">
+  return <div className="relative isolate min-h-dvh min-w-0 w-full pb-[calc(env(safe-area-inset-bottom)+100px)]">
     <div className="sc-hero pointer-events-none absolute inset-x-0 top-0 -z-10" aria-hidden />
     <svg className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[300px] w-full opacity-40" aria-hidden viewBox="0 0 390 300" preserveAspectRatio="none">
       <path d="M-10 230 Q40 120 90 210 Q140 110 190 200 Q240 100 290 190 Q340 95 400 170" fill="none" stroke="white" strokeWidth="2" strokeDasharray="1.5 8" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
@@ -93,7 +93,7 @@ export default function FinanceApp({ section }: { section?: FinanceSection }) {
       </header>
       <FinanceWorkspace section={section} mobile />
     </div>
-    <NubiTabBar label={section.group} raised={group?.workspace === "personal"}>
+    <NubiTabBar docked label={section.group} raised={group?.workspace === "personal"}>
       {navSections?.map(item => {
         const Icon = navIcons[item.tab];
         const active = section.slug === item.slug;
