@@ -10,6 +10,7 @@ import { adoptAccount } from "@/lib/auth-helpers";
 export type FinanceUser = { id: string; role: string; name?: string };
 
 export const financeSessionStore = () =>
+  sessionStorage.getItem("syncro-finance-session") === "1" ||
   window.matchMedia("(display-mode: standalone)").matches ? sessionStorage : localStorage;
 
 export default function FinanceLogin({ onLogin }: { onLogin: (user: FinanceUser) => void }) {
@@ -37,11 +38,9 @@ export default function FinanceLogin({ onLogin }: { onLogin: (user: FinanceUser)
       const user = result.user as FinanceUser;
       if (user.role !== "syncropos") throw new Error("Usa tu cuenta de Syncro Central para iniciar sesión.");
       await adoptAccount(user);
-      const storage = financeSessionStore();
-      storage.setItem("token", result.access_token);
-      storage.setItem("user", JSON.stringify(user));
-      const expiry = storage === localStorage ? "; max-age=28800" : "";
-      document.cookie = `token=${result.access_token}; path=/; SameSite=Strict; Secure${expiry}`;
+      sessionStorage.setItem("token", result.access_token);
+      sessionStorage.setItem("user", JSON.stringify(user));
+      sessionStorage.setItem("syncro-finance-session", "1");
       window.dispatchEvent(new Event("syncro_session_activity"));
       onLogin(user);
     } catch (failure) {

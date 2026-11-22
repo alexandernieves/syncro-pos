@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { CalendarDays, ChevronDown, House, Landmark, LogOut, Receipt, Wallet } from "lucide-react";
 import { NubiTabBar, nubiCenterSlotClass, nubiCenterTabClass, nubiTabClass } from "@/components/portal/nubi-tab-bar";
@@ -39,14 +39,19 @@ export default function FinanceApp({ section }: { section?: FinanceSection }) {
 
   useEffect(() => { syncThemeColor(); }, [user, section]);
 
-  function logout() {
+  const logout = useCallback(() => {
     const store = financeSessionStore();
     store.removeItem("token");
     store.removeItem("user");
-    document.cookie = "token=; path=/; max-age=0; SameSite=Strict; Secure";
+    if (store === localStorage) document.cookie = "token=; path=/; max-age=0; SameSite=Strict; Secure";
     window.dispatchEvent(new Event("syncro_session_activity"));
     setUser(null);
-  }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("syncro_finance_session_expired", logout);
+    return () => window.removeEventListener("syncro_finance_session_expired", logout);
+  }, [logout]);
 
   if (user === undefined) return <main className="mx-auto max-w-md px-4 pt-[calc(env(safe-area-inset-top)+14px)]"><FinanceSkeleton mobile session /></main>;
   if (!user) return <FinanceLogin onLogin={setUser} />;

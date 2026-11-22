@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Header, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { BcvService } from '../settings/bcv.service';
@@ -65,8 +66,9 @@ export class CentralFinanceController {
   constructor(private readonly prisma: PrismaService, private readonly bcv: BcvService) {}
 
   @Get('rates')
+  @Header('Cache-Control', 'private, no-store')
   async rates(@Req() req: any) {
-    this.scope(req, 'personal');
+    await this.scope(req, 'personal');
     if (!this.quotes || this.quotes.expires < Date.now()) {
       const data = Promise.all([this.bcv.fetchBcv().catch(() => null), this.bcv.fetchTrm().catch(() => null)])
         .then(([bcv, trm]) => ({
@@ -79,9 +81,11 @@ export class CentralFinanceController {
     return this.quotes.data;
   }
 
-  private scope(req: any, workspace: string) {
+  private async scope(req: any, workspace: string) {
     const user = req.user;
     if (user?.role !== 'syncropos' || typeof user.id !== 'string' || !user.id) throw new ForbiddenException();
+    const account = await this.prisma.user.findUnique({ where: { id: user.id }, select: { role: true } });
+    if (account?.role !== 'syncropos') throw new ForbiddenException('Tu usuario ya no tiene acceso a Finanzas');
     if (workspace === 'personal') return `personal:${user.id}`;
     const financeAdmins = (process.env.SYNCRO_FINANCE_ADMIN_IDS ?? '').split(',').map(id => id.trim());
     if (workspace === 'company' && financeAdmins.includes(user.id)) return 'company';
@@ -91,7 +95,7 @@ export class CentralFinanceController {
   @Get(':workspace')
   @Header('Cache-Control', 'private, no-store')
   async read(@Req() req: any, @Param('workspace') workspace: string) {
-    const scope = this.scope(req, workspace);
+    const scope = await this.scope(req, workspace);
     const [entries, plan] = await this.prisma.$transaction([
       this.prisma.centralFinanceEntry.findMany({ where: { scope }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }], select: { id: true, date: true, description: true, debit: true, credit: true, cents: true, smallSpend: true, currency: true, nativeCents: true, rate: true, toCurrency: true, toCents: true } }),
       this.prisma.centralFinancePlan.findUnique({ where: { scope } }),
@@ -101,7 +105,7 @@ export class CentralFinanceController {
 
   @Post(':workspace/entries')
   async post(@Req() req: any, @Param('workspace') workspace: string, @Body() body: any) {
-    const scope = this.scope(req, workspace);
+    const scope = await this.scope(req, workspace);
     const { id, debit, credit } = body ?? {};
     const originalCurrency = currency(body?.currency ?? 'USD');
     const toCurrency = body?.toCurrency == null ? null : currency(body.toCurrency);
@@ -142,10 +146,42 @@ export class CentralFinanceController {
     return { id: saved.id };
   }
 
+  @Post('personal/import')
+  @Header('Cache-Control', 'private, no-store')
+  async importBankEntries(@Req() req: any, @Body() body: any) {
+    const scope = await this.scope(req, 'personal');
+    if (!Array.isArray(body?.entries) || !body.entries.length || body.entries.length > 100) {
+      throw new BadRequestException('Confirma entre 1 y 100 movimientos');
+    }
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const entries = body.entries.map((row: any) => {
+      const posted = date(row?.date);
+      if (posted > today) throw new BadRequestException('El archivo contiene movimientos con fecha futura');
+      const reference = label(row.reference).toUpperCase();
+      const description = label(row.description);
+      const kind = row.kind;
+      const category = row.category;
+      if (kind !== 'income' && (kind !== 'expense' || !expenseAccounts.includes(category))) {
+        throw new BadRequestException('Confirma la categoría de cada movimiento seleccionado');
+      }
+      const { cents, original } = monetary(row, null, 1);
+      const { currency, nativeCents, rate } = original!;
+      const id = createHash('sha256').update(JSON.stringify(['banesco', posted, reference, currency, nativeCents, kind])).digest('hex');
+      return {
+        scope, id, date: posted, description, cents, currency, nativeCents, rate: new Prisma.Decimal(rate),
+        debit: kind === 'income' ? 'bank' : category,
+        credit: kind === 'income' ? 'income' : 'bank',
+        actorId: req.user.id,
+      };
+    });
+    const result = await this.prisma.centralFinanceEntry.createMany({ data: entries, skipDuplicates: true });
+    return { count: result.count, duplicates: entries.length - result.count };
+  }
+
   @Post('company/owner-payment')
   async ownerPayment(@Req() req: any, @Body() body: any) {
-    const company = this.scope(req, 'company');
-    const personal = this.scope(req, 'personal');
+    const company = await this.scope(req, 'company');
+    const personal = await this.scope(req, 'personal');
     const { id, account, classification } = body ?? {};
     if (typeof id !== 'string' || !/^[a-f0-9-]{36}$/i.test(id) ||
         !wallets.includes(account) || !['expense', 'equity'].includes(classification)) {
@@ -180,7 +216,7 @@ export class CentralFinanceController {
 
   @Put(':workspace/plan')
   async plan(@Req() req: any, @Param('workspace') workspace: string, @Body() body: any) {
-    const scope = this.scope(req, workspace);
+    const scope = await this.scope(req, workspace);
     if (!Array.isArray(body?.obligations) || body.obligations.length > 200) throw new BadRequestException('Compromisos inválidos');
     if (!Array.isArray(body.debts) || body.debts.length > 100) throw new BadRequestException('Deudas inválidas');
     const overrides = body.incomeOverrides ?? [];

@@ -9,10 +9,11 @@ import { accountOpen } from './closed-accounts';
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private configService: ConfigService, private prisma: PrismaService) {
+    const secret = configService.getOrThrow<string>('JWT_SECRET');
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET') || 'syncro-pos-secret-key-2025',
+      secretOrKey: secret,
     });
   }
 

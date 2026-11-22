@@ -3,13 +3,16 @@ import { apiFetch } from "@/lib/api";
 /** Calls a /syncro-admin endpoint and throws the server's message when it fails. */
 export async function adminApi<T>(path: string, options: RequestInit = {}): Promise<T> {
   const dedicatedFinance = typeof window !== "undefined" && path.startsWith("/finance/") &&
-    window.location.pathname.startsWith("/finanzas") && window.matchMedia("(display-mode: standalone)").matches;
+    window.location.pathname.startsWith("/finanzas") &&
+    (sessionStorage.getItem("syncro-finance-session") === "1" || window.matchMedia("(display-mode: standalone)").matches);
   const token = dedicatedFinance ? sessionStorage.getItem("token") : null;
   const res = await apiFetch(`/syncro-admin${path}`, path.startsWith("/finance/") ? {
     ...options,
     cache: "no-store",
     headers: { ...options.headers, ...(dedicatedFinance && { Authorization: token ? `Bearer ${token}` : "" }) },
   } : options);
+  if (res.status === 401 && typeof window !== "undefined" && path.startsWith("/finance/") &&
+      window.location.pathname.startsWith("/finanzas")) window.dispatchEvent(new Event("syncro_finance_session_expired"));
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new Error(Array.isArray(body?.message) ? body.message.join(", ") : body?.message || "No se pudo completar la acción");
   return body as T;

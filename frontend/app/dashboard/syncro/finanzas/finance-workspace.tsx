@@ -12,6 +12,7 @@ import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } 
 import { FinanceCheck, FinanceSelect, MoneyFields, type Quotes } from "./finance-fields";
 import { CashForecast, FinanceOverview } from "./finance-overview";
 import { FinanceDate } from "./finance-calendar";
+import { BankImport } from "./bank-import";
 import { FinanceSkeleton } from "./finance-skeleton";
 import { projection, simulateDebts, walletAccounts, walletBalances, type Entry, type Frequency, type OriginalMoney, type Plan } from "./calculations";
 
@@ -479,6 +480,10 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
         </FinanceDetails>
       </>}
       {tab === "Libro diario" && <>
+        {personal && <FinanceDetails title="Importar movimientos de Banesco">
+          <BankImport entries={entries} categories={expenseAccounts.map(account => [account, names[account]])}
+            onSaved={async () => setEntries((await adminApi<{ entries: Entry[] }>(path)).entries)} />
+        </FinanceDetails>}
         {personal && <FinanceDetails title="Anotar el saldo inicial de otra cuenta">
           <p className="text-sm text-muted-foreground">Úsalo cuando comiences a llevar una cuenta de banco o efectivo.</p>
           <Button type="button" variant="outline" aria-expanded={quickAction === "opening"} onClick={() => setQuickAction(quickAction === "opening" ? null : "opening")}>Anotar saldo inicial</Button>

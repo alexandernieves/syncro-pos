@@ -43,7 +43,7 @@ export function SessionMonitor({ timeoutMinutes = 30 }: SessionMonitorProps) {
     }
     
     // Solo si hay un token (usuario logueado)
-    const token = window.location.pathname.startsWith("/finanzas") && window.matchMedia("(display-mode: standalone)").matches
+    const token = window.location.pathname.startsWith("/finanzas") && (sessionStorage.getItem("syncro-finance-session") === "1" || window.matchMedia("(display-mode: standalone)").matches)
       ? sessionStorage.getItem("token") : localStorage.getItem("token")
     if (token) {
       // Si hay una grabación de lección en curso, postergamos el cierre de sesión
