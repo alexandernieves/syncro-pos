@@ -1,15 +1,17 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { createHash, createHmac, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Prisma, type CentralFinanceBotPhone } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BcvService } from '../settings/bcv.service';
+import { fiscalRecordData, fiscalSupport } from './central-fiscal-data';
 import { requireFinanceScope } from './finance-access';
 import { defaultFinanceModel, FinanceNubiAi, type FinanceHistory } from './finance-nubi-ai';
 import { describeDraft, storeDrafts, validateDrafts, type FinanceDraft } from './finance-nubi-drafts';
 import { financeNubiSecret, FinanceNubiTransport } from './finance-nubi-transport';
 
 const minutes = (value: number) => new Date(Date.now() + value * 60_000);
-const cleared = { awaiting: false, activeUntil: null, pending: Prisma.DbNull, history: Prisma.DbNull };
+const noDraft = { pending: Prisma.DbNull, fiscalDocument: null };
+const cleared = { ...noDraft, awaiting: false, activeUntil: null, history: Prisma.DbNull };
 const reset = { ...cleared, challengeHash: null, challengeUntil: null };
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const equal = (left: string, right: string) => timingSafeEqual(Buffer.from(hash(left)), Buffer.from(hash(right)));
@@ -98,7 +100,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
     const changed = await this.prisma.centralFinanceBotPhone.updateMany({
       where: { phone, userId: user.id },
       data: {
-        activeUntil: null, pending: Prisma.DbNull, history: Prisma.DbNull,
+        ...noDraft, activeUntil: null, history: Prisma.DbNull,
         challengeHash: this.challenge(secret, phone, code), challengeUntil: expiresAt, revision: { increment: 1 },
       },
     });
@@ -213,7 +215,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (!attachment && command === 'confirmar') {
-      const pending = row.pending as { id?: string; rows?: unknown } | null;
+      const pending = row.pending as { id?: string; rows?: unknown; fiscal?: Prisma.InputJsonObject } | null;
       if (!pending?.id) {
         await send('No hay registros pendientes de confirmar.');
         return { ok: true };
@@ -223,26 +225,105 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         result = await this.prisma.$transaction(async tx => {
           const session = await tx.centralFinanceBotPhone.updateMany({
             where: { phone, userId: row.userId, revision: row.revision, activeUntil: { gt: new Date() } },
-            data: { pending: Prisma.DbNull, revision: { increment: 1 } },
+            data: { ...noDraft, revision: { increment: 1 } },
           });
           if (!session.count) return null;
+          if (pending.fiscal) {
+            if (!row.fiscalDocument) throw new Error('Falta el comprobante original');
+            const data = await fiscalRecordData(tx, scope, row.userId, {
+              ...pending.fiscal, support: Buffer.from(row.fiscalDocument).toString('base64'),
+            });
+            await tx.centralFiscalRecord.create({ data: { ...data, scope, id: randomUUID() } });
+            return { saved: 1, duplicates: 0 };
+          }
           return storeDrafts(tx, scope, row.userId, pending.id!, validateDrafts(pending.rows, todayKey()));
         }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-      } catch {
+      } catch (error) {
+        if (pending.fiscal) {
+          const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+          if (duplicate) await this.change(row, noDraft);
+          await send(duplicate ? 'Ya existe ese registro fiscal. Abre el registro en la app para revisar sus adjuntos.'
+            : 'No pude guardar el registro fiscal. Revisa la factura vinculada o vuelve a confirmar.');
+          return { ok: true };
+        }
         await send('No se confirmó el lote. Revisa tus movimientos y vuelve a confirmar si sigue pendiente.');
         return { ok: true };
       }
-      if (result) await send(`${result.saved} registro(s) guardado(s) en Syncro Finanzas.${result.duplicates ? ` Omití ${result.duplicates} duplicado(s).` : ''}`);
+      if (result && pending.fiscal) await send('Registro y archivo guardados. Puedes ver el original en Registro fiscal de Syncro Finanzas.');
+      else if (result) await send(`${result.saved} registro(s) guardado(s) en Syncro Finanzas.${result.duplicates ? ` Omití ${result.duplicates} duplicado(s).` : ''}`);
       return { ok: true };
     }
     if (!attachment && command === 'cancelar') {
-      if (await this.change(row, { pending: Prisma.DbNull, history: Prisma.DbNull })) await send('Borrador descartado. La sesión sigue activa.');
+      if (await this.change(row, { ...noDraft, history: Prisma.DbNull })) await send('Borrador descartado. La sesión sigue activa.');
       return { ok: true };
     }
 
+    const fiscalKind = /^\s*factura emitida\b/i.test(text) ? 'invoice'
+      : /^\s*retenci[oó]n\b/i.test(text) ? 'retention'
+        : /^\s*declaraci[oó]n\b/i.test(text) ? 'declaration' : null;
+    if (fiscalKind && !attachment) {
+      if (await this.change(row, noDraft)) await send('Adjunta un PDF, PNG o JPEG y escribe el tipo de registro en el mismo mensaje.');
+      return { ok: true };
+    }
     try {
       const date = todayKey();
       const media = attachment ? await this.transport.media({ ...message, message: content }, attachment) : undefined;
+      if (fiscalKind) {
+        const url = media?.type === 'file' ? media.file.file_data : media?.type === 'image_url' ? media.image_url.url : '';
+        const document = fiscalSupport(url.split(',')[1]);
+        const invoiceReference = fiscalKind === 'retention' ? /\bfactura\s*[:#]\s*([^\s,;]+)/i.exec(text)?.[1] : undefined;
+        const invoice = invoiceReference ? await this.prisma.centralFiscalRecord.findFirst({
+          where: { scope, kind: 'invoice', reference: { equals: invoiceReference, mode: 'insensitive' } },
+          select: { id: true, reference: true },
+        }) : null;
+        if (fiscalKind === 'retention' && !invoice) {
+          if (await this.change(row, noDraft)) {
+            await send('Reenvía el comprobante con «Retención IVA factura: 000123» o «Retención ISLR factura: 000123». Usa el número exacto de una factura ya guardada en este espacio.');
+          }
+          return { ok: true };
+        }
+        const output = await this.ai.respond([], text, media, { modoFiscal: true, tipoSolicitado: fiscalKind });
+        const candidate = output.fiscal;
+        if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate) ||
+            (candidate as { kind?: string }).kind !== fiscalKind || output.drafts.length) {
+          if (await this.change(row, noDraft)) {
+            await send((output.reply || 'No pude verificar el tipo de documento.') + '\nReenvía el archivo con los datos faltantes.');
+          }
+          return { ok: true };
+        }
+        const { reference, counterparty, status, date, period, tax, amountCents, baseCents, vatCents } = candidate as Record<string, Prisma.InputJsonValue>;
+        const requestedTax = /^(?:retenci[oó]n|declaraci[oó]n)\s+(IVA|ISLR)\b/i.exec(text)?.[1].toUpperCase();
+        if (requestedTax && requestedTax !== tax) {
+          throw new BadRequestException('El impuesto del archivo no coincide con el que indicaste.');
+        }
+        if (fiscalKind === 'retention' && amountCents == null) {
+          throw new BadRequestException('Indica el importe retenido en bolívares.');
+        }
+        const fiscal = {
+          kind: fiscalKind, reference, counterparty, status, date, period, tax, amountCents, baseCents, vatCents,
+          direction: fiscalKind === 'retention' ? 'received' : null, invoiceId: invoice?.id ?? null,
+        };
+        const data = await fiscalRecordData(this.prisma, scope, row.userId, fiscal);
+        const number = (cents: number | null) => cents == null ? 'sin importe' : new Intl.NumberFormat('es-VE', {
+          minimumFractionDigits: 2, maximumFractionDigits: 2,
+        }).format(cents / 100) + ' Bs';
+        const type = fiscalKind === 'invoice' ? 'Factura emitida' : fiscalKind === 'retention' ? 'Retención recibida' : 'Declaración';
+        if (await this.change(row, {
+          pending: { id: eventId, fiscal: JSON.parse(JSON.stringify(fiscal)) },
+          fiscalDocument: new Uint8Array(document.bytes),
+          history: Prisma.DbNull,
+        })) {
+          await send([
+            `${type}${data.tax ? ' ' + data.tax : ''} · ${data.reference} · ${data.date}`,
+            data.counterparty, data.period && `Período ${data.period}`, `Importe ${number(data.amountCents)}`,
+            data.baseCents != null && `Base ${number(data.baseCents)}`,
+            data.vatCents != null && `IVA ${number(data.vatCents)}`,
+            invoice && `Factura vinculada ${invoice.reference}`,
+            'El original se guardará con vista previa. Escribe «confirmar» para guardar o «cancelar» para descartar.',
+          ].filter(Boolean).join('\n'));
+        }
+        return { ok: true };
+      }
       const snapshot = await this.snapshot(scope, date, {
         bcv: /\bbcv\b/i.test(text),
         fiscal: /\b(iva|islr|declaraci[oó]n|retenci[oó]n|vencimiento fiscal)\b/i.test(text),
@@ -282,6 +363,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
       ].slice(-8) as FinanceHistory;
       const updated = await this.change(row, {
         history: updatedHistory,
+        fiscalDocument: null,
         pending: drafts.length ? { id: eventId, rows: drafts } as Prisma.InputJsonObject : Prisma.DbNull,
       });
       if (updated && row.activeUntil && row.activeUntil.getTime() > Date.now()) {
@@ -289,6 +371,13 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
           (drafts.length ? '\n\nEscribe «confirmar» para guardar este lote o corrige los datos. Usa «cancelar» para descartarlo.' : ''));
       }
     } catch (error) {
+      if (fiscalKind) {
+        if (await this.change(row, noDraft)) {
+          const detail = error instanceof BadRequestException ? error.message : 'No pude leer el comprobante fiscal.';
+          await send(detail + ' Reenvía el archivo como PDF, PNG o JPEG con los datos faltantes.');
+        }
+        return { ok: true };
+      }
       // Never log message content, document bodies, model output, credentials or provider responses.
       this.logger.warn('No se pudo procesar un mensaje de Nubi Finanzas');
       const latest = await this.prisma.centralFinanceBotPhone.findUnique({ where: { phone }, select: { activeUntil: true, revision: true } });

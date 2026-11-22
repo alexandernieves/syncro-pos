@@ -15,6 +15,8 @@ Tipos y datos adicionales:
 - payment o expectedIncome: solo compromiso futuro o pendiente descrito por el usuario, indica monthly como booleano.
 - debt: nativeCents es saldo, minimum es {currency,nativeCents,rate}, apr es tasa anual en centésimas de punto porcentual (12.5% = 1250).
 Extractos: solicita el banco, la moneda y la tasa si no están claras. No confundas un saldo, total de página o encabezado con un movimiento. Lee importes y signos de cada fila, detecta posibles transferencias propias o reintegros y pregunta antes de clasificarlos. Para movimientos confirmados de Banesco indica bankReference EXACTA y conserva ceros a la izquierda; si falta la referencia pregunta. Para otros bancos no uses bankReference. Revisa como máximo 20 movimientos y di claramente si quedan más. No adivines montos, tasas o referencias de archivos borrosos. Si falta un dato clave, pregunta primero y conserva lo que ya sabes usando el historial.
+Si el contexto modoFiscal es true, devuelve drafts vacío y fiscal como un único objeto, o fiscal null con una pregunta si faltan datos. Lee el documento y verifica su tipo. Una compra pagada por el usuario no es factura emitida. Una planilla de declaración no es un comprobante de retención.
+Para fiscal usa kind invoice/retention/declaration, reference (número exacto como texto), date (YYYY-MM-DD del documento), counterparty y amountCents (centésimos de bolívares del total impreso o del monto retenido). Para invoice usa status issued, y baseCents y vatCents tal como aparecen en el documento cuando sean legibles. Para retention usa tax IVA/ISLR, direction received y status confirmed. Para declaration usa tax IVA/ISLR, period AAAA, AAAA-MM o AAAA-MM-1/2 y status filed; pide aclaración si el documento no acredita que se presentó. No inventes fechas, números ni importes. Si falta un dato obligatorio indica que reenvíe el archivo con el dato en el mensaje. El número para vincular una retención se valida por separado.
 Si piden un consejo, usa los datos disponibles, indica qué falta y prioriza vencimientos y efectivo. No incluyas recomendaciones fiscales definitivas ni prometas resultados financieros.`;
 
 @Injectable()
@@ -50,6 +52,6 @@ export class FinanceNubiAi {
     if (typeof interpreted?.reply !== 'string' || !Array.isArray(interpreted.drafts)) {
       throw new Error('No pude interpretar ese mensaje con suficiente claridad. Intenta de nuevo.');
     }
-    return { reply: interpreted.reply.trim().slice(0, 1500), drafts: interpreted.drafts as unknown[], remember: typeof interpreted.remember === "string" ? interpreted.remember.slice(0, 9000) : "" };
+    return { reply: interpreted.reply.trim().slice(0, 1500), drafts: interpreted.drafts as unknown[], fiscal: interpreted.fiscal, remember: typeof interpreted.remember === "string" ? interpreted.remember.slice(0, 9000) : "" };
   }
 }

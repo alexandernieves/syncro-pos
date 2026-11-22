@@ -2571,6 +2571,7 @@ model CentralFinanceBotPhone {
   awaiting       Boolean   @default(false)
   activeUntil    DateTime?
   pending        Json?
+  fiscalDocument Bytes?
   history        Json?
   memory         String[]  @default([])
   revision       Int       @default(0)
