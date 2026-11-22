@@ -27,12 +27,12 @@ export function FinanceSelect({ label, name, options, defaultValue, value, onCha
   </div>;
 }
 
-export function FinanceCheck({ label, name, checked, onChange }: {
-  label: string; name?: string; checked?: boolean; onChange?: (value: boolean) => void;
+export function FinanceCheck({ label, name, checked, defaultChecked, onChange }: {
+  label: string; name?: string; checked?: boolean; defaultChecked?: boolean; onChange?: (value: boolean) => void;
 }) {
   const id = useId();
   return <label htmlFor={id} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl px-2 text-sm font-medium hover:bg-muted">
-    <Checkbox id={id} name={name} checked={checked} onCheckedChange={value => onChange?.(value === true)} className="size-5 rounded-md" />
+    <Checkbox id={id} name={name} checked={checked} defaultChecked={defaultChecked} onCheckedChange={value => onChange?.(value === true)} className="size-5 rounded-md" />
     {label}
   </label>;
 }
