@@ -2561,3 +2561,27 @@ model CentralFiscalRecord {
   @@unique([scope, identity])
   @@index([scope, date])
 }
+
+model CentralFinanceBotPhone {
+  phone          String    @id
+  userId         String
+  workspace      String
+  challengeHash  String?
+  challengeUntil DateTime?
+  awaiting       Boolean   @default(false)
+  activeUntil    DateTime?
+  pending        Json?
+  history        Json?
+  memory         String[]  @default([])
+  revision       Int       @default(0)
+  createdAt      DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model CentralFinanceBotEvent {
+  id        String   @id
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

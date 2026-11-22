@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CalendarDays, ChevronDown, House, Landmark, LogOut, Receipt, Wallet } from "lucide-react";
+import { CalendarDays, ChevronDown, House, Landmark, LogOut, MessageCircle, Receipt, Wallet } from "lucide-react";
 import { NubiTabBar, nubiCenterSlotClass, nubiCenterTabClass, nubiTabClass } from "@/components/portal/nubi-tab-bar";
 import { NubiFace } from "@/components/portal/nubi-face";
 import { syncThemeColor } from "@/components/portal/nubi-splash";
@@ -22,6 +22,7 @@ const navIcons = {
   "Estados financieros": Landmark,
   "Deudas": Landmark,
   "Fiscal": Receipt,
+  "Nubi": MessageCircle,
 };
 
 export default function FinanceApp({ section }: { section?: FinanceSection }) {

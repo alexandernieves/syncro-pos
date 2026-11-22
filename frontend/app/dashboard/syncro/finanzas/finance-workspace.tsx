@@ -15,6 +15,7 @@ import { CashForecast, FinanceOverview } from "./finance-overview";
 import { FinanceDate } from "./finance-calendar";
 import { budgetSuggestion } from "./budget-suggestion";
 import { BankImport } from "./bank-import";
+import FinanceNubiSettings from "./finance-nubi-settings";
 import FiscalRecords from "./fiscal-records";
 import { FinanceSkeleton } from "./finance-skeleton";
 import { projection, simulateDebts, shiftDay, walletAccounts, walletBalances, type Entry, type Frequency, type OriginalMoney, type Plan } from "./calculations";
@@ -58,6 +59,7 @@ export default function FinanceWorkspace({ section, mobile = false }: { section:
       {!mobile && section.tab === "Resumen" && <Button asChild size="sm" variant="outline"><Link href="/finanzas/instalar/">Instalar app de Finanzas</Link></Button>}
     </header>}
     {section.tab === "Fiscal" ? <FiscalRecords key={section.slug} workspace={section.workspace} mobile={mobile} />
+      : section.tab === "Nubi" ? <FinanceNubiSettings />
       : <Workspace key={section.slug} workspace={section.workspace} tab={section.tab} mobile={mobile} />}
   </main>;
 }

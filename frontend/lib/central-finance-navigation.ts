@@ -15,6 +15,7 @@ export const financeGroups = [
       { slug: "tesoreria", title: "Tesorería", tab: "Resumen" },
       { slug: "presupuesto-empresa", title: "Presupuesto de empresa", tab: "Presupuesto" },
       { slug: "deudas-empresa", title: "Deudas de empresa", tab: "Deudas" },
+      { slug: "nubi-whatsapp", title: "Nubi WhatsApp", tab: "Nubi" },
     ],
   },
   {

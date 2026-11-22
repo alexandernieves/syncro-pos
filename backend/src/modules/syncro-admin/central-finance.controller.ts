@@ -3,6 +3,8 @@ import { BadRequestException, Body, ConflictException, Controller, ForbiddenExce
 import { Prisma } from '@prisma/client';
 import { BcvService } from '../settings/bcv.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { requireFinanceScope } from './finance-access';
+import { financeBankEntryId } from './finance-bank-identity';
 import { PrismaService } from '../prisma/prisma.service';
 
 const accounts = ['cash', 'bank', 'receivable', 'payable', 'debt', 'equity', 'income', 'food', 'dining', 'housing', 'transport', 'health', 'interest', 'expense', 'subscriptions', 'shopping', 'leisure'];
@@ -109,14 +111,7 @@ export class CentralFinanceController {
   }
 
   private async scope(req: any, workspace: string) {
-    const user = req.user;
-    if (user?.role !== 'syncropos' || typeof user.id !== 'string' || !user.id) throw new ForbiddenException();
-    const account = await this.prisma.user.findUnique({ where: { id: user.id }, select: { role: true } });
-    if (account?.role !== 'syncropos') throw new ForbiddenException('Tu usuario ya no tiene acceso a Finanzas');
-    if (workspace === 'personal') return `personal:${user.id}`;
-    const financeAdmins = (process.env.SYNCRO_FINANCE_ADMIN_IDS ?? '').split(',').map(id => id.trim());
-    if (workspace === 'company' && financeAdmins.includes(user.id)) return 'company';
-    throw new ForbiddenException('Acceso financiero no autorizado');
+    return requireFinanceScope(this.prisma, req.user, workspace);
   }
 
   @Get(':workspace')
@@ -273,7 +268,7 @@ export class CentralFinanceController {
       }
       const { cents, original } = monetary(row, null, 1);
       const { currency, nativeCents, rate } = original!;
-      const id = createHash('sha256').update(JSON.stringify(['banesco', posted, reference, currency, nativeCents, kind])).digest('hex');
+      const id = financeBankEntryId(posted, reference, currency, nativeCents, kind);
       return {
         scope, id, date: posted, description, cents, currency, nativeCents, rate: new Prisma.Decimal(rate),
         debit: kind === 'income' ? 'bank' : category,
