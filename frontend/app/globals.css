@@ -828,8 +828,8 @@ html.syncro-credit .sc-ad .sc-ad-go { position: absolute; left: 18px; bottom: 18
     border-radius: 9999px;
   }
 
-  .syncro-finance-theme [data-finance-mobile] input,
-  .syncro-finance-theme [data-finance-mobile] [role="combobox"] {
+  [data-finance-mobile] input,
+  [data-finance-mobile] [role="combobox"] {
     font-size: 16px;
   }
 }

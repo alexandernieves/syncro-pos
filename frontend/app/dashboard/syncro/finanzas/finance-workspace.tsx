@@ -8,6 +8,7 @@ import { financeUrl, type FinanceSection } from "@/lib/central-finance-navigatio
 import { adminApi, usd } from "@/lib/syncro-admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { FinanceCheck, FinanceSelect, MoneyFields, type Quotes } from "./finance-fields";
 import { CashForecast, FinanceOverview } from "./finance-overview";
@@ -72,6 +73,7 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
   const [entryIds, setEntryIds] = useState<Record<string, string>>({});
   const [stress, setStress] = useState(false);
   const [statementBalance, setStatementBalance] = useState("");
+  const [showBankImport, setShowBankImport] = useState(false);
   const [quickAction, setQuickAction] = useState<"opening" | "income" | "transfer" | null>(null);
 
   useEffect(() => {
@@ -208,19 +210,42 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
   const sectionUrl = mobile ? (slug: string) => "/finanzas/" + slug : financeUrl;
   const budgetUrl = sectionUrl(personal ? "presupuesto-personal" : "presupuesto-empresa");
 
-  const quickForm = quickAction && <form key={quickAction} className="mt-5 flex flex-wrap items-end gap-3 border-t pt-4" onSubmit={event => postEntry(event, quickAction)}>
+  const quickForm = quickAction && <form key={quickAction} className="grid gap-3 border-t pt-4 sm:grid-cols-2" onSubmit={event => postEntry(event, quickAction)}>
     <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
     {quickAction === "income" && <label>Concepto<Input name="description" placeholder="Ej. Sueldo" maxLength={200} required /></label>}
     {quickAction === "transfer" && <Account name="credit" label="Desde" options={walletAccounts} />}
     <Account name="debit" label={quickAction === "transfer" ? "Hacia" : "Dónde está el dinero"} options={walletAccounts} />
     <MoneyFields quotes={quotes} label={quickAction === "opening" ? "Saldo inicial" : quickAction === "transfer" ? "Importe enviado" : "Importe recibido"} />
     {quickAction === "transfer" && <MoneyFields quotes={quotes} prefix="to" label="Importe recibido" reference={false} />}
-    <Button type="submit">Guardar {quickAction === "opening" ? "saldo" : quickAction === "transfer" ? "transferencia" : "ingreso"}</Button>
+    <Button type="submit" className="sm:col-span-2">Guardar {quickAction === "opening" ? "saldo" : quickAction === "transfer" ? "transferencia" : "ingreso"}</Button>
   </form>;
 
   return <div className="space-y-5">
-    {error && <p role="alert" className="text-destructive">{error}</p>}
+    {error && !quickAction && <p role="alert" className="text-destructive">{error}</p>}
     {success && <p role="status">{success}</p>}
+    <Dialog open={quickAction !== null} onOpenChange={open => { if (!open && !busy) setQuickAction(null); }}>
+      <DialogContent data-finance-workspace="" data-finance-mobile={mobile ? "" : undefined} className="z-[60] max-h-[85dvh] overflow-y-auto overscroll-y-contain">
+        <DialogHeader>
+          <DialogTitle>{quickAction === "opening" ? "Anotar saldo inicial" : quickAction === "income" ? "Registrar ingreso" : "Transferir o cambiar"}</DialogTitle>
+          <DialogDescription>{quickAction === "opening"
+            ? "Anota lo que ya tienes en esta cuenta. Si ya incluye un cobro anterior, registra ese dinero una sola vez."
+            : quickAction === "income" ? "Registra el importe que efectivamente recibiste y su moneda."
+              : "Indica cuánto salió de una cuenta y cuánto llegó a la otra."}</DialogDescription>
+        </DialogHeader>
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        <fieldset disabled={busy} className="min-w-0">{quickForm}</fieldset>
+      </DialogContent>
+    </Dialog>
+    {personal && tab === "Libro diario" && <Dialog open={showBankImport} onOpenChange={setShowBankImport}>
+      <DialogContent data-finance-workspace="" data-finance-mobile={mobile ? "" : undefined} className="z-[60] max-h-[85dvh] overflow-y-auto overscroll-y-contain">
+        <DialogHeader>
+          <DialogTitle>Importar movimientos de Banesco</DialogTitle>
+          <DialogDescription>Revisa el archivo y confirma los movimientos que quieres guardar.</DialogDescription>
+        </DialogHeader>
+        <BankImport entries={entries} categories={expenseAccounts.map(account => [account, names[account]])}
+          onSaved={async () => setEntries((await adminApi<{ entries: Entry[] }>(path)).entries)} />
+      </DialogContent>
+    </Dialog>}
     <fieldset disabled={busy} className="min-w-0 space-y-4">
       {tab === "Resumen" && <>
         {mobile && <section className="space-y-3">
@@ -250,17 +275,14 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
               : "Anota el dinero que ya tienes en el banco o en efectivo. Luego registra cada cobro y cada gasto a medida que ocurran."}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            {!hasCashActivity && <Button type="button" aria-expanded={quickAction === "opening"} onClick={() => setQuickAction(quickAction === "opening" ? null : "opening")}><Wallet /> Anotar saldo inicial</Button>}
-            <Button type="button" variant={hasCashActivity ? "default" : "outline"} aria-expanded={quickAction === "income"} onClick={() => setQuickAction(quickAction === "income" ? null : "income")}><ArrowDownLeft /> Registrar ingreso</Button>
+            {!hasCashActivity && <Button type="button" aria-haspopup="dialog" onClick={() => setQuickAction("opening")}><Wallet /> Anotar saldo inicial</Button>}
+            <Button type="button" variant={hasCashActivity ? "default" : "outline"} aria-haspopup="dialog" onClick={() => setQuickAction("income")}><ArrowDownLeft /> Registrar ingreso</Button>
             <Button asChild variant="outline"><Link href={sectionUrl("gastos-personales")}><ArrowUpRight /> Registrar gasto</Link></Button>
-            <Button type="button" variant="outline" aria-expanded={quickAction === "transfer"} onClick={() => setQuickAction(quickAction === "transfer" ? null : "transfer")}><ArrowLeftRight /> Transferir o cambiar</Button>
+            <Button type="button" variant="outline" aria-haspopup="dialog" onClick={() => setQuickAction("transfer")}><ArrowLeftRight /> Transferir o cambiar</Button>
           </div>
-          {quickForm}
-          {quickAction === "opening" && <p className="mt-2 text-sm text-muted-foreground">Incluye en el saldo el dinero que ya está en esa cuenta. Registra por separado los cobros que recibas después.</p>}
         </section>}
         {!personal && <div className="rounded-xl border p-4">
-          <Button type="button" variant="outline" aria-expanded={quickAction === "transfer"} onClick={() => setQuickAction(quickAction === "transfer" ? null : "transfer")}><ArrowLeftRight /> Transferir o cambiar</Button>
-          {quickForm}
+          <Button type="button" variant="outline" aria-haspopup="dialog" onClick={() => setQuickAction("transfer")}><ArrowLeftRight /> Transferir o cambiar</Button>
         </div>}
         {!hasPlan && (hasCashActivity || !personal) && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
           <div><h2 className="font-semibold">Organiza tus próximos cobros</h2><p className="text-sm text-muted-foreground">Configura cuándo cobras y cuánto quieres apartar para comida.</p></div>
@@ -480,14 +502,12 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
         </FinanceDetails>
       </>}
       {tab === "Libro diario" && <>
-        {personal && <FinanceDetails title="Importar movimientos de Banesco">
-          <BankImport entries={entries} categories={expenseAccounts.map(account => [account, names[account]])}
-            onSaved={async () => setEntries((await adminApi<{ entries: Entry[] }>(path)).entries)} />
-        </FinanceDetails>}
+        {personal && <Button type="button" variant="outline" aria-haspopup="dialog" onClick={() => setShowBankImport(true)}>
+          Importar movimientos de Banesco
+        </Button>}
         {personal && <FinanceDetails title="Anotar el saldo inicial de otra cuenta">
           <p className="text-sm text-muted-foreground">Úsalo cuando comiences a llevar una cuenta de banco o efectivo.</p>
-          <Button type="button" variant="outline" aria-expanded={quickAction === "opening"} onClick={() => setQuickAction(quickAction === "opening" ? null : "opening")}>Anotar saldo inicial</Button>
-          {quickForm}
+          <Button type="button" variant="outline" aria-haspopup="dialog" onClick={() => setQuickAction("opening")}>Anotar saldo inicial</Button>
         </FinanceDetails>}
         <FinanceDetails title="Registrar asiento manual">
         <p className="text-sm text-muted-foreground">Para corregir un asiento, registra su reversión con las cuentas invertidas.</p>
