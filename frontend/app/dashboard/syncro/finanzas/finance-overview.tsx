@@ -47,9 +47,13 @@ export function FinanceOverview({ plan, entries, today, expenseAccounts }: {
     if (expenseAccounts.includes(entry.credit)) expenses -= entry.cents;
   }
 
-  return <section className="grid items-start gap-4 rounded-xl border bg-card p-4 lg:grid-cols-[auto_1fr]">
+  return <section className="grid items-start gap-4 rounded-xl border bg-card p-2 sm:p-4 lg:grid-cols-[auto_1fr]">
     <div className="mx-auto w-fit">
-      <Calendar locale={es} mode="single" selected={calendarDate(selected)} month={calendarDate(visibleMonth + "-01")}
+      <Calendar locale={es} mode="single" className="px-1 sm:px-3" classNames={{
+          weekday: "w-8 rounded-md text-xs font-normal text-muted-foreground sm:w-9",
+          day: "relative size-8 p-0 text-center sm:size-9",
+          day_button: "size-8 rounded-lg text-sm hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary/50 sm:size-9",
+        }} selected={calendarDate(selected)} month={calendarDate(visibleMonth + "-01")}
         onMonthChange={day => {
           const next = dateKey(day).slice(0, 7);
           setVisibleMonth(next);

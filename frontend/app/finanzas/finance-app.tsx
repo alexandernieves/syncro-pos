@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CalendarDays, ChevronDown, House, Landmark, LogOut, Receipt, Wallet } from "lucide-react";
+import { NubiTabBar, nubiCenterSlotClass, nubiCenterTabClass, nubiTabClass } from "@/components/portal/nubi-tab-bar";
 import { NubiFace } from "@/components/portal/nubi-face";
 import { syncThemeColor } from "@/components/portal/nubi-splash";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { financeGroups, type FinanceSection } from "@/lib/central-finance-navigation";
-import { cn } from "@/lib/utils";
 import FinanceWorkspace from "../dashboard/syncro/finanzas/finance-workspace";
 import FinanceInstallation from "./finance-installation";
 import FinanceLogin, { financeSessionStore, type FinanceUser } from "./finance-login";
@@ -58,12 +58,12 @@ export default function FinanceApp({ section }: { section?: FinanceSection }) {
   const firstName = user.name?.trim().split(/\s+/)[0];
   const personalHome = section.slug === "resumen-personal";
 
-  return <div className="relative isolate min-h-dvh pb-[calc(env(safe-area-inset-bottom)+100px)]">
+  return <div className="relative isolate min-h-dvh min-w-0 w-full pb-[calc(env(safe-area-inset-bottom)+116px)]">
     <div className="sc-hero pointer-events-none absolute inset-x-0 top-0 -z-10" aria-hidden />
     <svg className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[300px] w-full opacity-40" aria-hidden viewBox="0 0 390 300" preserveAspectRatio="none">
       <path d="M-10 230 Q40 120 90 210 Q140 110 190 200 Q240 100 290 190 Q340 95 400 170" fill="none" stroke="white" strokeWidth="2" strokeDasharray="1.5 8" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
     </svg>
-    <div className="mx-auto max-w-md">
+    <div className="mx-auto w-full min-w-0 max-w-md">
       <header className="px-5 pt-[calc(env(safe-area-inset-top)+14px)]">
         <div className="flex min-h-11 items-center justify-between gap-2">
           <Link href="/finanzas/" className="flex items-center gap-2 text-sm font-semibold text-white"><Wallet className="size-4" aria-hidden /> Syncro Finanzas</Link>
@@ -92,25 +92,25 @@ export default function FinanceApp({ section }: { section?: FinanceSection }) {
       </header>
       <FinanceWorkspace section={section} mobile />
     </div>
-    <nav className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-40 mx-auto flex min-h-16 max-w-sm items-center justify-around gap-1 rounded-full bg-white px-2 py-2 shadow-[0_8px_25px_rgba(139,92,26,0.18)]" aria-label={section.group}>
+    <NubiTabBar label={section.group} raised={group?.workspace === "personal"}>
       {navSections?.map(item => {
         const Icon = navIcons[item.tab];
         const active = section.slug === item.slug;
-        const raised = group?.workspace === "personal" && item.tab === "Libro diario";
-        const label = item.tab === "Resumen" && group?.workspace === "personal" ? "Inicio"
-          : item.tab === "Libro diario" && group?.workspace === "personal" ? "Movimientos" : item.title;
-        return <Link key={item.slug} href={"/finanzas/" + item.slug}
-          aria-current={active ? "page" : undefined} className={cn(
-            "flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 text-center text-[9px] font-semibold leading-tight focus-visible:outline-2 focus-visible:outline-primary sm:text-[10px]",
-            raised ? "relative z-10" : active ? "bg-amber-100 text-amber-800" : "text-zinc-600 hover:bg-zinc-100",
-          )}>
-          {raised
-            ? <><span className="absolute -top-[28px] grid size-14 place-items-center rounded-full bg-white shadow-[0_-3px_10px_rgba(139,92,26,0.08)]">
-                <span className={cn("grid size-11 place-items-center rounded-full", active ? "bg-amber-100 text-amber-800" : "bg-primary text-primary-foreground")}><Icon className="size-5" aria-hidden /></span>
-              </span><span className={cn("pt-7", active ? "text-amber-800" : "text-zinc-600")}>{label}</span></>
-            : <><Icon className="size-[17px] shrink-0" aria-hidden />{label}</>}
+        const personal = group?.workspace === "personal";
+        const label = item.tab === "Resumen" && personal ? "Inicio" : item.title;
+        const href = "/finanzas/" + item.slug;
+        if (personal && item.tab === "Libro diario") {
+          return <div key={item.slug} className={nubiCenterSlotClass}>
+            <Link href={href} aria-current={active ? "page" : undefined} className={nubiCenterTabClass(active)}>
+              <Icon className="size-[22px]" aria-hidden />
+              <span className="mt-0.5 text-[9px] font-black">Movimientos</span>
+            </Link>
+          </div>;
+        }
+        return <Link key={item.slug} href={href} aria-current={active ? "page" : undefined} className={nubiTabClass(active)}>
+          <Icon className="size-[18px]" aria-hidden />{label}
         </Link>;
       })}
-    </nav>
+    </NubiTabBar>
   </div>;
 }

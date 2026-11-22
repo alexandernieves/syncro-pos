@@ -833,3 +833,17 @@ html.syncro-credit .sc-ad .sc-ad-go { position: absolute; left: 18px; bottom: 18
     font-size: 16px;
   }
 }
+
+html:has(.syncro-finance-theme),
+html:has(.syncro-finance-theme) body {
+  max-inline-size: 100%;
+  overflow-x: clip;
+  overscroll-behavior-x: none;
+}
+
+.syncro-finance-theme {
+  width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+  touch-action: pan-y;
+}

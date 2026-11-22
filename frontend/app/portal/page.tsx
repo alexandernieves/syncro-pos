@@ -33,6 +33,7 @@ import {
     PolarGrid, PolarRadiusAxis, PolarAngleAxis, RadialBar, RadialBarChart, Label as RechartsLabel 
 } from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
+import { NubiTabBar, nubiCenterSlotClass, nubiCenterTabClass, nubiTabClass } from "@/components/portal/nubi-tab-bar";
 import { NubiSplash, syncThemeColor } from "@/components/portal/nubi-splash";
 import { NubiFace, type NubiMood, type NubiRoll } from "@/components/portal/nubi-face";
 import { NubiPortal, type PortalFx } from "@/components/portal/nubi-portal";
@@ -5275,30 +5276,8 @@ $1color: #8E3418 !important;
             {/* "Instala Syncro Credit" (hidden once it is installed) */}
             <InstallPrompt />
 
-            {/* CAPSULE BOTTOM NAV (GOOEY METABALLS DESIGN) */}
             {selectedProductForDetail === null && !isCheckoutOpen && !isCartOpen && (
-                <div className="fixed bottom-6 left-6 right-6 h-16 max-w-sm mx-auto z-50 filter drop-shadow-[0_8px_20px_rgba(139,92,26,0.12)] animate-in slide-in-from-bottom duration-300">
-                {/* SVG Filter for Gooey Effect */}
-                <svg className="absolute w-0 h-0" width="0" height="0" version="1.1" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                        <filter id="gooey-nav">
-                            <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />
-                            <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo" />
-                            <feComposite in="SourceGraphic" in2="goo" operator="atop" />
-                        </filter>
-                    </defs>
-                </svg>
-
-                {/* Gooey Background Shapes */}
-                <div className="absolute inset-0 w-full h-full pointer-events-none" style={{ filter: "url(#gooey-nav)" }}>
-                    {/* Main Bar Background */}
-                    <div className="absolute inset-0 w-full h-full bg-white rounded-full" />
-                    {/* Central Bubble Background (Enlarged) */}
-                    <div className="absolute w-[84px] h-[84px] bg-white rounded-full -top-[30px] left-1/2 -translate-x-1/2" />
-                </div>
-
-                {/* Interactive Foreground Menu */}
-                <div className="absolute inset-0 w-full h-full flex justify-around items-center px-4">
+                <NubiTabBar label="Syncro Credit">
                     <button 
                         onClick={() => { 
                             setRequestLoanView(false); 
@@ -5313,7 +5292,7 @@ $1color: #8E3418 !important;
                             setSelectedProductForDetail(null);
                             setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false); setShowLoans(false);
                         }} 
-                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "home" && !requestLoanView && !showLevel && !showLoans ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
+                        className={nubiTabClass(activeTab === "home" && !requestLoanView && !showLevel && !showLoans)}
                     >
                         <IconCreditCard size={18} />
                         <span>Inicio</span>
@@ -5333,7 +5312,7 @@ $1color: #8E3418 !important;
                             setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false);
                             openLoans("mine");
                         }}
-                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "home" && showLoans && loansView === "mine" ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
+                        className={nubiTabClass(activeTab === "home" && showLoans && loansView === "mine")}
                     >
                         <span className="relative">
                             <IconCash size={18} />
@@ -5343,7 +5322,7 @@ $1color: #8E3418 !important;
                     </button>
 
                     {/* Central button: ask for a loan (the market) */}
-                    <div className="relative w-[84px] h-full flex items-center justify-center shrink-0">
+                    <div className={nubiCenterSlotClass}>
                         <button 
                             aria-label="Pedir préstamo"
                             onClick={() => { 
@@ -5359,11 +5338,7 @@ $1color: #8E3418 !important;
                                 setSelectedProductForDetail(null);
                                 setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false);
                             }} 
-                            className={`absolute -top-[34px] w-[72px] h-[72px] rounded-full flex flex-col items-center justify-center transition-all duration-300 transform active:scale-95 shadow-md z-10 ${
-                                showLoans && loansView === "market" 
-                                    ? "bg-amber-400 text-white scale-105 shadow-amber-400/35 border-none" 
-                                    : "bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100/40 shadow-zinc-200"
-                            }`}
+                            className={nubiCenterTabClass(showLoans && loansView === "market")}
                         >
                             <IconCash size={22} />
                             <span className="text-[10px] font-black mt-0.5">Pedir</span>
@@ -5387,7 +5362,7 @@ $1color: #8E3418 !important;
                             setShowHistory(true);
                             window.scrollTo({ top: 0 });
                         }} 
-                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "payments" && showHistory ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
+                        className={nubiTabClass(activeTab === "payments" && showHistory)}
                     >
                         <IconHistory size={18} />
                         <span>Historial</span>
@@ -5406,13 +5381,12 @@ $1color: #8E3418 !important;
                             setSelectedProductForDetail(null);
                             setPurchaseSuccessData(null); setPlanDebt(null); setShowHistory(false); setShowLevel(false); setShowLoans(false);
                         }} 
-                        className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[9px] font-bold transition-colors duration-300 ${activeTab === "profile" ? "text-amber-500 font-extrabold" : "text-zinc-400"}`}
+                        className={nubiTabClass(activeTab === "profile")}
                     >
                         <IconUser size={18} />
                         <span>Perfil</span>
                     </button>
-                </div>
-            </div>
+                </NubiTabBar>
             )}
 
             {/* BRANCHES MODAL */}

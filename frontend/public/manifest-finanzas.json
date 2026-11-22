@@ -9,8 +9,8 @@
   "background_color": "#f6f3ee",
   "theme_color": "#F26B3A",
   "icons": [
-    { "src": "/sc-icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/sc-icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/sc-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/finance-nubi-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/finance-nubi-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/finance-nubi-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

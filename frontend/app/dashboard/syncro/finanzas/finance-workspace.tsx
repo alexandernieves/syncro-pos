@@ -549,7 +549,7 @@ function FinanceDetails({ title, children }: { title: string; children: React.Re
     <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 font-medium [&::-webkit-details-marker]:hidden">
       {title}<ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden />
     </summary>
-    <div className="space-y-4 border-t p-4">{children}</div>
+    <div className="space-y-4 border-t p-3 sm:p-4">{children}</div>
   </details>;
 }
 
