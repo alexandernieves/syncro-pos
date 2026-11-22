@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { FileText, Plus } from "lucide-react";
+import { CalendarDays, FileText, Plus } from "lucide-react";
 import { adminApi, adminResponse } from "@/lib/syncro-admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FinanceDate, readableDate } from "./finance-calendar";
 import { FiscalPdfPreview } from "./fiscal-pdf-preview";
+import { FiscalCalendar } from "./fiscal-calendar";
+import { invoicePeriod, monthlyIvaReference } from "./fiscal-periods";
 import { FinanceSelect } from "./finance-fields";
 
 const kinds = {
@@ -17,14 +19,14 @@ const kinds = {
   retention: { singular: "Retención", plural: "Retenciones", statuses: [["pending", "Por verificar"], ["confirmed", "Verificada"]] },
 } as const;
 type Kind = keyof typeof kinds;
-type RecordItem = {
+export type FiscalRecord = {
   id: string; kind: Kind; status: string; reference: string; date: string; period: string | null;
   dueDate: string | null; filedDate: string | null; paidDate: string | null; counterparty: string | null;
   tax: string | null; direction: string | null; invoiceId: string | null; notes: string | null;
   baseCents: number | null; vatCents: number | null; amountCents: number | null;
   rateCurrency: string | null; rate: string | null; supportMime: string | null;
 };
-type Editor = { id: string; kind: Kind; record?: RecordItem };
+type Editor = { id: string; kind: Kind; record?: FiscalRecord; period?: string };
 const bolivares = new Intl.NumberFormat("es-VE", { style: "currency", currency: "VES" });
 
 function fileBase64(file: File) {
@@ -40,10 +42,14 @@ function fileBase64(file: File) {
 export default function FiscalRecords({ workspace, mobile }: { workspace: "personal" | "company"; mobile: boolean }) {
   const path = `/finance/${workspace}/fiscal`;
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Caracas", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  const [records, setRecords] = useState<RecordItem[]>();
-  const [kind, setKind] = useState<Kind>("invoice");
+  const [records, setRecords] = useState<FiscalRecord[]>();
+  const [kind, setKind] = useState<Kind | "calendar">("invoice");
+  const [calendarPeriod, setCalendarPeriod] = useState(today.slice(0, 7));
+  const [calendarMonth, setCalendarMonth] = useState(today.slice(0, 7));
+  const [calendarDay, setCalendarDay] = useState<string>();
+  const [monthlyIva, setMonthlyIva] = useState(false);
   const [editor, setEditor] = useState<Editor>();
-  const [preview, setPreview] = useState<RecordItem>();
+  const [preview, setPreview] = useState<FiscalRecord>();
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewError, setPreviewError] = useState("");
   const [error, setError] = useState("");
@@ -52,7 +58,7 @@ export default function FiscalRecords({ workspace, mobile }: { workspace: "perso
 
   useEffect(() => {
     const controller = new AbortController();
-    adminApi<RecordItem[]>(path, { signal: controller.signal }).then(setRecords).catch(failure => {
+    adminApi<FiscalRecord[]>(path, { signal: controller.signal }).then(setRecords).catch(failure => {
       if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : "No se pudo cargar el registro");
     });
     return () => controller.abort();
@@ -87,7 +93,7 @@ export default function FiscalRecords({ workspace, mobile }: { workspace: "perso
       const values = Object.fromEntries([...form].filter(([, value]) => typeof value === "string"));
       const money = (field: string) => values[field] ? Math.round(Number(values[field]) * 100) : null;
       const file = form.get("support");
-      const item = await adminApi<RecordItem>(`${path}/${editor.id}`, {
+      const item = await adminApi<FiscalRecord>(`${path}/${editor.id}`, {
         method: "PUT",
         body: JSON.stringify({
           ...values, kind: editor.kind, invoiceId: values.invoiceId === "none" ? null : values.invoiceId,
@@ -115,6 +121,22 @@ export default function FiscalRecords({ workspace, mobile }: { workspace: "perso
     {[0, 1, 2].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
   </div>;
 
+  function openPeriod(period: string, deadline?: string) {
+    setCalendarPeriod(period);
+    setCalendarDay(deadline);
+    setCalendarMonth((deadline ?? (period.length >= 7 ? period : today)).slice(0, 7));
+  }
+
+  function goToRecordPeriod(row: FiscalRecord) {
+    const period = row.kind === "invoice" ? invoicePeriod(row) : row.period;
+    if (!period) return;
+    const due = row.dueDate ?? records?.find(item =>
+      item.kind === "declaration" && item.tax === "IVA" && item.period === period && item.dueDate,
+    )?.dueDate ?? (monthlyIva ? monthlyIvaReference(period) : undefined);
+    openPeriod(period, due);
+    setKind("calendar");
+  }
+
   const visible = records.filter(row => row.kind === kind);
   const overdue = records.filter(row => row.kind === "declaration" && row.status === "pending" && row.dueDate && row.dueDate < today).length;
 
@@ -122,7 +144,13 @@ export default function FiscalRecords({ workspace, mobile }: { workspace: "perso
     {overdue > 0 && <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{overdue} {overdue === 1 ? "declaración pendiente con vencimiento registrado" : "declaraciones pendientes con vencimiento registrado"}.</p>}
     <nav aria-label="Tipo de registro fiscal" className="flex flex-wrap gap-1 rounded-xl border bg-card p-1.5">
       {(Object.keys(kinds) as Kind[]).map(key => <Button key={key} variant={kind === key ? "secondary" : "ghost"} size="sm" aria-pressed={kind === key} onClick={() => setKind(key)}>{kinds[key].plural}</Button>)}
+      <Button type="button" variant={kind === "calendar" ? "secondary" : "ghost"} size="sm" aria-pressed={kind === "calendar"} onClick={() => setKind("calendar")}><CalendarDays /> Calendario fiscal</Button>
     </nav>
+    {kind === "calendar" ? <FiscalCalendar records={records} today={today} period={calendarPeriod} month={calendarMonth} selectedDate={calendarDay}
+      monthlyIva={monthlyIva} onPeriod={openPeriod} onMonth={month => { setCalendarMonth(month); setCalendarDay(undefined); }}
+      onDay={(date, period) => { setCalendarDay(date); setCalendarMonth(date.slice(0, 7)); if (period) setCalendarPeriod(period); }}
+      onMonthlyIva={setMonthlyIva} onEdit={row => edit({ id: row.id, kind: row.kind, record: row })}
+      onAddDeclaration={period => edit({ id: crypto.randomUUID(), kind: "declaration", period })} /> : <>
     <div className="flex justify-end">
       <Button onClick={() => edit({ id: crypto.randomUUID(), kind })}><Plus /> Agregar {kinds[kind].singular.toLowerCase()}</Button>
     </div>
@@ -140,9 +168,11 @@ export default function FiscalRecords({ workspace, mobile }: { workspace: "perso
       </p>}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={() => edit({ id: row.id, kind: row.kind, record: row })}>Editar</Button>
+        {(row.kind === "invoice" || (row.kind === "declaration" && row.period)) && <Button size="sm" variant="ghost" onClick={() => goToRecordPeriod(row)}><CalendarDays /> Ver período</Button>}
         {row.supportMime && <Button size="sm" variant="outline" onClick={() => setPreview(row)}><FileText /> Ver soporte</Button>}
       </div>
     </li>)}</ul> : <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">Aún no hay registros en esta sección.</p>}
+    </>}
     <Dialog open={!!editor} onOpenChange={open => { if (!open && !busy) setEditor(undefined); }}>
       <DialogContent data-finance-workspace="" data-finance-mobile={mobile ? "" : undefined} className="z-[60] max-h-[85dvh] overflow-y-auto overscroll-y-contain">
         <DialogHeader>
@@ -156,7 +186,7 @@ export default function FiscalRecords({ workspace, mobile }: { workspace: "perso
             </label>
             <FinanceSelect label="Estado" name="status" options={kinds[editor.kind].statuses} defaultValue={editor.record?.status ?? kinds[editor.kind].statuses[0][0]} />
             <FinanceDate label={editor.kind === "invoice" ? "Fecha de emisión" : "Fecha del registro"} defaultValue={editor.record?.date ?? today} />
-            <label className="text-sm">Período<Input name="period" placeholder="Ej. 2026-11-2" defaultValue={editor.record?.period ?? ""} required={editor.kind === "declaration"} /></label>
+            <label className="text-sm">Período<Input name="period" placeholder="Ej. 2026-11-2" defaultValue={editor.record?.period ?? editor.period ?? ""} required={editor.kind === "declaration"} /></label>
             {editor.kind !== "declaration" && <label className="text-sm">{editor.kind === "invoice" ? "Cliente" : "Contraparte"}
               <Input name="counterparty" maxLength={200} defaultValue={editor.record?.counterparty ?? ""} required={editor.kind === "retention"} />
             </label>}
