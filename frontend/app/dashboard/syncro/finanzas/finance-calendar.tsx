@@ -29,7 +29,7 @@ export function FinanceDate({ label, name = "date", defaultValue = "", min, max 
           <ChevronDown className="ml-auto text-muted-foreground" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto p-0">
+      <PopoverContent align="start" className="z-[70] w-auto p-0">
         <Calendar locale={es} mode="single" defaultMonth={value ? calendarDate(value) : undefined}
           selected={value ? calendarDate(value) : undefined}
           disabled={day => Boolean((min && dateKey(day) < min) || (max && dateKey(day) > max))}

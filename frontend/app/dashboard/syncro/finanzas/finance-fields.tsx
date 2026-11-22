@@ -22,7 +22,7 @@ export function FinanceSelect({ label, name, options, defaultValue, value, onCha
     <label className="block text-sm font-medium" htmlFor={id}>{label}</label>
     <Select name={name} defaultValue={defaultValue} value={value} required onValueChange={onChange}>
       <SelectTrigger id={id} className="w-full rounded-xl bg-background data-[size=default]:h-11"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-      <SelectContent>{options.map(([key, title]) => <SelectItem key={key} value={key}>{title}</SelectItem>)}</SelectContent>
+      <SelectContent className="z-[70]">{options.map(([key, title]) => <SelectItem key={key} value={key}>{title}</SelectItem>)}</SelectContent>
     </Select>
   </div>;
 }
