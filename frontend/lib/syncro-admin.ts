@@ -1,7 +1,7 @@
 import { apiFetch } from "@/lib/api";
 
 /** Calls a /syncro-admin endpoint and throws the server's message when it fails. */
-export async function adminApi<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function adminResponse(path: string, options: RequestInit = {}): Promise<Response> {
   const dedicatedFinance = typeof window !== "undefined" && path.startsWith("/finance/") &&
     window.location.pathname.startsWith("/finanzas") &&
     (sessionStorage.getItem("syncro-finance-session") === "1" || window.matchMedia("(display-mode: standalone)").matches);
@@ -13,9 +13,14 @@ export async function adminApi<T>(path: string, options: RequestInit = {}): Prom
   } : options);
   if (res.status === 401 && typeof window !== "undefined" && path.startsWith("/finance/") &&
       window.location.pathname.startsWith("/finanzas")) window.dispatchEvent(new Event("syncro_finance_session_expired"));
+  if (res.ok) return res;
   const body = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(Array.isArray(body?.message) ? body.message.join(", ") : body?.message || "No se pudo completar la acción");
-  return body as T;
+  throw new Error(Array.isArray(body?.message) ? body.message.join(", ") : body?.message || "No se pudo completar la acción");
+}
+
+export async function adminApi<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await adminResponse(path, options);
+  return response.json().catch(() => null) as Promise<T>;
 }
 
 export type BusinessStatus = "ACTIVE" | "TRIAL" | "SUSPENDED";

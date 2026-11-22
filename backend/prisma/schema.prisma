@@ -2529,3 +2529,35 @@ model CentralFinancePlan {
   scope   String @id
   data    Json
 }
+
+model CentralFiscalRecord {
+  scope           String
+  id              String
+  kind            String
+  identity        String
+  tax             String?
+  direction       String?
+  reference       String
+  counterparty    String?
+  date            String
+  period          String?
+  dueDate         String?
+  filedDate       String?
+  paidDate        String?
+  status          String
+  baseCents       Int?
+  vatCents        Int?
+  amountCents     Int?
+  rateCurrency    String?
+  rate            Decimal? @db.Decimal(20, 8)
+  notes           String?
+  invoiceId       String?
+  support         Bytes?
+  supportMime     String?
+  actorId         String
+  updatedAt       DateTime @updatedAt
+
+  @@id([scope, id])
+  @@unique([scope, identity])
+  @@index([scope, date])
+}

@@ -5,6 +5,7 @@ export const financeGroups = [
     sections: [
       { slug: "libro-diario", title: "Libro diario", tab: "Libro diario" },
       { slug: "estados-financieros", title: "Estados financieros", tab: "Estados financieros" },
+      { slug: "fiscal-empresa", title: "Registro fiscal", tab: "Fiscal" },
     ],
   },
   {
@@ -25,6 +26,7 @@ export const financeGroups = [
       { slug: "presupuesto-personal", title: "Presupuesto", tab: "Presupuesto" },
       { slug: "movimientos-personales", title: "Movimientos", tab: "Libro diario" },
       { slug: "deudas-personales", title: "Deudas", tab: "Deudas" },
+      { slug: "fiscal-personal", title: "Registro fiscal", tab: "Fiscal" },
     ],
   },
 ] as const;

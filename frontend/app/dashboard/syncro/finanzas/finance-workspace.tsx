@@ -14,6 +14,7 @@ import { FinanceCheck, FinanceSelect, MoneyFields, type Quotes } from "./finance
 import { CashForecast, FinanceOverview } from "./finance-overview";
 import { FinanceDate } from "./finance-calendar";
 import { BankImport } from "./bank-import";
+import FiscalRecords from "./fiscal-records";
 import { FinanceSkeleton } from "./finance-skeleton";
 import { projection, simulateDebts, walletAccounts, walletBalances, type Entry, type Frequency, type OriginalMoney, type Plan } from "./calculations";
 
@@ -52,7 +53,8 @@ export default function FinanceWorkspace({ section, mobile = false }: { section:
       </div>
       {!mobile && section.tab === "Resumen" && <Button asChild size="sm" variant="outline"><Link href="/finanzas/instalar/">Instalar app de Finanzas</Link></Button>}
     </header>}
-    <Workspace key={section.slug} workspace={section.workspace} tab={section.tab} mobile={mobile} />
+    {section.tab === "Fiscal" ? <FiscalRecords key={section.slug} workspace={section.workspace} mobile={mobile} />
+      : <Workspace key={section.slug} workspace={section.workspace} tab={section.tab} mobile={mobile} />}
   </main>;
 }
 
@@ -279,6 +281,7 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
             <Button type="button" variant={hasCashActivity ? "default" : "outline"} aria-haspopup="dialog" onClick={() => setQuickAction("income")}><ArrowDownLeft /> Registrar ingreso</Button>
             <Button asChild variant="outline"><Link href={sectionUrl("gastos-personales")}><ArrowUpRight /> Registrar gasto</Link></Button>
             <Button type="button" variant="outline" aria-haspopup="dialog" onClick={() => setQuickAction("transfer")}><ArrowLeftRight /> Transferir o cambiar</Button>
+            <Button asChild variant="outline"><Link href={sectionUrl("fiscal-personal")}>Registro fiscal</Link></Button>
           </div>
         </section>}
         {!personal && <div className="rounded-xl border p-4">

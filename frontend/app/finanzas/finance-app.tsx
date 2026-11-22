@@ -21,6 +21,7 @@ const navIcons = {
   "Libro diario": Wallet,
   "Estados financieros": Landmark,
   "Deudas": Landmark,
+  "Fiscal": Receipt,
 };
 
 export default function FinanceApp({ section }: { section?: FinanceSection }) {
@@ -84,6 +85,7 @@ export default function FinanceApp({ section }: { section?: FinanceSection }) {
                 <Link href={"/finanzas/" + item.sections[0].slug}>{item.title}</Link>
               </DropdownMenuItem>)}
               <DropdownMenuSeparator />
+              <DropdownMenuItem asChild><Link href={section.workspace === "company" ? "/finanzas/fiscal-empresa" : "/finanzas/fiscal-personal"}><Receipt /> Registro fiscal</Link></DropdownMenuItem>
               <DropdownMenuItem onSelect={logout}><LogOut /> Cerrar sesión</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
