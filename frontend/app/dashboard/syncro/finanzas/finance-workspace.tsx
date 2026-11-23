@@ -2,22 +2,25 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ChevronDown, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, ChartNoAxesCombined, Wallet } from "lucide-react";
 import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
 import { financeUrl, type FinanceSection } from "@/lib/central-finance-navigation";
 import { adminApi, usd } from "@/lib/syncro-admin";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { FinanceSheet } from "./finance-sheet";
 import { FinanceCheck, FinanceSelect, MoneyFields, type Quotes } from "./finance-fields";
 import { CashForecast, FinanceOverview } from "./finance-overview";
-import { FinanceDate } from "./finance-calendar";
+import { FinanceDate, readableDate } from "./finance-calendar";
 import { budgetSuggestion } from "./budget-suggestion";
 import { BankImport } from "./bank-import";
 import FinanceNubiSettings from "./finance-nubi-settings";
 import FiscalRecords from "./fiscal-records";
 import { FinanceSkeleton } from "./finance-skeleton";
+import { FinanceDecisionCard, FinanceQuickActions } from "./finance-decision-card";
+import { FinanceDebtsView } from "./finance-debts-view";
 import { projection, simulateDebts, shiftDay, walletAccounts, walletBalances, type Entry, type Frequency, type OriginalMoney, type Plan } from "./calculations";
 
 const names: Record<string, string> = {
@@ -77,6 +80,8 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
   const [quotes, setQuotes] = useState<Quotes>({});
   const [horizon, setHorizon] = useState(13);
   const [formRevision, setFormRevision] = useState(0);
+  const [expenseOpen, setExpenseOpen] = useState(false);
+  const [expenseFilter, setExpenseFilter] = useState("all");
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -153,6 +158,7 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
       setEntryIds(ids => ({ ...ids, [kind]: "" }));
       form.reset();
       setFormRevision(revision => revision + 1);
+      if (kind === "expense") setExpenseOpen(false);
       if (kind === quickAction) setQuickAction(null);
     }, kind === "opening" ? "Saldo inicial registrado" : kind === "income" ? "Ingreso registrado" : kind === "expense" ? "Gasto registrado" : kind === "transfer" ? "Transferencia registrada" : "Asiento registrado");
   }
@@ -176,6 +182,41 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
     }, "Pago registrado en los dos espacios");
   }
 
+  async function payDebt({ index, date, wallet, original }: { index: number; date: string; wallet: string; original: OriginalMoney }) {
+    const debt = plan.debts[index];
+    if (!debt) return;
+    const paidUsdCents = original.currency === "USD" || original.currency === "USDT"
+      ? original.nativeCents
+      : Math.round(original.nativeCents / (original.rate || 1));
+    await perform(async () => {
+      await adminApi(path + "/entries", {
+        method: "POST",
+        body: JSON.stringify({
+          id: crypto.randomUUID(),
+          ...original,
+          date,
+          description: `Abono deuda: ${debt.name}`,
+          debit: "debt",
+          credit: wallet,
+          cents: paidUsdCents,
+          smallSpend: false,
+        }),
+      });
+      const data = await adminApi<{ entries: Entry[] }>(path);
+      setEntries(data.entries);
+      const remainingBalance = Math.max(0, debt.balance - paidUsdCents);
+      const nextDebts = plan.debts.flatMap((item, i) => {
+        if (i !== index) return [item];
+        if (remainingBalance <= 0) return [];
+        const updatedOriginal = item.balanceOriginal && item.balanceOriginal.currency === original.currency
+          ? { ...item.balanceOriginal, nativeCents: Math.max(0, item.balanceOriginal.nativeCents - original.nativeCents) }
+          : { currency: "USD", nativeCents: remainingBalance, rate: 1 };
+        return [{ ...item, balance: remainingBalance, balanceOriginal: updatedOriginal }];
+      });
+      setPlan(await adminApi<Plan>(path + "/plan", { method: "PUT", body: JSON.stringify({ ...plan, debts: nextDebts }) }));
+    }, `Abono registrado en ${debt.name}`);
+  }
+
   if (!ready) return error
     ? <p role="alert" className="rounded-xl border bg-card p-4 text-destructive">{error}</p>
     : <FinanceSkeleton tab={tab} mobile={mobile} />;
@@ -197,6 +238,12 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
   const purchases = entries.filter(entry =>
     entry.date <= asOf && entry.date.startsWith(month) && expenseAccounts.includes(entry.debit),
   );
+  const spendingCategories = expenseAccounts
+    .map(account => ({ account, amount: spending[account] ?? 0 }))
+    .sort((a, b) => b.amount - a.amount);
+  const largestExpense = spendingCategories[0]?.amount ?? 0;
+  const filteredPurchases = purchases.filter(entry =>
+    expenseFilter === "all" || (expenseFilter === "small" ? entry.smallSpend : entry.debit === expenseFilter));
   const smallPurchases = purchases.filter(entry => entry.smallSpend);
   const smallTotal = smallPurchases.reduce((sum, entry) => sum + entry.cents, 0);
   const smallLimit = plan.smallSpendLimit ?? 0;
@@ -205,9 +252,10 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
   const liabilities = -(totals.payable ?? 0) - (totals.debt ?? 0);
   const wallets = walletBalances(entries, asOf);
   const bookBalance = walletAccounts.reduce((sum, account) => sum + (totals[account] ?? 0), 0);
-  const hasCurrentQuotes = wallets.every(row => row.currency === "USD" || Number(quotes[row.currency]?.rate) > 0);
+  const isUsdPegged = (currency: string) => currency === "USD" || currency === "USDT";
+  const hasCurrentQuotes = wallets.every(row => isUsdPegged(row.currency) || Number(quotes[row.currency]?.rate) > 0);
   const available = hasCurrentQuotes
-    ? wallets.reduce((sum, row) => sum + Math.round(row.cents / (row.currency === "USD" ? 1 : quotes[row.currency]!.rate)), 0)
+    ? wallets.reduce((sum, row) => sum + Math.round(row.cents / (isUsdPegged(row.currency) ? 1 : quotes[row.currency]!.rate)), 0)
     : bookBalance;
   const opening = entries.filter(entry => entry.date <= asOf && entry.credit === "equity" &&
     walletAccounts.includes(entry.debit) && entry.description === "Saldo inicial").reduce((sum, row) => sum + row.cents, 0);
@@ -217,51 +265,54 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
   const baseline = simulateDebts(plan.debts, 0);
   const extra = stress ? forecast.extra : Math.min(forecast.extra, projection(plan, asOf, available, grocery + dining, true, horizon).extra);
   const accelerated = simulateDebts(plan.debts, extra);
+  const totalDebt = plan.debts.reduce((sum, debt) => sum + debt.balance, 0);
   const suggested = tab === "Presupuesto" && budgetView === "suggestion" ? budgetSuggestion(plan, entries, budgetMonth, asOf, Math.max(0, cents(groceryReceipts) || 0)) : null;
   const cashFirst = suggested ? projection({ ...plan, grocery: 0, dining: 0 }, asOf, available, 0, false, 4).shortfall : undefined;
   const personal = workspace === "personal";
   const paymentDraft = editingPayment === null ? undefined : plan.obligations[editingPayment];
   const hasCashActivity = entries.some(entry => entry.date <= asOf &&
-    [entry.debit, entry.credit].some(account => account === "cash" || account === "bank"));
+    [entry.debit, entry.credit].some(account => walletAccounts.includes(account)));
   const sectionUrl = mobile ? (slug: string) => "/finanzas/" + slug : financeUrl;
   const budgetUrl = sectionUrl(personal ? "presupuesto-personal" : "presupuesto-empresa");
 
-  const quickForm = quickAction && <form key={quickAction} className="grid gap-3 border-t pt-4 sm:grid-cols-2" onSubmit={event => postEntry(event, quickAction)}>
+  const quickForm = quickAction && <form key={quickAction} className="grid gap-3.5 pt-2 sm:grid-cols-2" onSubmit={event => postEntry(event, quickAction)}>
     <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
-    {quickAction === "income" && <label>Concepto<Input name="description" placeholder="Ej. Sueldo" maxLength={200} required /></label>}
+    {quickAction === "income" && <label className="block space-y-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>Concepto</span><Input className="h-12 rounded-2xl text-base sm:text-sm" name="description" placeholder="Ej. Sueldo o pago de cliente" maxLength={200} required /></label>}
     {quickAction === "transfer" && <Account name="credit" label="Desde" options={walletAccounts} />}
     <Account name="debit" label={quickAction === "transfer" ? "Hacia" : "Dónde está el dinero"} options={walletAccounts} />
-    <MoneyFields quotes={quotes} label={quickAction === "opening" ? "Saldo inicial" : quickAction === "transfer" ? "Importe enviado" : "Importe recibido"} />
-    {quickAction === "transfer" && <MoneyFields quotes={quotes} prefix="to" label="Importe recibido" reference={false} />}
-    <Button type="submit" className="sm:col-span-2">Guardar {quickAction === "opening" ? "saldo" : quickAction === "transfer" ? "transferencia" : "ingreso"}</Button>
+    <div className="sm:col-span-2"><MoneyFields quotes={quotes} label={quickAction === "opening" ? "Saldo inicial" : quickAction === "transfer" ? "Importe enviado" : "Importe recibido"} /></div>
+    {quickAction === "transfer" && <div className="sm:col-span-2"><MoneyFields quotes={quotes} prefix="to" label="Importe recibido" reference={false} /></div>}
+    <Button type="submit" className="h-12 rounded-full text-base font-semibold sm:col-span-2">Guardar {quickAction === "opening" ? "saldo" : quickAction === "transfer" ? "transferencia" : "ingreso"}</Button>
   </form>;
 
   return <div className="space-y-5">
-    {error && !quickAction && <p role="alert" className="text-destructive">{error}</p>}
+    {error && !quickAction && !expenseOpen && <p role="alert" className="text-destructive">{error}</p>}
     {success && <p role="status">{success}</p>}
-    <Dialog open={quickAction !== null} onOpenChange={open => { if (!open && !busy) setQuickAction(null); }}>
-      <DialogContent data-finance-workspace="" data-finance-mobile={mobile ? "" : undefined} className="z-[60] max-h-[85dvh] overflow-y-auto overscroll-y-contain">
-        <DialogHeader>
-          <DialogTitle>{quickAction === "opening" ? "Anotar saldo inicial" : quickAction === "income" ? "Registrar ingreso" : "Transferir o cambiar"}</DialogTitle>
-          <DialogDescription>{quickAction === "opening"
-            ? "Anota lo que ya tienes en esta cuenta. Si ya incluye un cobro anterior, registra ese dinero una sola vez."
-            : quickAction === "income" ? "Registra el importe que efectivamente recibiste y su moneda."
-              : "Indica cuánto salió de una cuenta y cuánto llegó a la otra."}</DialogDescription>
-        </DialogHeader>
-        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <fieldset disabled={busy} className="min-w-0">{quickForm}</fieldset>
-      </DialogContent>
-    </Dialog>
-    {personal && tab === "Libro diario" && <Dialog open={showBankImport} onOpenChange={setShowBankImport}>
-      <DialogContent data-finance-workspace="" data-finance-mobile={mobile ? "" : undefined} className="z-[60] max-h-[85dvh] overflow-y-auto overscroll-y-contain">
-        <DialogHeader>
-          <DialogTitle>Importar movimientos de Banesco</DialogTitle>
-          <DialogDescription>Revisa el archivo y confirma los movimientos que quieres guardar.</DialogDescription>
-        </DialogHeader>
+    <FinanceSheet
+      open={quickAction !== null}
+      onOpenChange={open => { if (!open && !busy) setQuickAction(null); }}
+      mobile={mobile}
+      title={quickAction === "opening" ? "Anotar saldo inicial" : quickAction === "income" ? "Registrar ingreso" : "Transferir o cambiar"}
+      description={quickAction === "opening"
+        ? "Anota lo que ya tienes en esta cuenta. Si ya incluye un cobro anterior, registra ese dinero una sola vez."
+        : quickAction === "income" ? "Registra el importe que efectivamente recibiste y su moneda."
+          : "Indica cuánto salió de una cuenta y cuánto llegó a la otra."}
+    >
+      {error && <p role="alert" className="mb-3 rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+      <fieldset disabled={busy} className="min-w-0">{quickForm}</fieldset>
+    </FinanceSheet>
+    {personal && tab === "Libro diario" && (
+      <FinanceSheet
+        open={showBankImport}
+        onOpenChange={setShowBankImport}
+        mobile={mobile}
+        title="Importar movimientos de Banesco"
+        description="Revisa el archivo y confirma los movimientos que quieres guardar."
+      >
         <BankImport entries={entries} categories={expenseAccounts.map(account => [account, names[account]])}
           onSaved={async () => setEntries((await adminApi<{ entries: Entry[] }>(path)).entries)} />
-      </DialogContent>
-    </Dialog>}
+      </FinanceSheet>
+    )}
     <fieldset disabled={busy} className="min-w-0 space-y-4">
       {tab === "Resumen" && <>
         {mobile && <section className="space-y-3">
@@ -283,21 +334,28 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
             )}
           </div>
         </section>}
-        {personal && <section className="rounded-2xl border bg-card p-5 sm:p-6">
-          <h2 className="text-xl font-semibold">{hasCashActivity ? "¿Qué quieres registrar?" : "Empieza por tu saldo de hoy"}</h2>
-          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-            {hasCashActivity
-              ? "Anota lo que entra y sale para tener tu saldo al día."
-              : "Anota el dinero que ya tienes en el banco o en efectivo. Luego registra cada cobro y cada gasto a medida que ocurran."}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {!hasCashActivity && <Button type="button" aria-haspopup="dialog" onClick={() => setQuickAction("opening")}><Wallet /> Anotar saldo inicial</Button>}
-            <Button type="button" variant={hasCashActivity ? "default" : "outline"} aria-haspopup="dialog" onClick={() => setQuickAction("income")}><ArrowDownLeft /> Registrar ingreso</Button>
-            <Button asChild variant="outline"><Link href={sectionUrl("gastos-personales")}><ArrowUpRight /> Registrar gasto</Link></Button>
-            <Button type="button" variant="outline" aria-haspopup="dialog" onClick={() => setQuickAction("transfer")}><ArrowLeftRight /> Transferir o cambiar</Button>
-            <Button asChild variant="outline"><Link href={sectionUrl("fiscal-personal")}>Registro fiscal</Link></Button>
-          </div>
-        </section>}
+        {personal && <>
+          <FinanceQuickActions
+            hasCashActivity={hasCashActivity}
+            onOpening={() => setQuickAction("opening")}
+            onIncome={() => setQuickAction("income")}
+            onTransfer={() => setQuickAction("transfer")}
+            expensesHref={sectionUrl("gastos-personales")}
+            fiscalHref={sectionUrl("fiscal-personal")}
+          />
+          {(hasPlan || hasCashActivity || totalDebt > 0) && (
+            <FinanceDecisionCard
+              available={available}
+              reserve={plan.reserve}
+              foodRemaining={grocery + dining}
+              extraForDebts={extra}
+              totalDebt={totalDebt}
+              shortfall={forecast.shortfall}
+              debtsHref={sectionUrl("deudas-personales")}
+              budgetHref={budgetUrl}
+            />
+          )}
+        </>}
         {!personal && <div className="rounded-xl border p-4">
           <Button type="button" variant="outline" aria-haspopup="dialog" onClick={() => setQuickAction("transfer")}><ArrowLeftRight /> Transferir o cambiar</Button>
         </div>}
@@ -319,40 +377,59 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
               <CardFooter className="text-sm text-muted-foreground">{hint}</CardFooter>
             </Card>)}
         </div>}
-        <FinanceDetails title="Saldos por cuenta y moneda">
-          <p className="text-sm text-muted-foreground">El saldo inicial es el dinero registrado al comenzar. El saldo disponible refleja lo que entró y salió después. Cada movimiento conserva su tasa. El saldo usa la referencia vigente cuando está disponible para todas tus monedas.</p>
-          {opening > 0 && <p>Saldo inicial registrado <strong>{money(opening)}</strong></p>}
-          {wallets.length ? <dl className="grid gap-2 sm:grid-cols-2">{wallets.map(row =>
-            <div key={row.account + row.currency} className="flex justify-between gap-2 rounded-lg border p-3"><dt>{names[row.account]}</dt><dd className="tabular-nums">{nativeMoney(row.cents, row.currency)}</dd></div>
-          )}</dl> : <p>Aún no hay saldos registrados.</p>}
-        </FinanceDetails>
         {personal && (plan.grocery > 0 || plan.dining > 0) && <div className="flex flex-wrap justify-between gap-2 rounded-lg border p-4">
           <div><p className="text-sm text-muted-foreground">Disponible para comida este mes</p>
             <p>Mercado <strong>{money(grocery)}</strong> · Comidas fuera <strong>{money(dining)}</strong></p></div>
           <Button asChild variant="ghost"><Link href={budgetUrl}>Ver presupuesto</Link></Button>
         </div>}
-        <FinanceDetails title="Calendario e historial por período">
-          <FinanceOverview plan={plan} entries={entries} today={asOf} expenseAccounts={expenseAccounts} />
-        </FinanceDetails>
-        <FinanceDetails title="Proyección de flujo de caja">
-          <FinanceSelect label="Horizonte" value={String(horizon)} options={[4, 8, 13, 26, 52, horizon].filter((value, index, all) => all.indexOf(value) === index).sort((a, b) => a - b).map(value => [String(value), `${value} semanas`])} onChange={value => setHorizon(Number(value))} />
-          <form className="flex flex-wrap items-end gap-2" onSubmit={event => {
-            event.preventDefault();
-            const weeks = Number(new FormData(event.currentTarget).get("weeks"));
-            setHorizon(weeks);
-            void savePlan({ ...plan, horizonWeeks: weeks });
-          }}>
-            <label className="block max-w-52 space-y-1.5 text-sm font-medium">Semanas personalizadas
-              <Input key={horizon} name="weeks" className="h-11 rounded-xl" type="number" min={1} max={52} defaultValue={horizon} required />
-            </label>
-            <Button type="submit" variant="outline">Guardar horizonte</Button>
-          </form>
-          {plan.debts.length > 0 && <p>Capacidad estimada para abono inmediato <strong>{money(extra)}</strong></p>}
-          <p className="text-sm text-muted-foreground">Parte de los movimientos registrados hasta hoy. Confirma que los compromisos de hoy siguen pendientes. Los cobros de hoy cuentan al registrar el ingreso.</p>
-          <FinanceCheck checked={stress} onChange={setStress} label="Simular cobros 10 % menores" />
-          <p>{forecast.shortfall ? `Primer faltante frente a la reserva: ${forecast.shortfall.date} · ${money(forecast.shortfall.cents)}` : "La proyección cubre la reserva configurada."}</p>
-          <CashForecast weeks={forecast.weeks} />
-        </FinanceDetails>
+        <Tabs defaultValue="accounts" className="gap-3">
+          <TabsList aria-label="Vistas del resumen" className="grid h-auto w-full grid-cols-3 rounded-xl border bg-card p-1">
+            {([{ value: "accounts", label: "Cuentas", icon: Wallet }, { value: "calendar", label: "Calendario", icon: CalendarDays }, { value: "forecast", label: "Proyección", icon: ChartNoAxesCombined }]).map(({ value, label, icon: Icon }) =>
+              <TabsTrigger key={value} value={value} className="min-h-11 flex-col rounded-lg px-1 text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-foreground sm:flex-row sm:text-sm">
+                <Icon aria-hidden />{label}
+              </TabsTrigger>)}
+          </TabsList>
+          <TabsContent value="accounts">
+            <FinancePanel title="Saldos por cuenta y moneda">
+              <p className="text-sm text-muted-foreground">El saldo inicial es el dinero registrado al comenzar. El saldo disponible refleja lo que entró y salió después. Cada movimiento conserva su tasa. El saldo usa la referencia vigente cuando está disponible para todas tus monedas.</p>
+              {opening > 0 && <p>Saldo inicial registrado <strong>{money(opening)}</strong></p>}
+              {wallets.length ? <dl className="grid gap-2 sm:grid-cols-2">{wallets.map(row =>
+                <div key={row.account + row.currency} className="flex justify-between gap-2 rounded-lg border p-3"><dt>{names[row.account]}</dt><dd className="tabular-nums">{nativeMoney(row.cents, row.currency)}</dd></div>
+              )}</dl> : <p>Aún no hay saldos registrados.</p>}
+            </FinancePanel>
+          </TabsContent>
+          <TabsContent value="calendar">
+            <FinancePanel title="Calendario e historial por período">
+              <FinanceOverview plan={plan} entries={entries} today={asOf} expenseAccounts={expenseAccounts} />
+            </FinancePanel>
+          </TabsContent>
+          <TabsContent value="forecast">
+            <FinancePanel title="Proyección de flujo de caja">
+              <FinanceSelect label="Horizonte" value={String(horizon)} options={[4, 8, 13, 26, 52, horizon].filter((value, index, all) => all.indexOf(value) === index).sort((a, b) => a - b).map(value => [String(value), `${value} semanas`])} onChange={value => setHorizon(Number(value))} />
+              <form className="flex flex-wrap items-end gap-2" onSubmit={event => {
+                event.preventDefault();
+                const weeks = Number(new FormData(event.currentTarget).get("weeks"));
+                setHorizon(weeks);
+                void savePlan({ ...plan, horizonWeeks: weeks });
+              }}>
+                <label className="block max-w-52 space-y-1.5 text-sm font-medium">Semanas personalizadas
+                  <Input key={horizon} name="weeks" className="h-11 rounded-xl" type="number" min={1} max={52} defaultValue={horizon} required />
+                </label>
+                <Button type="submit" variant="outline">Guardar horizonte</Button>
+              </form>
+              {plan.debts.length > 0 && <p>Capacidad estimada para abono inmediato <strong>{money(extra)}</strong></p>}
+              <p className="text-sm text-muted-foreground">Parte de los movimientos registrados hasta hoy. Confirma que los compromisos de hoy siguen pendientes. Los cobros de hoy cuentan al registrar el ingreso.</p>
+              <FinanceCheck checked={stress} onChange={setStress} label="Simular cobros 10 % menores" />
+              <div role="status" className="rounded-xl border bg-muted/50 p-3">
+                <p className="font-semibold">{forecast.shortfall ? "Se prevé un faltante" : "Reserva cubierta en la proyección"}</p>
+                {forecast.shortfall && <p className="text-sm text-muted-foreground">
+                  El {readableDate(forecast.shortfall.date)} faltarían <strong>{money(forecast.shortfall.cents)}</strong> para mantener tu reserva mínima.
+                </p>}
+              </div>
+              <CashForecast weeks={forecast.weeks} />
+            </FinancePanel>
+          </TabsContent>
+        </Tabs>
       </>}
       {tab === "Estados financieros" && <>
         <h2 className="text-lg font-semibold">Resumen contable</h2>
@@ -364,33 +441,60 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
           ].map(([label, value]) => <div className="rounded border p-3" key={label}><dt>{label}</dt><dd>{money(Number(value))}</dd></div>)}
         </dl>
       </>}
-      {tab === "Resumen" && !personal && <FinanceDetails title="Comparar saldo bancario">
+      {tab === "Resumen" && !personal && <FinancePanel title="Comparar saldo bancario">
         <label className="block max-w-xs">Saldo del extracto al día de hoy (USD)
           <Input type="number" step="0.01" value={statementBalance} onChange={event => setStatementBalance(event.target.value)} />
         </label>
         {statementBalance !== "" && <p>Diferencia entre extracto y libro: {money(cents(statementBalance) - (totals.bank ?? 0))}</p>}
-      </FinanceDetails>}
-      {(tab === "Estados financieros" || tab === "Libro diario") && <FinanceDetails title="Saldos contables en USD">
+      </FinancePanel>}
+      {(tab === "Estados financieros" || tab === "Libro diario") && <FinancePanel title="Saldos contables en USD">
         <dl className="grid gap-2 sm:grid-cols-2">{Object.entries(names).map(([key, label]) =>
           <div className="flex justify-between gap-3 rounded border p-2" key={key}><dt>{label}</dt><dd>{money((totals[key] ?? 0) * (["payable", "debt", "equity", "income"].includes(key) ? -1 : 1))}</dd></div>)}</dl>
-      </FinanceDetails>}
+      </FinancePanel>}
       {tab === "Gastos" && <>
-        <h2 className="text-lg font-semibold">Registrar gasto</h2>
-        <form key={formRevision} className="flex flex-wrap items-end gap-3" onSubmit={event => postEntry(event, "expense")}>
-          <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
-          <label>Concepto<Input name="description" maxLength={200} placeholder="Ej. Café camino al trabajo" required /></label>
-          <Account name="debit" label="Categoría" options={expenseAccounts} />
-          <Account name="credit" label="Pagado desde" options={walletAccounts} />
-          <MoneyFields quotes={quotes} label="Importe pagado" />
-          <FinanceCheck name="smallSpend" label="Gasto hormiga" />
-          <Button type="submit">Registrar gasto</Button>
-        </form>
-        <h2 className="text-lg font-semibold">Adónde se fue el dinero este mes</h2>
-        <p>Total de gastos registrados: <strong>{money(monthlyExpenses)}</strong></p>
-        <dl className="grid gap-2 sm:grid-cols-2">
-          {[...expenseAccounts].sort((a, b) => (spending[b] ?? 0) - (spending[a] ?? 0)).map(account =>
-            <div className="flex justify-between rounded border p-2" key={account}><dt>{names[account]}</dt><dd>{money(spending[account] ?? 0)}</dd></div>)}
-        </dl>
+        <FinancePanel title="Gastos del mes">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-3xl font-semibold tabular-nums">{money(monthlyExpenses)}</p>
+            <Button type="button" className="h-11 rounded-full px-5" onClick={() => setExpenseOpen(true)}>Registrar gasto</Button>
+          </div>
+        </FinancePanel>
+        <FinanceSheet
+          open={expenseOpen}
+          onOpenChange={open => { if (!busy) setExpenseOpen(open); }}
+          mobile={mobile}
+          title="Registrar gasto"
+          description="Elige qué compraste y desde dónde pagaste."
+        >
+          {error && <p role="alert" className="mb-3 rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+          <fieldset disabled={busy} className="min-w-0">
+            <form key={formRevision} className="grid gap-3.5" onSubmit={event => postEntry(event, "expense")}>
+              <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
+              <label className="block space-y-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <span>Concepto</span>
+                <Input className="h-12 rounded-2xl text-base sm:text-sm" name="description" maxLength={200} placeholder="Ej. Café camino al trabajo" required />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Account name="debit" label="Categoría" options={expenseAccounts} />
+                <Account name="credit" label="Pagado desde" options={walletAccounts} />
+              </div>
+              <MoneyFields quotes={quotes} label="Importe pagado" />
+              <FinanceCheck name="smallSpend" label="Marcar como gasto hormiga" />
+              <Button type="submit" className="h-12 rounded-full text-base font-semibold">Guardar gasto</Button>
+            </form>
+          </fieldset>
+        </FinanceSheet>
+        <FinancePanel title="Gastos por categoría">
+          {spendingCategories.every(({ amount }) => amount === 0) ? <p className="text-sm text-muted-foreground">Aún no hay importes por categoría este mes.</p> :
+            <dl className="grid gap-4 sm:grid-cols-2">
+              {spendingCategories.filter(({ amount }) => amount !== 0).map(({ account, amount }) =>
+                <div key={account} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1.5">
+                  <dt className="text-sm">{names[account]}</dt><dd className="text-right text-sm font-semibold tabular-nums">{money(amount)}</dd>
+                  {amount > 0 && <div aria-hidden className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-primary" style={{ width: (amount / largestExpense) * 100 + "%" }} />
+                  </div>}
+                </div>)}
+            </dl>}
+        </FinancePanel>
         <h2 className="text-lg font-semibold">Gastos hormiga de este mes</h2>
         <p>{smallPurchases.length} movimientos · <strong>{money(smallTotal)}</strong></p>
         {smallLimit > 0 && <p role="status">
@@ -399,10 +503,17 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
             : `Disponible del tope de ${money(smallLimit)}: ${money(smallLimit - smallTotal)}.`}
         </p>}
         <h2 className="text-lg font-semibold">Movimientos del mes</h2>
-        <ul className="space-y-2">{purchases.map(entry =>
-          <li className="rounded border p-2" key={entry.id}>
-            {entry.date} · {entry.description} · {names[entry.debit]} · {names[entry.credit]} · {entry.nativeCents != null ? nativeMoney(entry.nativeCents, entry.currency ?? "USD") : money(entry.cents)}
-            {entry.smallSpend && " · Gasto hormiga"}
+        <FinanceSelect label="Filtrar movimientos" value={expenseFilter} onChange={setExpenseFilter}
+          options={[["all", "Todos los gastos"], ["small", "Gastos hormiga"], ...expenseAccounts.map(account => [account, names[account]] as [string, string])]} />
+        {!filteredPurchases.length && <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">No hay movimientos para este filtro.</p>}
+        <ul className="space-y-2">{filteredPurchases.map(entry =>
+          <li className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 rounded-xl border bg-card p-3" key={entry.id}>
+            <div className="min-w-0">
+              <p className="break-words font-medium">{entry.description}</p>
+              <p className="text-sm text-muted-foreground">{readableDate(entry.date)} · {names[entry.debit]} · {names[entry.credit]}</p>
+              {entry.smallSpend && <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-xs">Gasto hormiga</span>}
+            </div>
+            <strong className="tabular-nums">{entry.nativeCents != null ? nativeMoney(entry.nativeCents, entry.currency ?? "USD") : money(entry.cents)}</strong>
           </li>)}</ul>
       </>}
       {tab === "Presupuesto" && <>
@@ -538,7 +649,7 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
             <Button variant="outline" type="button" onClick={() => void savePlan({ ...plan, incomeOverrides: (plan.incomeOverrides ?? []).filter(item => item !== row) })}>Restaurar habitual</Button>
           </li>)}</ul>
         </>}
-        <FinanceDetails title="Registrar un ingreso recibido">
+        <FinancePanel title="Registrar un ingreso recibido">
         <p className="text-sm text-muted-foreground">Registra aquí el importe que llegó a tu cuenta. Ajusta el plan si ya recibiste un cobro que sigue previsto para una fecha futura.</p>
         <form key={formRevision} className="flex flex-wrap items-end gap-3" onSubmit={event => postEntry(event, "income")}>
           <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
@@ -547,7 +658,7 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
           <MoneyFields quotes={quotes} label="Importe recibido" />
           <Button type="submit">Registrar ingreso</Button>
         </form>
-        </FinanceDetails>
+        </FinancePanel>
         </section>}
         {budgetView === "payments" && <section className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
         <h2 className="text-lg font-semibold">Programar cobros y pagos</h2>
@@ -583,11 +694,11 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
         {personal && <Button type="button" variant="outline" aria-haspopup="dialog" onClick={() => setShowBankImport(true)}>
           Importar movimientos de Banesco
         </Button>}
-        {personal && <FinanceDetails title="Anotar el saldo inicial de otra cuenta">
+        {personal && <FinancePanel title="Anotar el saldo inicial de otra cuenta">
           <p className="text-sm text-muted-foreground">Úsalo cuando comiences a llevar una cuenta de banco o efectivo.</p>
           <Button type="button" variant="outline" aria-haspopup="dialog" onClick={() => setQuickAction("opening")}>Anotar saldo inicial</Button>
-        </FinanceDetails>}
-        <FinanceDetails title="Registrar asiento manual">
+        </FinancePanel>}
+        <FinancePanel title="Registrar asiento manual">
         <p className="text-sm text-muted-foreground">Para corregir un asiento, registra su reversión con las cuentas invertidas.</p>
         <form key={formRevision} className="flex flex-wrap items-end gap-3" onSubmit={event => postEntry(event)}>
           <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
@@ -597,7 +708,7 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
           <MoneyFields quotes={quotes} label="Importe" />
           <Button type="submit">Registrar asiento</Button>
         </form>
-        </FinanceDetails>
+        </FinancePanel>
         {workspace === "company" && <form key={formRevision} className="space-y-3 rounded border p-4" onSubmit={postOwnerPayment}>
           <h2 className="font-semibold">Registrar un pago de Syncro a mi cuenta personal</h2>
           <div className="flex flex-wrap items-end gap-3">
@@ -620,43 +731,31 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
           </tr>)}</tbody>
         </table></div>
       </>}
-      {tab === "Deudas" && <>
-        <p>Simulación estimada para cuotas mensuales y tasa nominal anual fija. Registra las deudas aquí para incluir sus cuotas en la proyección.</p>
-        <form className="flex flex-wrap items-end gap-3" onSubmit={event => {
-          event.preventDefault();
-          const fields = new FormData(event.currentTarget);
-          void savePlan({ ...plan, debts: [...plan.debts, { name: String(fields.get("name")), date: String(fields.get("date")), balance: 0, minimum: 0, balanceOriginal: originalMoney(fields, "balance"), minimumOriginal: originalMoney(fields, "minimum"), apr: cents(fields.get("apr")) }] });
-        }}>
-          <label className="block space-y-1.5 text-sm font-medium"><span>Acreedor</span><Input className="h-11 rounded-xl" name="name" placeholder="Ej. Banco o persona" maxLength={200} required /></label>
-          <FinanceDate label="Próximo vencimiento" min={asOf} />
-          <MoneyFields quotes={quotes} prefix="balance" label="Saldo pendiente" />
-          <MoneyFields quotes={quotes} prefix="minimum" label="Cuota mensual" />
-          <label>Tasa anual (%)<Input name="apr" type="number" min="0" max="1000" step="0.01" required /></label>
-          <Button type="submit">Agregar deuda</Button>
-        </form>
-        <ul className="space-y-2">{plan.debts.map((debt, index) =>
-          <li className="flex flex-wrap items-center justify-between gap-2 rounded border p-2" key={index}>
-            <span>{debt.name} · Saldo {debt.balanceOriginal ? nativeMoney(debt.balanceOriginal.nativeCents, debt.balanceOriginal.currency) : money(debt.balance)} · Cuota {debt.minimumOriginal ? nativeMoney(debt.minimumOriginal.nativeCents, debt.minimumOriginal.currency) : money(debt.minimum)} · {debt.apr / 100}% anual · {debt.date}</span>
-            <Button variant="outline" type="button" onClick={() => void savePlan({ ...plan, debts: plan.debts.filter((_, i) => i !== index) })}>Quitar</Button>
-          </li>)}</ul>
-        {plan.debts.length > 0 && <div className="space-y-2 rounded border p-4">
-          <p>Capacidad estimada para un abono inmediato tras proteger la reserva durante {horizon} semanas: <strong>{money(extra)}</strong></p>
-          <p>Cuotas y reasignación de cuotas liberadas: {baseline ? `${baseline.months} meses · ${money(baseline.interest)} en intereses` : "La simulación supera 600 meses."}</p>
-          <p>Con el abono inmediato: {accelerated ? `${accelerated.months} meses · ${money(accelerated.interest)} en intereses` : "La simulación supera 600 meses."}</p>
-          <p>Orden de abono por tasa: {[...plan.debts].sort((a, b) => b.apr - a.apr).map(debt => debt.name).join(", ")}</p>
-        </div>}
-      </>}
+      {tab === "Deudas" && (
+        <FinanceDebtsView
+          debts={plan.debts}
+          asOf={asOf}
+          quotes={quotes}
+          horizon={horizon}
+          extra={extra}
+          baseline={baseline}
+          accelerated={accelerated}
+          busy={busy}
+          mobile={mobile}
+          onAddDebt={debt => savePlan({ ...plan, debts: [...plan.debts, debt] })}
+          onRemoveDebt={index => savePlan({ ...plan, debts: plan.debts.filter((_, i) => i !== index) })}
+          onPayDebt={payDebt}
+        />
+      )}
     </fieldset>
   </div>;
 }
 
-function FinanceDetails({ title, children }: { title: string; children: React.ReactNode }) {
-  return <details className="group rounded-xl border bg-card">
-    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 font-medium [&::-webkit-details-marker]:hidden">
-      {title}<ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden />
-    </summary>
-    <div className="space-y-4 border-t p-3 sm:p-4">{children}</div>
-  </details>;
+function FinancePanel({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section className="space-y-4 rounded-2xl border bg-card p-4 sm:p-5">
+    <h2 className="text-base font-semibold">{title}</h2>
+    {children}
+  </section>;
 }
 
 function Dollar({ name, label, value, min = 0 }: { name: string; label: string; value?: number; min?: number }) {

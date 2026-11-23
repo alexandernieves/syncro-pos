@@ -3,10 +3,14 @@ import { apiFetch } from "@/lib/api";
 /** Calls a /syncro-admin endpoint and throws the server's message when it fails. */
 export async function adminResponse(path: string, options: RequestInit = {}): Promise<Response> {
   const finance = path.startsWith("/finance/") || path === "/finance-nubi" || path.startsWith("/finance-nubi/");
+  const standalonePwa = typeof window !== "undefined" && (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
   const dedicatedFinance = typeof window !== "undefined" && finance &&
     window.location.pathname.startsWith("/finanzas") &&
-    (sessionStorage.getItem("syncro-finance-session") === "1" || window.matchMedia("(display-mode: standalone)").matches);
-  const token = dedicatedFinance ? sessionStorage.getItem("token") : null;
+    (localStorage.getItem("syncro-finance-session") === "1" || sessionStorage.getItem("syncro-finance-session") === "1" || standalonePwa);
+  const token = dedicatedFinance ? (localStorage.getItem("token") || sessionStorage.getItem("token")) : null;
   const res = await apiFetch(`/syncro-admin${path}`, finance ? {
     ...options,
     cache: "no-store",

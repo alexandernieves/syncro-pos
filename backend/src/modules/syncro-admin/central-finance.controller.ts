@@ -45,6 +45,7 @@ export class CentralFinanceController {
           VES: bcv?.rateUsd ? { rate: bcv.rateUsd, source: 'BCV', date: bcv.updateDate } : null,
           EUR: bcv?.rateUsd && bcv.rateEur ? { rate: bcv.rateUsd / bcv.rateEur, source: 'BCV', date: bcv.updateDate } : null,
           COP: trm ? { ...trm, source: 'TRM' } : null,
+          USDT: { rate: 1, source: 'Paridad' },
         }));
       this.quotes = { expires: Date.now() + 5 * 60_000, data };
     }

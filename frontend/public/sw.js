@@ -9,9 +9,10 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => {
-        return undefined;
-      })
+      fetch(event.request).catch(() => new Response(
+        '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sin conexión · Syncro</title><style>body{font-family:system-ui,-apple-system,sans-serif;display:grid;place-items:center;min-height:100dvh;margin:0;background:#f6f4f0;color:#141414;padding:24px;text-align:center}button{margin-top:16px;background:#F26B3A;color:#fff;border:0;border-radius:999px;padding:12px 24px;font-weight:700;font-size:15px}</style></head><body><main><h1>Sin conexión a internet</h1><p>Revisa tu señal e intenta recargar para ver tus finanzas al día.</p><button onclick="location.reload()">Reintentar</button></main></body></html>',
+        { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      ))
     );
   }
 });

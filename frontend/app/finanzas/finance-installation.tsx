@@ -35,13 +35,16 @@ export default function FinanceInstallation() {
 
     window.addEventListener("beforeinstallprompt", handleOffer);
     window.addEventListener("appinstalled", handleInstalled);
-    const manifest = document.createElement("link");
-    manifest.rel = "manifest";
-    manifest.href = "/manifest-finanzas.json";
-    document.head.append(manifest);
+    const existing = document.querySelector('link[rel="manifest"]');
+    const manifest = existing ? null : document.createElement("link");
+    if (manifest) {
+      manifest.rel = "manifest";
+      manifest.href = "/manifest-finanzas.json";
+      document.head.append(manifest);
+    }
 
     return () => {
-      manifest.remove();
+      manifest?.remove();
       window.removeEventListener("beforeinstallprompt", handleOffer);
       window.removeEventListener("appinstalled", handleInstalled);
     };

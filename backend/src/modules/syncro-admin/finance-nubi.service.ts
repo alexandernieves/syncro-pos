@@ -152,8 +152,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
 
     let scope: string;
     try {
-      const company = await requireFinanceScope(this.prisma, { id: row.userId, role: 'syncropos' }, 'company');
-      scope = row.workspace === 'company' ? company : `personal:${row.userId}`;
+      scope = await requireFinanceScope(this.prisma, { id: row.userId, role: 'syncropos' }, row.workspace);
     } catch (error) {
       if (!(error instanceof ForbiddenException)) throw error;
       await this.change(row, reset);

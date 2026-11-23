@@ -4,7 +4,7 @@ import FinanceTheme from "./finance-theme";
 export const metadata: Metadata = {
   title: "Syncro Finanzas",
   description: "Registra gastos, ingresos, saldos y transferencias desde tu teléfono.",
-  manifest: null,
+  manifest: "/manifest-finanzas.json",
   icons: { icon: "/finance-nubi-192.png", apple: "/finance-nubi-apple.png" },
   appleWebApp: { capable: true, title: "Syncro Finanzas", statusBarStyle: "black-translucent" },
 };

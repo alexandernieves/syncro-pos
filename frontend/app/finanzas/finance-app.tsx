@@ -42,10 +42,13 @@ export default function FinanceApp({ section }: { section?: FinanceSection }) {
   useEffect(() => { syncThemeColor(); }, [user, section]);
 
   const logout = useCallback(() => {
-    const store = financeSessionStore();
-    store.removeItem("token");
-    store.removeItem("user");
-    if (store === localStorage) document.cookie = "token=; path=/; max-age=0; SameSite=Strict; Secure";
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("syncro-finance-session");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
+    sessionStorage.removeItem("syncro-finance-session");
+    document.cookie = "token=; path=/; max-age=0; SameSite=Strict; Secure";
     window.dispatchEvent(new Event("syncro_session_activity"));
     setUser(null);
   }, []);

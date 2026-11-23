@@ -9,9 +9,18 @@ import { adoptAccount } from "@/lib/auth-helpers";
 
 export type FinanceUser = { id: string; role: string; name?: string };
 
+export const isStandaloneFinancePwa = () =>
+  typeof window !== "undefined" && (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+
 export const financeSessionStore = () =>
-  sessionStorage.getItem("syncro-finance-session") === "1" ||
-  window.matchMedia("(display-mode: standalone)").matches ? sessionStorage : localStorage;
+  localStorage.getItem("syncro-finance-session") === "1" || isStandaloneFinancePwa()
+    ? localStorage
+    : sessionStorage.getItem("syncro-finance-session") === "1"
+      ? sessionStorage
+      : localStorage;
 
 export default function FinanceLogin({ onLogin }: { onLogin: (user: FinanceUser) => void }) {
   const id = useId();
@@ -38,6 +47,9 @@ export default function FinanceLogin({ onLogin }: { onLogin: (user: FinanceUser)
       const user = result.user as FinanceUser;
       if (user.role !== "syncropos") throw new Error("Usa tu cuenta de Syncro Central para iniciar sesión.");
       await adoptAccount(user);
+      localStorage.setItem("token", result.access_token);
+      localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("syncro-finance-session", "1");
       sessionStorage.setItem("token", result.access_token);
       sessionStorage.setItem("user", JSON.stringify(user));
       sessionStorage.setItem("syncro-finance-session", "1");
