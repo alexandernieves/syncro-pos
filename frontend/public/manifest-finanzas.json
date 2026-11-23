@@ -6,7 +6,7 @@
   "start_url": "/finanzas/",
   "scope": "/finanzas/",
   "display": "standalone",
-  "background_color": "#f6f3ee",
+  "background_color": "#F26B3A",
   "theme_color": "#F26B3A",
   "icons": [
     { "src": "/finance-nubi-192.png", "sizes": "192x192", "type": "image/png" },

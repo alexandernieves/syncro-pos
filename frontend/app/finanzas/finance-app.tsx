@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { financeGroups, type FinanceSection } from "@/lib/central-finance-navigation";
 import FinanceWorkspace from "../dashboard/syncro/finanzas/finance-workspace";
-import { FinanceSkeleton } from "../dashboard/syncro/finanzas/finance-skeleton";
 import FinanceInstallation from "./finance-installation";
 import FinanceLogin, { financeSessionStore, type FinanceUser } from "./finance-login";
 
@@ -39,7 +38,12 @@ export default function FinanceApp({ section }: { section?: FinanceSection }) {
     }
   }, []);
 
-  useEffect(() => { syncThemeColor(); }, [user, section]);
+  useEffect(() => {
+    syncThemeColor();
+    if (user !== undefined) {
+      window.dispatchEvent(new Event("syncro_finance_boot_ready"));
+    }
+  }, [user, section]);
 
   const logout = useCallback(() => {
     localStorage.removeItem("token");
@@ -58,7 +62,7 @@ export default function FinanceApp({ section }: { section?: FinanceSection }) {
     return () => window.removeEventListener("syncro_finance_session_expired", logout);
   }, [logout]);
 
-  if (user === undefined) return <main className="mx-auto max-w-md px-4 pt-[calc(env(safe-area-inset-top)+14px)]"><FinanceSkeleton mobile session /></main>;
+  if (user === undefined) return <main data-sc-orange className="min-h-dvh bg-[#F26B3A]" aria-hidden />;
   if (!user) return <FinanceLogin onLogin={setUser} />;
   if (!section) return <FinanceInstallation />;
 
