@@ -86,16 +86,16 @@ export function FinanceExpensesView({
 
   return (
     <div className="space-y-4">
-      {/* Hero Obsidian Banking Card with Grid Texture */}
-      <section className="finance-bank-card relative overflow-hidden rounded-[28px] p-5 text-white shadow-[0_20px_44px_-18px_rgba(20,16,12,0.55)]">
-        <div aria-hidden className="finance-grid-bg pointer-events-none absolute inset-0 opacity-70" />
+      {/* Hero Syncro Card with subtle grid */}
+      <section className="finance-bank-card relative overflow-hidden rounded-[24px] border p-5 text-foreground shadow-xs">
+        <div aria-hidden className="finance-grid-light pointer-events-none absolute inset-0 opacity-80" />
         <div className="relative z-10 space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Gastos del mes
               </p>
-              <p className="mt-1 text-[clamp(30px,8vw,40px)] font-bold leading-none tracking-[-0.04em] tabular-nums">
+              <p className="mt-1 text-[clamp(28px,7vw,38px)] font-bold leading-none tracking-[-0.04em] tabular-nums text-foreground">
                 {money(monthlyExpenses)}
               </p>
             </div>
@@ -103,24 +103,24 @@ export function FinanceExpensesView({
               type="button"
               size="sm"
               onClick={onOpenNewExpense}
-              className="h-10 rounded-full bg-[#F26B3A] px-4 text-xs font-bold text-white shadow-lg shadow-[#F26B3A]/30 hover:bg-[#e35d2c]"
+              className="h-10 rounded-full px-4 text-xs font-semibold shadow-xs"
             >
               <Plus className="size-4" /> Nuevo gasto
             </Button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-white/[0.06] p-3 backdrop-blur-md">
+          <div className="grid grid-cols-3 gap-2 rounded-2xl border bg-background/75 p-3 backdrop-blur-sm">
             <div>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-white/55">Promedio / día</p>
-              <p className="mt-0.5 text-sm font-bold tabular-nums">{money(dailyAvg)}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Promedio / día</p>
+              <p className="mt-0.5 text-sm font-bold tabular-nums text-foreground">{money(dailyAvg)}</p>
             </div>
             <div>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-white/55">Movimientos</p>
-              <p className="mt-0.5 text-sm font-bold tabular-nums">{purchases.length}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Movimientos</p>
+              <p className="mt-0.5 text-sm font-bold tabular-nums text-foreground">{purchases.length}</p>
             </div>
             <div>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-white/55">Vs. ingresos</p>
-              <p className="mt-0.5 text-sm font-bold tabular-nums text-[#F6A27F]">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Vs. ingresos</p>
+              <p className="mt-0.5 text-sm font-bold tabular-nums text-primary">
                 {incomePct !== null ? `${incomePct}%` : "—"}
               </p>
             </div>
@@ -247,20 +247,20 @@ export function FinanceExpensesView({
                 type="button"
                 onClick={() => onFilterChange(chip.id)}
                 className={`relative shrink-0 rounded-full px-3.5 py-2 text-xs font-semibold transition-colors ${
-                  active ? "text-white" : "border bg-card text-muted-foreground hover:text-foreground"
+                  active ? "text-primary" : "border bg-card text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {active && (
                   <motion.span
                     layoutId="expenses-filter-pill"
                     transition={{ type: "spring", stiffness: 450, damping: 32 }}
-                    className="absolute inset-0 rounded-full bg-[#1A1815] shadow-sm dark:bg-[#F26B3A]"
+                    className="absolute inset-0 rounded-full border border-primary/30 bg-primary/12"
                   />
                 )}
                 <span className="relative z-10 flex items-center gap-1.5">
                   {chip.label}
                   {chip.count !== undefined && (
-                    <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                    <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${active ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
                       {chip.count}
                     </span>
                   )}
@@ -322,3 +322,4 @@ export function FinanceExpensesView({
     </div>
   );
 }
+

@@ -411,14 +411,14 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
     <fieldset disabled={busy} className="min-w-0 space-y-4">
       {tab === "Resumen" && <>
         {mobile && <section className="space-y-3">
-          <div className="finance-bank-card relative overflow-hidden rounded-[28px] p-5 text-white shadow-[0_20px_44px_-18px_rgba(20,16,12,0.55)]">
-            <div aria-hidden className="finance-grid-bg pointer-events-none absolute inset-0 opacity-75" />
+          <div className="finance-bank-card relative overflow-hidden rounded-[26px] border p-5 text-foreground shadow-[0_18px_40px_-18px_rgba(90,30,5,0.22)]">
+            <div aria-hidden className="finance-grid-light pointer-events-none absolute inset-0 opacity-85" />
             <div className="relative z-10">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">Saldo disponible</p>
-              <p className="mt-1.5 text-[clamp(30px,8.5vw,44px)] font-bold leading-none tracking-[-0.045em] tabular-nums">{money(available)}</p>
-              <p className="mt-2.5 text-xs text-white/65">{hasCurrentQuotes ? "Equivalente en USD a tasa vigente" : "Equivalente contable en USD"}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Saldo disponible</p>
+              <p className="mt-1.5 text-[clamp(30px,8.5vw,44px)] font-bold leading-none tracking-[-0.045em] tabular-nums text-foreground">{money(available)}</p>
+              <p className="mt-2.5 text-xs text-muted-foreground">{hasCurrentQuotes ? "Equivalente en USD a tasa vigente" : "Equivalente contable en USD"}</p>
             </div>
-            <Wallet className="absolute -bottom-4 -right-2 size-28 -rotate-12 text-white/[0.06]" aria-hidden />
+            <Wallet className="absolute -bottom-4 -right-2 size-28 -rotate-12 text-foreground/[0.04]" aria-hidden />
           </div>
           <div className="grid grid-cols-2 gap-3">
             {([
@@ -565,19 +565,19 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
                   key={key}
                   type="button"
                   onClick={() => setExpensesMode(key)}
-                  className={`relative h-10 rounded-2xl text-xs font-semibold transition-colors ${active ? "text-white" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`relative h-10 rounded-2xl text-xs font-semibold transition-colors ${active ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   {active && (
                     <motion.span
                       layoutId="expenses-mode-pill"
                       transition={{ type: "spring", stiffness: 450, damping: 32 }}
-                      className="absolute inset-0 rounded-2xl bg-[#1A1815] shadow-sm dark:bg-[#F26B3A]"
+                      className="absolute inset-0 rounded-2xl border border-primary/25 bg-primary/12"
                     />
                   )}
                   <span className="relative z-10 flex items-center justify-center gap-1.5">
                     {label}
                     {key === "market" && openItemsCount > 0 && (
-                      <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${active ? "bg-white/20 text-white" : "bg-emerald-500/15 text-emerald-700"}`}>
+                      <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${active ? "bg-primary/15 text-primary" : "bg-emerald-500/15 text-emerald-700"}`}>
                         {openItemsCount}
                       </span>
                     )}
@@ -653,14 +653,14 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
                 aria-pressed={active}
                 onClick={() => setBudgetView(key)}
                 className={`relative h-10 rounded-2xl px-3 text-xs font-semibold transition-colors sm:text-sm ${
-                  active ? "text-white" : "text-muted-foreground hover:text-foreground"
+                  active ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {active && (
                   <motion.span
                     layoutId="budget-view-pill"
                     transition={{ type: "spring", stiffness: 450, damping: 32 }}
-                    className="absolute inset-0 rounded-2xl bg-[#1A1815] shadow-sm dark:bg-[#F26B3A]"
+                    className="absolute inset-0 rounded-2xl border border-primary/25 bg-primary/12"
                   />
                 )}
                 <span className="relative z-10">{label}</span>

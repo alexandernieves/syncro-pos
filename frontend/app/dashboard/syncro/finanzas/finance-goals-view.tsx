@@ -99,18 +99,18 @@ export function FinanceGoalsView({
   return (
     <div className="space-y-4">
       {/* Hero Wealth & Investments Card */}
-      <section className="finance-bank-card relative overflow-hidden rounded-[28px] p-5 text-white shadow-[0_20px_44px_-18px_rgba(20,16,12,0.55)]">
-        <div aria-hidden className="finance-grid-bg pointer-events-none absolute inset-0 opacity-70" />
+      <section className="finance-bank-card relative overflow-hidden rounded-[24px] border p-5 text-foreground shadow-xs">
+        <div aria-hidden className="finance-grid-light pointer-events-none absolute inset-0 opacity-80" />
         <div className="relative z-10 space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
-                <Rocket className="size-3.5 text-[#F6A27F]" /> Objetivos e Inversiones
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                <Rocket className="size-3.5 text-primary" /> Objetivos e Inversiones
               </p>
-              <p className="mt-1 text-[clamp(30px,8vw,40px)] font-bold leading-none tracking-[-0.04em] tabular-nums">
+              <p className="mt-1 text-[clamp(28px,7vw,38px)] font-bold leading-none tracking-[-0.04em] tabular-nums text-foreground">
                 {money(totalSaved)}
               </p>
-              <p className="mt-1 text-xs text-white/65">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {totalTarget > 0 ? `de ${money(totalTarget)} en metas activas` : "Define metas de inversión y ahorro para prosperar"}
               </p>
             </div>
@@ -118,20 +118,20 @@ export function FinanceGoalsView({
               type="button"
               size="sm"
               onClick={() => setAddOpen(true)}
-              className="h-10 rounded-full bg-[#F26B3A] px-4 text-xs font-bold text-white shadow-lg shadow-[#F26B3A]/30 hover:bg-[#e35d2c]"
+              className="h-10 rounded-full px-4 text-xs font-semibold shadow-xs"
             >
               <Plus className="size-4" /> Nuevo
             </Button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.06] p-3 backdrop-blur-md">
+          <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-background/75 p-3 backdrop-blur-sm">
             <div>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-white/55">En inversiones</p>
-              <p className="mt-0.5 text-sm font-bold tabular-nums text-violet-300">{money(totalInvested)}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">En inversiones</p>
+              <p className="mt-0.5 text-sm font-bold tabular-nums text-violet-600 dark:text-violet-400">{money(totalInvested)}</p>
             </div>
             <div>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-white/55">Meta mensual</p>
-              <p className="mt-0.5 text-sm font-bold tabular-nums text-emerald-300">{money(monthlyCommitment)}/mes</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Meta mensual</p>
+              <p className="mt-0.5 text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{money(monthlyCommitment)}/mes</p>
             </div>
           </div>
         </div>
@@ -285,3 +285,4 @@ export function FinanceGoalsView({
     </div>
   );
 }
+

@@ -111,18 +111,18 @@ export function FinanceMarketView({
   return (
     <div className="space-y-4">
       {/* Hero Supermarket Live Budget Card */}
-      <section className="finance-bank-card relative overflow-hidden rounded-[28px] p-5 text-white shadow-[0_20px_44px_-18px_rgba(20,16,12,0.55)]">
-        <div aria-hidden className="finance-grid-bg pointer-events-none absolute inset-0 opacity-70" />
+      <section className="finance-bank-card relative overflow-hidden rounded-[24px] border p-5 text-foreground shadow-xs">
+        <div aria-hidden className="finance-grid-light pointer-events-none absolute inset-0 opacity-80" />
         <div className="relative z-10 space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
-                <ShoppingCart className="size-3.5 text-[#F6A27F]" /> Carrito de mercado en vivo
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                <ShoppingCart className="size-3.5 text-primary" /> Carrito de mercado en vivo
               </p>
-              <p className="mt-1 text-[clamp(30px,8vw,40px)] font-bold leading-none tracking-[-0.04em] tabular-nums">
+              <p className="mt-1 text-[clamp(28px,7vw,38px)] font-bold leading-none tracking-[-0.04em] tabular-nums text-foreground">
                 {money(cartTotal)}
               </p>
-              <p className="mt-1 text-xs text-white/65">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {openTrip ? `${openTrip.items.length} productos en el carrito hoy` : "Agrega productos aquí o díctaselos a Nubi por WhatsApp"}
               </p>
             </div>
@@ -131,7 +131,7 @@ export function FinanceMarketView({
                 type="button"
                 size="sm"
                 onClick={() => setCloseOpen(true)}
-                className="h-10 rounded-full bg-emerald-500 px-4 text-xs font-bold text-white shadow-lg shadow-emerald-500/25 hover:bg-emerald-600"
+                className="h-10 rounded-full bg-emerald-600 px-4 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700"
               >
                 <CheckCircle2 className="size-4" /> Cerrar compra
               </Button>
@@ -139,25 +139,25 @@ export function FinanceMarketView({
           </div>
 
           {/* Monthly Mercado Cap Progress */}
-          <div className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.06] p-3.5 backdrop-blur-md">
+          <div className="space-y-2 rounded-2xl border bg-background/75 p-3.5 backdrop-blur-sm">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-white/70">Tope mensual de mercado</span>
-              <span className="font-bold tabular-nums">
+              <span className="text-muted-foreground">Tope mensual de mercado</span>
+              <span className="font-bold tabular-nums text-foreground">
                 {groceryLimit > 0 ? `${money(projectedFoodTotal)} / ${money(groceryLimit)}` : "Sin tope definido"}
               </span>
             </div>
             {groceryLimit > 0 && (
               <>
-                <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/15">
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${progressPct}%` }}
                     transition={{ type: "spring", stiffness: 220, damping: 28 }}
-                    className={`h-full rounded-full ${exceeded ? "bg-rose-500" : progressPct >= 80 ? "bg-amber-400" : "bg-emerald-400"}`}
+                    className={`h-full rounded-full ${exceeded ? "bg-rose-500" : progressPct >= 80 ? "bg-amber-500" : "bg-emerald-500"}`}
                   />
                 </div>
                 <div className="flex items-center justify-between text-[11px]">
-                  <span className={exceeded ? "flex items-center gap-1 font-semibold text-rose-300" : "text-emerald-300 font-medium"}>
+                  <span className={exceeded ? "flex items-center gap-1 font-semibold text-rose-600 dark:text-rose-400" : "font-medium text-emerald-600 dark:text-emerald-400"}>
                     {exceeded ? (
                       <>
                         <AlertTriangle className="size-3" /> Excedido por {money(projectedFoodTotal - groceryLimit)}
@@ -166,7 +166,7 @@ export function FinanceMarketView({
                       `Te quedan ${money(remaining)} para no pasarte`
                     )}
                   </span>
-                  <span className="text-white/55 tabular-nums">Ya pagado: {money(foodSpentCents)}</span>
+                  <span className="text-muted-foreground tabular-nums">Ya pagado: {money(foodSpentCents)}</span>
                 </div>
               </>
             )}
@@ -317,3 +317,4 @@ export function FinanceMarketView({
     </div>
   );
 }
+
