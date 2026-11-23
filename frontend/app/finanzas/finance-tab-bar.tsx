@@ -55,15 +55,13 @@ export function FinanceTabBar({
   return (
     <nav
       aria-label={label}
-      className="pointer-events-none fixed inset-x-0 bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.35rem))] z-50 flex justify-center px-3"
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-50 border-t border-zinc-900/[0.08] bg-[#FCFBF8]/95 backdrop-blur-xl",
+        "pb-[env(safe-area-inset-bottom)] shadow-[0_-6px_24px_-8px_rgba(24,24,27,0.08)]",
+        "dark:border-white/10 dark:bg-zinc-950/95",
+      )}
     >
-      <div
-        className={cn(
-          "pointer-events-auto flex w-full max-w-[420px] items-center justify-between gap-1 rounded-[26px] border border-zinc-900/[0.08] bg-white/90 p-1.5 backdrop-blur-xl",
-          "shadow-[0_14px_34px_-10px_rgba(24,24,27,0.22),0_2px_8px_rgba(24,24,27,0.06)]",
-          "dark:border-white/10 dark:bg-zinc-900/90",
-        )}
-      >
+      <div className="mx-auto flex w-full max-w-md items-stretch justify-between px-1.5">
         {items.map(item => {
           const Icon = tabIcons[item.tab] ?? House;
           const active = activeSlug === item.slug;
@@ -75,22 +73,29 @@ export function FinanceTabBar({
               href={"/finanzas/" + item.slug}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[20px] px-1 py-1.5 transition-transform duration-150 active:scale-95 focus-visible:outline-2 focus-visible:outline-primary",
+                "relative flex min-h-[58px] min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 transition-transform duration-150 active:scale-95 focus-visible:outline-2 focus-visible:outline-primary",
                 active
                   ? "text-[#F26B3A]"
                   : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200",
               )}
             >
               {active && (
-                <motion.span
-                  layoutId="finance-tabbar-pill"
-                  transition={{ type: "spring", stiffness: 460, damping: 34 }}
-                  className="absolute inset-0 rounded-[20px] bg-[#F26B3A]/12 dark:bg-[#F26B3A]/20"
-                />
+                <>
+                  <motion.span
+                    layoutId="finance-tabbar-top-line"
+                    transition={{ type: "spring", stiffness: 500, damping: 36 }}
+                    className="absolute inset-x-3 top-0 h-[2.5px] rounded-b-full bg-[#F26B3A]"
+                  />
+                  <motion.span
+                    layoutId="finance-tabbar-glow"
+                    transition={{ type: "spring", stiffness: 460, damping: 34 }}
+                    className="pointer-events-none absolute inset-x-2 inset-y-1.5 rounded-2xl bg-[#F26B3A]/[0.09] dark:bg-[#F26B3A]/15"
+                  />
+                </>
               )}
               <Icon
                 className={cn("relative z-10 size-[20px] transition-transform duration-200", active && "scale-105")}
-                strokeWidth={active ? 2.4 : 1.9}
+                strokeWidth={active ? 2.4 : 1.85}
                 aria-hidden
               />
               <span

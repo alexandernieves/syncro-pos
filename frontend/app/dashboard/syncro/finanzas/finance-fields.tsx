@@ -35,7 +35,7 @@ export function FinanceSelect({ label, name, options, defaultValue, value, onCha
       <Select name={name} defaultValue={defaultValue} value={value} required onValueChange={onChange}>
         <SelectTrigger
           id={id}
-          className="w-full rounded-2xl border-input/80 bg-background px-3.5 text-base font-medium shadow-2xs transition-colors hover:border-primary/40 data-[size=default]:h-12 sm:text-sm"
+          className="w-full rounded-2xl border-input/70 bg-muted/45 px-3.5 text-base font-medium shadow-none transition-colors hover:border-primary/40 data-[size=default]:h-12 sm:text-sm"
         >
           <SelectValue placeholder="Seleccionar" />
         </SelectTrigger>
@@ -118,8 +118,8 @@ export function MoneyFields({ quotes, label, prefix = "", reference = true, init
       </div>
 
       {/* Unified Currency + Amount Group */}
-      <div className="flex h-12 items-stretch overflow-hidden rounded-2xl border border-input bg-background shadow-2xs transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
-        <div className="flex shrink-0 items-center border-r border-input/70 bg-muted/35">
+      <div className="flex h-12 items-stretch overflow-hidden rounded-2xl border border-foreground/12 bg-muted/40 transition-all focus-within:border-primary focus-within:bg-card focus-within:ring-2 focus-within:ring-primary/20">
+        <div className="flex shrink-0 items-center border-r border-foreground/10 bg-muted/65">
           <Select
             name={prefix ? prefix + "Currency" : "currency"}
             value={currency}
@@ -127,6 +127,7 @@ export function MoneyFields({ quotes, label, prefix = "", reference = true, init
             onValueChange={handleCurrencyChange}
           >
             <SelectTrigger
+              data-money-bare=""
               aria-label="Moneda"
               className="h-full min-w-[84px] rounded-none border-0 bg-transparent px-3 text-sm font-bold shadow-none focus-visible:ring-0"
             >
@@ -148,6 +149,7 @@ export function MoneyFields({ quotes, label, prefix = "", reference = true, init
           </span>
           <Input
             id={amountId}
+            data-money-bare=""
             className="h-full flex-1 rounded-none border-0 bg-transparent px-2 text-lg font-bold tabular-nums shadow-none focus-visible:ring-0"
             name={amountName}
             type="number"

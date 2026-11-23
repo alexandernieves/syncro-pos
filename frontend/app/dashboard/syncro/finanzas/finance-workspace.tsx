@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, ChartNoAxesCombined, Wallet } from "lucide-react";
 import { useRequireSyncroAdmin } from "@/hooks/use-require-syncro-admin";
 import { financeUrl, type FinanceSection } from "@/lib/central-finance-navigation";
@@ -21,6 +22,8 @@ import FiscalRecords from "./fiscal-records";
 import { FinanceSkeleton } from "./finance-skeleton";
 import { FinanceDecisionCard, FinanceQuickActions } from "./finance-decision-card";
 import { FinanceDebtsView } from "./finance-debts-view";
+import { FinanceExpensesView } from "./finance-expenses-view";
+import { FinanceLedgerView } from "./finance-ledger-view";
 import { projection, simulateDebts, shiftDay, walletAccounts, walletBalances, type Entry, type Frequency, type OriginalMoney, type Plan } from "./calculations";
 
 const names: Record<string, string> = {
@@ -316,20 +319,26 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
     <fieldset disabled={busy} className="min-w-0 space-y-4">
       {tab === "Resumen" && <>
         {mobile && <section className="space-y-3">
-          <div className="relative overflow-hidden rounded-[26px] bg-[linear-gradient(160deg,#ffffff_0%,#fafbfc_42%,#eceff3_100%)] p-5 text-zinc-900 shadow-[0_18px_40px_-16px_rgba(90,30,5,0.45),inset_0_1px_0_#fff,inset_0_-12px_26px_rgba(140,150,170,0.18)]">
+          <div className="finance-bank-card relative overflow-hidden rounded-[28px] p-5 text-white shadow-[0_20px_44px_-18px_rgba(20,16,12,0.55)]">
+            <div aria-hidden className="finance-grid-bg pointer-events-none absolute inset-0 opacity-75" />
             <div className="relative z-10">
-              <p className="text-sm font-semibold text-zinc-500">Saldo disponible</p>
-              <p className="mt-1 text-[clamp(28px,8vw,44px)] font-bold leading-tight tracking-[-0.045em] tabular-nums">{money(available)}</p>
-              <p className="mt-2 text-xs text-zinc-600">{hasCurrentQuotes ? "Equivalente en USD a tasa de referencia" : "Equivalente contable en USD"}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">Saldo disponible</p>
+              <p className="mt-1.5 text-[clamp(30px,8.5vw,44px)] font-bold leading-none tracking-[-0.045em] tabular-nums">{money(available)}</p>
+              <p className="mt-2.5 text-xs text-white/65">{hasCurrentQuotes ? "Equivalente en USD a tasa vigente" : "Equivalente contable en USD"}</p>
             </div>
-            <Wallet className="absolute -bottom-4 -right-2 size-28 -rotate-12 text-zinc-900/5" aria-hidden />
+            <Wallet className="absolute -bottom-4 -right-2 size-28 -rotate-12 text-white/[0.06]" aria-hidden />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {([{ label: "Ingresos del mes", value: income, icon: ArrowDownLeft }, { label: "Gastos del mes", value: monthlyExpenses, icon: ArrowUpRight }]).map(({ label, value, icon: MetricIcon }) =>
-              <div key={label} className="min-w-0 rounded-[22px] border bg-card p-3 shadow-xs">
-                <MetricIcon className="mb-2 size-4 text-primary" aria-hidden />
+            {([
+              { label: "Ingresos del mes", value: income, icon: ArrowDownLeft, tone: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" },
+              { label: "Gastos del mes", value: monthlyExpenses, icon: ArrowUpRight, tone: "bg-orange-500/12 text-[#F26B3A]" },
+            ]).map(({ label, value, icon: MetricIcon, tone }) =>
+              <div key={label} className="min-w-0 rounded-[22px] border bg-card p-3.5 shadow-xs">
+                <span className={`mb-2 inline-flex size-8 items-center justify-center rounded-xl ${tone}`}>
+                  <MetricIcon className="size-4" aria-hidden />
+                </span>
                 <p className="text-xs font-medium text-muted-foreground">{label}</p>
-                <p className="mt-0.5 break-all font-semibold tabular-nums">{money(value)}</p>
+                <p className="mt-0.5 break-all text-base font-bold tabular-nums">{money(value)}</p>
               </div>
             )}
           </div>
@@ -447,17 +456,27 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
         </label>
         {statementBalance !== "" && <p>Diferencia entre extracto y libro: {money(cents(statementBalance) - (totals.bank ?? 0))}</p>}
       </FinancePanel>}
-      {(tab === "Estados financieros" || tab === "Libro diario") && <FinancePanel title="Saldos contables en USD">
+      {tab === "Estados financieros" && <FinancePanel title="Saldos contables en USD">
         <dl className="grid gap-2 sm:grid-cols-2">{Object.entries(names).map(([key, label]) =>
-          <div className="flex justify-between gap-3 rounded border p-2" key={key}><dt>{label}</dt><dd>{money((totals[key] ?? 0) * (["payable", "debt", "equity", "income"].includes(key) ? -1 : 1))}</dd></div>)}</dl>
+          <div className="flex justify-between gap-3 rounded-xl border bg-muted/25 p-2.5 text-sm" key={key}><dt>{label}</dt><dd className="font-semibold tabular-nums">{money((totals[key] ?? 0) * (["payable", "debt", "equity", "income"].includes(key) ? -1 : 1))}</dd></div>)}</dl>
       </FinancePanel>}
       {tab === "Gastos" && <>
-        <FinancePanel title="Gastos del mes">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-3xl font-semibold tabular-nums">{money(monthlyExpenses)}</p>
-            <Button type="button" className="h-11 rounded-full px-5" onClick={() => setExpenseOpen(true)}>Registrar gasto</Button>
-          </div>
-        </FinancePanel>
+        <FinanceExpensesView
+          asOf={asOf}
+          monthlyExpenses={monthlyExpenses}
+          monthlyIncome={income}
+          spendingCategories={spendingCategories}
+          largestExpense={largestExpense}
+          purchases={purchases}
+          filteredPurchases={filteredPurchases}
+          smallPurchasesCount={smallPurchases.length}
+          smallTotal={smallTotal}
+          smallLimit={smallLimit}
+          expenseFilter={expenseFilter}
+          onFilterChange={setExpenseFilter}
+          onOpenNewExpense={() => setExpenseOpen(true)}
+          names={names}
+        />
         <FinanceSheet
           open={expenseOpen}
           onOpenChange={open => { if (!busy) setExpenseOpen(open); }}
@@ -483,187 +502,196 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
             </form>
           </fieldset>
         </FinanceSheet>
-        <FinancePanel title="Gastos por categoría">
-          {spendingCategories.every(({ amount }) => amount === 0) ? <p className="text-sm text-muted-foreground">Aún no hay importes por categoría este mes.</p> :
-            <dl className="grid gap-4 sm:grid-cols-2">
-              {spendingCategories.filter(({ amount }) => amount !== 0).map(({ account, amount }) =>
-                <div key={account} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1.5">
-                  <dt className="text-sm">{names[account]}</dt><dd className="text-right text-sm font-semibold tabular-nums">{money(amount)}</dd>
-                  {amount > 0 && <div aria-hidden className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-primary" style={{ width: (amount / largestExpense) * 100 + "%" }} />
-                  </div>}
-                </div>)}
-            </dl>}
-        </FinancePanel>
-        <h2 className="text-lg font-semibold">Gastos hormiga de este mes</h2>
-        <p>{smallPurchases.length} movimientos · <strong>{money(smallTotal)}</strong></p>
-        {smallLimit > 0 && <p role="status">
-          {smallTotal > smallLimit
-            ? `Superaste el tope por ${money(smallTotal - smallLimit)}.`
-            : `Disponible del tope de ${money(smallLimit)}: ${money(smallLimit - smallTotal)}.`}
-        </p>}
-        <h2 className="text-lg font-semibold">Movimientos del mes</h2>
-        <FinanceSelect label="Filtrar movimientos" value={expenseFilter} onChange={setExpenseFilter}
-          options={[["all", "Todos los gastos"], ["small", "Gastos hormiga"], ...expenseAccounts.map(account => [account, names[account]] as [string, string])]} />
-        {!filteredPurchases.length && <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">No hay movimientos para este filtro.</p>}
-        <ul className="space-y-2">{filteredPurchases.map(entry =>
-          <li className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 rounded-xl border bg-card p-3" key={entry.id}>
-            <div className="min-w-0">
-              <p className="break-words font-medium">{entry.description}</p>
-              <p className="text-sm text-muted-foreground">{readableDate(entry.date)} · {names[entry.debit]} · {names[entry.credit]}</p>
-              {entry.smallSpend && <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-xs">Gasto hormiga</span>}
-            </div>
-            <strong className="tabular-nums">{entry.nativeCents != null ? nativeMoney(entry.nativeCents, entry.currency ?? "USD") : money(entry.cents)}</strong>
-          </li>)}</ul>
       </>}
       {tab === "Presupuesto" && <>
-        <nav aria-label="Vistas de presupuesto" className="grid grid-cols-2 gap-1 rounded-2xl border bg-card p-1 sm:flex">
-          {(Object.entries(budgetViews) as [BudgetView, string][]).filter(([key]) => personal || key !== "suggestion").map(([key, label]) =>
-            <Button type="button" key={key} variant={budgetView === key ? "secondary" : "ghost"} aria-pressed={budgetView === key}
-              className="h-10 rounded-xl transition-colors" onClick={() => setBudgetView(key)}>{label}</Button>)}
+        <nav aria-label="Vistas de presupuesto" className="grid grid-cols-2 gap-1 rounded-[22px] border bg-card p-1.5 shadow-xs sm:grid-cols-4">
+          {(Object.entries(budgetViews) as [BudgetView, string][]).filter(([key]) => personal || key !== "suggestion").map(([key, label]) => {
+            const active = budgetView === key;
+            return (
+              <button
+                type="button"
+                key={key}
+                aria-pressed={active}
+                onClick={() => setBudgetView(key)}
+                className={`relative h-10 rounded-2xl px-3 text-xs font-semibold transition-colors sm:text-sm ${
+                  active ? "text-white" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="budget-view-pill"
+                    transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                    className="absolute inset-0 rounded-2xl bg-[#1A1815] shadow-sm dark:bg-[#F26B3A]"
+                  />
+                )}
+                <span className="relative z-10">{label}</span>
+              </button>
+            );
+          })}
         </nav>
         <div key={budgetView} className="space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-200">
-        {personal && suggested && <section className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
-          <div><h2 className="text-lg font-semibold">Distribución sugerida</h2>
-            <p className="text-sm text-muted-foreground">Calculada con tus cobros, compromisos y gastos de meses anteriores.</p>
+        {personal && suggested && <section className="finance-grid-light space-y-4 rounded-[26px] border bg-card p-4 shadow-xs sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">Planificación inteligente</p>
+              <h2 className="text-lg font-bold tracking-tight">Distribución sugerida</h2>
+              <p className="text-xs text-muted-foreground">Calculada con tus cobros, compromisos y gastos de meses anteriores.</p>
+            </div>
           </div>
-          <label className="block max-w-xs text-sm font-medium">Mes que quieres organizar
-            <Input type="month" value={budgetMonth} onChange={event => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)) setBudgetMonth(event.target.value); }} />
+          <label className="block max-w-xs space-y-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <span>Mes que quieres organizar</span>
+            <Input className="h-12 rounded-2xl" type="month" value={budgetMonth} onChange={event => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)) setBudgetMonth(event.target.value); }} />
           </label>
-          <dl className="grid gap-2 text-sm sm:grid-cols-2">
-            <div className="rounded-lg border p-3"><dt>Cobros previstos</dt><dd className="font-semibold">{money(suggested.income)}</dd></div>
-            <div className="rounded-lg border p-3"><dt>Pagos programados y cuotas</dt><dd className="font-semibold">{money(suggested.bills + suggested.debt)}</dd></div>
-            <div className="rounded-lg border p-3"><dt>Reserva mínima protegida</dt><dd className="font-semibold">{money(plan.reserve)}</dd></div>
-            <div className="rounded-lg border p-3"><dt>Otros gastos según tu historial</dt><dd className="font-semibold">{suggested.historyMonths ? money(suggested.other) : "Sin historial"}</dd></div>
+          <dl className="grid grid-cols-2 gap-2.5 text-sm">
+            <div className="rounded-2xl border bg-background/80 p-3.5"><dt className="text-xs text-muted-foreground">Cobros previstos</dt><dd className="mt-0.5 text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{money(suggested.income)}</dd></div>
+            <div className="rounded-2xl border bg-background/80 p-3.5"><dt className="text-xs text-muted-foreground">Pagos y cuotas</dt><dd className="mt-0.5 text-base font-bold tabular-nums">{money(suggested.bills + suggested.debt)}</dd></div>
+            <div className="rounded-2xl border bg-background/80 p-3.5"><dt className="text-xs text-muted-foreground">Reserva protegida</dt><dd className="mt-0.5 text-base font-bold tabular-nums text-sky-600 dark:text-sky-400">{money(plan.reserve)}</dd></div>
+            <div className="rounded-2xl border bg-background/80 p-3.5"><dt className="text-xs text-muted-foreground">Otros gastos (hist.)</dt><dd className="mt-0.5 text-base font-bold tabular-nums">{suggested.historyMonths ? money(suggested.other) : "Sin historial"}</dd></div>
           </dl>
-          {cashFirst && <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-            <p>Primero revisa el faltante del {cashFirst.date}: {money(cashFirst.cents)} frente a tu reserva, aun antes de apartar para comida.</p>
-            <Button type="button" size="sm" variant="outline" onClick={() => setBudgetView("payments")}>Revisar pagos programados</Button>
+          {cashFirst && <div className="space-y-2 rounded-2xl border border-amber-300/70 bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-200">
+            <p>Primero revisa el faltante del <strong>{readableDate(cashFirst.date)}</strong>: <strong>{money(cashFirst.cents)}</strong> frente a tu reserva, aun antes de apartar para comida.</p>
+            <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={() => setBudgetView("payments")}>Revisar pagos programados</Button>
           </div>}
-          {!suggested.groceryObserved && <label className="block max-w-xs text-sm font-medium">Total de tus recibos de mercado de un mes (USD, opcional)
-            <Input type="number" inputMode="decimal" min={0} max={20000000} step="0.01" value={groceryReceipts} onChange={event => setGroceryReceipts(event.target.value)} />
-            <span className="text-xs font-normal text-muted-foreground">Solo se usa para estimar el tope. Tu saldo queda igual.</span>
+          {!suggested.groceryObserved && <label className="block max-w-xs space-y-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <span>Recibos de mercado de un mes (USD, opcional)</span>
+            <Input className="h-12 rounded-2xl" type="number" inputMode="decimal" min={0} max={20000000} step="0.01" value={groceryReceipts} onChange={event => setGroceryReceipts(event.target.value)} />
+            <span className="block text-[11px] font-normal normal-case text-muted-foreground">Solo se usa para estimar el tope. Tu saldo queda igual.</span>
           </label>}
           {suggested.groceryObserved || suggested.groceryFromReceipts ? <>
-            <dl className="grid gap-2 text-sm sm:grid-cols-3">
-              <div className="rounded-lg border p-3"><dt>Mercado estimado</dt><dd className="font-semibold">{money(suggested.grocery)}</dd></div>
-              <div className="rounded-lg border p-3"><dt>Comidas fuera sugeridas</dt><dd className="font-semibold">{money(cashFirst ? 0 : suggested.dining)}</dd></div>
-              <div className="rounded-lg border p-3"><dt>Tope de gastos hormiga</dt><dd className="font-semibold">{money(cashFirst ? 0 : suggested.small)}</dd></div>
+            <dl className="grid grid-cols-3 gap-2 text-sm">
+              <div className="rounded-2xl border bg-background/80 p-3"><dt className="text-[11px] text-muted-foreground">Mercado</dt><dd className="mt-0.5 font-bold tabular-nums">{money(suggested.grocery)}</dd></div>
+              <div className="rounded-2xl border bg-background/80 p-3"><dt className="text-[11px] text-muted-foreground">Comidas fuera</dt><dd className="mt-0.5 font-bold tabular-nums">{money(cashFirst ? 0 : suggested.dining)}</dd></div>
+              <div className="rounded-2xl border bg-background/80 p-3"><dt className="text-[11px] text-muted-foreground">Tope hormiga</dt><dd className="mt-0.5 font-bold tabular-nums">{money(cashFirst ? 0 : suggested.small)}</dd></div>
             </dl>
-            <p className="text-sm text-muted-foreground">{suggested.groceryFromReceipts
+            <p className="text-xs text-muted-foreground">{suggested.groceryFromReceipts
               ? "El mercado estimado viene del total de tus recibos."
               : `Base: ${suggested.historyMonths} ${suggested.historyMonths === 1 ? "mes anterior con gastos registrados" : "meses anteriores con gastos registrados"}.`}
             {" "}El tope de gastos hormiga se aplica a compras ya incluidas en sus categorías.</p>
-            {suggested.unassigned >= 0 && !cashFirst && <p className="text-sm">Quedaría por asignar: <strong>{money(suggested.unassigned)}</strong> después de los importes mostrados.</p>}
-            {suggested.afterEssentials < 0 && <p className="text-sm text-destructive">Los cobros previstos no cubren los compromisos y el gasto estimado de mercado.</p>}
-            <Button type="button" variant="outline" disabled={busy || !!cashFirst || suggested.afterEssentials < 0 || suggested.income <= 0}
+            {suggested.unassigned >= 0 && !cashFirst && <p className="rounded-xl bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300">Quedaría por asignar: <strong className="tabular-nums">{money(suggested.unassigned)}</strong> después de los importes mostrados.</p>}
+            {suggested.afterEssentials < 0 && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">Los cobros previstos no cubren los compromisos y el gasto estimado de mercado.</p>}
+            <Button type="button" className="h-11 w-full rounded-full sm:w-auto" disabled={busy || !!cashFirst || suggested.afterEssentials < 0 || suggested.income <= 0}
               onClick={() => void savePlan({ ...plan, grocery: suggested.grocery, dining: suggested.dining, smallSpendLimit: suggested.small }, () => {
                 setBudgetView("habitual");
               })}>Aplicar topes al plan habitual</Button>
-          </> : <div className="space-y-2 rounded-lg border bg-muted/40 p-3 text-sm">
+          </> : <div className="space-y-2.5 rounded-2xl border bg-muted/40 p-4 text-xs">
             <p>Para calcular un tope, usa el total de un mes de recibos o registra tus próximas compras como Mercado.</p>
-            {!cashFirst && suggested.income > 0 && suggested.afterEssentials >= 0 && <p>Después de los importes mostrados quedan <strong>{money(suggested.afterEssentials)}</strong> por asignar, incluyendo mercado y otros gastos que aún no registraste.</p>}
-            <Button asChild size="sm" variant="outline"><Link href={sectionUrl("gastos-personales")}>Ir a registrar gastos</Link></Button>
+            {!cashFirst && suggested.income > 0 && suggested.afterEssentials >= 0 && <p>Después de los importes mostrados quedan <strong>{money(suggested.afterEssentials)}</strong> por asignar.</p>}
+            <Button asChild size="sm" variant="outline" className="rounded-full"><Link href={sectionUrl("gastos-personales")}>Ir a registrar gastos</Link></Button>
           </div>}
         </section>}
-        {budgetView === "habitual" && <section className="space-y-4 rounded-xl border bg-card p-5">
-        <div><h2 className="text-lg font-semibold">Tu plan habitual</h2><p className="text-sm text-muted-foreground">Elige cuándo cobras y cuánto quieres apartar cada mes.</p></div>
-        <form className="grid gap-3 sm:grid-cols-3" onSubmit={event => {
+        {budgetView === "habitual" && <section className="space-y-4 rounded-[26px] border bg-card p-4 shadow-xs sm:p-5">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">Configuración base</p>
+          <h2 className="text-lg font-bold tracking-tight">Tu plan habitual</h2>
+          <p className="text-xs text-muted-foreground">Elige cuándo cobras y cuánto quieres apartar cada mes.</p>
+        </div>
+        <form className="grid gap-3.5 sm:grid-cols-2" onSubmit={event => {
           event.preventDefault();
           const fields = new FormData(event.currentTarget);
           void savePlan({ ...plan, frequency, weeklyPayday: Number(fields.get("weeklyPayday") ?? plan.weeklyPayday ?? 5), incomeOriginal: originalMoney(fields), grocery: cents(fields.get("grocery")), dining: cents(fields.get("dining")), reserve: cents(fields.get("reserve")), smallSpendLimit: cents(fields.get("smallSpendLimit")), payday1: Number(fields.get("payday1") ?? plan.payday1), payday2: Number(fields.get("payday2") ?? plan.payday2) });
         }}>
           <FinanceSelect label="Frecuencia de cobro" value={frequency} onChange={value => setFrequency(value as Frequency)}
             options={[["weekly", "Semanal"], ["twice-monthly", "Quincenal"], ["monthly", "Mensual"]]} />
-          <MoneyFields quotes={quotes} label="Ingreso habitual por cobro" min={0} initial={plan.incomeOriginal ?? { currency: "USD", nativeCents: plan.income, rate: 1 }} />
+          {frequency === "weekly" ? <FinanceSelect label="Día de cobro" name="weeklyPayday" defaultValue={String(plan.weeklyPayday ?? 5)}
+            options={["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"].map((day, index) => [String(index), day])} /> : (
+            <div className="grid grid-cols-2 gap-3">
+              {frequency === "twice-monthly" && <label className="block space-y-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>1er cobro</span><Input className="h-12 rounded-2xl" name="payday1" type="number" min="1" max="30" defaultValue={plan.payday1} required /></label>}
+              <label className="block space-y-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>{frequency === "monthly" ? "Día de cobro" : "2do cobro"}</span>
+                <Input className="h-12 rounded-2xl" name="payday2" type="number" min={frequency === "monthly" ? 1 : 2} max="31" defaultValue={plan.payday2} required />
+              </label>
+            </div>
+          )}
+          <div className="sm:col-span-2"><MoneyFields quotes={quotes} label="Ingreso habitual por cobro" min={0} initial={plan.incomeOriginal ?? { currency: "USD", nativeCents: plan.income, rate: 1 }} /></div>
           <Dollar name="grocery" label="Mercado mensual" value={plan.grocery} />
           <Dollar name="dining" label="Comidas fuera al mes" value={plan.dining} />
-          <Dollar name="smallSpendLimit" label="Tope mensual de gastos hormiga" value={smallLimit} />
+          <Dollar name="smallSpendLimit" label="Tope gastos hormiga" value={smallLimit} />
           <Dollar name="reserve" label="Reserva mínima" value={plan.reserve} />
-          {frequency === "weekly" ? <FinanceSelect label="Día de cobro" name="weeklyPayday" defaultValue={String(plan.weeklyPayday ?? 5)}
-            options={["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"].map((day, index) => [String(index), day])} /> : <>
-            {frequency === "twice-monthly" && <label>Día del primer cobro<Input name="payday1" type="number" min="1" max="30" defaultValue={plan.payday1} required /></label>}
-            <label>{frequency === "monthly" ? "Día de cobro" : "Día del segundo cobro"}
-              <Input name="payday2" type="number" min={frequency === "monthly" ? 1 : 2} max="31" defaultValue={plan.payday2} required />
-            </label>
-          </>}
-          <Button type="submit">Guardar presupuesto</Button>
+          <Button type="submit" className="h-12 rounded-full text-base font-semibold sm:col-span-2">Guardar presupuesto</Button>
         </form>
         </section>}
-        {budgetView === "income" && <section className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
-        <h2 className="text-lg font-semibold">Cobros previstos</h2>
-        <p className="text-sm text-muted-foreground">Ajusta el importe si esperas cobrar algo distinto. Registra el ingreso cuando entre a tu cuenta.</p>
-        <h2 className="font-semibold">Ajustar el ingreso de un mes</h2>
-        <p className="text-sm text-muted-foreground">Distribuye el total entre las fechas de cobro programadas de ese mes.</p>
-        <form className="flex flex-wrap items-end gap-3" onSubmit={event => {
-          event.preventDefault();
-          const fields = new FormData(event.currentTarget);
-          const adjustment = { month: String(fields.get("month")), cents: cents(fields.get("amount")) };
-          const other = (plan.monthlyOverrides ?? []).filter(row => row.month !== adjustment.month);
-          void savePlan({ ...plan, monthlyOverrides: [...other, adjustment] });
-        }}>
-          <label>Mes<Input name="month" type="month" defaultValue={month} required /></label>
-          <Dollar name="amount" label="Ingreso total previsto del mes" />
-          <Button type="submit">Guardar ajuste mensual</Button>
-        </form>
-        <ul className="space-y-2">{(plan.monthlyOverrides ?? []).map(row =>
-          <li className="flex items-center justify-between gap-2 rounded border p-2" key={row.month}>
-            <span>{row.month} · {money(row.cents)}</span>
-            <Button variant="outline" type="button" onClick={() => void savePlan({ ...plan, monthlyOverrides: (plan.monthlyOverrides ?? []).filter(item => item.month !== row.month) })}>Restaurar habitual</Button>
-          </li>)}</ul>
-        <h2 className="text-lg font-semibold">Ajustar un cobro por fecha</h2>
-        <p className="text-sm text-muted-foreground">El importe de esa fecha tiene prioridad sobre el cálculo mensual. Puedes usar $0 para cancelar un cobro previsto.</p>
-        <form className="flex flex-wrap items-end gap-3" onSubmit={event => {
-          event.preventDefault();
-          const fields = new FormData(event.currentTarget);
-          const adjustment = { date: String(fields.get("date")), cents: cents(fields.get("amount")) };
-          const other = (plan.paydayOverrides ?? []).filter(row => row.date !== adjustment.date);
-          void savePlan({ ...plan, paydayOverrides: [...other, adjustment] });
-        }}>
-          <FinanceDate label="Fecha del cobro" />
-          <Dollar name="amount" label="Importe previsto ese día" />
-          <Button type="submit">Guardar fecha e importe</Button>
-        </form>
-        <ul className="space-y-2">{(plan.paydayOverrides ?? []).map(row =>
-          <li className="flex items-center justify-between gap-2 rounded border p-2" key={row.date}>
-            <span>{row.date} · {money(row.cents)}</span>
-            <Button variant="outline" type="button" onClick={() => void savePlan({ ...plan, paydayOverrides: (plan.paydayOverrides ?? []).filter(item => item !== row) })}>Quitar ajuste</Button>
-          </li>)}</ul>
-        {(plan.frequency ?? "twice-monthly") === "twice-monthly" && <>
-        <h2 className="text-lg font-semibold">Ajustar un cobro quincenal previsto</h2>
-        <form className="flex flex-wrap items-end gap-3" onSubmit={event => {
-          event.preventDefault();
-          const fields = new FormData(event.currentTarget);
-          const adjustment = { month: String(fields.get("month")), slot: fields.get("slot") === "2" ? 2 as const : 1 as const, cents: cents(fields.get("amount")) };
-          const other = (plan.incomeOverrides ?? []).filter(row => row.month !== adjustment.month || row.slot !== adjustment.slot);
-          void savePlan({ ...plan, incomeOverrides: [...other, adjustment] });
-        }}>
-          <label>Mes<Input name="month" type="month" defaultValue={month} required /></label>
-          <FinanceSelect label="Quincena" name="slot" defaultValue="1" options={[["1", "Primera"], ["2", "Segunda"]]} />
-          <Dollar name="amount" label="Cobro previsto" />
-          <Button type="submit">Guardar ajuste</Button>
-        </form>
-        <ul className="space-y-2">{(plan.incomeOverrides ?? []).map(row =>
-          <li className="flex items-center justify-between gap-2 rounded border p-2" key={row.month + "-" + row.slot}>
-            <span>{row.month} · Quincena {row.slot} · {money(row.cents)}</span>
-            <Button variant="outline" type="button" onClick={() => void savePlan({ ...plan, incomeOverrides: (plan.incomeOverrides ?? []).filter(item => item !== row) })}>Restaurar habitual</Button>
-          </li>)}</ul>
-        </>}
-        <FinancePanel title="Registrar un ingreso recibido">
-        <p className="text-sm text-muted-foreground">Registra aquí el importe que llegó a tu cuenta. Ajusta el plan si ya recibiste un cobro que sigue previsto para una fecha futura.</p>
-        <form key={formRevision} className="flex flex-wrap items-end gap-3" onSubmit={event => postEntry(event, "income")}>
-          <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
-          <label>Concepto<Input name="description" maxLength={200} required /></label>
-          <Account name="debit" label="Recibido en" options={walletAccounts} />
-          <MoneyFields quotes={quotes} label="Importe recibido" />
-          <Button type="submit">Registrar ingreso</Button>
-        </form>
-        </FinancePanel>
+        {budgetView === "income" && <section className="space-y-4 rounded-[26px] border bg-card p-4 shadow-xs sm:p-5">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">Ajustes de cobro</p>
+          <h2 className="text-lg font-bold tracking-tight">Cobros previstos</h2>
+          <p className="text-xs text-muted-foreground">Ajusta el importe si esperas cobrar algo distinto. Registra el ingreso cuando entre a tu cuenta.</p>
+        </div>
+        <div className="space-y-3 rounded-2xl border bg-muted/25 p-3.5">
+          <h3 className="text-sm font-bold">Ajustar el ingreso de un mes</h3>
+          <form className="grid gap-3 sm:grid-cols-2" onSubmit={event => {
+            event.preventDefault();
+            const fields = new FormData(event.currentTarget);
+            const adjustment = { month: String(fields.get("month")), cents: cents(fields.get("amount")) };
+            const other = (plan.monthlyOverrides ?? []).filter(row => row.month !== adjustment.month);
+            void savePlan({ ...plan, monthlyOverrides: [...other, adjustment] });
+          }}>
+            <label className="block space-y-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>Mes</span><Input className="h-12 rounded-2xl" name="month" type="month" defaultValue={month} required /></label>
+            <Dollar name="amount" label="Ingreso total del mes" />
+            <Button type="submit" className="h-11 rounded-full sm:col-span-2">Guardar ajuste mensual</Button>
+          </form>
+          {(plan.monthlyOverrides ?? []).length > 0 && <ul className="space-y-2">{(plan.monthlyOverrides ?? []).map(row =>
+            <li className="flex items-center justify-between gap-2 rounded-xl border bg-card px-3 py-2 text-sm" key={row.month}>
+              <span className="font-medium tabular-nums">{row.month} · {money(row.cents)}</span>
+              <Button variant="ghost" size="sm" className="rounded-full text-xs" type="button" onClick={() => void savePlan({ ...plan, monthlyOverrides: (plan.monthlyOverrides ?? []).filter(item => item.month !== row.month) })}>Restaurar</Button>
+            </li>)}</ul>}
+        </div>
+        <div className="space-y-3 rounded-2xl border bg-muted/25 p-3.5">
+          <h3 className="text-sm font-bold">Ajustar un cobro por fecha</h3>
+          <p className="text-xs text-muted-foreground">Tiene prioridad sobre el cálculo mensual. Usa $0 para cancelar un cobro previsto.</p>
+          <form className="grid gap-3 sm:grid-cols-2" onSubmit={event => {
+            event.preventDefault();
+            const fields = new FormData(event.currentTarget);
+            const adjustment = { date: String(fields.get("date")), cents: cents(fields.get("amount")) };
+            const other = (plan.paydayOverrides ?? []).filter(row => row.date !== adjustment.date);
+            void savePlan({ ...plan, paydayOverrides: [...other, adjustment] });
+          }}>
+            <FinanceDate label="Fecha del cobro" />
+            <Dollar name="amount" label="Importe previsto" />
+            <Button type="submit" className="h-11 rounded-full sm:col-span-2">Guardar fecha e importe</Button>
+          </form>
+          {(plan.paydayOverrides ?? []).length > 0 && <ul className="space-y-2">{(plan.paydayOverrides ?? []).map(row =>
+            <li className="flex items-center justify-between gap-2 rounded-xl border bg-card px-3 py-2 text-sm" key={row.date}>
+              <span className="font-medium tabular-nums">{readableDate(row.date)} · {money(row.cents)}</span>
+              <Button variant="ghost" size="sm" className="rounded-full text-xs" type="button" onClick={() => void savePlan({ ...plan, paydayOverrides: (plan.paydayOverrides ?? []).filter(item => item !== row) })}>Quitar</Button>
+            </li>)}</ul>}
+        </div>
+        {(plan.frequency ?? "twice-monthly") === "twice-monthly" && <div className="space-y-3 rounded-2xl border bg-muted/25 p-3.5">
+          <h3 className="text-sm font-bold">Ajustar quincena prevista</h3>
+          <form className="grid gap-3 sm:grid-cols-3" onSubmit={event => {
+            event.preventDefault();
+            const fields = new FormData(event.currentTarget);
+            const adjustment = { month: String(fields.get("month")), slot: fields.get("slot") === "2" ? 2 as const : 1 as const, cents: cents(fields.get("amount")) };
+            const other = (plan.incomeOverrides ?? []).filter(row => row.month !== adjustment.month || row.slot !== adjustment.slot);
+            void savePlan({ ...plan, incomeOverrides: [...other, adjustment] });
+          }}>
+            <label className="block space-y-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>Mes</span><Input className="h-12 rounded-2xl" name="month" type="month" defaultValue={month} required /></label>
+            <FinanceSelect label="Quincena" name="slot" defaultValue="1" options={[["1", "Primera"], ["2", "Segunda"]]} />
+            <Dollar name="amount" label="Cobro previsto" />
+            <Button type="submit" className="h-11 rounded-full sm:col-span-3">Guardar ajuste quincenal</Button>
+          </form>
+          {(plan.incomeOverrides ?? []).length > 0 && <ul className="space-y-2">{(plan.incomeOverrides ?? []).map(row =>
+            <li className="flex items-center justify-between gap-2 rounded-xl border bg-card px-3 py-2 text-sm" key={row.month + "-" + row.slot}>
+              <span className="font-medium tabular-nums">{row.month} · Quincena {row.slot} · {money(row.cents)}</span>
+              <Button variant="ghost" size="sm" className="rounded-full text-xs" type="button" onClick={() => void savePlan({ ...plan, incomeOverrides: (plan.incomeOverrides ?? []).filter(item => item !== row) })}>Restaurar</Button>
+            </li>)}</ul>}
+        </div>}
+        <div className="space-y-3 rounded-2xl border bg-muted/25 p-3.5">
+          <h3 className="text-sm font-bold">Registrar un ingreso recibido</h3>
+          <form key={formRevision} className="grid gap-3 sm:grid-cols-2" onSubmit={event => postEntry(event, "income")}>
+            <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
+            <label className="block space-y-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>Concepto</span><Input className="h-12 rounded-2xl" name="description" maxLength={200} placeholder="Ej. Quincena" required /></label>
+            <Account name="debit" label="Recibido en" options={walletAccounts} />
+            <div className="sm:col-span-2"><MoneyFields quotes={quotes} label="Importe recibido" /></div>
+            <Button type="submit" className="h-12 rounded-full font-semibold sm:col-span-2">Registrar ingreso</Button>
+          </form>
+        </div>
         </section>}
-        {budgetView === "payments" && <section className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
-        <h2 className="text-lg font-semibold">Programar cobros y pagos</h2>
-        <p className="text-sm text-muted-foreground">Usa el vencimiento acordado para cada compromiso. Si acuerdas cambiar una fecha, puedes editarla aquí.</p>
-        <form key={editingPayment ?? `new-${plan.obligations.length}`} className="flex flex-wrap items-end gap-3" onSubmit={event => {
+        {budgetView === "payments" && <section className="space-y-4 rounded-[26px] border bg-card p-4 shadow-xs sm:p-5">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">Agenda financiera</p>
+          <h2 className="text-lg font-bold tracking-tight">Programar cobros y pagos</h2>
+          <p className="text-xs text-muted-foreground">Usa el vencimiento acordado para cada compromiso. Si cambia una fecha, edítala aquí.</p>
+        </div>
+        <form key={editingPayment ?? `new-${plan.obligations.length}`} className="grid gap-3.5 rounded-2xl border bg-muted/25 p-3.5 sm:grid-cols-2" onSubmit={event => {
           event.preventDefault();
           const fields = new FormData(event.currentTarget);
           const row = { name: String(fields.get("name")), date: String(fields.get("date")), cents: 0, original: originalMoney(fields), kind: fields.get("kind") === "income" ? "income" as const : "payment" as const, monthly: fields.has("monthly") };
@@ -671,66 +699,57 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
             : plan.obligations.map((item, index) => index === editingPayment ? row : item);
           void savePlan({ ...plan, obligations }, () => setEditingPayment(null));
         }}>
-          <label>Concepto<Input name="name" maxLength={200} defaultValue={paymentDraft?.name} required /></label>
+          <label className="block space-y-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>Concepto</span><Input className="h-12 rounded-2xl" name="name" maxLength={200} placeholder="Ej. Alquiler o internet" defaultValue={paymentDraft?.name} required /></label>
           <FinanceDate label="Vencimiento" defaultValue={paymentDraft?.date ?? ""} />
-          <MoneyFields quotes={quotes} label="Importe previsto" initial={paymentDraft ? paymentDraft.original ?? { currency: "USD", nativeCents: paymentDraft.cents, rate: 1 } : undefined} />
           <FinanceSelect label="Tipo" name="kind" defaultValue={paymentDraft?.kind ?? "payment"} options={[["payment", "Pago"], ["income", "Cobro"]]} />
-          <FinanceCheck name="monthly" label="Repetir cada mes" defaultChecked={paymentDraft?.monthly} />
-          <Button type="submit">{paymentDraft ? "Guardar cambios" : "Agregar compromiso"}</Button>
-          {paymentDraft && <Button type="button" variant="ghost" onClick={() => setEditingPayment(null)}>Cancelar edición</Button>}
+          <div className="flex items-end"><FinanceCheck name="monthly" label="Repetir cada mes" defaultChecked={paymentDraft?.monthly} /></div>
+          <div className="sm:col-span-2"><MoneyFields quotes={quotes} label="Importe previsto" initial={paymentDraft ? paymentDraft.original ?? { currency: "USD", nativeCents: paymentDraft.cents, rate: 1 } : undefined} /></div>
+          <div className="flex flex-wrap gap-2 sm:col-span-2">
+            <Button type="submit" className="h-11 flex-1 rounded-full font-semibold">{paymentDraft ? "Guardar cambios" : "Agregar compromiso"}</Button>
+            {paymentDraft && <Button type="button" variant="ghost" className="h-11 rounded-full" onClick={() => setEditingPayment(null)}>Cancelar</Button>}
+          </div>
         </form>
-        <ul className="space-y-2">{plan.obligations.map((row, index) =>
-          <li className="flex flex-wrap items-center justify-between gap-2 rounded border p-2" key={index}>
-            <span>{row.name} · {row.date} · {row.kind === "payment" ? "Pago" : "Cobro"} {row.original ? nativeMoney(row.original.nativeCents, row.original.currency) : money(row.cents)} {row.monthly && "· Mensual"}</span>
-            <div className="flex gap-1">
-              <Button variant="outline" type="button" onClick={() => setEditingPayment(index)}>Editar</Button>
-              <Button variant="ghost" type="button" onClick={() => void savePlan({ ...plan, obligations: plan.obligations.filter((_, i) => i !== index) }, () => setEditingPayment(null))}>Quitar</Button>
+        {plan.obligations.length > 0 && <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border bg-card">{plan.obligations.map((row, index) =>
+          <li className="flex items-center justify-between gap-3 p-3.5" key={index}>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${row.kind === "income" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-orange-500/15 text-orange-700 dark:text-orange-400"}`}>
+                  {row.kind === "payment" ? "Pago" : "Cobro"}
+                </span>
+                <p className="truncate text-sm font-semibold">{row.name}</p>
+              </div>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {readableDate(row.date)} · <strong className="tabular-nums text-foreground">{row.original ? nativeMoney(row.original.nativeCents, row.original.currency) : money(row.cents)}</strong> {row.monthly && "· Mensual"}
+              </p>
             </div>
-          </li>)}</ul>
+            <div className="flex shrink-0 gap-1">
+              <Button variant="outline" size="sm" className="h-8 rounded-full px-3 text-xs" type="button" onClick={() => setEditingPayment(index)}>Editar</Button>
+              <Button variant="ghost" size="sm" className="h-8 rounded-full px-2.5 text-xs text-muted-foreground hover:text-destructive" type="button" onClick={() => void savePlan({ ...plan, obligations: plan.obligations.filter((_, i) => i !== index) }, () => setEditingPayment(null))}>Quitar</Button>
+            </div>
+          </li>)}</ul>}
         </section>}
         </div>
       </>}
-      {tab === "Libro diario" && <>
-        {personal && <Button type="button" variant="outline" aria-haspopup="dialog" onClick={() => setShowBankImport(true)}>
-          Importar movimientos de Banesco
-        </Button>}
-        {personal && <FinancePanel title="Anotar el saldo inicial de otra cuenta">
-          <p className="text-sm text-muted-foreground">Úsalo cuando comiences a llevar una cuenta de banco o efectivo.</p>
-          <Button type="button" variant="outline" aria-haspopup="dialog" onClick={() => setQuickAction("opening")}>Anotar saldo inicial</Button>
-        </FinancePanel>}
-        <FinancePanel title="Registrar asiento manual">
-        <p className="text-sm text-muted-foreground">Para corregir un asiento, registra su reversión con las cuentas invertidas.</p>
-        <form key={formRevision} className="flex flex-wrap items-end gap-3" onSubmit={event => postEntry(event)}>
-          <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
-          <label>Descripción<Input name="description" maxLength={200} required /></label>
-          <Account name="debit" label="Debe" />
-          <Account name="credit" label="Haber" />
-          <MoneyFields quotes={quotes} label="Importe" />
-          <Button type="submit">Registrar asiento</Button>
-        </form>
-        </FinancePanel>
-        {workspace === "company" && <form key={formRevision} className="space-y-3 rounded border p-4" onSubmit={postOwnerPayment}>
-          <h2 className="font-semibold">Registrar un pago de Syncro a mi cuenta personal</h2>
-          <div className="flex flex-wrap items-end gap-3">
-            <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
-            <label>Descripción<Input name="description" maxLength={200} required /></label>
-            <FinanceSelect label="Concepto contable" name="classification" options={[["expense", "Remuneración"], ["equity", "Retiro de patrimonio"]]} />
-            <FinanceSelect label="Medio en ambas cuentas" name="account" defaultValue="bank" options={walletAccounts.map(key => [key, names[key]])} />
-            <MoneyFields quotes={quotes} label="Importe pagado" />
-            <Button type="submit">Registrar pago vinculado</Button>
-          </div>
-        </form>}
-        <div className="overflow-x-auto"><table className="w-full text-left text-sm">
-          <thead><tr>{["Fecha", "Descripción", "Debe", "Haber", "Importe"].map(label => <th key={label} className="p-2">{label}</th>)}</tr></thead>
-          <tbody>{entries.map(entry => <tr key={entry.id} className="border-t">
-            <td className="p-2">{entry.date}</td><td className="p-2">{entry.description}</td><td className="p-2">{names[entry.debit]}</td><td className="p-2">{names[entry.credit]}</td><td className="p-2">{money(entry.cents)}
-              {entry.nativeCents != null && entry.currency !== "USD" && <div className="text-xs text-muted-foreground">{nativeMoney(entry.nativeCents, entry.currency ?? "USD")}</div>}
-              {entry.toCurrency && entry.toCents != null && <div className="text-xs text-muted-foreground">Recibido {nativeMoney(entry.toCents, entry.toCurrency)}</div>}
-              {entry.rate && entry.currency !== "USD" && <div className="text-xs text-muted-foreground">{Number(entry.rate).toLocaleString("es-VE", { maximumFractionDigits: 8 })} {entry.currency} por USD</div>}
-            </td>
-          </tr>)}</tbody>
-        </table></div>
-      </>}
+      {tab === "Libro diario" && (
+        <FinanceLedgerView
+          entries={entries}
+          asOf={asOf}
+          personal={personal}
+          workspace={workspace}
+          mobile={mobile}
+          busy={busy}
+          quotes={quotes}
+          names={names}
+          expenseAccounts={expenseAccounts}
+          monthlyIncome={income}
+          monthlyExpenses={monthlyExpenses}
+          formRevision={formRevision}
+          onOpenBankImport={() => setShowBankImport(true)}
+          onOpenOpening={() => setQuickAction("opening")}
+          onPostEntry={event => postEntry(event)}
+          onPostOwnerPayment={postOwnerPayment}
+        />
+      )}
       {tab === "Deudas" && (
         <FinanceDebtsView
           debts={plan.debts}
@@ -759,7 +778,10 @@ function FinancePanel({ title, children }: { title: string; children: React.Reac
 }
 
 function Dollar({ name, label, value, min = 0 }: { name: string; label: string; value?: number; min?: number }) {
-  return <label>{label} (USD)<Input className="h-11 rounded-xl" inputMode="decimal" name={name} type="number" step="0.01" min={min} defaultValue={value === undefined ? undefined : value / 100} required /></label>;
+  return <label className="block space-y-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <span>{label} (USD)</span>
+    <Input className="h-12 rounded-2xl text-base font-semibold tabular-nums sm:text-sm" inputMode="decimal" name={name} type="number" step="0.01" min={min} defaultValue={value === undefined ? undefined : value / 100} required />
+  </label>;
 }
 
 function Account({ name, label, options = Object.keys(names) }: { name: string; label: string; options?: string[] }) {

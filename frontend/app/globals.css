@@ -865,12 +865,35 @@ html:has(.syncro-finance-theme) body {
   overscroll-behavior-inline: contain;
 }
 
-[data-finance-workspace] :is(input:not([type="hidden"], [type="checkbox"]), [role="combobox"]) {
-  background-color: #fffdfa;
-  border-color: #b6ab9f;
-  color: #211d17;
+[data-finance-workspace] :is(input:not([type="hidden"], [type="checkbox"], [data-money-bare]), [role="combobox"]:not([data-money-bare])) {
+  background-color: color-mix(in srgb, var(--muted) 55%, var(--card));
+  border-color: color-mix(in srgb, var(--foreground) 14%, transparent);
+  color: var(--foreground);
 }
 
-[data-finance-workspace] :is(input, [role="combobox"]):focus-visible {
+[data-finance-workspace] :is(input:not([data-money-bare]), [role="combobox"]:not([data-money-bare])):focus-visible {
+  background-color: var(--card);
   border-color: var(--primary);
+}
+
+/* Fintech visual textures for Syncro Finanzas */
+.finance-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.finance-grid-light {
+  background-image:
+    linear-gradient(to right, rgba(26, 24, 21, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(26, 24, 21, 0.045) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.finance-bank-card {
+  background:
+    radial-gradient(120% 90% at 95% 0%, rgba(242, 107, 58, 0.28) 0%, rgba(242, 107, 58, 0) 58%),
+    radial-gradient(90% 80% at 0% 100%, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(145deg, #1b1917 0%, #141210 55%, #1e1916 100%);
 }
