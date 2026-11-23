@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CalendarDays, ChevronDown, House, Landmark, LogOut, MessageCircle, Receipt, Wallet } from "lucide-react";
-import { NubiTabBar, nubiCenterSlotClass, nubiCenterTabClass, nubiTabClass } from "@/components/portal/nubi-tab-bar";
+import { ChevronDown, LogOut, Receipt, Wallet } from "lucide-react";
 import { NubiFace } from "@/components/portal/nubi-face";
 import { syncThemeColor } from "@/components/portal/nubi-splash";
 import { Button } from "@/components/ui/button";
@@ -12,17 +11,7 @@ import { financeGroups, type FinanceSection } from "@/lib/central-finance-naviga
 import FinanceWorkspace from "../dashboard/syncro/finanzas/finance-workspace";
 import FinanceInstallation from "./finance-installation";
 import FinanceLogin, { financeSessionStore, type FinanceUser } from "./finance-login";
-
-const navIcons = {
-  "Resumen": House,
-  "Gastos": Receipt,
-  "Presupuesto": CalendarDays,
-  "Libro diario": Wallet,
-  "Estados financieros": Landmark,
-  "Deudas": Landmark,
-  "Fiscal": Receipt,
-  "Nubi": MessageCircle,
-};
+import { FinanceTabBar } from "./finance-tab-bar";
 
 export default function FinanceApp({ section }: { section?: FinanceSection }) {
   const [user, setUser] = useState<FinanceUser | null | undefined>(undefined);
@@ -108,24 +97,13 @@ export default function FinanceApp({ section }: { section?: FinanceSection }) {
       </header>
       <FinanceWorkspace section={section} mobile />
     </div>
-    <NubiTabBar docked label={section.group} raised={group?.workspace === "personal"}>
-      {navSections?.map(item => {
-        const Icon = navIcons[item.tab];
-        const active = section.slug === item.slug;
-        const personal = group?.workspace === "personal";
-        const label = item.tab === "Resumen" && personal ? "Inicio" : item.title;
-        const href = "/finanzas/" + item.slug;
-        if (personal && item.tab === "Libro diario") {
-          return <div key={item.slug} className={nubiCenterSlotClass}>
-            <Link href={href} aria-label="Movimientos" aria-current={active ? "page" : undefined} className={nubiCenterTabClass(active)}>
-              <Icon className="size-[26px]" aria-hidden />
-            </Link>
-          </div>;
-        }
-        return <Link key={item.slug} href={href} aria-current={active ? "page" : undefined} className={nubiTabClass(active)}>
-          <Icon className="size-[18px]" aria-hidden />{label}
-        </Link>;
-      })}
-    </NubiTabBar>
+    {navSections && (
+      <FinanceTabBar
+        label={section.group}
+        items={navSections}
+        activeSlug={section.slug}
+        personal={group?.workspace === "personal"}
+      />
+    )}
   </div>;
 }
