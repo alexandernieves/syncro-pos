@@ -59,6 +59,17 @@ export type CalendarEventDraft = Common & {
   durationMinutes: number;
   notes?: string;
 };
+export type UpdateCalendarEventDraft = Common & {
+  kind: 'updateCalendarEvent';
+  eventId: string;
+  startTime?: string;
+  durationMinutes: number;
+  notes?: string;
+};
+export type DeleteCalendarEventDraft = Common & {
+  kind: 'deleteCalendarEvent';
+  eventId: string;
+};
 export type FinanceDraft =
   | LedgerDraft
   | IncomePlanDraft
@@ -73,7 +84,9 @@ export type FinanceDraft =
   | AssetCapitalDraft
   | PayDebtDraft
   | AdjustBalanceDraft
-  | CalendarEventDraft;
+  | CalendarEventDraft
+  | UpdateCalendarEventDraft
+  | DeleteCalendarEventDraft;
 
 const whole = (value: unknown, min = 1) =>
   typeof value === 'number' && Number.isInteger(value) && value >= min && value <= 2_000_000_000;
@@ -148,6 +161,19 @@ export function validateDrafts(proposed: unknown, today: string): FinanceDraft[]
       const durationMinutes = Math.max(15, Math.min(480, Math.round(Number(row.durationMinutes ?? 60) || 60)));
       const notes = typeof row.notes === 'string' && row.notes.trim() ? row.notes.trim().slice(0, 400) : undefined;
       return { kind, date, description, startTime, durationMinutes, notes };
+    }
+    if (kind === 'updateCalendarEvent') {
+      const eventId = typeof row.eventId === 'string' && row.eventId.trim() ? row.eventId.trim().slice(0, 200) : '';
+      if (!eventId) throw new Error('Indica qué evento del calendario quieres reprogramar.');
+      const startTime = typeof row.startTime === 'string' && /^\d{2}:\d{2}$/.test(row.startTime.trim()) ? row.startTime.trim() : undefined;
+      const durationMinutes = Math.max(15, Math.min(480, Math.round(Number(row.durationMinutes ?? 60) || 60)));
+      const notes = typeof row.notes === 'string' && row.notes.trim() ? row.notes.trim().slice(0, 400) : undefined;
+      return { kind, eventId, date, description, startTime, durationMinutes, notes };
+    }
+    if (kind === 'deleteCalendarEvent') {
+      const eventId = typeof row.eventId === 'string' && row.eventId.trim() ? row.eventId.trim().slice(0, 200) : '';
+      if (!eventId) throw new Error('Indica qué evento del calendario quieres cancelar.');
+      return { kind, eventId, date, description };
     }
     const common = { ...money(row), date, description };
     if (kind === 'assetCapital') {
@@ -241,6 +267,12 @@ export function describeDraft(row: FinanceDraft) {
   }
   if (row.kind === 'calendarEvent') {
     return `Google Calendar · ${row.date}${row.startTime ? ` ${row.startTime}` : ' (todo el día)'} · ${row.description}`;
+  }
+  if (row.kind === 'updateCalendarEvent') {
+    return `Reprogramar en Google Calendar · ${row.date}${row.startTime ? ` ${row.startTime}` : ' (todo el día)'} · ${row.description}`;
+  }
+  if (row.kind === 'deleteCalendarEvent') {
+    return `Cancelar en Google Calendar · ${row.description} (${row.date})`;
   }
   const amount = moneyLabel(row);
   const rate = row.currency === 'USD' ? '' : ` · tasa ${row.rate} ${row.currency}/USD`;

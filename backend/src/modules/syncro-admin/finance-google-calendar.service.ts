@@ -250,7 +250,65 @@ export class FinanceGoogleCalendarService {
     return { id: json.id, htmlLink: json.htmlLink };
   }
 
-  async listUpcomingEvents(userId: string, days = 3): Promise<{ summary: string; start: string }[]> {
+  async updateEvent(userId: string, eventId: string, input: CalendarEventInput): Promise<{ id: string }> {
+    const token = await this.getAccessToken(userId);
+    if (!token) {
+      throw new Error('Tu Google Calendar no está conectado.');
+    }
+    const duration = Math.max(15, Math.min(480, Math.round(input.durationMinutes ?? 60)));
+    let start: Record<string, string>;
+    let end: Record<string, string>;
+    if (input.startTime && /^\d{2}:\d{2}$/.test(input.startTime)) {
+      const startIso = `${input.date}T${input.startTime}:00-04:00`;
+      const endMs = Date.parse(startIso) + duration * 60_000;
+      const endParts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).formatToParts(new Date(endMs));
+      const p = (type: string) => endParts.find(x => x.type === type)?.value ?? '00';
+      const endIso = `${p('year')}-${p('month')}-${p('day')}T${p('hour')}:${p('minute')}:00-04:00`;
+      start = { dateTime: startIso, timeZone: TIMEZONE };
+      end = { dateTime: endIso, timeZone: TIMEZONE };
+    } else {
+      const nextDay = new Date(Date.parse(`${input.date}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+      start = { date: input.date };
+      end = { date: nextDay };
+    }
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        summary: input.summary.slice(0, 200),
+        ...(input.description ? { description: input.description.slice(0, 500) } : {}),
+        start,
+        end,
+      }),
+      signal: AbortSignal.timeout(12_000),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.id) throw new Error('Google Calendar no pudo reprogramar el evento.');
+    return { id: json.id };
+  }
+
+  async deleteEvent(userId: string, eventId: string): Promise<void> {
+    const token = await this.getAccessToken(userId);
+    if (!token) throw new Error('Tu Google Calendar no está conectado.');
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok && res.status !== 404 && res.status !== 410) {
+      throw new Error('Google Calendar no pudo cancelar el evento.');
+    }
+  }
+
+  async listUpcomingEvents(userId: string, days = 14): Promise<{ id: string; summary: string; start: string }[]> {
     const token = await this.getAccessToken(userId);
     if (!token) return [];
     const now = new Date();
@@ -260,7 +318,7 @@ export class FinanceGoogleCalendarService {
     url.searchParams.set('timeMax', max.toISOString());
     url.searchParams.set('singleEvents', 'true');
     url.searchParams.set('orderBy', 'startTime');
-    url.searchParams.set('maxResults', '10');
+    url.searchParams.set('maxResults', '20');
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(8_000),
@@ -269,8 +327,10 @@ export class FinanceGoogleCalendarService {
     const json = await res.json().catch(() => null);
     const items = Array.isArray(json?.items) ? json.items : [];
     return items.map((item: any) => ({
+      id: String(item.id || ''),
       summary: String(item.summary || 'Evento sin título'),
       start: String(item.start?.dateTime || item.start?.date || ''),
     }));
   }
 }
+

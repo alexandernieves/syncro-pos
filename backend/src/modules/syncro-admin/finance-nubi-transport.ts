@@ -77,6 +77,13 @@ export class FinanceNubiTransport {
     return { connected: false, state: 'QR', qr: typeof qr === 'string' && qr.length <= 500_000 ? qr : null };
   }
 
+  async typing(phone: string) {
+    await this.request(`/chat/sendPresence/${instance}`, {
+      method: 'POST',
+      body: JSON.stringify({ number: phone, presence: 'composing', delay: 8000 }),
+    }, 5_000).catch(() => {});
+  }
+
   async send(phone: string, text: string) {
     // A large reviewed bank batch may need more than one WhatsApp message.
     let remaining = formatWhatsAppText(text);

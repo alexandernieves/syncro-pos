@@ -7,7 +7,7 @@ import { BcvService } from '../settings/bcv.service';
 import { fiscalRecordData, fiscalSupport } from './central-fiscal-data';
 import { requireFinanceScope } from './finance-access';
 import { defaultFinanceModel, FinanceNubiAi, type FinanceHistory } from './finance-nubi-ai';
-import { describeDraft, storeDrafts, validateDrafts, type CalendarEventDraft, type FinanceDraft, type LedgerDraft } from './finance-nubi-drafts';
+import { describeDraft, storeDrafts, validateDrafts, type CalendarEventDraft, type DeleteCalendarEventDraft, type FinanceDraft, type LedgerDraft, type UpdateCalendarEventDraft } from './finance-nubi-drafts';
 import { financeNubiSecret, FinanceNubiTransport } from './finance-nubi-transport';
 import { FinanceGoogleCalendarService } from './finance-google-calendar.service';
 
@@ -228,7 +228,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         return { ok: true };
       }
       let result: Awaited<ReturnType<typeof storeDrafts>> | null;
-      let calendarDrafts: CalendarEventDraft[] = [];
+      let calendarDrafts: (CalendarEventDraft | UpdateCalendarEventDraft | DeleteCalendarEventDraft)[] = [];
       try {
         result = await this.prisma.$transaction(async tx => {
           const session = await tx.centralFinanceBotPhone.updateMany({
@@ -245,8 +245,10 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
             return { saved: 1, duplicates: 0 };
           }
           const validated = validateDrafts(pending.rows, todayKey());
-          calendarDrafts = validated.filter((d): d is CalendarEventDraft => d.kind === 'calendarEvent');
-          const financeOnly = validated.filter(d => d.kind !== 'calendarEvent');
+          const isCal = (d: FinanceDraft): d is CalendarEventDraft | UpdateCalendarEventDraft | DeleteCalendarEventDraft =>
+            d.kind === 'calendarEvent' || d.kind === 'updateCalendarEvent' || d.kind === 'deleteCalendarEvent';
+          calendarDrafts = validated.filter(isCal);
+          const financeOnly = validated.filter(d => !isCal(d));
           if (!financeOnly.length) return { saved: 0, duplicates: 0 };
           return storeDrafts(tx, scope, row.userId, pending.id!, financeOnly);
         }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -261,30 +263,42 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         await send('No se confirmó el lote. Revisa tus movimientos y vuelve a confirmar si sigue pendiente.');
         return { ok: true };
       }
-      let calendarCreated = 0;
+      let calendarDone = 0;
       let calendarError = '';
       if (result && calendarDrafts.length) {
         for (const ev of calendarDrafts) {
           try {
-            await this.gcal.createEvent(row.userId, {
-              summary: ev.description,
-              date: ev.date,
-              startTime: ev.startTime,
-              durationMinutes: ev.durationMinutes,
-              description: ev.notes,
-            });
-            calendarCreated++;
+            if (ev.kind === 'calendarEvent') {
+              await this.gcal.createEvent(row.userId, {
+                summary: ev.description,
+                date: ev.date,
+                startTime: ev.startTime,
+                durationMinutes: ev.durationMinutes,
+                description: ev.notes,
+              });
+            } else if (ev.kind === 'updateCalendarEvent') {
+              await this.gcal.updateEvent(row.userId, ev.eventId, {
+                summary: ev.description,
+                date: ev.date,
+                startTime: ev.startTime,
+                durationMinutes: ev.durationMinutes,
+                description: ev.notes,
+              });
+            } else {
+              await this.gcal.deleteEvent(row.userId, ev.eventId);
+            }
+            calendarDone++;
           } catch (err) {
-            calendarError = err instanceof Error ? err.message : 'No se pudo agendar en Google Calendar.';
+            calendarError = err instanceof Error ? err.message : 'No se pudo actualizar Google Calendar.';
           }
         }
       }
       if (result && pending.fiscal) await send('Listo, dejé el registro fiscal y el soporte guardados en Syncro Finanzas.');
       else if (result) {
-        const totalSaved = result.saved + calendarCreated;
+        const totalSaved = result.saved + calendarDone;
         const parts: string[] = [];
         if (result.saved > 0) parts.push(`${result.saved === 1 ? '1 registro guardado' : `${result.saved} registros guardados`} en Syncro Finanzas`);
-        if (calendarCreated > 0) parts.push(`${calendarCreated === 1 ? '1 evento agendado' : `${calendarCreated} eventos agendados`} en tu Google Calendar`);
+        if (calendarDone > 0) parts.push(`${calendarDone === 1 ? '1 cambio aplicado' : `${calendarDone} cambios aplicados`} en tu Google Calendar`);
         if (calendarError) parts.push(`⚠️ ${calendarError}`);
         const msg = parts.length ? `¡Listo! ${parts.join(' · ')}.` : (totalSaved ? '¡Listo!' : 'Sin cambios nuevos.');
         await send(`${msg}${result.duplicates ? ` (Omití ${result.duplicates} duplicado(s)).` : ''}`);
@@ -304,6 +318,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
       return { ok: true };
     }
     try {
+      void this.transport.typing(phone);
       const date = todayKey();
       let media = attachment ? await this.transport.media({ ...message, message: content }, attachment) : undefined;
       let effectiveText = text;
@@ -572,7 +587,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         where: { scope }, orderBy: [{ date: 'desc' }], take: 15,
         select: { kind: true, tax: true, direction: true, period: true, dueDate: true, status: true, amountCents: true, vatCents: true },
       }) : null,
-      this.gcal.listUpcomingEvents(userId, 3).catch(() => []),
+      this.gcal.listUpcomingEvents(userId, 14).catch(() => []),
     ]);
     const balances: Record<string, number> = { cash: 0, bank: 0, binance: 0 };
     for (const entry of wallets) {
