@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { createHash, createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Prisma, type CentralFinanceBotPhone } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -6,8 +7,9 @@ import { BcvService } from '../settings/bcv.service';
 import { fiscalRecordData, fiscalSupport } from './central-fiscal-data';
 import { requireFinanceScope } from './finance-access';
 import { defaultFinanceModel, FinanceNubiAi, type FinanceHistory } from './finance-nubi-ai';
-import { describeDraft, storeDrafts, validateDrafts, type FinanceDraft, type LedgerDraft } from './finance-nubi-drafts';
+import { describeDraft, storeDrafts, validateDrafts, type CalendarEventDraft, type FinanceDraft, type LedgerDraft } from './finance-nubi-drafts';
 import { financeNubiSecret, FinanceNubiTransport } from './finance-nubi-transport';
+import { FinanceGoogleCalendarService } from './finance-google-calendar.service';
 
 const minutes = (value: number) => new Date(Date.now() + value * 60_000);
 const noDraft = { pending: Prisma.DbNull, fiscalDocument: null };
@@ -36,6 +38,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
     private readonly transport: FinanceNubiTransport,
     private readonly ai: FinanceNubiAi,
     private readonly bcv: BcvService,
+    private readonly gcal: FinanceGoogleCalendarService,
   ) {}
 
   onModuleInit() {
@@ -52,15 +55,16 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
 
   async settings(user: any) {
     await requireFinanceScope(this.prisma, user, 'company');
-    const [status, phones] = await Promise.all([
+    const [status, phones, googleCalendar] = await Promise.all([
       this.transport.status().catch(() => ({ connected: false, state: 'UNAVAILABLE' })),
       this.prisma.centralFinanceBotPhone.findMany({
         where: { userId: user.id },
         select: { phone: true, workspace: true, activeUntil: true },
         orderBy: { createdAt: 'asc' },
       }),
+      this.gcal.getStatus(user.id).catch(() => ({ configured: false, connected: false, email: null })),
     ]);
-    return { ...status, phones, model: process.env.SYNCRO_FINANCE_OPENROUTER_MODEL || defaultFinanceModel, aiConfigured: !!process.env.OPENROUTER_API_KEY };
+    return { ...status, phones, googleCalendar, model: process.env.SYNCRO_FINANCE_OPENROUTER_MODEL || defaultFinanceModel, aiConfigured: !!process.env.OPENROUTER_API_KEY };
   }
 
   async connect(user: any) {
@@ -224,6 +228,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         return { ok: true };
       }
       let result: Awaited<ReturnType<typeof storeDrafts>> | null;
+      let calendarDrafts: CalendarEventDraft[] = [];
       try {
         result = await this.prisma.$transaction(async tx => {
           const session = await tx.centralFinanceBotPhone.updateMany({
@@ -239,7 +244,11 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
             await tx.centralFiscalRecord.create({ data: { ...data, scope, id: randomUUID() } });
             return { saved: 1, duplicates: 0 };
           }
-          return storeDrafts(tx, scope, row.userId, pending.id!, validateDrafts(pending.rows, todayKey()));
+          const validated = validateDrafts(pending.rows, todayKey());
+          calendarDrafts = validated.filter((d): d is CalendarEventDraft => d.kind === 'calendarEvent');
+          const financeOnly = validated.filter(d => d.kind !== 'calendarEvent');
+          if (!financeOnly.length) return { saved: 0, duplicates: 0 };
+          return storeDrafts(tx, scope, row.userId, pending.id!, financeOnly);
         }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
       } catch (error) {
         if (pending.fiscal) {
@@ -252,8 +261,34 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         await send('No se confirmó el lote. Revisa tus movimientos y vuelve a confirmar si sigue pendiente.');
         return { ok: true };
       }
+      let calendarCreated = 0;
+      let calendarError = '';
+      if (result && calendarDrafts.length) {
+        for (const ev of calendarDrafts) {
+          try {
+            await this.gcal.createEvent(row.userId, {
+              summary: ev.description,
+              date: ev.date,
+              startTime: ev.startTime,
+              durationMinutes: ev.durationMinutes,
+              description: ev.notes,
+            });
+            calendarCreated++;
+          } catch (err) {
+            calendarError = err instanceof Error ? err.message : 'No se pudo agendar en Google Calendar.';
+          }
+        }
+      }
       if (result && pending.fiscal) await send('Listo, dejé el registro fiscal y el soporte guardados en Syncro Finanzas.');
-      else if (result) await send(`¡Listo! Ya te dejé ${result.saved === 1 ? 'ese registro guardado' : `esos ${result.saved} registros guardados`} en Syncro Finanzas.${result.duplicates ? ` (Omití ${result.duplicates} que ya estaban).` : ''}`);
+      else if (result) {
+        const totalSaved = result.saved + calendarCreated;
+        const parts: string[] = [];
+        if (result.saved > 0) parts.push(`${result.saved === 1 ? '1 registro guardado' : `${result.saved} registros guardados`} en Syncro Finanzas`);
+        if (calendarCreated > 0) parts.push(`${calendarCreated === 1 ? '1 evento agendado' : `${calendarCreated} eventos agendados`} en tu Google Calendar`);
+        if (calendarError) parts.push(`⚠️ ${calendarError}`);
+        const msg = parts.length ? `¡Listo! ${parts.join(' · ')}.` : (totalSaved ? '¡Listo!' : 'Sin cambios nuevos.');
+        await send(`${msg}${result.duplicates ? ` (Omití ${result.duplicates} duplicado(s)).` : ''}`);
+      }
       return { ok: true };
     }
     if (isNaturalCancel || (!attachment && command === 'cancelar')) {
@@ -333,7 +368,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         }
         return { ok: true };
       }
-      const snapshot = await this.snapshot(scope, date, {
+      const snapshot = await this.snapshot(scope, date, row.userId, {
         bcv: true,
         fiscal: true,
       });
@@ -418,8 +453,109 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
     ]).catch(() => this.logger.warn('No se pudo limpiar el estado vencido de Nubi Finanzas'));
   }
 
-  private async snapshot(scope: string, today: string, requested: { bcv: boolean; fiscal: boolean }) {
-    const [plan, current, wallets, recent, bcv, fiscal] = await Promise.all([
+  @Cron('0 8 * * *', { timeZone: 'America/Caracas' })
+  async sendDailyProactiveAlerts() {
+    if (!process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_API_KEY) return;
+    const today = todayKey();
+    const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    const inTwoDays = new Date(Date.parse(`${today}T12:00:00Z`) + 2 * 86_400_000).toISOString().slice(0, 10);
+    const phones = await this.prisma.centralFinanceBotPhone.findMany({
+      where: { workspace: 'personal' },
+      select: { phone: true, userId: true },
+    });
+    for (const row of phones) {
+      try {
+        const scope = await requireFinanceScope(this.prisma, { id: row.userId, role: 'syncropos' }, 'personal');
+        const [plan, fiscal, calendarEvents] = await Promise.all([
+          this.prisma.centralFinancePlan.findUnique({ where: { scope } }),
+          this.prisma.centralFiscalRecord.findMany({
+            where: { scope, kind: 'declaration', status: 'pending', dueDate: { lte: inTwoDays } },
+            select: { tax: true, period: true, dueDate: true },
+          }),
+          this.gcal.listUpcomingEvents(row.userId, 1).catch(() => []),
+        ]);
+        const data = (plan?.data ?? {}) as Record<string, any>;
+        const alerts: string[] = [];
+        const debts = Array.isArray(data.debts) ? data.debts : [];
+        for (const d of debts) {
+          if (d?.date === today || d?.date === tomorrow) {
+            alerts.push(`• *Deuda:* ${d.name} vence ${d.date === today ? 'hoy' : 'mañana'} ($${(Number(d.minimum || 0) / 100).toFixed(2)})`);
+          }
+        }
+        const obligations = Array.isArray(data.obligations) ? data.obligations : [];
+        for (const ob of obligations) {
+          if (ob?.kind === 'payment' && (ob?.date === today || ob?.date === tomorrow)) {
+            alerts.push(`• *Pago programado:* ${ob.name} vence ${ob.date === today ? 'hoy' : 'mañana'} ($${(Number(ob.cents || 0) / 100).toFixed(2)})`);
+          }
+        }
+        for (const dec of fiscal) {
+          alerts.push(`• *Fiscal:* Declaración ${dec.tax ?? ''} (${dec.period ?? ''}) vence el ${dec.dueDate}`);
+        }
+        if (calendarEvents.length) {
+          alerts.push(`• *Agenda hoy:* ${calendarEvents.slice(0, 3).map(e => e.summary).join(' · ')}`);
+        }
+        if (alerts.length) {
+          await this.transport.send(
+            row.phone,
+            `¡Buenos días! Aquí tienes tu radar de hoy en *Syncro Finanzas*:\n\n${alerts.join('\n')}\n\nSi necesitas ajustar algo o agendar un pendiente, escríbeme por aquí.`,
+          );
+        }
+      } catch {
+        // Keep cron resilient per user
+      }
+    }
+  }
+
+  @Cron('0 19 * * 0', { timeZone: 'America/Caracas' })
+  async sendWeeklySummary() {
+    if (!process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_API_KEY) return;
+    const today = todayKey();
+    const weekAgo = new Date(Date.parse(`${today}T12:00:00Z`) - 7 * 86_400_000).toISOString().slice(0, 10);
+    const phones = await this.prisma.centralFinanceBotPhone.findMany({
+      where: { workspace: 'personal' },
+      select: { phone: true, userId: true },
+    });
+    for (const row of phones) {
+      try {
+        const scope = await requireFinanceScope(this.prisma, { id: row.userId, role: 'syncropos' }, 'personal');
+        const [weekEntries, plan] = await Promise.all([
+          this.prisma.centralFinanceEntry.findMany({
+            where: { scope, date: { gte: weekAgo, lte: today } },
+            select: { debit: true, credit: true, cents: true, smallSpend: true },
+          }),
+          this.prisma.centralFinancePlan.findUnique({ where: { scope } }),
+        ]);
+        let weekIncome = 0;
+        let weekExpense = 0;
+        let weekSmall = 0;
+        for (const e of weekEntries) {
+          if (e.credit === 'income') weekIncome += e.cents;
+          else if (!['cash', 'bank', 'binance', 'equity', 'receivable', 'payable', 'debt'].includes(e.debit)) {
+            weekExpense += e.cents;
+            if (e.smallSpend) weekSmall += e.cents;
+          }
+        }
+        const data = (plan?.data ?? {}) as Record<string, any>;
+        const debts = Array.isArray(data.debts) ? data.debts : [];
+        const totalDebt = debts.reduce((s: number, d: any) => s + Number(d.balance || 0), 0);
+        const topDebt = [...debts].sort((a: any, b: any) => Number(b.apr || 0) - Number(a.apr || 0))[0];
+        const usdFmt = (c: number) => `$${(c / 100).toFixed(2)}`;
+        const lines = [
+          'Hola, aquí tienes tu *resumen semanal de Nubi*:',
+          `• *Ingresos (7 días):* ${usdFmt(weekIncome)}`,
+          `• *Gastos (7 días):* ${usdFmt(weekExpense)}${weekSmall > 0 ? ` (hormiga: ${usdFmt(weekSmall)})` : ''}`,
+          totalDebt > 0 ? `• *Deudas totales:* ${usdFmt(totalDebt)}${topDebt ? ` · Prioridad #1: ${topDebt.name}` : ''}` : '• *Deudas:* $0.00',
+          'Mañana arrancamos con foco. Si quieres que revisemos tu plan para esta semana, escríbeme.',
+        ];
+        await this.transport.send(row.phone, lines.join('\n'));
+      } catch {
+        // Keep cron resilient per user
+      }
+    }
+  }
+
+  private async snapshot(scope: string, today: string, userId: string, requested: { bcv: boolean; fiscal: boolean }) {
+    const [plan, current, wallets, recent, bcv, fiscal, upcomingEvents] = await Promise.all([
       this.prisma.centralFinancePlan.findUnique({ where: { scope } }),
       this.prisma.centralFinanceEntry.groupBy({
         by: ['debit', 'credit', 'smallSpend'], where: { scope, date: { gte: today.slice(0, 7) + '-01', lte: today } }, _sum: { cents: true },
@@ -436,6 +572,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         where: { scope }, orderBy: [{ date: 'desc' }], take: 15,
         select: { kind: true, tax: true, direction: true, period: true, dueDate: true, status: true, amountCents: true, vatCents: true },
       }) : null,
+      this.gcal.listUpcomingEvents(userId, 3).catch(() => []),
     ]);
     const balances: Record<string, number> = { cash: 0, bank: 0, binance: 0 };
     for (const entry of wallets) {
@@ -460,9 +597,13 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
     const activeAssetsFlowCents = assetsList.filter((a: any) => a.status !== 'planned').reduce((s: number, a: any) => s + Number(a.monthlyCashflowCents || 0), 0);
     const totalLiabilitiesDrainCents = liabilitiesList.reduce((s: number, l: any) => s + Number(l.monthlyDrainCents || 0), 0);
 
+    const safePlan = plan?.data ? { ...(plan.data as Record<string, unknown>) } : null;
+    if (safePlan && 'googleCalendar' in safePlan) delete safePlan.googleCalendar;
+
     return {
       fechaCaracas: today, saldoContablePorCuentaEnCentavosUSD: balances,
       movimientosDelMesAgrupadosEnCentavosUSD: current, ultimosMovimientos: recent,
+      proximosEventosGoogleCalendar: upcomingEvents,
       activosYPasivosEnCentavosUSD: {
         fuentesDeIngresoActivas: activeAssetsCount,
         flujoMensualActivos: activeAssetsFlowCents,
@@ -484,7 +625,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         declaracionesIvaPagadas: ivaPaidVes,
         ivaNetoPorPagar: ivaNetDueVes,
       },
-      plan: plan?.data ?? null, ...(bcv && { referenciaBcv: bcv }), ...(fiscal && { registrosFiscalesEnCentavosVES: fiscal }),
+      plan: safePlan, ...(bcv && { referenciaBcv: bcv }), ...(fiscal && { registrosFiscalesEnCentavosVES: fiscal }),
     };
   }
 }

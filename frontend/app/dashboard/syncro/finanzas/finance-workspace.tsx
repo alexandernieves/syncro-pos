@@ -296,6 +296,30 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
     }, ob.kind === "income" ? `Cobro registrado: ${ob.name}` : `Pago registrado: ${ob.name}`);
   }
 
+  async function reverseEntry(entry: Entry) {
+    const rate = entry.rate ? Number(entry.rate) : 1;
+    await perform(async () => {
+      await adminApi(path + "/entries", {
+        method: "POST",
+        body: JSON.stringify({
+          id: crypto.randomUUID(),
+          date: asOf,
+          description: `Reversión: ${entry.description}`.slice(0, 200),
+          debit: entry.credit,
+          credit: entry.debit,
+          cents: entry.cents,
+          currency: entry.currency ?? "USD",
+          nativeCents: entry.nativeCents ?? entry.cents,
+          rate: Number.isFinite(rate) && rate > 0 ? rate : 1,
+          ...(entry.toCurrency && entry.toCents != null ? { toCurrency: entry.currency ?? "USD", toCents: entry.nativeCents ?? entry.cents } : {}),
+          smallSpend: false,
+        }),
+      });
+      const data = await adminApi<{ entries: Entry[] }>(path);
+      setEntries(data.entries);
+    }, "Movimiento revertido correctamente");
+  }
+
   if (!ready) return error
     ? <p role="alert" className="rounded-xl border bg-card p-4 text-destructive">{error}</p>
     : <FinanceSkeleton tab={tab} mobile={mobile} />;
@@ -908,6 +932,7 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
           onOpenOpening={() => setQuickAction("opening")}
           onPostEntry={event => postEntry(event)}
           onPostOwnerPayment={postOwnerPayment}
+          onReverseEntry={reverseEntry}
         />
       )}
       {tab === "Deudas" && (

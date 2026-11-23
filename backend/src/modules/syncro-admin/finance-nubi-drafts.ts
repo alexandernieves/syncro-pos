@@ -53,6 +53,12 @@ type LiabilityDraft = Common & {
 type AssetCapitalDraft = Common & Money & { kind: 'assetCapital'; assetName: string };
 type PayDebtDraft = Common & Money & { kind: 'payDebt'; debtName: string; account: Wallet };
 type AdjustBalanceDraft = Common & Money & { kind: 'adjustBalance'; account: Wallet };
+export type CalendarEventDraft = Common & {
+  kind: 'calendarEvent';
+  startTime?: string;
+  durationMinutes: number;
+  notes?: string;
+};
 export type FinanceDraft =
   | LedgerDraft
   | IncomePlanDraft
@@ -66,7 +72,8 @@ export type FinanceDraft =
   | LiabilityDraft
   | AssetCapitalDraft
   | PayDebtDraft
-  | AdjustBalanceDraft;
+  | AdjustBalanceDraft
+  | CalendarEventDraft;
 
 const whole = (value: unknown, min = 1) =>
   typeof value === 'number' && Number.isInteger(value) && value >= min && value <= 2_000_000_000;
@@ -135,6 +142,12 @@ export function validateDrafts(proposed: unknown, today: string): FinanceDraft[]
       const monthlyDrainCents = whole(row.monthlyDrainCents, 0) ? row.monthlyDrainCents : 0;
       const balanceCents = whole(row.balanceCents, 0) ? row.balanceCents : 0;
       return { kind, date, description, category, monthlyDrainCents, balanceCents };
+    }
+    if (kind === 'calendarEvent') {
+      const startTime = typeof row.startTime === 'string' && /^\d{2}:\d{2}$/.test(row.startTime.trim()) ? row.startTime.trim() : undefined;
+      const durationMinutes = Math.max(15, Math.min(480, Math.round(Number(row.durationMinutes ?? 60) || 60)));
+      const notes = typeof row.notes === 'string' && row.notes.trim() ? row.notes.trim().slice(0, 400) : undefined;
+      return { kind, date, description, startTime, durationMinutes, notes };
     }
     const common = { ...money(row), date, description };
     if (kind === 'assetCapital') {
@@ -225,6 +238,9 @@ export function describeDraft(row: FinanceDraft) {
   }
   if (row.kind === 'liability') {
     return `Pasivo · ${row.description} · drena -$${(row.monthlyDrainCents / 100).toFixed(2)}/mes`;
+  }
+  if (row.kind === 'calendarEvent') {
+    return `Google Calendar · ${row.date}${row.startTime ? ` ${row.startTime}` : ' (todo el día)'} · ${row.description}`;
   }
   const amount = moneyLabel(row);
   const rate = row.currency === 'USD' ? '' : ` · tasa ${row.rate} ${row.currency}/USD`;

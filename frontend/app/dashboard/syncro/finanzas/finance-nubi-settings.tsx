@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Copy, MessageCircle, QrCode, ShieldCheck } from "lucide-react";
+import { CalendarDays, Copy, MessageCircle, QrCode, ShieldCheck } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { adminApi } from "@/lib/syncro-admin";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,14 @@ import { FinanceSelect } from "./finance-fields";
 const path = "/finance-nubi";
 const workspaceNames = { personal: "Mis finanzas", company: "Empresa Syncro" };
 type Phone = { phone: string; workspace: "personal" | "company"; activeUntil: string | null };
-type Settings = { connected: boolean; state: string; phones: Phone[]; model: string; aiConfigured: boolean };
+type Settings = {
+  connected: boolean;
+  state: string;
+  phones: Phone[];
+  model: string;
+  aiConfigured: boolean;
+  googleCalendar?: { configured: boolean; connected: boolean; email: string | null };
+};
 
 export default function FinanceNubiSettings() {
   const [settings, setSettings] = useState<Settings>();
@@ -96,6 +103,42 @@ export default function FinanceNubiSettings() {
           </div>
           <p className="text-sm text-muted-foreground">En el WhatsApp del bot abre Dispositivos vinculados y escanea el QR.</p>
         </div>}
+      </section>
+      <section className="space-y-3 rounded-2xl border bg-card p-4 sm:p-5">
+        <div className="flex items-center gap-2"><CalendarDays className="size-5 text-primary" /><h2 className="font-semibold">Google Calendar (Agenda personal)</h2></div>
+        <p className="text-sm text-muted-foreground">
+          Conecta tu calendario personal de Google para que Nubi pueda agendar tus reuniones de trabajo, citas o recordatorios de pago directo desde WhatsApp (solo para tu usuario).
+        </p>
+        {settings.googleCalendar?.connected ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-muted/30 p-3">
+            <div>
+              <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Google Calendar conectado</p>
+              {settings.googleCalendar.email && <p className="text-xs text-muted-foreground">{settings.googleCalendar.email}</p>}
+            </div>
+            <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void act(() => adminApi(path + "/google", { method: "DELETE" }))}>
+              Desconectar
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {!settings.googleCalendar?.configured && (
+              <p className="text-xs text-muted-foreground">
+                Falta configurar <code className="rounded bg-muted px-1">GOOGLE_CALENDAR_CLIENT_ID</code> y <code className="rounded bg-muted px-1">GOOGLE_CALENDAR_CLIENT_SECRET</code> en el backend.
+              </p>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || !settings.googleCalendar?.configured}
+              onClick={() => void act(async () => {
+                const res = await adminApi<{ url: string }>(path + "/google/auth-url");
+                window.location.href = res.url;
+              })}
+            >
+              <CalendarDays className="size-4" /> Conectar Google Calendar
+            </Button>
+          </div>
+        )}
       </section>
       <section className="space-y-3 rounded-2xl border bg-card p-4 sm:p-5">
         <div className="flex items-center gap-2"><ShieldCheck className="size-5 text-primary" /><h2 className="font-semibold">Números autorizados por ti</h2></div>

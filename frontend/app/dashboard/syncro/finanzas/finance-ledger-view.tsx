@@ -9,6 +9,7 @@ import {
   Building2,
   Landmark,
   Plus,
+  RotateCcw,
   Search,
   Upload,
   Wallet,
@@ -44,6 +45,7 @@ export function FinanceLedgerView({
   onOpenOpening,
   onPostEntry,
   onPostOwnerPayment,
+  onReverseEntry,
 }: {
   entries: Entry[];
   asOf: string;
@@ -61,11 +63,13 @@ export function FinanceLedgerView({
   onOpenOpening: () => void;
   onPostEntry: (event: FormEvent<HTMLFormElement>) => void;
   onPostOwnerPayment: (event: FormEvent<HTMLFormElement>) => void;
+  onReverseEntry: (entry: Entry) => Promise<void> | void;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<LedgerFilter>("all");
   const [manualOpen, setManualOpen] = useState(false);
   const [ownerPayOpen, setOwnerPayOpen] = useState(false);
+  const [reversing, setReversing] = useState<Entry | null>(null);
 
   function classify(entry: Entry): "income" | "expense" | "transfer" | "other" {
     if (entry.credit === "income") return "income";
@@ -251,19 +255,34 @@ export function FinanceLedgerView({
                           </div>
                         </div>
                       </div>
-                      <div className="shrink-0 text-right">
-                        <p className={`text-sm font-bold tabular-nums ${amountTone}`}>
-                          {sign}{money(entry.cents)}
-                        </p>
-                        {entry.nativeCents != null && entry.currency && entry.currency !== "USD" && (
-                          <p className="text-[11px] tabular-nums text-muted-foreground">
-                            {nativeMoney(entry.nativeCents, entry.currency)}
+                      <div className="flex shrink-0 items-center gap-2">
+                        <div className="text-right">
+                          <p className={`text-sm font-bold tabular-nums ${amountTone}`}>
+                            {sign}{money(entry.cents)}
                           </p>
-                        )}
-                        {entry.toCurrency && entry.toCents != null && (
-                          <p className="text-[10px] tabular-nums text-sky-600 dark:text-sky-400">
-                            → {nativeMoney(entry.toCents, entry.toCurrency)}
-                          </p>
+                          {entry.nativeCents != null && entry.currency && entry.currency !== "USD" && (
+                            <p className="text-[11px] tabular-nums text-muted-foreground">
+                              {nativeMoney(entry.nativeCents, entry.currency)}
+                            </p>
+                          )}
+                          {entry.toCurrency && entry.toCents != null && (
+                            <p className="text-[10px] tabular-nums text-sky-600 dark:text-sky-400">
+                              → {nativeMoney(entry.toCents, entry.toCurrency)}
+                            </p>
+                          )}
+                        </div>
+                        {!entry.description.startsWith("Reversión:") && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 rounded-full text-muted-foreground hover:text-primary"
+                            title="Revertir asiento"
+                            aria-label={`Revertir ${entry.description}`}
+                            onClick={() => setReversing(entry)}
+                          >
+                            <RotateCcw className="size-3.5" />
+                          </Button>
                         )}
                       </div>
                     </li>
@@ -340,6 +359,42 @@ export function FinanceLedgerView({
           </fieldset>
         </FinanceSheet>
       )}
+      {/* Sheet: Confirmar reversión */}
+      <FinanceSheet
+        open={!!reversing}
+        onOpenChange={open => { if (!open && !busy) setReversing(null); }}
+        mobile={mobile}
+        title="Revertir movimiento"
+        description="Se creará un asiento inverso exacto para anular su efecto manteniendo tu contabilidad cuadrada."
+      >
+        {reversing && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border bg-muted/35 p-3.5 text-sm space-y-1">
+              <p className="font-bold">{reversing.description}</p>
+              <p className="text-xs text-muted-foreground">
+                {readableDate(reversing.date)} · {names[reversing.credit] ?? reversing.credit} → {names[reversing.debit] ?? reversing.debit}
+              </p>
+              <p className="text-base font-bold tabular-nums">{money(reversing.cents)}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                className="h-11 flex-1 rounded-full font-semibold"
+                disabled={busy}
+                onClick={async () => {
+                  await onReverseEntry(reversing);
+                  setReversing(null);
+                }}
+              >
+                <RotateCcw className="size-4" /> Confirmar reversión
+              </Button>
+              <Button type="button" variant="outline" className="h-11 rounded-full" disabled={busy} onClick={() => setReversing(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+      </FinanceSheet>
     </div>
   );
 }
