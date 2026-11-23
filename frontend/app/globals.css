@@ -837,11 +837,12 @@ html.syncro-credit .sc-ad .sc-ad-go { position: absolute; left: 18px; bottom: 18
 html:has(.syncro-finance-theme),
 html:has(.syncro-finance-theme) body {
   height: 100%;
-  min-height: 100dvh;
+  min-height: 100vh;
+  min-height: 100lvh;
   max-inline-size: 100%;
   overflow: hidden;
   overscroll-behavior: none;
-  background-color: var(--background);
+  background-color: #FCFBF8;
 }
 
 .syncro-finance-theme {
@@ -850,7 +851,8 @@ html:has(.syncro-finance-theme) body {
   left: 0;
   right: 0;
   bottom: 0;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100lvh;
   min-width: 0;
   overflow: hidden;
   overscroll-behavior: none;

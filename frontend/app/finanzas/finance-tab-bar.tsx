@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -52,13 +54,16 @@ export function FinanceTabBar({
   activeSlug: string;
   personal: boolean;
 }) {
-  return (
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  const bar = (
     <nav
       aria-label={label}
       className={cn(
         "fixed inset-x-0 bottom-0 z-50 border-t border-zinc-900/[0.08] bg-[#FCFBF8]/95 backdrop-blur-xl",
-        "pb-[max(0.35rem,calc(env(safe-area-inset-bottom)*0.65))] shadow-[0_-6px_24px_-8px_rgba(24,24,27,0.08)]",
-        "after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-[64px] after:bg-[#FCFBF8] after:content-['']",
+        "pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-6px_24px_-8px_rgba(24,24,27,0.08)]",
+        "after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-[80px] after:bg-[#FCFBF8] after:content-['']",
         "dark:border-white/10 dark:bg-zinc-950/95 dark:after:bg-zinc-950",
       )}
     >
@@ -113,4 +118,6 @@ export function FinanceTabBar({
       </div>
     </nav>
   );
+
+  return mounted ? createPortal(bar, document.body) : bar;
 }
