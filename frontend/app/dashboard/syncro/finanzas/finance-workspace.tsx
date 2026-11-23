@@ -18,13 +18,16 @@ import { FinanceDate, readableDate } from "./finance-calendar";
 import { budgetSuggestion } from "./budget-suggestion";
 import { BankImport } from "./bank-import";
 import FinanceNubiSettings from "./finance-nubi-settings";
-import FiscalRecords from "./fiscal-records";
+import FiscalRecords, { type FiscalRecord } from "./fiscal-records";
 import { FinanceSkeleton } from "./finance-skeleton";
 import { FinanceDecisionCard, FinanceQuickActions } from "./finance-decision-card";
 import { FinanceDebtsView } from "./finance-debts-view";
 import { FinanceExpensesView } from "./finance-expenses-view";
 import { FinanceLedgerView } from "./finance-ledger-view";
-import { projection, simulateDebts, shiftDay, walletAccounts, walletBalances, type Entry, type Frequency, type OriginalMoney, type Plan } from "./calculations";
+import { FinanceMarketView } from "./finance-market-view";
+import { FinanceGoalsView } from "./finance-goals-view";
+import { FinanceDistributionSheet } from "./finance-distribution-sheet";
+import { obligationOccursOn, projection, simulateDebts, shiftDay, walletAccounts, walletBalances, type Entry, type Frequency, type MarketTrip, type OriginalMoney, type Plan } from "./calculations";
 
 const names: Record<string, string> = {
   cash: "Efectivo", bank: "Banco", binance: "Binance", receivable: "Cuentas por cobrar", payable: "Cuentas por pagar",
@@ -32,7 +35,7 @@ const names: Record<string, string> = {
   housing: "Vivienda y servicios", transport: "Transporte", health: "Salud", interest: "Intereses", expense: "Otros gastos", subscriptions: "Suscripciones", shopping: "Compras", leisure: "Ocio",
 };
 
-const budgetViews = { suggestion: "Distribución", habitual: "Mi plan", income: "Cobros", payments: "Pagos" } as const;
+const budgetViews = { suggestion: "Distribución", habitual: "Mi plan", goals: "Objetivos", income: "Cobros", payments: "Pagos" } as const;
 type BudgetView = keyof typeof budgetViews;
 
 const expenseAccounts = ["food", "dining", "housing", "transport", "health", "subscriptions", "shopping", "leisure", "interest", "expense"];
@@ -95,6 +98,10 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
   const [statementBalance, setStatementBalance] = useState("");
   const [showBankImport, setShowBankImport] = useState(false);
   const [quickAction, setQuickAction] = useState<"opening" | "income" | "transfer" | null>(null);
+  const [fiscalRecords, setFiscalRecords] = useState<FiscalRecord[]>([]);
+  const [expensesMode, setExpensesMode] = useState<"expenses" | "market">("expenses");
+  const [distributeAmount, setDistributeAmount] = useState<number | null>(null);
+  const [payingObligation, setPayingObligation] = useState<number | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -110,6 +117,7 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
       setReady(true);
     }).catch(err => { if (current) setError(err.message); });
     adminApi<Quotes>("/finance/rates").then(data => { if (current) setQuotes(data); }).catch(() => {});
+    adminApi<FiscalRecord[]>(path + "/fiscal").then(data => { if (current) setFiscalRecords(data); }).catch(() => {});
     return () => { current = false; };
   }, [path]);
 
@@ -163,6 +171,12 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
       setFormRevision(revision => revision + 1);
       if (kind === "expense") setExpenseOpen(false);
       if (kind === quickAction) setQuickAction(null);
+      if (kind === "income" && workspace === "personal") {
+        const usdCents = original.currency === "USD" || original.currency === "USDT"
+          ? original.nativeCents
+          : Math.round(original.nativeCents / (original.rate || 1));
+        if (usdCents > 0) setDistributeAmount(usdCents);
+      }
     }, kind === "opening" ? "Saldo inicial registrado" : kind === "income" ? "Ingreso registrado" : kind === "expense" ? "Gasto registrado" : kind === "transfer" ? "Transferencia registrada" : "Asiento registrado");
   }
 
@@ -220,6 +234,67 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
     }, `Abono registrado en ${debt.name}`);
   }
 
+  async function closeMarketTrip({ trip, wallet }: { trip: MarketTrip; wallet: string }) {
+    if (trip.totalCents <= 0) return;
+    await perform(async () => {
+      await adminApi(path + "/entries", {
+        method: "POST",
+        body: JSON.stringify({
+          id: crypto.randomUUID(),
+          date: trip.date,
+          description: trip.store ? `Mercado (${trip.store})` : "Compra de mercado",
+          debit: "food",
+          credit: wallet,
+          cents: trip.totalCents,
+          currency: "USD",
+          nativeCents: trip.totalCents,
+          rate: 1,
+          smallSpend: false,
+        }),
+      });
+      const data = await adminApi<{ entries: Entry[] }>(path);
+      setEntries(data.entries);
+      const nextTrips = (plan.marketTrips ?? []).map(t => (t.id === trip.id ? { ...t, status: "closed" as const } : t));
+      setPlan(await adminApi<Plan>(path + "/plan", { method: "PUT", body: JSON.stringify({ ...plan, marketTrips: nextTrips }) }));
+    }, "Compra de mercado registrada");
+  }
+
+  async function payObligationNow(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (payingObligation === null) return;
+    const ob = plan.obligations[payingObligation];
+    if (!ob) return;
+    const fields = new FormData(event.currentTarget);
+    const wallet = String(fields.get("wallet") ?? "bank");
+    const category = String(fields.get("category") ?? "housing");
+    const dateVal = String(fields.get("date") ?? today());
+    const original = originalMoney(fields);
+    const usdCents = original.currency === "USD" || original.currency === "USDT"
+      ? original.nativeCents
+      : Math.round(original.nativeCents / (original.rate || 1));
+    await perform(async () => {
+      await adminApi(path + "/entries", {
+        method: "POST",
+        body: JSON.stringify({
+          id: crypto.randomUUID(),
+          ...original,
+          date: dateVal,
+          description: ob.name,
+          debit: ob.kind === "income" ? wallet : category,
+          credit: ob.kind === "income" ? "income" : wallet,
+          cents: usdCents,
+          smallSpend: false,
+        }),
+      });
+      const data = await adminApi<{ entries: Entry[] }>(path);
+      setEntries(data.entries);
+      setPayingObligation(null);
+      if (ob.kind === "income" && workspace === "personal" && usdCents > 0) {
+        setDistributeAmount(usdCents);
+      }
+    }, ob.kind === "income" ? `Cobro registrado: ${ob.name}` : `Pago registrado: ${ob.name}`);
+  }
+
   if (!ready) return error
     ? <p role="alert" className="rounded-xl border bg-card p-4 text-destructive">{error}</p>
     : <FinanceSkeleton tab={tab} mobile={mobile} />;
@@ -269,6 +344,22 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
   const extra = stress ? forecast.extra : Math.min(forecast.extra, projection(plan, asOf, available, grocery + dining, true, horizon).extra);
   const accelerated = simulateDebts(plan.debts, extra);
   const totalDebt = plan.debts.reduce((sum, debt) => sum + debt.balance, 0);
+  const topDebtName = [...plan.debts].sort((a, b) => b.apr - a.apr)[0]?.name;
+  const ivaBilledVes = fiscalRecords.filter(r => r.kind === "invoice" && r.status !== "void").reduce((s, r) => s + (r.vatCents ?? 0), 0);
+  const ivaRetVes = fiscalRecords.filter(r => r.kind === "retention" && r.tax === "IVA" && r.direction === "received").reduce((s, r) => s + (r.amountCents ?? 0), 0);
+  const ivaPaidVes = fiscalRecords.filter(r => r.kind === "declaration" && r.tax === "IVA" && r.status === "paid").reduce((s, r) => s + (r.amountCents ?? 0), 0);
+  const fiscalIvaVesCents = Math.max(0, ivaBilledVes - ivaRetVes - ivaPaidVes);
+  const fiscalIvaUsdCents = quotes.VES?.rate ? Math.round(fiscalIvaVesCents / quotes.VES.rate) : 0;
+  let upcomingBills15dCents = 0;
+  for (let offset = 0; offset < 15; offset++) {
+    const d = shiftDay(asOf, offset);
+    for (const ob of plan.obligations) {
+      if (ob.kind === "payment" && obligationOccursOn(ob, d)) upcomingBills15dCents += ob.cents;
+    }
+  }
+  const monthlyInvestmentTargetCents = (plan.goals ?? []).reduce((sum, g) => sum + (g.monthlyTargetCents || 0), 0);
+  const reserveGapCents = Math.max(0, plan.reserve - Math.max(0, available - fiscalIvaUsdCents));
+  const obligationToPay = payingObligation !== null ? plan.obligations[payingObligation] : undefined;
   const suggested = tab === "Presupuesto" && budgetView === "suggestion" ? budgetSuggestion(plan, entries, budgetMonth, asOf, Math.max(0, cents(groceryReceipts) || 0)) : null;
   const cashFirst = suggested ? projection({ ...plan, grocery: 0, dining: 0 }, asOf, available, 0, false, 4).shortfall : undefined;
   const personal = workspace === "personal";
@@ -359,9 +450,11 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
               foodRemaining={grocery + dining}
               extraForDebts={extra}
               totalDebt={totalDebt}
+              fiscalIvaCents={fiscalIvaUsdCents}
               shortfall={forecast.shortfall}
               debtsHref={sectionUrl("deudas-personales")}
               budgetHref={budgetUrl}
+              onOpenDistribute={() => setDistributeAmount(plan.income > 0 ? plan.income : Math.max(available, 10000))}
             />
           )}
         </>}
@@ -461,22 +554,67 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
           <div className="flex justify-between gap-3 rounded-xl border bg-muted/25 p-2.5 text-sm" key={key}><dt>{label}</dt><dd className="font-semibold tabular-nums">{money((totals[key] ?? 0) * (["payable", "debt", "equity", "income"].includes(key) ? -1 : 1))}</dd></div>)}</dl>
       </FinancePanel>}
       {tab === "Gastos" && <>
-        <FinanceExpensesView
-          asOf={asOf}
-          monthlyExpenses={monthlyExpenses}
-          monthlyIncome={income}
-          spendingCategories={spendingCategories}
-          largestExpense={largestExpense}
-          purchases={purchases}
-          filteredPurchases={filteredPurchases}
-          smallPurchasesCount={smallPurchases.length}
-          smallTotal={smallTotal}
-          smallLimit={smallLimit}
-          expenseFilter={expenseFilter}
-          onFilterChange={setExpenseFilter}
-          onOpenNewExpense={() => setExpenseOpen(true)}
-          names={names}
-        />
+        {personal && (
+          <div className="grid grid-cols-2 gap-1 rounded-[20px] border bg-card p-1 shadow-xs">
+            {([["expenses", "Gastos del mes"], ["market", "Carrito Mercado"]] as const).map(([key, label]) => {
+              const active = expensesMode === key;
+              const openItemsCount = (plan.marketTrips ?? []).find(t => t.status === "open")?.items.length ?? 0;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setExpensesMode(key)}
+                  className={`relative h-10 rounded-2xl text-xs font-semibold transition-colors ${active ? "text-white" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="expenses-mode-pill"
+                      transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                      className="absolute inset-0 rounded-2xl bg-[#1A1815] shadow-sm dark:bg-[#F26B3A]"
+                    />
+                  )}
+                  <span className="relative z-10 flex items-center justify-center gap-1.5">
+                    {label}
+                    {key === "market" && openItemsCount > 0 && (
+                      <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${active ? "bg-white/20 text-white" : "bg-emerald-500/15 text-emerald-700"}`}>
+                        {openItemsCount}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {expensesMode === "market" && personal ? (
+          <FinanceMarketView
+            asOf={asOf}
+            groceryLimit={plan.grocery}
+            foodSpentCents={spending.food ?? 0}
+            trips={plan.marketTrips ?? []}
+            busy={busy}
+            mobile={mobile}
+            onSaveTrips={nextTrips => savePlan({ ...plan, marketTrips: nextTrips })}
+            onCloseTripAsExpense={closeMarketTrip}
+          />
+        ) : (
+          <FinanceExpensesView
+            asOf={asOf}
+            monthlyExpenses={monthlyExpenses}
+            monthlyIncome={income}
+            spendingCategories={spendingCategories}
+            largestExpense={largestExpense}
+            purchases={purchases}
+            filteredPurchases={filteredPurchases}
+            smallPurchasesCount={smallPurchases.length}
+            smallTotal={smallTotal}
+            smallLimit={smallLimit}
+            expenseFilter={expenseFilter}
+            onFilterChange={setExpenseFilter}
+            onOpenNewExpense={() => setExpenseOpen(true)}
+            names={names}
+          />
+        )}
         <FinanceSheet
           open={expenseOpen}
           onOpenChange={open => { if (!busy) setExpenseOpen(open); }}
@@ -504,7 +642,7 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
         </FinanceSheet>
       </>}
       {tab === "Presupuesto" && <>
-        <nav aria-label="Vistas de presupuesto" className="grid grid-cols-2 gap-1 rounded-[22px] border bg-card p-1.5 shadow-xs sm:grid-cols-4">
+        <nav aria-label="Vistas de presupuesto" className="grid grid-cols-3 gap-1 rounded-[22px] border bg-card p-1.5 shadow-xs sm:grid-cols-5">
           {(Object.entries(budgetViews) as [BudgetView, string][]).filter(([key]) => personal || key !== "suggestion").map(([key, label]) => {
             const active = budgetView === key;
             return (
@@ -609,6 +747,14 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
           <Button type="submit" className="h-12 rounded-full text-base font-semibold sm:col-span-2">Guardar presupuesto</Button>
         </form>
         </section>}
+        {budgetView === "goals" && (
+          <FinanceGoalsView
+            goals={plan.goals ?? []}
+            busy={busy}
+            mobile={mobile}
+            onSaveGoals={nextGoals => savePlan({ ...plan, goals: nextGoals })}
+          />
+        )}
         {budgetView === "income" && <section className="space-y-4 rounded-[26px] border bg-card p-4 shadow-xs sm:p-5">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">Ajustes de cobro</p>
@@ -722,7 +868,10 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
                 {readableDate(row.date)} · <strong className="tabular-nums text-foreground">{row.original ? nativeMoney(row.original.nativeCents, row.original.currency) : money(row.cents)}</strong> {row.monthly && "· Mensual"}
               </p>
             </div>
-            <div className="flex shrink-0 gap-1">
+            <div className="flex shrink-0 flex-wrap gap-1">
+              <Button size="sm" className="h-8 rounded-full px-3 text-xs" type="button" onClick={() => setPayingObligation(index)}>
+                {row.kind === "income" ? "Cobrar" : "Pagar"}
+              </Button>
               <Button variant="outline" size="sm" className="h-8 rounded-full px-3 text-xs" type="button" onClick={() => setEditingPayment(index)}>Editar</Button>
               <Button variant="ghost" size="sm" className="h-8 rounded-full px-2.5 text-xs text-muted-foreground hover:text-destructive" type="button" onClick={() => void savePlan({ ...plan, obligations: plan.obligations.filter((_, i) => i !== index) }, () => setEditingPayment(null))}>Quitar</Button>
             </div>
@@ -767,6 +916,56 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
         />
       )}
     </fieldset>
+    <FinanceDistributionSheet
+      open={distributeAmount !== null}
+      onOpenChange={open => { if (!open) setDistributeAmount(null); }}
+      mobile={mobile}
+      initialAmountCents={distributeAmount ?? 0}
+      fiscalIvaCents={fiscalIvaUsdCents}
+      upcomingBillsCents={upcomingBills15dCents}
+      foodRemainingCents={grocery + dining}
+      reserveGapCents={reserveGapCents}
+      totalDebtCents={totalDebt}
+      topDebtName={topDebtName}
+      monthlyInvestmentTargetCents={monthlyInvestmentTargetCents}
+    />
+    <FinanceSheet
+      open={payingObligation !== null}
+      onOpenChange={open => { if (!open && !busy) setPayingObligation(null); }}
+      mobile={mobile}
+      title={obligationToPay?.kind === "income" ? `Registrar cobro: ${obligationToPay.name}` : `Pagar compromiso: ${obligationToPay?.name ?? ""}`}
+      description="Registra este movimiento real en tu libro diario en 1 toque."
+    >
+      {obligationToPay && (
+        <fieldset disabled={busy} className="min-w-0">
+          <form className="grid gap-3.5" onSubmit={payObligationNow}>
+            <FinanceDate label="Fecha" max={asOf} defaultValue={asOf} />
+            <FinanceSelect
+              label={obligationToPay.kind === "income" ? "Recibido en" : "Pagado desde"}
+              name="wallet"
+              defaultValue="bank"
+              options={walletAccounts.map(key => [key, names[key]])}
+            />
+            {obligationToPay.kind === "payment" && (
+              <FinanceSelect
+                label="Categoría del gasto"
+                name="category"
+                defaultValue="housing"
+                options={expenseAccounts.map(key => [key, names[key]])}
+              />
+            )}
+            <MoneyFields
+              quotes={quotes}
+              label="Importe"
+              initial={obligationToPay.original ?? { currency: "USD", nativeCents: obligationToPay.cents, rate: 1 }}
+            />
+            <Button type="submit" className="h-12 rounded-full text-base font-semibold">
+              {obligationToPay.kind === "income" ? "Confirmar cobro" : "Confirmar pago"}
+            </Button>
+          </form>
+        </fieldset>
+      )}
+    </FinanceSheet>
   </div>;
 }
 

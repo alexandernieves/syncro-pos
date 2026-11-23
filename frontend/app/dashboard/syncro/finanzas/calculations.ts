@@ -3,8 +3,104 @@ export type Debt = { balanceOriginal?: OriginalMoney | null; minimumOriginal?: O
 export type Obligation = { original?: OriginalMoney | null; name: string; date: string; cents: number; kind: "income" | "payment"; monthly: boolean };
 export type IncomeOverride = { month: string; slot: 1 | 2; cents: number };
 export type Frequency = "weekly" | "twice-monthly" | "monthly";
-export type Plan = { incomeOriginal?: OriginalMoney | null; horizonWeeks?: number; paydayOverrides?: { date: string; cents: number }[]; frequency?: Frequency; weeklyPayday?: number; monthlyOverrides?: { month: string; cents: number }[]; smallSpendLimit?: number; incomeOverrides?: IncomeOverride[]; income: number; payday1: number; payday2: number; grocery: number; dining: number; reserve: number; obligations: Obligation[]; debts: Debt[] };
+export type GoalKind = "emergency" | "investment" | "goal";
+export type Goal = {
+  id: string;
+  name: string;
+  kind: GoalKind;
+  targetCents: number;
+  savedCents: number;
+  monthlyTargetCents: number;
+  deadline?: string | null;
+};
+export type MarketItem = { id: string; name: string; cents: number; qty?: number };
+export type MarketTrip = {
+  id: string;
+  date: string;
+  store?: string | null;
+  status: "open" | "closed";
+  items: MarketItem[];
+  totalCents: number;
+};
+export type Plan = {
+  incomeOriginal?: OriginalMoney | null;
+  horizonWeeks?: number;
+  paydayOverrides?: { date: string; cents: number }[];
+  frequency?: Frequency;
+  weeklyPayday?: number;
+  monthlyOverrides?: { month: string; cents: number }[];
+  smallSpendLimit?: number;
+  incomeOverrides?: IncomeOverride[];
+  income: number;
+  payday1: number;
+  payday2: number;
+  grocery: number;
+  dining: number;
+  reserve: number;
+  obligations: Obligation[];
+  debts: Debt[];
+  goals?: Goal[];
+  marketTrips?: MarketTrip[];
+};
 export type Entry = { id: string; date: string; description: string; debit: string; credit: string; cents: number; smallSpend?: boolean; currency?: string; nativeCents?: number | null; rate?: string | null; toCurrency?: string | null; toCents?: number | null };
+
+export function distributeIncome(
+  amountCents: number,
+  params: {
+    fiscalIvaCents: number;
+    upcomingBillsCents: number;
+    foodRemainingCents: number;
+    reserveGapCents: number;
+    totalDebtCents: number;
+    topDebtName?: string;
+    monthlyInvestmentTargetCents: number;
+  },
+) {
+  let pool = Math.max(0, Math.round(amountCents));
+  const take = (need: number) => {
+    const used = Math.min(pool, Math.max(0, Math.round(need)));
+    pool -= used;
+    return used;
+  };
+
+  const fiscal = take(params.fiscalIvaCents);
+  const bills = take(params.upcomingBillsCents);
+  const food = take(params.foodRemainingCents);
+  const reserve = take(params.reserveGapCents);
+
+  // Split remaining surplus between Debt Attack, Investments/Goals, and Free Cash
+  let debtAttack = 0;
+  let investments = 0;
+  if (pool > 0) {
+    if (params.totalDebtCents > 0) {
+      // Prioritize 60% of surplus to avalanche debt #1, 25% to investments/goals (so you still build wealth!), 15% free
+      debtAttack = take(Math.min(params.totalDebtCents, Math.round(pool * 0.6)));
+      const invTarget = params.monthlyInvestmentTargetCents > 0
+        ? Math.min(params.monthlyInvestmentTargetCents, Math.round(pool * 0.65))
+        : Math.round(pool * 0.55);
+      investments = take(invTarget);
+    } else {
+      // Debt-free: allocate 50% (or monthly target) to investments & goals, rest free
+      const invTarget = params.monthlyInvestmentTargetCents > 0
+        ? Math.max(params.monthlyInvestmentTargetCents, Math.round(pool * 0.45))
+        : Math.round(pool * 0.5);
+      investments = take(invTarget);
+    }
+  }
+  const freeCash = pool;
+
+  return {
+    total: Math.max(0, Math.round(amountCents)),
+    fiscal,
+    bills,
+    food,
+    reserve,
+    debtAttack,
+    topDebtName: params.topDebtName,
+    investments,
+    freeCash,
+  };
+}
 
 export function monthDate(month: string, day: number) {
   const [year, index] = month.split("-").map(Number);

@@ -256,6 +256,36 @@ export class CentralFinanceController {
     if (new Set(paydayIncome.map(row => row.date)).size !== paydayIncome.length) {
       throw new BadRequestException('Hay ajustes duplicados para una fecha');
     }
+    const rawGoals = body.goals ?? [];
+    if (!Array.isArray(rawGoals) || rawGoals.length > 50) throw new BadRequestException('Objetivos inválidos');
+    const goals = rawGoals.map((row: any) => ({
+      id: typeof row?.id === 'string' && row.id.trim() ? row.id.trim().slice(0, 64) : label(row?.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40),
+      name: label(row?.name),
+      kind: ['emergency', 'investment', 'goal'].includes(row?.kind) ? row.kind : 'goal',
+      targetCents: amount(row?.targetCents, 1),
+      savedCents: amount(row?.savedCents ?? 0, 0),
+      monthlyTargetCents: amount(row?.monthlyTargetCents ?? 0, 0),
+      deadline: row?.deadline ? date(row.deadline) : null,
+    }));
+    const rawTrips = body.marketTrips ?? [];
+    if (!Array.isArray(rawTrips) || rawTrips.length > 60) throw new BadRequestException('Registros de mercado inválidos');
+    const marketTrips = rawTrips.map((trip: any) => {
+      const items = Array.isArray(trip?.items) ? trip.items.slice(0, 100).map((item: any, idx: number) => ({
+        id: typeof item?.id === 'string' && item.id.trim() ? item.id.trim().slice(0, 64) : `item-${idx}`,
+        name: label(item?.name),
+        cents: amount(item?.cents, 1),
+        qty: Math.max(1, Math.min(999, Math.round(Number(item?.qty ?? 1) || 1))),
+      })) : [];
+      const totalCents = items.reduce((sum: number, item: any) => sum + item.cents * (item.qty ?? 1), 0);
+      return {
+        id: typeof trip?.id === 'string' && trip.id.trim() ? trip.id.trim().slice(0, 64) : `trip-${date(trip?.date)}`,
+        date: date(trip?.date),
+        store: typeof trip?.store === 'string' && trip.store.trim() ? trip.store.trim().slice(0, 120) : null,
+        status: trip?.status === 'closed' ? 'closed' : 'open',
+        items,
+        totalCents,
+      };
+    });
     const income = monetary(body.incomeOriginal, body.income);
     const data = {
       frequency,
@@ -265,6 +295,8 @@ export class CentralFinanceController {
       paydayOverrides: paydayIncome,
       incomeOverrides,
       smallSpendLimit: amount(body.smallSpendLimit ?? 0),
+      goals,
+      marketTrips,
       debts: body.debts.map((row: any) => {
         const apr = amount(row?.apr);
         if (apr > 100_000) throw new BadRequestException('Tasa anual fuera de rango');

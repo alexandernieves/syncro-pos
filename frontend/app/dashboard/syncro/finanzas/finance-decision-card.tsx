@@ -108,24 +108,30 @@ export function FinanceDecisionCard({
   foodRemaining,
   extraForDebts,
   totalDebt,
+  fiscalIvaCents = 0,
   shortfall,
   debtsHref,
   budgetHref,
+  onOpenDistribute,
 }: {
   available: number;
   reserve: number;
   foodRemaining: number;
   extraForDebts: number;
   totalDebt: number;
+  fiscalIvaCents?: number;
   shortfall?: { date: string; cents: number };
   debtsHref: string;
   budgetHref: string;
+  onOpenDistribute?: () => void;
 }) {
+  const realAvailable = Math.max(0, available - fiscalIvaCents);
   const safeBase = Math.max(1, available);
-  const reservePct = Math.min(100, Math.round((Math.min(available, reserve) / safeBase) * 100));
-  const foodPct = Math.min(100 - reservePct, Math.round((Math.min(Math.max(0, available - reserve), foodRemaining) / safeBase) * 100));
-  const extraPct = Math.max(0, Math.min(100 - reservePct - foodPct, Math.round((extraForDebts / safeBase) * 100)));
-  const committedPct = Math.max(0, 100 - reservePct - foodPct - extraPct);
+  const fiscalPct = Math.min(100, Math.round((Math.min(available, fiscalIvaCents) / safeBase) * 100));
+  const reservePct = Math.min(100 - fiscalPct, Math.round((Math.min(realAvailable, reserve) / safeBase) * 100));
+  const foodPct = Math.min(100 - fiscalPct - reservePct, Math.round((Math.min(Math.max(0, realAvailable - reserve), foodRemaining) / safeBase) * 100));
+  const extraPct = Math.max(0, Math.min(100 - fiscalPct - reservePct - foodPct, Math.round((extraForDebts / safeBase) * 100)));
+  const committedPct = Math.max(0, 100 - fiscalPct - reservePct - foodPct - extraPct);
 
   return (
     <section className="space-y-4 rounded-[24px] border bg-card p-4 shadow-xs sm:p-5">
@@ -159,12 +165,20 @@ export function FinanceDecisionCard({
       {available > 0 && (
         <div className="space-y-2">
           <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
+            {fiscalPct > 0 && <div className="h-full bg-rose-500 transition-all" style={{ width: `${fiscalPct}%` }} title="Apartado fiscal IVA" />}
             {reservePct > 0 && <div className="h-full bg-sky-500 transition-all" style={{ width: `${reservePct}%` }} title="Reserva mínima" />}
             {foodPct > 0 && <div className="h-full bg-amber-500 transition-all" style={{ width: `${foodPct}%` }} title="Comida del mes" />}
             {committedPct > 0 && <div className="h-full bg-zinc-400 transition-all" style={{ width: `${committedPct}%` }} title="Compromisos y cuotas" />}
             {extraPct > 0 && <div className="h-full bg-emerald-500 transition-all" style={{ width: `${extraPct}%` }} title="Libre / Extra deudas" />}
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+            {fiscalIvaCents > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-full bg-rose-500" />
+                <span className="text-muted-foreground">IVA SENIAT:</span>
+                <strong className="tabular-nums text-rose-600 dark:text-rose-400">{money(fiscalIvaCents)}</strong>
+              </div>
+            )}
             <div className="flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-sky-500" />
               <span className="text-muted-foreground">Reserva:</span>
@@ -182,7 +196,7 @@ export function FinanceDecisionCard({
             </div>
             {totalDebt > 0 && (
               <div className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full bg-rose-500" />
+                <span className="size-2.5 rounded-full bg-orange-500" />
                 <span className="text-muted-foreground">Deudas:</span>
                 <strong className="tabular-nums">{money(totalDebt)}</strong>
               </div>
@@ -203,15 +217,20 @@ export function FinanceDecisionCard({
       )}
 
       <div className="flex flex-wrap gap-2">
+        {onOpenDistribute && (
+          <Button type="button" size="sm" className="rounded-full" onClick={onOpenDistribute}>
+            <Sparkles className="size-4" /> Repartir cobro
+          </Button>
+        )}
         {totalDebt > 0 && (
-          <Button asChild size="sm" className="rounded-full">
+          <Button asChild size="sm" variant={onOpenDistribute ? "secondary" : "default"} className="rounded-full">
             <Link href={debtsHref}>
-              <TrendingDown className="size-4" /> Plan para salir de deudas
+              <TrendingDown className="size-4" /> Salir de deudas
             </Link>
           </Button>
         )}
         <Button asChild size="sm" variant="outline" className="rounded-full">
-          <Link href={budgetHref}>Ajustar distribución</Link>
+          <Link href={budgetHref}>Ajustar plan</Link>
         </Button>
       </div>
     </section>

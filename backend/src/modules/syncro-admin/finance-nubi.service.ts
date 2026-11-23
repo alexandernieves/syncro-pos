@@ -6,7 +6,7 @@ import { BcvService } from '../settings/bcv.service';
 import { fiscalRecordData, fiscalSupport } from './central-fiscal-data';
 import { requireFinanceScope } from './finance-access';
 import { defaultFinanceModel, FinanceNubiAi, type FinanceHistory } from './finance-nubi-ai';
-import { describeDraft, storeDrafts, validateDrafts, type FinanceDraft } from './finance-nubi-drafts';
+import { describeDraft, storeDrafts, validateDrafts, type FinanceDraft, type LedgerDraft } from './finance-nubi-drafts';
 import { financeNubiSecret, FinanceNubiTransport } from './finance-nubi-transport';
 
 const minutes = (value: number) => new Date(Date.now() + value * 60_000);
@@ -213,7 +213,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
       return { ok: true };
     }
 
-    if (!attachment && command === 'confirmar') {
+    if (!attachment && (command === 'confirmar' || command === 'si' || command === 'sí')) {
       const pending = row.pending as { id?: string; rows?: unknown; fiscal?: Prisma.InputJsonObject } | null;
       if (!pending?.id) {
         await send('No hay registros pendientes de confirmar.');
@@ -324,8 +324,8 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         return { ok: true };
       }
       const snapshot = await this.snapshot(scope, date, {
-        bcv: /\bbcv\b/i.test(text),
-        fiscal: /\b(iva|islr|declaraci[oó]n|retenci[oó]n|vencimiento fiscal)\b/i.test(text),
+        bcv: /\b(bcv|tasa|bs|bol[ií]var|iva|fiscal|distribui|repart)/i.test(text),
+        fiscal: true,
       });
       const history = Array.isArray(row.history) ? row.history as FinanceHistory : [];
       const submitted = text || (attachment ? 'Lee el archivo. Pregunta qué hacer si no queda claro.' : '');
@@ -345,7 +345,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
           question = error instanceof Error ? error.message : 'Revisa los datos antes de guardar.';
         }
       }
-      const recordedBank = drafts.filter(draft => 'bankReference' in draft && draft.bankReference);
+      const recordedBank = drafts.filter((draft): draft is LedgerDraft => 'bankReference' in draft && Boolean(draft.bankReference));
       const possibleRepeat = recordedBank.length ? await this.prisma.centralFinanceEntry.findFirst({
         where: { scope, OR: recordedBank.map(draft => ({
           date: draft.date, currency: draft.currency, nativeCents: draft.nativeCents,
@@ -428,9 +428,33 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
       if (entry.debit in balances) balances[entry.debit] += cents;
       if (entry.credit in balances) balances[entry.credit] -= cents;
     }
+    const planData = (plan?.data ?? {}) as Record<string, any>;
+    const foodSpentCents = current.reduce((sum, row) => sum + (row.debit === 'food' ? row._sum.cents ?? 0 : 0), 0);
+    const openTrip = Array.isArray(planData.marketTrips) ? planData.marketTrips.find((t: any) => t.status === 'open') : null;
+    const cartCents = Number(openTrip?.totalCents ?? 0);
+    const groceryCap = Number(planData.grocery ?? 0);
+    const fiscalRows = fiscal ?? [];
+    const ivaBilledVes = fiscalRows.filter(r => r.kind === 'invoice' && r.status !== 'void').reduce((s, r) => s + (r.vatCents ?? 0), 0);
+    const ivaRetVes = fiscalRows.filter(r => r.kind === 'retention' && r.tax === 'IVA' && r.direction === 'received').reduce((s, r) => s + (r.amountCents ?? 0), 0);
+    const ivaPaidVes = fiscalRows.filter(r => r.kind === 'declaration' && r.tax === 'IVA' && r.status === 'paid').reduce((s, r) => s + (r.amountCents ?? 0), 0);
+    const ivaNetDueVes = Math.max(0, ivaBilledVes - ivaRetVes - ivaPaidVes);
+
     return {
       fechaCaracas: today, saldoContablePorCuentaEnCentavosUSD: balances,
       movimientosDelMesAgrupadosEnCentavosUSD: current, ultimosMovimientos: recent,
+      resumenMercadoMesEnCentavosUSD: {
+        topeMensual: groceryCap,
+        gastadoEnLibro: foodSpentCents,
+        carritoAbiertoHoy: cartCents,
+        restanteDelTope: Math.max(0, groceryCap - foodSpentCents - cartCents),
+        itemsEnCarritoAbierto: openTrip?.items ?? [],
+      },
+      reservaFiscalIvaEstimadaEnCentavosVES: {
+        ivaFacturado: ivaBilledVes,
+        retencionesIvaRecibidas: ivaRetVes,
+        declaracionesIvaPagadas: ivaPaidVes,
+        ivaNetoPorPagar: ivaNetDueVes,
+      },
       plan: plan?.data ?? null, ...(bcv && { referenciaBcv: bcv }), ...(fiscal && { registrosFiscalesEnCentavosVES: fiscal }),
     };
   }
