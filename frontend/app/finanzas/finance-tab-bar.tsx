@@ -57,8 +57,9 @@ export function FinanceTabBar({
       aria-label={label}
       className={cn(
         "fixed inset-x-0 bottom-0 z-50 border-t border-zinc-900/[0.08] bg-[#FCFBF8]/95 backdrop-blur-xl",
-        "pb-[env(safe-area-inset-bottom)] shadow-[0_-6px_24px_-8px_rgba(24,24,27,0.08)]",
-        "dark:border-white/10 dark:bg-zinc-950/95",
+        "pb-[max(0.35rem,calc(env(safe-area-inset-bottom)*0.65))] shadow-[0_-6px_24px_-8px_rgba(24,24,27,0.08)]",
+        "after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-[64px] after:bg-[#FCFBF8] after:content-['']",
+        "dark:border-white/10 dark:bg-zinc-950/95 dark:after:bg-zinc-950",
       )}
     >
       <div className="mx-auto flex w-full max-w-md items-stretch justify-between px-1.5">
