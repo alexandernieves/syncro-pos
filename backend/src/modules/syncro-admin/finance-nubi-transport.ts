@@ -14,6 +14,14 @@ export function financeNubiSecret() {
   return secret;
 }
 
+export function formatWhatsAppText(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+(.+)$/gm, '*$1*')
+    .replace(/\*{2,}([^*\n]+?)\*{2,}/g, (_match, inner: string) => `*${inner.trim()}*`)
+    .replace(/\*{2,}([^*\n]+?)\*/g, (_match, inner: string) => `*${inner.trim()}*`)
+    .replace(/\*([^*\n]+?)\*{2,}/g, (_match, inner: string) => `*${inner.trim()}*`);
+}
+
 @Injectable()
 export class FinanceNubiTransport {
   readonly instance = instance;
@@ -70,7 +78,7 @@ export class FinanceNubiTransport {
 
   async send(phone: string, text: string) {
     // A large reviewed bank batch may need more than one WhatsApp message.
-    let remaining = text;
+    let remaining = formatWhatsAppText(text);
     while (remaining) {
       const split = remaining.length > 3500 ? Math.max(remaining.lastIndexOf('\n', 3500), 0) || 3500 : remaining.length;
       const response = await this.request(`/message/sendText/${instance}`, {

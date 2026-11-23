@@ -304,14 +304,23 @@ export class WhatsAppService {
     }
   }
 
+  private formatWhatsAppText(text: string): string {
+    return text
+      .replace(/^#{1,6}\s+(.+)$/gm, '*$1*')
+      .replace(/\*{2,}([^*\n]+?)\*{2,}/g, (_match, inner: string) => `*${inner.trim()}*`)
+      .replace(/\*{2,}([^*\n]+?)\*/g, (_match, inner: string) => `*${inner.trim()}*`)
+      .replace(/\*([^*\n]+?)\*{2,}/g, (_match, inner: string) => `*${inner.trim()}*`);
+  }
+
   async sendBotTextMessage(phone: string, text: string, businessId: string) {
     const { url, apiKey, instance } = this.getBotUrlAndKey(businessId);
     const cleanPhone = phone.replace(/\D/g, '');
+    const formattedText = this.formatWhatsAppText(text);
     try {
       const res = await fetch(`${url}/message/sendText/${instance}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: apiKey },
-        body: JSON.stringify({ number: cleanPhone, text }),
+        body: JSON.stringify({ number: cleanPhone, text: formattedText }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1069,10 +1078,10 @@ export class WhatsAppService {
           },
         });
 
-        const replyText = `${aiResponse.message}\n\nResponde *SI* para confirmar o *NO* para cancelar.`;
+        const replyText = this.formatWhatsAppText(`${aiResponse.message}\n\nResponde *SI* para confirmar o *NO* para cancelar.`);
         await this.sendTextMessage(phone, replyText, businessId);
       } else {
-        await this.sendTextMessage(phone, aiResponse.message, businessId);
+        await this.sendTextMessage(phone, this.formatWhatsAppText(aiResponse.message), businessId);
       }
     } catch (e) {
       this.logger.error(`Error calling AI agent from WhatsApp: ${e.message}`);
