@@ -3,7 +3,8 @@ import { nubiCategories } from './finance-nubi-drafts';
 import type { FinanceMedia } from './finance-nubi-transport';
 
 export type FinanceHistory = { role: 'user' | 'assistant'; content: string }[];
-export const defaultFinanceModel = 'anthropic/claude-opus-5.5';
+export const defaultFinanceModel = 'anthropic/claude-sonnet-4';
+const defaultAudioModel = 'google/gemini-2.5-flash';
 
 const instructions = `Eres Nubi Finanzas de Syncro: la compañera y mentora financiera personal del usuario.
 PERSONALIDAD Y TONO (MUY IMPORTANTE):
@@ -24,6 +25,9 @@ Cada draft incluye: kind, description, date (YYYY-MM-DD). Para montos monetarios
 - transfer: account, toAccount, toCurrency, toCents.
 - payment o expectedIncome: compromiso futuro, monthly booleano.
 - debt: nativeCents (saldo), minimum {currency,nativeCents,rate}, apr (tasa anual × 100).
+- payDebt: abonar a una deuda existente (descuenta de la cuenta y rebaja automáticamente el saldo de la deuda en el plan). Campos: kind "payDebt", date, description, debtName (nombre de la deuda, ej. "Cashea"), account ("bank"|"cash"|"binance"), currency, nativeCents, rate.
+- adjustBalance: ajustar el saldo real actual de una cuenta cuando el usuario diga exactamente cuánto tiene hoy (ej. "hoy tengo realmente $45 en banco"). Campos: kind "adjustBalance", date, description, account ("bank"|"cash"|"binance"), currency, nativeCents, rate.
+- TASA BCV: siempre recibes referenciaBcv en el contexto. Si el usuario habla en bolívares (VES) sin indicar tasa, propón automáticamente usar la tasa BCV de hoy en el draft y díselo en tu reply para que solo confirme.
 - planLimits: sugerir y guardar topes mensuales (grocery, dining, smallSpendLimit, reserve en centavos USD) cuando el usuario pida guía.
 - goal / goalContribution: objetivos de ahorro o inversión (goalKind: emergency|investment|goal, targetCents, savedCents, monthlyTargetCents).
 - asset: registrar un ACTIVO en marcha o en construcción. Campos: kind "asset", date, description (nombre), category ("salary"|"business"|"investment"|"rental"|"digital"|"other"), status ("active"|"planned"), monthlyCashflowCents (flujo mensual estimado en centavos USD), startupCapitalCents (capital necesario si es planeado), savedCapitalCents (capital ya reunido), linkedLiabilityName (opcional: nombre del pasivo que neutraliza, ej. "Carro").
@@ -38,6 +42,37 @@ Si modoFiscal es true: devuelve drafts vacío y fiscal como objeto (kind invoice
 
 @Injectable()
 export class FinanceNubiAi {
+  async transcribeAudio(audio: Extract<FinanceMedia, { type: 'input_audio' }>): Promise<string> {
+    const key = process.env.OPENROUTER_API_KEY;
+    if (!key) throw new ServiceUnavailableException('OpenRouter no está configurado en el servidor');
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'Syncro Nubi Audio' },
+      body: JSON.stringify({
+        model: process.env.SYNCRO_FINANCE_AUDIO_MODEL || defaultAudioModel,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Transcribe esta nota de voz en español de forma fiel y directa, sin comentarios extra. Conserva exactamente los montos, monedas y nombres mencionados.' },
+              audio,
+            ],
+          },
+        ],
+        max_tokens: 1000,
+      }),
+      signal: AbortSignal.timeout(45_000),
+      redirect: 'error',
+    });
+    if (!response.ok) throw new Error('No pude escuchar bien ese audio. Intenta grabarlo de nuevo o escribirlo.');
+    const body = await response.json();
+    const transcript = body.choices?.[0]?.message?.content;
+    if (typeof transcript !== 'string' || !transcript.trim()) {
+      throw new Error('No pude entender el audio. Intenta de nuevo.');
+    }
+    return transcript.trim().slice(0, 3500);
+  }
+
   async respond(history: FinanceHistory, text: string, media: FinanceMedia | undefined, context: object) {
     const key = process.env.OPENROUTER_API_KEY;
     if (!key) throw new ServiceUnavailableException('OpenRouter no está configurado en el servidor');

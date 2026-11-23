@@ -51,6 +51,8 @@ type LiabilityDraft = Common & {
   balanceCents: number;
 };
 type AssetCapitalDraft = Common & Money & { kind: 'assetCapital'; assetName: string };
+type PayDebtDraft = Common & Money & { kind: 'payDebt'; debtName: string; account: Wallet };
+type AdjustBalanceDraft = Common & Money & { kind: 'adjustBalance'; account: Wallet };
 export type FinanceDraft =
   | LedgerDraft
   | IncomePlanDraft
@@ -62,7 +64,9 @@ export type FinanceDraft =
   | CloseMarketDraft
   | AssetDraft
   | LiabilityDraft
-  | AssetCapitalDraft;
+  | AssetCapitalDraft
+  | PayDebtDraft
+  | AdjustBalanceDraft;
 
 const whole = (value: unknown, min = 1) =>
   typeof value === 'number' && Number.isInteger(value) && value >= min && value <= 2_000_000_000;
@@ -136,6 +140,15 @@ export function validateDrafts(proposed: unknown, today: string): FinanceDraft[]
     if (kind === 'assetCapital') {
       const assetName = typeof row.assetName === 'string' && row.assetName.trim() ? row.assetName.trim().slice(0, 120) : description;
       return { ...common, kind, assetName };
+    }
+    if (kind === 'payDebt') {
+      if (!wallets.includes(row.account)) throw new Error('¿Desde qué cuenta abonaste a la deuda (Banco, Efectivo o Binance)?');
+      const debtName = typeof row.debtName === 'string' && row.debtName.trim() ? row.debtName.trim().slice(0, 120) : description;
+      return { ...common, kind, debtName, account: row.account };
+    }
+    if (kind === 'adjustBalance') {
+      if (!wallets.includes(row.account)) throw new Error('¿Qué cuenta quieres ajustar (Banco, Efectivo o Binance)?');
+      return { ...common, kind, account: row.account };
     }
     if (kind === 'goalContribution') {
       const goalName = typeof row.goalName === 'string' && row.goalName.trim() ? row.goalName.trim().slice(0, 120) : description;
@@ -217,6 +230,8 @@ export function describeDraft(row: FinanceDraft) {
   const rate = row.currency === 'USD' ? '' : ` · tasa ${row.rate} ${row.currency}/USD`;
   const prefix = `${row.date} · ${row.description} · ${amount}${rate}`;
   if (row.kind === 'assetCapital') return `Capital para activo (${row.assetName}) · ${prefix}`;
+  if (row.kind === 'payDebt') return `Abono a deuda (${row.debtName}) · ${prefix} · desde ${nubiWallets[row.account]}`;
+  if (row.kind === 'adjustBalance') return `Ajustar saldo real de ${nubiWallets[row.account]} a ${amount}${rate}`;
   if (row.kind === 'goalContribution') return `Aporte a objetivo (${row.goalName}) · ${prefix}`;
   if (row.kind === 'marketItem') return `Carrito mercado · ${row.qty > 1 ? `${row.qty}x ` : ''}${row.description} · ${amount}${rate}`;
   if (row.kind === 'debt') return `Deuda · ${prefix} · cuota ${moneyLabel(row.minimum)} · ${row.apr / 100}% anual`;
@@ -243,6 +258,8 @@ export async function storeDrafts(tx: Prisma.TransactionClient, scope: string, a
   const newAssets: AssetDraft[] = [];
   const newLiabilities: LiabilityDraft[] = [];
   const assetCapitals: AssetCapitalDraft[] = [];
+  const debtPayments: PayDebtDraft[] = [];
+  const balanceAdjustments: AdjustBalanceDraft[] = [];
 
   rows.forEach((row, index) => {
     if (row.kind === 'planLimits') planUpdates.push(row);
@@ -253,6 +270,8 @@ export async function storeDrafts(tx: Prisma.TransactionClient, scope: string, a
     else if (row.kind === 'asset') newAssets.push(row);
     else if (row.kind === 'liability') newLiabilities.push(row);
     else if (row.kind === 'assetCapital') assetCapitals.push(row);
+    else if (row.kind === 'payDebt') debtPayments.push(row);
+    else if (row.kind === 'adjustBalance') balanceAdjustments.push(row);
     else if (row.kind === 'debt') {
       debts.push({ name: row.description, date: row.date, balance: row.cents, minimum: row.minimum.cents, apr: row.apr, balanceOriginal: original(row), minimumOriginal: original(row.minimum) });
     } else if (row.kind === 'payment' || row.kind === 'expectedIncome') {
@@ -271,7 +290,7 @@ export async function storeDrafts(tx: Prisma.TransactionClient, scope: string, a
     }
   });
 
-  const touchesPlan = obligations.length || debts.length || planUpdates.length || newGoals.length || goalContribs.length || marketItems.length || closeMarkets.length || newAssets.length || newLiabilities.length || assetCapitals.length;
+  const touchesPlan = obligations.length || debts.length || planUpdates.length || newGoals.length || goalContribs.length || marketItems.length || closeMarkets.length || newAssets.length || newLiabilities.length || assetCapitals.length || debtPayments.length;
   let extraSaved = 0;
 
   if (touchesPlan) {
@@ -412,6 +431,35 @@ export async function storeDrafts(tx: Prisma.TransactionClient, scope: string, a
       }
     }
 
+    for (const [idx, dp] of debtPayments.entries()) {
+      entries.push({
+        scope,
+        id: createHash('sha256').update(`nubi-debt-pay:${batchId}:${idx}`).digest('hex'),
+        actorId,
+        date: dp.date,
+        description: `Abono deuda: ${dp.debtName}`,
+        debit: 'debt',
+        credit: dp.account,
+        cents: dp.cents,
+        currency: dp.currency,
+        nativeCents: dp.nativeCents,
+        rate: new Prisma.Decimal(dp.rate),
+        smallSpend: false,
+      });
+      const matchIdx = currentDebts.findIndex(item => String(item.name).toLowerCase().includes(dp.debtName.toLowerCase()));
+      if (matchIdx >= 0) {
+        const target = { ...currentDebts[matchIdx] };
+        const remaining = Math.max(0, Number(target.balance || 0) - dp.cents);
+        if (remaining <= 0) {
+          currentDebts.splice(matchIdx, 1);
+        } else {
+          target.balance = remaining;
+          target.balanceOriginal = { currency: 'USD', nativeCents: remaining, rate: 1 };
+          currentDebts[matchIdx] = target;
+        }
+      }
+    }
+
     const updated = {
       ...data,
       obligations: [...currentObligations, ...obligations],
@@ -423,6 +471,35 @@ export async function storeDrafts(tx: Prisma.TransactionClient, scope: string, a
     };
     if (updated.obligations.length > 200 || updated.debts.length > 100) throw new Error('El plan alcanzó su límite de registros.');
     await tx.centralFinancePlan.upsert({ where: { scope }, create: { scope, data: updated as Prisma.InputJsonObject }, update: { data: updated as Prisma.InputJsonObject } });
+  }
+  for (const [idx, adj] of balanceAdjustments.entries()) {
+    const grouped = await tx.centralFinanceEntry.groupBy({
+      by: ['debit', 'credit'],
+      where: { scope, OR: [{ debit: adj.account }, { credit: adj.account }] },
+      _sum: { cents: true },
+    });
+    let currentBook = 0;
+    for (const g of grouped) {
+      if (g.debit === adj.account) currentBook += g._sum.cents ?? 0;
+      if (g.credit === adj.account) currentBook -= g._sum.cents ?? 0;
+    }
+    const diff = adj.cents - currentBook;
+    if (diff !== 0) {
+      entries.push({
+        scope,
+        id: createHash('sha256').update(`nubi-balance-adj:${batchId}:${idx}`).digest('hex'),
+        actorId,
+        date: adj.date,
+        description: adj.description || `Ajuste saldo real ${nubiWallets[adj.account]}`,
+        debit: diff > 0 ? adj.account : 'equity',
+        credit: diff > 0 ? 'equity' : adj.account,
+        cents: Math.abs(diff),
+        currency: 'USD',
+        nativeCents: Math.abs(diff),
+        rate: new Prisma.Decimal(1),
+        smallSpend: false,
+      });
+    }
   }
   const { count } = entries.length ? await tx.centralFinanceEntry.createMany({ data: entries, skipDuplicates: true }) : { count: 0 };
   return { saved: count + obligations.length + debts.length + extraSaved, duplicates: entries.length - count };

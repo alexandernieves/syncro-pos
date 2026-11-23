@@ -143,7 +143,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
     const content = message.message?.ephemeralMessage?.message ??
       message.message?.documentWithCaptionMessage?.message ?? message.message;
     if (!content) return { ok: true };
-    const attachment = content.imageMessage ?? content.documentMessage;
+    const attachment = content.imageMessage ?? content.documentMessage ?? content.audioMessage;
     const original = content.conversation ?? content.extendedTextMessage?.text ?? attachment?.caption ?? '';
     const text = typeof original === 'string' ? original.trim().slice(0, 4000) : '';
     const command = text.toLowerCase();
@@ -181,8 +181,8 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
     if (row.awaiting && !active) {
       const valid = !attachment && /^\d{8}$/.test(text) && row.challengeHash && row.challengeUntil &&
         row.challengeUntil.getTime() > Date.now() && equal(row.challengeHash, this.challenge(secret, phone, text));
-      if (!await this.change(row, valid ? { ...reset, activeUntil: minutes(30) } : reset)) return { ok: true };
-      await send(valid ? `Nubi Finanzas activo por 30 minutos en ${row.workspace === 'personal' ? 'Mis finanzas' : 'Empresa Syncro'}. Envíame texto, fotos, PDF o CSV. Los archivos se procesan con OpenRouter. Escribe «salir» para cerrar.`
+      if (!await this.change(row, valid ? { ...reset, activeUntil: minutes(12 * 60) } : reset)) return { ok: true };
+      await send(valid ? `¡Hola! Ya estoy activa contigo por 12 horas en ${row.workspace === 'personal' ? 'Mis finanzas' : 'Empresa Syncro'} (y me mantengo activa mientras sigamos conversando). Envíame texto, notas de voz, fotos, PDF o CSV. Escribe «salir» cuando quieras cerrar.`
         : 'Código inválido o vencido. Cerré la activación. Genera otro código y escribe «finanza».');
       return { ok: true };
     }
@@ -270,7 +270,13 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
     }
     try {
       const date = todayKey();
-      const media = attachment ? await this.transport.media({ ...message, message: content }, attachment) : undefined;
+      let media = attachment ? await this.transport.media({ ...message, message: content }, attachment) : undefined;
+      let effectiveText = text;
+      if (media?.type === 'input_audio') {
+        const transcript = await this.ai.transcribeAudio(media);
+        effectiveText = text ? `${text}\n(Nota de voz): ${transcript}` : transcript;
+        media = undefined;
+      }
       if (fiscalKind) {
         const url = media?.type === 'file' ? media.file.file_data : media?.type === 'image_url' ? media.image_url.url : '';
         const document = fiscalSupport(url.split(',')[1]);
@@ -328,11 +334,11 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         return { ok: true };
       }
       const snapshot = await this.snapshot(scope, date, {
-        bcv: /\b(bcv|tasa|bs|bol[ií]var|iva|fiscal|distribui|repart)/i.test(text),
+        bcv: true,
         fiscal: true,
       });
       const history = Array.isArray(row.history) ? row.history as FinanceHistory : [];
-      const submitted = text || (attachment ? 'Lee el archivo. Pregunta qué hacer si no queda claro.' : '');
+      const submitted = effectiveText || (attachment ? 'Lee el archivo. Pregunta qué hacer si no queda claro.' : '');
       if (!submitted) return { ok: true };
       const output = await this.ai.respond(history, submitted, media, { ...snapshot, preferenciasDelUsuario: row.memory });
       let drafts: FinanceDraft[] = [];
@@ -369,6 +375,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         : undefined;
       const updated = await this.change(row, {
         history: updatedHistory,
+        activeUntil: minutes(12 * 60),
         ...(learned ? { memory: learned } : {}),
         fiscalDocument: null,
         pending: drafts.length ? { id: eventId, rows: drafts } as Prisma.InputJsonObject : Prisma.DbNull,
