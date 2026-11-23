@@ -22,6 +22,28 @@ export type MarketTrip = {
   items: MarketItem[];
   totalCents: number;
 };
+export type AssetCategory = "salary" | "business" | "investment" | "rental" | "digital" | "other";
+export type AssetItem = {
+  id: string;
+  name: string;
+  category: AssetCategory;
+  status: "active" | "planned";
+  monthlyCashflowCents: number;
+  valuationCents: number;
+  startupCapitalCents: number;
+  savedCapitalCents: number;
+  linkedLiabilityId?: string | null;
+  notes?: string | null;
+};
+export type LiabilityCategory = "vehicle" | "housing" | "subscription" | "debt" | "lifestyle" | "other";
+export type LiabilityItem = {
+  id: string;
+  name: string;
+  category: LiabilityCategory;
+  monthlyDrainCents: number;
+  balanceCents: number;
+  notes?: string | null;
+};
 export type Plan = {
   incomeOriginal?: OriginalMoney | null;
   horizonWeeks?: number;
@@ -41,6 +63,8 @@ export type Plan = {
   debts: Debt[];
   goals?: Goal[];
   marketTrips?: MarketTrip[];
+  assets?: AssetItem[];
+  liabilities?: LiabilityItem[];
 };
 export type Entry = { id: string; date: string; description: string; debit: string; credit: string; cents: number; smallSpend?: boolean; currency?: string; nativeCents?: number | null; rate?: string | null; toCurrency?: string | null; toCents?: number | null };
 

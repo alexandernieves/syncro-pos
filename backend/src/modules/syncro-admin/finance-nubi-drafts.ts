@@ -35,6 +35,22 @@ type GoalDraft = Common & {
 type GoalContributionDraft = Common & Money & { kind: 'goalContribution'; goalName: string };
 type MarketItemDraft = Common & Money & { kind: 'marketItem'; store?: string; qty: number };
 type CloseMarketDraft = Common & { kind: 'closeMarket'; account: Wallet; store?: string };
+type AssetDraft = Common & {
+  kind: 'asset';
+  category: 'salary' | 'business' | 'investment' | 'rental' | 'digital' | 'other';
+  status: 'active' | 'planned';
+  monthlyCashflowCents: number;
+  startupCapitalCents: number;
+  savedCapitalCents: number;
+  linkedLiabilityName?: string;
+};
+type LiabilityDraft = Common & {
+  kind: 'liability';
+  category: 'vehicle' | 'housing' | 'subscription' | 'debt' | 'lifestyle' | 'other';
+  monthlyDrainCents: number;
+  balanceCents: number;
+};
+type AssetCapitalDraft = Common & Money & { kind: 'assetCapital'; assetName: string };
 export type FinanceDraft =
   | LedgerDraft
   | IncomePlanDraft
@@ -43,7 +59,10 @@ export type FinanceDraft =
   | GoalDraft
   | GoalContributionDraft
   | MarketItemDraft
-  | CloseMarketDraft;
+  | CloseMarketDraft
+  | AssetDraft
+  | LiabilityDraft
+  | AssetCapitalDraft;
 
 const whole = (value: unknown, min = 1) =>
   typeof value === 'number' && Number.isInteger(value) && value >= min && value <= 2_000_000_000;
@@ -98,7 +117,26 @@ export function validateDrafts(proposed: unknown, today: string): FinanceDraft[]
       const store = typeof row.store === 'string' && row.store.trim() ? row.store.trim().slice(0, 120) : undefined;
       return { kind, date, description, account: row.account, store };
     }
+    if (kind === 'asset') {
+      const category = ['salary', 'business', 'investment', 'rental', 'digital', 'other'].includes(row.category) ? row.category : 'business';
+      const status = row.status === 'planned' ? 'planned' : 'active';
+      const monthlyCashflowCents = whole(row.monthlyCashflowCents, 0) ? row.monthlyCashflowCents : 0;
+      const startupCapitalCents = whole(row.startupCapitalCents, 0) ? row.startupCapitalCents : 0;
+      const savedCapitalCents = whole(row.savedCapitalCents, 0) ? row.savedCapitalCents : 0;
+      const linkedLiabilityName = typeof row.linkedLiabilityName === 'string' && row.linkedLiabilityName.trim() ? row.linkedLiabilityName.trim().slice(0, 120) : undefined;
+      return { kind, date, description, category, status, monthlyCashflowCents, startupCapitalCents, savedCapitalCents, linkedLiabilityName };
+    }
+    if (kind === 'liability') {
+      const category = ['vehicle', 'housing', 'subscription', 'debt', 'lifestyle', 'other'].includes(row.category) ? row.category : 'other';
+      const monthlyDrainCents = whole(row.monthlyDrainCents, 0) ? row.monthlyDrainCents : 0;
+      const balanceCents = whole(row.balanceCents, 0) ? row.balanceCents : 0;
+      return { kind, date, description, category, monthlyDrainCents, balanceCents };
+    }
     const common = { ...money(row), date, description };
+    if (kind === 'assetCapital') {
+      const assetName = typeof row.assetName === 'string' && row.assetName.trim() ? row.assetName.trim().slice(0, 120) : description;
+      return { ...common, kind, assetName };
+    }
     if (kind === 'goalContribution') {
       const goalName = typeof row.goalName === 'string' && row.goalName.trim() ? row.goalName.trim().slice(0, 120) : description;
       return { ...common, kind, goalName };
@@ -165,9 +203,20 @@ export function describeDraft(row: FinanceDraft) {
   if (row.kind === 'closeMarket') {
     return `Cerrar carrito de mercado (${row.date}) y registrar gasto en ${nubiWallets[row.account]}`;
   }
+  if (row.kind === 'asset') {
+    const state = row.status === 'planned' ? 'Activo en construcción' : 'Activo en marcha';
+    const flow = row.monthlyCashflowCents ? ` · +$${(row.monthlyCashflowCents / 100).toFixed(2)}/mes` : '';
+    const cap = row.startupCapitalCents ? ` · capital meta $${(row.startupCapitalCents / 100).toFixed(2)}` : '';
+    const neutralizes = row.linkedLiabilityName ? ` · neutraliza pasivo: ${row.linkedLiabilityName}` : '';
+    return `${state} · ${row.description}${flow}${cap}${neutralizes}`;
+  }
+  if (row.kind === 'liability') {
+    return `Pasivo · ${row.description} · drena -$${(row.monthlyDrainCents / 100).toFixed(2)}/mes`;
+  }
   const amount = moneyLabel(row);
   const rate = row.currency === 'USD' ? '' : ` · tasa ${row.rate} ${row.currency}/USD`;
   const prefix = `${row.date} · ${row.description} · ${amount}${rate}`;
+  if (row.kind === 'assetCapital') return `Capital para activo (${row.assetName}) · ${prefix}`;
   if (row.kind === 'goalContribution') return `Aporte a objetivo (${row.goalName}) · ${prefix}`;
   if (row.kind === 'marketItem') return `Carrito mercado · ${row.qty > 1 ? `${row.qty}x ` : ''}${row.description} · ${amount}${rate}`;
   if (row.kind === 'debt') return `Deuda · ${prefix} · cuota ${moneyLabel(row.minimum)} · ${row.apr / 100}% anual`;
@@ -191,6 +240,9 @@ export async function storeDrafts(tx: Prisma.TransactionClient, scope: string, a
   const goalContribs: GoalContributionDraft[] = [];
   const marketItems: MarketItemDraft[] = [];
   const closeMarkets: CloseMarketDraft[] = [];
+  const newAssets: AssetDraft[] = [];
+  const newLiabilities: LiabilityDraft[] = [];
+  const assetCapitals: AssetCapitalDraft[] = [];
 
   rows.forEach((row, index) => {
     if (row.kind === 'planLimits') planUpdates.push(row);
@@ -198,6 +250,9 @@ export async function storeDrafts(tx: Prisma.TransactionClient, scope: string, a
     else if (row.kind === 'goalContribution') goalContribs.push(row);
     else if (row.kind === 'marketItem') marketItems.push(row);
     else if (row.kind === 'closeMarket') closeMarkets.push(row);
+    else if (row.kind === 'asset') newAssets.push(row);
+    else if (row.kind === 'liability') newLiabilities.push(row);
+    else if (row.kind === 'assetCapital') assetCapitals.push(row);
     else if (row.kind === 'debt') {
       debts.push({ name: row.description, date: row.date, balance: row.cents, minimum: row.minimum.cents, apr: row.apr, balanceOriginal: original(row), minimumOriginal: original(row.minimum) });
     } else if (row.kind === 'payment' || row.kind === 'expectedIncome') {
@@ -216,16 +271,18 @@ export async function storeDrafts(tx: Prisma.TransactionClient, scope: string, a
     }
   });
 
-  const touchesPlan = obligations.length || debts.length || planUpdates.length || newGoals.length || goalContribs.length || marketItems.length || closeMarkets.length;
+  const touchesPlan = obligations.length || debts.length || planUpdates.length || newGoals.length || goalContribs.length || marketItems.length || closeMarkets.length || newAssets.length || newLiabilities.length || assetCapitals.length;
   let extraSaved = 0;
 
   if (touchesPlan) {
     const existing = await tx.centralFinancePlan.findUnique({ where: { scope } });
-    const data = (existing?.data ?? { income: 0, grocery: 0, dining: 0, reserve: 0, payday1: 15, payday2: 31, obligations: [], debts: [], goals: [], marketTrips: [] }) as Record<string, any>;
+    const data = (existing?.data ?? { income: 0, grocery: 0, dining: 0, reserve: 0, payday1: 15, payday2: 31, obligations: [], debts: [], goals: [], marketTrips: [], assets: [], liabilities: [] }) as Record<string, any>;
     const currentObligations = Array.isArray(data.obligations) ? [...data.obligations] : [];
     const currentDebts = Array.isArray(data.debts) ? [...data.debts] : [];
     const currentGoals: any[] = Array.isArray(data.goals) ? [...data.goals] : [];
     const currentTrips: any[] = Array.isArray(data.marketTrips) ? [...data.marketTrips] : [];
+    const currentAssets: any[] = Array.isArray(data.assets) ? [...data.assets] : [];
+    const currentLiabilities: any[] = Array.isArray(data.liabilities) ? [...data.liabilities] : [];
 
     for (const upd of planUpdates) {
       if (upd.grocery != null) data.grocery = upd.grocery;
@@ -316,12 +373,53 @@ export async function storeDrafts(tx: Prisma.TransactionClient, scope: string, a
       extraSaved++;
     }
 
+    for (const l of newLiabilities) {
+      currentLiabilities.push({
+        id: createHash('sha256').update(`liab:${batchId}:${l.description}`).digest('hex').slice(0, 16),
+        name: l.description,
+        category: l.category,
+        monthlyDrainCents: l.monthlyDrainCents,
+        balanceCents: l.balanceCents,
+        notes: null,
+      });
+      extraSaved++;
+    }
+
+    for (const a of newAssets) {
+      const linked = a.linkedLiabilityName
+        ? currentLiabilities.find(item => String(item.name).toLowerCase().includes(a.linkedLiabilityName!.toLowerCase()))
+        : undefined;
+      currentAssets.push({
+        id: createHash('sha256').update(`asset:${batchId}:${a.description}`).digest('hex').slice(0, 16),
+        name: a.description,
+        category: a.category,
+        status: a.status,
+        monthlyCashflowCents: a.monthlyCashflowCents,
+        valuationCents: 0,
+        startupCapitalCents: a.startupCapitalCents,
+        savedCapitalCents: a.savedCapitalCents,
+        linkedLiabilityId: linked?.id ?? null,
+        notes: null,
+      });
+      extraSaved++;
+    }
+
+    for (const ac of assetCapitals) {
+      const target = currentAssets.find(item => String(item.name).toLowerCase().includes(ac.assetName.toLowerCase()));
+      if (target) {
+        target.savedCapitalCents = (Number(target.savedCapitalCents) || 0) + ac.cents;
+        extraSaved++;
+      }
+    }
+
     const updated = {
       ...data,
       obligations: [...currentObligations, ...obligations],
       debts: [...currentDebts, ...debts],
       goals: currentGoals.slice(0, 50),
       marketTrips: currentTrips.slice(0, 60),
+      assets: currentAssets.slice(0, 50),
+      liabilities: currentLiabilities.slice(0, 50),
     };
     if (updated.obligations.length > 200 || updated.debts.length > 100) throw new Error('El plan alcanzó su límite de registros.');
     await tx.centralFinancePlan.upsert({ where: { scope }, create: { scope, data: updated as Prisma.InputJsonObject }, update: { data: updated as Prisma.InputJsonObject } });

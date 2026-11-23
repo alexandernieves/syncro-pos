@@ -27,6 +27,7 @@ import { FinanceLedgerView } from "./finance-ledger-view";
 import { FinanceMarketView } from "./finance-market-view";
 import { FinanceGoalsView } from "./finance-goals-view";
 import { FinanceDistributionSheet } from "./finance-distribution-sheet";
+import { FinanceAssetsView } from "./finance-assets-view";
 import { obligationOccursOn, projection, simulateDebts, shiftDay, walletAccounts, walletBalances, type Entry, type Frequency, type MarketTrip, type OriginalMoney, type Plan } from "./calculations";
 
 const names: Record<string, string> = {
@@ -35,7 +36,7 @@ const names: Record<string, string> = {
   housing: "Vivienda y servicios", transport: "Transporte", health: "Salud", interest: "Intereses", expense: "Otros gastos", subscriptions: "Suscripciones", shopping: "Compras", leisure: "Ocio",
 };
 
-const budgetViews = { suggestion: "Distribución", habitual: "Mi plan", goals: "Objetivos", income: "Cobros", payments: "Pagos" } as const;
+const budgetViews = { suggestion: "Distribución", assets: "Activos", goals: "Objetivos", habitual: "Mi plan", income: "Cobros", payments: "Pagos" } as const;
 type BudgetView = keyof typeof budgetViews;
 
 const expenseAccounts = ["food", "dining", "housing", "transport", "health", "subscriptions", "shopping", "leisure", "interest", "expense"];
@@ -642,7 +643,7 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
         </FinanceSheet>
       </>}
       {tab === "Presupuesto" && <>
-        <nav aria-label="Vistas de presupuesto" className="grid grid-cols-3 gap-1 rounded-[22px] border bg-card p-1.5 shadow-xs sm:grid-cols-5">
+        <nav aria-label="Vistas de presupuesto" className="grid grid-cols-3 gap-1 rounded-[22px] border bg-card p-1.5 shadow-xs sm:grid-cols-6">
           {(Object.entries(budgetViews) as [BudgetView, string][]).filter(([key]) => personal || key !== "suggestion").map(([key, label]) => {
             const active = budgetView === key;
             return (
@@ -747,6 +748,16 @@ function Workspace({ workspace, tab, mobile }: { workspace: FinanceSection["work
           <Button type="submit" className="h-12 rounded-full text-base font-semibold sm:col-span-2">Guardar presupuesto</Button>
         </form>
         </section>}
+        {budgetView === "assets" && (
+          <FinanceAssetsView
+            assets={plan.assets ?? []}
+            liabilities={plan.liabilities ?? []}
+            monthlySurplusCents={Math.max(0, income - monthlyExpenses)}
+            busy={busy}
+            mobile={mobile}
+            onSave={({ assets, liabilities }) => savePlan({ ...plan, assets, liabilities })}
+          />
+        )}
         {budgetView === "goals" && (
           <FinanceGoalsView
             goals={plan.goals ?? []}

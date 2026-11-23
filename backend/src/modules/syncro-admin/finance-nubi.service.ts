@@ -213,8 +213,12 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
       return { ok: true };
     }
 
-    if (!attachment && (command === 'confirmar' || command === 'si' || command === 'sí')) {
-      const pending = row.pending as { id?: string; rows?: unknown; fiscal?: Prisma.InputJsonObject } | null;
+    const pendingObj = row.pending as { id?: string; rows?: unknown; fiscal?: Prisma.InputJsonObject } | null;
+    const isNaturalConfirm = !attachment && !!pendingObj?.id && /^(confirmar|confirmo|s[ií]|dale|ok|okay|listo|perfecto|claro|an[oó]talo|gu[aá]rdalo|de una|va|hagale|h[aá]gale|adelante)[\s!.,]*$/i.test(text);
+    const isNaturalCancel = !attachment && !!pendingObj?.id && /^(cancelar|cancela|no|descartar|descarta|d[eé]jalo|olv[ií]dalo)[\s!.,]*$/i.test(text);
+
+    if (isNaturalConfirm || (!attachment && command === 'confirmar')) {
+      const pending = pendingObj;
       if (!pending?.id) {
         await send('No hay registros pendientes de confirmar.');
         return { ok: true };
@@ -248,12 +252,12 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         await send('No se confirmó el lote. Revisa tus movimientos y vuelve a confirmar si sigue pendiente.');
         return { ok: true };
       }
-      if (result && pending.fiscal) await send('Registro y archivo guardados. Puedes ver el original en Registro fiscal de Syncro Finanzas.');
-      else if (result) await send(`${result.saved} registro(s) guardado(s) en Syncro Finanzas.${result.duplicates ? ` Omití ${result.duplicates} duplicado(s).` : ''}`);
+      if (result && pending.fiscal) await send('Listo, dejé el registro fiscal y el soporte guardados en Syncro Finanzas.');
+      else if (result) await send(`¡Listo! Ya te dejé ${result.saved === 1 ? 'ese registro guardado' : `esos ${result.saved} registros guardados`} en Syncro Finanzas.${result.duplicates ? ` (Omití ${result.duplicates} que ya estaban).` : ''}`);
       return { ok: true };
     }
-    if (!attachment && command === 'cancelar') {
-      if (await this.change(row, { ...noDraft, history: Prisma.DbNull })) await send('Borrador descartado. La sesión sigue activa.');
+    if (isNaturalCancel || (!attachment && command === 'cancelar')) {
+      if (await this.change(row, { ...noDraft, history: Prisma.DbNull })) await send('Perfecto, lo descarté sin problema. Seguimos conversando.');
       return { ok: true };
     }
 
@@ -359,15 +363,19 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         ...history,
         { role: 'user', content: submitted },
         { role: 'assistant', content: (question + review + recordedContext).slice(0, 14_000) },
-      ].slice(-8) as FinanceHistory;
+      ].slice(-16) as FinanceHistory;
+      const learned = output.learn && !/\b\d{8,}\b|\S+@\S+|\b(contrase[nñ]a|password|clave|pin|otp)\b/i.test(output.learn)
+        ? [...row.memory.filter(value => value !== output.learn), output.learn].slice(-20)
+        : undefined;
       const updated = await this.change(row, {
         history: updatedHistory,
+        ...(learned ? { memory: learned } : {}),
         fiscalDocument: null,
         pending: drafts.length ? { id: eventId, rows: drafts } as Prisma.InputJsonObject : Prisma.DbNull,
       });
       if (updated && row.activeUntil && row.activeUntil.getTime() > Date.now()) {
-        await send((question || 'Revisa estos datos.') + review + repeatNote +
-          (drafts.length ? '\n\nEscribe «confirmar» para guardar este lote o corrige los datos. Usa «cancelar» para descartarlo.' : ''));
+        await send((question || 'Aquí tienes el resumen.') + review + repeatNote +
+          (drafts.length ? '\n\n¿Te lo dejo guardado así en la app? Solo dime *dale* o corrígeme cualquier detalle.' : ''));
       }
     } catch (error) {
       if (fiscalKind) {
@@ -439,9 +447,23 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
     const ivaPaidVes = fiscalRows.filter(r => r.kind === 'declaration' && r.tax === 'IVA' && r.status === 'paid').reduce((s, r) => s + (r.amountCents ?? 0), 0);
     const ivaNetDueVes = Math.max(0, ivaBilledVes - ivaRetVes - ivaPaidVes);
 
+    const assetsList = Array.isArray(planData.assets) ? planData.assets : [];
+    const liabilitiesList = Array.isArray(planData.liabilities) ? planData.liabilities : [];
+    const activeAssetsCount = assetsList.filter((a: any) => a.status !== 'planned').length;
+    const activeAssetsFlowCents = assetsList.filter((a: any) => a.status !== 'planned').reduce((s: number, a: any) => s + Number(a.monthlyCashflowCents || 0), 0);
+    const totalLiabilitiesDrainCents = liabilitiesList.reduce((s: number, l: any) => s + Number(l.monthlyDrainCents || 0), 0);
+
     return {
       fechaCaracas: today, saldoContablePorCuentaEnCentavosUSD: balances,
       movimientosDelMesAgrupadosEnCentavosUSD: current, ultimosMovimientos: recent,
+      activosYPasivosEnCentavosUSD: {
+        fuentesDeIngresoActivas: activeAssetsCount,
+        flujoMensualActivos: activeAssetsFlowCents,
+        drenajeMensualPasivos: totalLiabilitiesDrainCents,
+        flujoNetoPatrimonial: activeAssetsFlowCents - totalLiabilitiesDrainCents,
+        activos: assetsList,
+        pasivos: liabilitiesList,
+      },
       resumenMercadoMesEnCentavosUSD: {
         topeMensual: groceryCap,
         gastadoEnLibro: foodSpentCents,

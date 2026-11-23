@@ -286,6 +286,30 @@ export class CentralFinanceController {
         totalCents,
       };
     });
+    const rawAssets = body.assets ?? [];
+    if (!Array.isArray(rawAssets) || rawAssets.length > 50) throw new BadRequestException('Activos inválidos');
+    const assets = rawAssets.map((row: any) => ({
+      id: typeof row?.id === 'string' && row.id.trim() ? row.id.trim().slice(0, 64) : label(row?.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40),
+      name: label(row?.name),
+      category: ['salary', 'business', 'investment', 'rental', 'digital', 'other'].includes(row?.category) ? row.category : 'business',
+      status: row?.status === 'planned' ? 'planned' : 'active',
+      monthlyCashflowCents: amount(row?.monthlyCashflowCents ?? 0, 0),
+      valuationCents: amount(row?.valuationCents ?? 0, 0),
+      startupCapitalCents: amount(row?.startupCapitalCents ?? 0, 0),
+      savedCapitalCents: amount(row?.savedCapitalCents ?? 0, 0),
+      linkedLiabilityId: typeof row?.linkedLiabilityId === 'string' && row.linkedLiabilityId.trim() ? row.linkedLiabilityId.trim().slice(0, 64) : null,
+      notes: typeof row?.notes === 'string' && row.notes.trim() ? row.notes.trim().slice(0, 200) : null,
+    }));
+    const rawLiabilities = body.liabilities ?? [];
+    if (!Array.isArray(rawLiabilities) || rawLiabilities.length > 50) throw new BadRequestException('Pasivos inválidos');
+    const liabilities = rawLiabilities.map((row: any) => ({
+      id: typeof row?.id === 'string' && row.id.trim() ? row.id.trim().slice(0, 64) : label(row?.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40),
+      name: label(row?.name),
+      category: ['vehicle', 'housing', 'subscription', 'debt', 'lifestyle', 'other'].includes(row?.category) ? row.category : 'other',
+      monthlyDrainCents: amount(row?.monthlyDrainCents ?? 0, 0),
+      balanceCents: amount(row?.balanceCents ?? 0, 0),
+      notes: typeof row?.notes === 'string' && row.notes.trim() ? row.notes.trim().slice(0, 200) : null,
+    }));
     const income = monetary(body.incomeOriginal, body.income);
     const data = {
       frequency,
@@ -297,6 +321,8 @@ export class CentralFinanceController {
       smallSpendLimit: amount(body.smallSpendLimit ?? 0),
       goals,
       marketTrips,
+      assets,
+      liabilities,
       debts: body.debts.map((row: any) => {
         const apr = amount(row?.apr);
         if (apr > 100_000) throw new BadRequestException('Tasa anual fuera de rango');
