@@ -17,7 +17,39 @@ export type LedgerDraft = Common & Money & {
   toAccount?: Wallet; toCurrency?: string; toCents?: number; bankReference?: string;
 };
 type IncomePlanDraft = Common & Money & { kind: 'payment' | 'expectedIncome'; monthly: boolean };
+type UpdateObligationDraft = Common & Money & {
+  kind: 'updateObligation';
+  matchName: string;
+  matchDate?: string;
+  matchCents?: number;
+  obligationKind?: 'payment' | 'income';
+  monthly?: boolean;
+};
+type DeleteObligationDraft = Common & {
+  kind: 'deleteObligation';
+  matchName: string;
+  matchDate?: string;
+  matchCents?: number;
+};
 type DebtDraft = Common & Money & { kind: 'debt'; minimum: Money; apr: number };
+type UpdateDebtDraft = Common & {
+  kind: 'updateDebt';
+  matchName: string;
+  currency?: string;
+  nativeCents?: number;
+  rate?: number;
+  cents?: number;
+  minimum?: Money;
+  apr?: number;
+};
+type DeleteDebtDraft = Common & {
+  kind: 'deleteDebt';
+  matchName: string;
+};
+type DeleteEntryDraft = Common & {
+  kind: 'deleteEntry';
+  entryId: string;
+};
 type PlanLimitsDraft = Common & {
   kind: 'planLimits';
   grocery?: number;
@@ -73,7 +105,12 @@ export type DeleteCalendarEventDraft = Common & {
 export type FinanceDraft =
   | LedgerDraft
   | IncomePlanDraft
+  | UpdateObligationDraft
+  | DeleteObligationDraft
   | DebtDraft
+  | UpdateDebtDraft
+  | DeleteDebtDraft
+  | DeleteEntryDraft
   | PlanLimitsDraft
   | GoalDraft
   | GoalContributionDraft
@@ -175,6 +212,42 @@ export function validateDrafts(proposed: unknown, today: string): FinanceDraft[]
       if (!eventId) throw new Error('Indica qué evento del calendario quieres cancelar.');
       return { kind, eventId, date, description };
     }
+    if (kind === 'deleteObligation') {
+      const matchName = typeof row.matchName === 'string' && row.matchName.trim() ? row.matchName.trim().slice(0, 200) : description;
+      const matchDate = typeof row.matchDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.matchDate.trim()) ? row.matchDate.trim() : undefined;
+      const matchCents = whole(row.matchCents, 0) ? row.matchCents : undefined;
+      return { kind, date, description, matchName, matchDate, matchCents };
+    }
+    if (kind === 'updateObligation') {
+      const matchName = typeof row.matchName === 'string' && row.matchName.trim() ? row.matchName.trim().slice(0, 200) : description;
+      const matchDate = typeof row.matchDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.matchDate.trim()) ? row.matchDate.trim() : undefined;
+      const matchCents = whole(row.matchCents, 0) ? row.matchCents : undefined;
+      const obligationKind = row.obligationKind === 'income' ? 'income' : row.obligationKind === 'payment' ? 'payment' : undefined;
+      const monthly = typeof row.monthly === 'boolean' ? row.monthly : undefined;
+      return { ...money(row), kind, date, description, matchName, matchDate, matchCents, obligationKind, monthly };
+    }
+    if (kind === 'deleteDebt') {
+      const matchName = typeof row.matchName === 'string' && row.matchName.trim() ? row.matchName.trim().slice(0, 200) : description;
+      return { kind, date, description, matchName };
+    }
+    if (kind === 'updateDebt') {
+      const matchName = typeof row.matchName === 'string' && row.matchName.trim() ? row.matchName.trim().slice(0, 200) : description;
+      const hasBalance = row.nativeCents != null && row.currency != null;
+      const bal = hasBalance ? money(row) : undefined;
+      const minimum = row.minimum ? money(row.minimum) : undefined;
+      const apr = row.apr != null ? (whole(row.apr, 0) && row.apr <= 100_000 ? row.apr : (() => { throw new Error('Tasa anual inválida.'); })()) : undefined;
+      return {
+        kind, date, description, matchName,
+        ...(bal ? { currency: bal.currency, nativeCents: bal.nativeCents, rate: bal.rate, cents: bal.cents } : {}),
+        ...(minimum ? { minimum } : {}),
+        ...(apr != null ? { apr } : {}),
+      };
+    }
+    if (kind === 'deleteEntry') {
+      const entryId = typeof row.entryId === 'string' && row.entryId.trim() ? row.entryId.trim().slice(0, 128) : '';
+      if (!entryId) throw new Error('Indica qué movimiento quieres eliminar.');
+      return { kind, entryId, date, description };
+    }
     const common = { ...money(row), date, description };
     if (kind === 'assetCapital') {
       const assetName = typeof row.assetName === 'string' && row.assetName.trim() ? row.assetName.trim().slice(0, 120) : description;
@@ -274,6 +347,24 @@ export function describeDraft(row: FinanceDraft) {
   if (row.kind === 'deleteCalendarEvent') {
     return `Cancelar en Google Calendar · ${row.description} (${row.date})`;
   }
+  if (row.kind === 'deleteObligation') {
+    const amt = row.matchCents != null ? ` · $${(row.matchCents / 100).toFixed(2)}` : '';
+    return `Eliminar compromiso · ${row.date} · ${row.description}${amt}`;
+  }
+  if (row.kind === 'updateObligation') {
+    const amt = moneyLabel(row);
+    return `Editar compromiso (${row.matchName}) → ${row.date} · ${row.description} · ${amt}${row.monthly ? ' · mensual' : ''}`;
+  }
+  if (row.kind === 'deleteDebt') {
+    return `Eliminar deuda · ${row.description}`;
+  }
+  if (row.kind === 'updateDebt') {
+    const bal = row.nativeCents != null && row.currency ? ` · saldo ${moneyLabel({ nativeCents: row.nativeCents, currency: row.currency })}` : '';
+    return `Editar deuda (${row.matchName}) → ${row.description} · vence ${row.date}${bal}`;
+  }
+  if (row.kind === 'deleteEntry') {
+    return `Eliminar movimiento · ${row.date} · ${row.description}`;
+  }
   const amount = moneyLabel(row);
   const rate = row.currency === 'USD' ? '' : ` · tasa ${row.rate} ${row.currency}/USD`;
   const prefix = `${row.date} · ${row.description} · ${amount}${rate}`;
@@ -297,7 +388,12 @@ const original = ({ currency, nativeCents, rate }: Money) => ({ currency, native
 export async function storeDrafts(tx: Prisma.TransactionClient, scope: string, actorId: string, batchId: string, rows: FinanceDraft[]) {
   const entries: Prisma.CentralFinanceEntryCreateManyInput[] = [];
   const obligations: Prisma.InputJsonObject[] = [];
+  const obligationUpdates: UpdateObligationDraft[] = [];
+  const obligationDeletes: DeleteObligationDraft[] = [];
   const debts: Prisma.InputJsonObject[] = [];
+  const debtUpdates: UpdateDebtDraft[] = [];
+  const debtDeletes: DeleteDebtDraft[] = [];
+  const entryDeletes: DeleteEntryDraft[] = [];
   const planUpdates: PlanLimitsDraft[] = [];
   const newGoals: GoalDraft[] = [];
   const goalContribs: GoalContributionDraft[] = [];
@@ -311,6 +407,11 @@ export async function storeDrafts(tx: Prisma.TransactionClient, scope: string, a
 
   rows.forEach((row, index) => {
     if (row.kind === 'planLimits') planUpdates.push(row);
+    else if (row.kind === 'updateObligation') obligationUpdates.push(row);
+    else if (row.kind === 'deleteObligation') obligationDeletes.push(row);
+    else if (row.kind === 'updateDebt') debtUpdates.push(row);
+    else if (row.kind === 'deleteDebt') debtDeletes.push(row);
+    else if (row.kind === 'deleteEntry') entryDeletes.push(row);
     else if (row.kind === 'goal') newGoals.push(row);
     else if (row.kind === 'goalContribution') goalContribs.push(row);
     else if (row.kind === 'marketItem') marketItems.push(row);
@@ -338,7 +439,7 @@ export async function storeDrafts(tx: Prisma.TransactionClient, scope: string, a
     }
   });
 
-  const touchesPlan = obligations.length || debts.length || planUpdates.length || newGoals.length || goalContribs.length || marketItems.length || closeMarkets.length || newAssets.length || newLiabilities.length || assetCapitals.length || debtPayments.length;
+  const touchesPlan = obligations.length || obligationUpdates.length || obligationDeletes.length || debts.length || debtUpdates.length || debtDeletes.length || planUpdates.length || newGoals.length || goalContribs.length || marketItems.length || closeMarkets.length || newAssets.length || newLiabilities.length || assetCapitals.length || debtPayments.length;
   let extraSaved = 0;
 
   if (touchesPlan) {
@@ -350,6 +451,85 @@ export async function storeDrafts(tx: Prisma.TransactionClient, scope: string, a
     const currentTrips: any[] = Array.isArray(data.marketTrips) ? [...data.marketTrips] : [];
     const currentAssets: any[] = Array.isArray(data.assets) ? [...data.assets] : [];
     const currentLiabilities: any[] = Array.isArray(data.liabilities) ? [...data.liabilities] : [];
+
+    const findObligationIdx = (matchName: string, matchDate?: string, matchCents?: number) => {
+      const needle = matchName.trim().toLowerCase();
+      const byAll = (exact: boolean) => currentObligations.findIndex(item => {
+        const name = String(item?.name ?? '').trim().toLowerCase();
+        const nameOk = exact ? name === needle : (name.includes(needle) || needle.includes(name));
+        if (!nameOk) return false;
+        if (matchDate && String(item?.date ?? '') !== matchDate) return false;
+        if (matchCents != null && Number(item?.cents ?? -1) !== matchCents) return false;
+        return true;
+      });
+      let idx = byAll(true);
+      if (idx >= 0) return idx;
+      idx = byAll(false);
+      if (idx >= 0) return idx;
+      if (matchDate && matchCents != null) {
+        idx = currentObligations.findIndex(item => String(item?.date ?? '') === matchDate && Number(item?.cents ?? -1) === matchCents);
+        if (idx >= 0) return idx;
+      }
+      return currentObligations.findIndex(item => String(item?.name ?? '').trim().toLowerCase().includes(needle));
+    };
+
+    for (const del of obligationDeletes) {
+      const idx = findObligationIdx(del.matchName, del.matchDate, del.matchCents);
+      if (idx >= 0) {
+        currentObligations.splice(idx, 1);
+        extraSaved++;
+      }
+    }
+
+    for (const upd of obligationUpdates) {
+      const idx = findObligationIdx(upd.matchName, upd.matchDate, upd.matchCents);
+      if (idx >= 0) {
+        const prev = currentObligations[idx];
+        currentObligations[idx] = {
+          ...prev,
+          name: upd.description,
+          date: upd.date,
+          kind: upd.obligationKind ?? prev.kind ?? 'payment',
+          cents: upd.cents,
+          original: original(upd),
+          monthly: upd.monthly ?? prev.monthly ?? false,
+        };
+        extraSaved++;
+      }
+    }
+
+    for (const del of debtDeletes) {
+      const needle = del.matchName.trim().toLowerCase();
+      const idx = currentDebts.findIndex(item => String(item?.name ?? '').trim().toLowerCase() === needle)
+        ?? -1;
+      const finalIdx = idx >= 0 ? idx : currentDebts.findIndex(item => String(item?.name ?? '').trim().toLowerCase().includes(needle));
+      if (finalIdx >= 0) {
+        currentDebts.splice(finalIdx, 1);
+        extraSaved++;
+      }
+    }
+
+    for (const upd of debtUpdates) {
+      const needle = upd.matchName.trim().toLowerCase();
+      let idx = currentDebts.findIndex(item => String(item?.name ?? '').trim().toLowerCase() === needle);
+      if (idx < 0) idx = currentDebts.findIndex(item => String(item?.name ?? '').trim().toLowerCase().includes(needle));
+      if (idx >= 0) {
+        const prev = { ...currentDebts[idx] };
+        prev.name = upd.description;
+        prev.date = upd.date;
+        if (upd.cents != null && upd.currency && upd.nativeCents != null && upd.rate != null) {
+          prev.balance = upd.cents;
+          prev.balanceOriginal = { currency: upd.currency, nativeCents: upd.nativeCents, rate: upd.rate };
+        }
+        if (upd.minimum) {
+          prev.minimum = upd.minimum.cents;
+          prev.minimumOriginal = original(upd.minimum);
+        }
+        if (upd.apr != null) prev.apr = upd.apr;
+        currentDebts[idx] = prev;
+        extraSaved++;
+      }
+    }
 
     for (const upd of planUpdates) {
       if (upd.grocery != null) data.grocery = upd.grocery;
@@ -548,6 +728,10 @@ export async function storeDrafts(tx: Prisma.TransactionClient, scope: string, a
         smallSpend: false,
       });
     }
+  }
+  for (const de of entryDeletes) {
+    const deleted = await tx.centralFinanceEntry.deleteMany({ where: { scope, id: de.entryId } });
+    extraSaved += deleted.count;
   }
   const { count } = entries.length ? await tx.centralFinanceEntry.createMany({ data: entries, skipDuplicates: true }) : { count: 0 };
   return { saved: count + obligations.length + debts.length + extraSaved, duplicates: entries.length - count };

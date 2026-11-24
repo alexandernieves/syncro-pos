@@ -853,7 +853,9 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
 
   @Cron('0 8 * * *', { timeZone: 'America/Caracas' })
   async sendDailyProactiveAlerts() {
-    if (!process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_API_KEY) return;
+    const hasWhatsApp = Boolean(process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_KEY);
+    const hasTelegram = this.telegram.isConfigured();
+    if (!hasWhatsApp && !hasTelegram) return;
     const today = todayKey();
     const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
     const inTwoDays = new Date(Date.parse(`${today}T12:00:00Z`) + 2 * 86_400_000).toISOString().slice(0, 10);
@@ -908,7 +910,9 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
 
   @Cron('0 19 * * 0', { timeZone: 'America/Caracas' })
   async sendWeeklySummary() {
-    if (!process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_API_KEY) return;
+    const hasWhatsApp = Boolean(process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_KEY);
+    const hasTelegram = this.telegram.isConfigured();
+    if (!hasWhatsApp && !hasTelegram) return;
     const today = todayKey();
     const weekAgo = new Date(Date.parse(`${today}T12:00:00Z`) - 7 * 86_400_000).toISOString().slice(0, 10);
     const phones = await this.prisma.centralFinanceBotPhone.findMany({
@@ -970,7 +974,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
       }),
       this.prisma.centralFinanceEntry.findMany({
         where: { scope, date: { lte: today } }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }], take: 12,
-        select: { date: true, description: true, debit: true, credit: true, cents: true, currency: true, nativeCents: true },
+        select: { id: true, date: true, description: true, debit: true, credit: true, cents: true, currency: true, nativeCents: true },
       }),
       requested.bcv ? this.bcv.fetchBcv().catch(() => null) : null,
       requested.fiscal ? this.prisma.centralFiscalRecord.findMany({
