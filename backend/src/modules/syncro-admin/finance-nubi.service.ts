@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BcvService } from '../settings/bcv.service';
 import { fiscalRecordData, fiscalSupport } from './central-fiscal-data';
 import { requireFinanceScope } from './finance-access';
-import { defaultFinanceModel, FinanceNubiAi, type AiCallUsage, type FinanceHistory } from './finance-nubi-ai';
+import { defaultFinanceModel, financeModelOptions, FinanceNubiAi, type AiCallUsage, type FinanceHistory } from './finance-nubi-ai';
 import { describeDraft, storeDrafts, validateDrafts, type CalendarEventDraft, type DeleteCalendarEventDraft, type FinanceDraft, type LedgerDraft, type UpdateCalendarEventDraft } from './finance-nubi-drafts';
 import { financeNubiSecret, FinanceNubiTransport } from './finance-nubi-transport';
 import { FinanceGoogleCalendarService } from './finance-google-calendar.service';
@@ -67,8 +67,39 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
       this.ai.getKeyUsage().catch(() => null),
       this.prisma.centralFinancePlan.findUnique({ where: { scope: personalScope }, select: { data: true } }),
     ]);
-    const aiUsage = (personalPlan?.data as Record<string, any> | null)?.aiUsage ?? null;
-    return { ...status, phones, googleCalendar, openRouterKey, aiUsage, model: process.env.SYNCRO_FINANCE_OPENROUTER_MODEL || defaultFinanceModel, aiConfigured: !!process.env.OPENROUTER_API_KEY };
+    const rawPlan = personalPlan?.data as Record<string, any> | null;
+    const aiUsage = rawPlan?.aiUsage ?? null;
+    const activeModel = typeof rawPlan?.aiModel === 'string' && rawPlan.aiModel.trim()
+      ? rawPlan.aiModel.trim()
+      : (process.env.SYNCRO_FINANCE_OPENROUTER_MODEL || defaultFinanceModel);
+    return {
+      ...status,
+      phones,
+      googleCalendar,
+      openRouterKey,
+      aiUsage,
+      model: activeModel,
+      availableModels: financeModelOptions,
+      aiConfigured: !!process.env.OPENROUTER_API_KEY,
+    };
+  }
+
+  async setModel(user: any, rawModel: unknown) {
+    await requireFinanceScope(this.prisma, user, 'company');
+    const model = typeof rawModel === 'string' ? rawModel.trim() : '';
+    if (!/^[a-z0-9._-]+\/[a-z0-9._:-]+$/i.test(model) || model.length > 100) {
+      throw new BadRequestException('Modelo de OpenRouter inválido');
+    }
+    const scope = `personal:${user.id}`;
+    const existing = await this.prisma.centralFinancePlan.findUnique({ where: { scope } });
+    const data = (existing?.data ?? { income: 0, grocery: 0, dining: 0, reserve: 0, payday1: 15, payday2: 31, obligations: [], debts: [] }) as Record<string, any>;
+    const updated = { ...data, aiModel: model };
+    await this.prisma.centralFinancePlan.upsert({
+      where: { scope },
+      create: { scope, data: updated as Prisma.InputJsonObject },
+      update: { data: updated as Prisma.InputJsonObject },
+    });
+    return { model };
   }
 
   private async recordAiUsage(userId: string, usage: AiCallUsage, isAudio = false) {
@@ -435,7 +466,11 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
       const history = Array.isArray(row.history) ? row.history as FinanceHistory : [];
       const submitted = effectiveText || (attachment ? 'Lee el archivo. Pregunta qué hacer si no queda claro.' : '');
       if (!submitted) return { ok: true };
-      const output = await this.ai.respond(history, submitted, media, { ...snapshot, esNotaDeVoz: wasAudio, preferenciasDelUsuario: row.memory });
+      const personalPlanRow = await this.prisma.centralFinancePlan.findUnique({ where: { scope: `personal:${row.userId}` }, select: { data: true } });
+      const selectedModel = typeof (personalPlanRow?.data as Record<string, any> | null)?.aiModel === 'string'
+        ? String((personalPlanRow?.data as Record<string, any>).aiModel)
+        : undefined;
+      const output = await this.ai.respond(history, submitted, media, { ...snapshot, esNotaDeVoz: wasAudio, preferenciasDelUsuario: row.memory }, selectedModel);
       void this.recordAiUsage(row.userId, output.usage, false);
       let drafts: FinanceDraft[] = [];
       let question = output.reply;
@@ -684,6 +719,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
     if (safePlan) {
       delete safePlan.googleCalendar;
       delete safePlan.aiUsage;
+      delete safePlan.aiModel;
     }
 
     return {

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Header, HttpCode, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, Post, Put, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FinanceNubiService } from './finance-nubi.service';
@@ -59,6 +59,13 @@ export class FinanceNubiController {
   @UseGuards(JwtAuthGuard)
   disconnect(@Req() req: any) {
     return this.nubi.disconnect(req.user);
+  }
+
+  @Put('model')
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(JwtAuthGuard)
+  setModel(@Req() req: any, @Body() body: { model?: string }) {
+    return this.nubi.setModel(req.user, body?.model);
   }
 
   @Post('phones')

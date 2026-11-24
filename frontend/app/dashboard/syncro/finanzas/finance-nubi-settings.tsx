@@ -38,6 +38,7 @@ type Settings = {
   state: string;
   phones: Phone[];
   model: string;
+  availableModels?: { id: string; label: string }[];
   aiConfigured: boolean;
   googleCalendar?: { configured: boolean; connected: boolean; email: string | null };
   aiUsage?: AiUsage | null;
@@ -153,6 +154,22 @@ export default function FinanceNubiSettings() {
           </div>
           <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void act(load)}>Actualizar</Button>
         </div>
+        {settings.aiConfigured && settings.availableModels && settings.availableModels.length > 0 && (
+          <div className="max-w-md">
+            <FinanceSelect
+              label="Modelo de IA activo"
+              value={settings.model}
+              options={[
+                ...(settings.availableModels.some(m => m.id === settings.model) ? [] : [[settings.model, `${settings.model} (Actual en .env)`] as const]),
+                ...settings.availableModels.map(m => [m.id, m.label] as const),
+              ]}
+              onChange={nextModel => {
+                if (nextModel === settings.model) return;
+                void act(() => adminApi(path + "/model", { method: "PUT", body: JSON.stringify({ model: nextModel }) }));
+              }}
+            />
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
           <div className="rounded-xl border bg-muted/30 p-3">
             <p className="text-[11px] font-medium text-muted-foreground">Costo este mes (chat)</p>

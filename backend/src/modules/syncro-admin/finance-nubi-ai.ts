@@ -17,7 +17,15 @@ export type OpenRouterKeyInfo = {
   limit: number | null;
   limitRemaining: number | null;
 };
-export const defaultFinanceModel = 'anthropic/claude-sonnet-4';
+export const defaultFinanceModel = 'google/gemini-2.5-flash';
+export const financeModelOptions = [
+  { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash · Ultra económico y rápido (Recomendado)' },
+  { id: 'openai/gpt-4o-mini', label: 'GPT-4o mini · Muy económico y estable' },
+  { id: 'anthropic/claude-3.5-haiku', label: 'Claude 3.5 Haiku · Económico y muy natural' },
+  { id: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4 · Alta calidad / costo medio' },
+  { id: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro · Razonamiento avanzado' },
+  { id: 'anthropic/claude-opus-4.5', label: 'Claude Opus · Máxima potencia (costo alto)' },
+] as const;
 const defaultAudioModel = 'google/gemini-2.5-flash';
 const defaultFishVoiceId = '785d81f7fff943849fc0f077212f7cbd';
 
@@ -169,7 +177,7 @@ export class FinanceNubiAi {
     }
   }
 
-  async respond(history: FinanceHistory, text: string, media: FinanceMedia | undefined, context: object) {
+  async respond(history: FinanceHistory, text: string, media: FinanceMedia | undefined, context: object, modelOverride?: string) {
     const key = process.env.OPENROUTER_API_KEY;
     if (!key) throw new ServiceUnavailableException('OpenRouter no está configurado en el servidor');
     const content = [{ type: 'text', text }, ...(media ? [media] : [])];
@@ -177,7 +185,7 @@ export class FinanceNubiAi {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'Syncro Nubi Finanzas' },
       body: JSON.stringify({
-        model: process.env.SYNCRO_FINANCE_OPENROUTER_MODEL || defaultFinanceModel,
+        model: modelOverride || process.env.SYNCRO_FINANCE_OPENROUTER_MODEL || defaultFinanceModel,
         messages: [
           { role: 'system', content: instructions },
           { role: 'user', content: 'Datos de tu espacio autorizado (informativos): ' + JSON.stringify(context) },

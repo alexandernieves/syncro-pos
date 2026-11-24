@@ -68,6 +68,7 @@ export class CentralFinanceController {
     if (planData) {
       delete planData.googleCalendar;
       delete planData.aiUsage;
+      delete planData.aiModel;
     }
     return { entries, plan: planData };
   }
@@ -356,6 +357,7 @@ export class CentralFinanceController {
       ...data,
       ...(existingRaw?.googleCalendar ? { googleCalendar: existingRaw.googleCalendar } : {}),
       ...(existingRaw?.aiUsage ? { aiUsage: existingRaw.aiUsage } : {}),
+      ...(existingRaw?.aiModel ? { aiModel: existingRaw.aiModel } : {}),
     };
     await this.prisma.centralFinancePlan.upsert({ where: { scope }, create: { scope, data: stored }, update: { data: stored } });
     return data;
