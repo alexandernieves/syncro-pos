@@ -20,11 +20,12 @@ export type OpenRouterKeyInfo = {
 export const defaultFinanceModel = 'google/gemini-2.5-flash';
 export const financeModelOptions = [
   { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash · Ultra económico y rápido (Recomendado)' },
-  { id: 'openai/gpt-4o-mini', label: 'GPT-4o mini · Muy económico y estable' },
-  { id: 'anthropic/claude-3.5-haiku', label: 'Claude 3.5 Haiku · Económico y muy natural' },
-  { id: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4 · Alta calidad / costo medio' },
+  { id: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite · Costo mínimo' },
+  { id: 'openai/gpt-4.1-mini', label: 'GPT-4.1 mini · Muy económico y estable' },
+  { id: 'anthropic/claude-haiku-5.5', label: 'Claude Haiku 5.5 · Económico y muy humano' },
+  { id: 'anthropic/claude-sonnet-5.5', label: 'Claude Sonnet 5.5 · Alta calidad / costo medio' },
   { id: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro · Razonamiento avanzado' },
-  { id: 'anthropic/claude-opus-4', label: 'Claude Opus 4 · Máxima potencia (costo alto)' },
+  { id: 'anthropic/claude-opus-5.5', label: 'Claude Opus 5.5 · Máxima potencia (costo alto)' },
 ] as const;
 const defaultAudioModel = 'google/gemini-2.5-flash';
 const defaultFishVoiceId = '785d81f7fff943849fc0f077212f7cbd';
