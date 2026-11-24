@@ -192,20 +192,26 @@ export class FinanceNubiAi {
           ...history,
           { role: 'user', content },
         ],
-        provider: { zdr: true, data_collection: 'deny', require_parameters: true },
+        provider: { data_collection: 'deny' },
         response_format: { type: 'json_object' },
         usage: { include: true },
         ...(media?.type === 'file' && { plugins: [{ id: 'file-parser', pdf: { engine: 'native' } }] }),
-        max_tokens: 9000,
+        max_tokens: 4000,
       }),
       signal: AbortSignal.timeout(85_000),
       redirect: 'error',
     });
-    if (!response.ok) throw new ServiceUnavailableException('Nubi no pudo consultar un proveedor compatible con la configuración de privacidad.');
+    if (!response.ok) {
+      throw new ServiceUnavailableException(`OpenRouter rechazó el modelo (${response.status}). Prueba cambiar de modelo en Nubi WhatsApp.`);
+    }
     const body = await response.json();
     const raw = body.choices?.[0]?.message?.content;
     if (typeof raw !== 'string') throw new Error('No pude completar la lectura. Intenta con menos movimientos.');
-    const interpreted = JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, ''));
+    const cleaned = raw.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    const jsonSlice = firstBrace >= 0 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : cleaned;
+    const interpreted = JSON.parse(jsonSlice);
     if (typeof interpreted?.reply !== 'string' || !Array.isArray(interpreted.drafts)) {
       throw new Error('No pude interpretar ese mensaje con suficiente claridad. Intenta de nuevo.');
     }
