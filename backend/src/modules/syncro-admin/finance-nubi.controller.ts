@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Header, HttpCode, Param, Post, Put, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Headers, HttpCode, Param, Post, Put, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FinanceNubiService } from './finance-nubi.service';
@@ -91,5 +91,40 @@ export class FinanceNubiController {
   @HttpCode(200)
   webhook(@Query('token') token: unknown, @Body() payload: unknown) {
     return this.nubi.receive(token, payload);
+  }
+
+  @Post('telegram/connect')
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(JwtAuthGuard)
+  connectTelegram(@Req() req: any) {
+    const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+    const host = (req.headers['x-forwarded-host'] as string) || req.headers.host;
+    const origin = host ? `${proto}://${host}/api` : undefined;
+    return this.nubi.connectTelegram(req.user, origin);
+  }
+
+  @Post('telegram/disconnect')
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(JwtAuthGuard)
+  disconnectTelegram(@Req() req: any) {
+    return this.nubi.disconnectTelegram(req.user);
+  }
+
+  @Post('telegram/chats')
+  @UseGuards(JwtAuthGuard)
+  authorizeTelegram(@Req() req: any, @Body() input: unknown) {
+    return this.nubi.authorizeTelegram(req.user, input);
+  }
+
+  @Delete('telegram/chats/:chatId')
+  @UseGuards(JwtAuthGuard)
+  revokeTelegram(@Req() req: any, @Param('chatId') chatId: string) {
+    return this.nubi.revokeTelegram(req.user, chatId);
+  }
+
+  @Post('telegram/webhook')
+  @HttpCode(200)
+  telegramWebhook(@Headers('x-telegram-bot-api-secret-token') secret: unknown, @Body() payload: unknown) {
+    return this.nubi.receiveTelegram(secret, payload);
   }
 }

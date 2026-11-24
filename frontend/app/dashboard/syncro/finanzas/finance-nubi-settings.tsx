@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { CalendarDays, Copy, Cpu, LogOut, MessageCircle, QrCode, ShieldCheck } from "lucide-react";
+import { CalendarDays, Copy, Cpu, LogOut, MessageCircle, QrCode, Send, ShieldCheck } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { adminApi } from "@/lib/syncro-admin";
 import { Button } from "@/components/ui/button";
@@ -33,10 +33,13 @@ type OpenRouterKeyInfo = {
   limit: number | null;
   limitRemaining: number | null;
 };
+type TelegramChat = { chatId: string; workspace: "personal" | "company"; activeUntil: string | null };
 type Settings = {
   connected: boolean;
   state: string;
   phones: Phone[];
+  telegram?: { configured: boolean; connected: boolean; botUsername: string | null; webhookUrl: string | null };
+  telegramChats?: TelegramChat[];
   model: string;
   availableModels?: { id: string; label: string }[];
   aiConfigured: boolean;
@@ -102,6 +105,19 @@ export default function FinanceNubiSettings() {
     });
   }
 
+  function addTelegram(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    void act(async () => {
+      await adminApi(path + "/telegram/chats", {
+        method: "POST",
+        body: JSON.stringify({ chatId: values.get("chatId"), workspace: values.get("workspace") }),
+      });
+      form.reset();
+    });
+  }
+
   const connected = !!settings?.connected;
   const qrImage = /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/]+=*$/.test(qr) ? qr : "";
   const rawImage = /^iVBORw0KGgo[A-Za-z0-9+/]+=*$/.test(qr) ? "data:image/png;base64," + qr : "";
@@ -113,6 +129,75 @@ export default function FinanceNubiSettings() {
       <Skeleton className="h-32 rounded-2xl" /><Skeleton className="h-28 rounded-2xl" />
     </div>}
     {settings && <>
+      <section className="space-y-3 rounded-2xl border bg-card p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Send className="size-5 text-primary" />
+            <h2 className="font-semibold">Nubi en Telegram (Recomendado · Sin bloqueos)</h2>
+          </div>
+          {settings.telegram?.connected && (
+            <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+              Conectado{settings.telegram.botUsername ? ` · @${settings.telegram.botUsername}` : ""}
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Usa la API oficial de Telegram (gratis, sin restricciones de Meta, con notas de voz de Nubi y botones rápidos de Guardar/Cancelar).
+        </p>
+        {!settings.telegram?.configured ? (
+          <p className="text-xs text-muted-foreground">
+            Falta configurar <code className="rounded bg-muted px-1">SYNCRO_FINANCE_TELEGRAM_BOT_TOKEN</code> en <code className="rounded bg-muted px-1">backend.env</code> (créalo gratis en @BotFather).
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void act(() => adminApi(path + "/telegram/connect", { method: "POST" }))}
+            >
+              <Send className="size-4" /> {settings.telegram.connected ? "Re-vincular webhook" : "Activar bot de Telegram"}
+            </Button>
+            {settings.telegram.connected && (
+              <Button
+                type="button"
+                variant="outline"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                disabled={busy}
+                onClick={() => void act(() => adminApi(path + "/telegram/disconnect", { method: "POST" }))}
+              >
+                <LogOut className="size-4" /> Desconectar Telegram
+              </Button>
+            )}
+          </div>
+        )}
+        <form onSubmit={addTelegram} className="flex flex-wrap items-end gap-2 pt-1">
+          <label className="text-sm font-medium">
+            Tu Chat ID de Telegram
+            <Input name="chatId" inputMode="numeric" placeholder="Ej. 123456789" required maxLength={20} />
+          </label>
+          <FinanceSelect name="workspace" label="Espacio autorizado" defaultValue="personal" options={Object.entries(workspaceNames)} />
+          <Button type="submit" disabled={busy}>Autorizar Chat ID</Button>
+        </form>
+        <p className="text-xs text-muted-foreground">
+          Tip: escribe <code className="rounded bg-muted px-1">/start</code> a tu bot en Telegram y él mismo te dirá tu Chat ID exacto para copiarlo aquí.
+        </p>
+        {(settings.telegramChats?.length ?? 0) > 0 && (
+          <ul className="space-y-2">
+            {settings.telegramChats!.map(chat => (
+              <li key={chat.chatId} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3">
+                <div>
+                  <p className="font-medium">Chat ID: {chat.chatId}</p>
+                  <p className="text-xs text-muted-foreground">{workspaceNames[chat.workspace]} · siempre activo</p>
+                </div>
+                <Button size="sm" type="button" variant="ghost" disabled={busy} onClick={() => void act(() => adminApi(`${path}/telegram/chats/${chat.chatId}`, { method: "DELETE" }))}>
+                  Revocar
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       <section className="space-y-3 rounded-2xl border bg-card p-4 sm:p-5">
         <div className="flex items-center gap-2"><MessageCircle className="size-5 text-primary" /><h2 className="font-semibold">Conecta el número de Nubi</h2></div>
         <p role="status" className="text-sm">{connected ? "WhatsApp conectado" : settings.state === "NOT_CONFIGURED" ? "Falta configurar Evolution o el secreto del webhook en el backend." : "WhatsApp sin conectar"}</p>

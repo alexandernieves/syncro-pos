@@ -9,6 +9,7 @@ import { requireFinanceScope } from './finance-access';
 import { defaultFinanceModel, financeModelOptions, FinanceNubiAi, type AiCallUsage, type FinanceHistory } from './finance-nubi-ai';
 import { describeDraft, storeDrafts, validateDrafts, type CalendarEventDraft, type DeleteCalendarEventDraft, type FinanceDraft, type LedgerDraft, type UpdateCalendarEventDraft } from './finance-nubi-drafts';
 import { financeNubiSecret, FinanceNubiTransport } from './finance-nubi-transport';
+import { FinanceNubiTelegramTransport } from './finance-nubi-telegram';
 import { FinanceGoogleCalendarService } from './finance-google-calendar.service';
 
 const minutes = (value: number) => new Date(Date.now() + value * 60_000);
@@ -36,6 +37,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly transport: FinanceNubiTransport,
+    private readonly telegram: FinanceNubiTelegramTransport,
     private readonly ai: FinanceNubiAi,
     private readonly bcv: BcvService,
     private readonly gcal: FinanceGoogleCalendarService,
@@ -56,7 +58,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
   async settings(user: any) {
     await requireFinanceScope(this.prisma, user, 'company');
     const personalScope = `personal:${user.id}`;
-    const [status, phones, googleCalendar, openRouterKey, personalPlan] = await Promise.all([
+    const [status, allPhones, googleCalendar, openRouterKey, personalPlan, telegram] = await Promise.all([
       this.transport.status().catch(() => ({ connected: false, state: 'UNAVAILABLE' })),
       this.prisma.centralFinanceBotPhone.findMany({
         where: { userId: user.id },
@@ -66,7 +68,12 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
       this.gcal.getStatus(user.id).catch(() => ({ configured: false, connected: false, email: null })),
       this.ai.getKeyUsage().catch(() => null),
       this.prisma.centralFinancePlan.findUnique({ where: { scope: personalScope }, select: { data: true } }),
+      this.telegram.status().catch(() => ({ configured: false, connected: false, botUsername: null, webhookUrl: null })),
     ]);
+    const phones = allPhones.filter(p => !p.phone.startsWith('tg:'));
+    const telegramChats = allPhones
+      .filter(p => p.phone.startsWith('tg:'))
+      .map(p => ({ chatId: p.phone.slice(3), workspace: p.workspace, activeUntil: p.activeUntil }));
     const rawPlan = personalPlan?.data as Record<string, any> | null;
     const aiUsage = rawPlan?.aiUsage ?? null;
     const activeModel = typeof rawPlan?.aiModel === 'string' && rawPlan.aiModel.trim()
@@ -75,6 +82,8 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
     return {
       ...status,
       phones,
+      telegram,
+      telegramChats,
       googleCalendar,
       openRouterKey,
       aiUsage,
@@ -143,6 +152,275 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
   async disconnect(user: any) {
     await requireFinanceScope(this.prisma, user, 'company');
     return this.transport.disconnect();
+  }
+
+  async connectTelegram(user: any, publicOrigin?: string) {
+    await requireFinanceScope(this.prisma, user, 'company');
+    return this.telegram.connect(publicOrigin);
+  }
+
+  async disconnectTelegram(user: any) {
+    await requireFinanceScope(this.prisma, user, 'company');
+    return this.telegram.disconnect();
+  }
+
+  async authorizeTelegram(user: any, input: any) {
+    await requireFinanceScope(this.prisma, user, 'company');
+    const raw = String(input?.chatId ?? '').trim();
+    if (!/^-?\d{5,20}$/.test(raw)) throw new BadRequestException('Ingresa un Chat ID numérico válido de Telegram');
+    const workspace = input?.workspace;
+    if (workspace !== 'company' && workspace !== 'personal') throw new BadRequestException('Selecciona qué espacio autorizas');
+    const key = `tg:${raw}`;
+    try {
+      await this.prisma.centralFinanceBotPhone.create({
+        data: { phone: key, userId: user.id, workspace, activeUntil: minutes(30 * 24 * 60) },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Ese Chat ID de Telegram ya está autorizado.');
+      }
+      throw error;
+    }
+    return { chatId: raw, workspace };
+  }
+
+  async revokeTelegram(user: any, raw: string) {
+    await requireFinanceScope(this.prisma, user, 'company');
+    const clean = String(raw ?? '').trim();
+    if (!/^-?\d{5,20}$/.test(clean)) throw new BadRequestException('Chat ID inválido');
+    await this.prisma.centralFinanceBotPhone.deleteMany({ where: { phone: `tg:${clean}`, userId: user.id } });
+    return { ok: true };
+  }
+
+  async receiveTelegram(secretHeader: unknown, update: any) {
+    if (!this.telegram.isConfigured()) return { ok: true };
+    if (typeof secretHeader !== 'string' || !equal(secretHeader, this.telegram.webhookSecret())) {
+      throw new ForbiddenException();
+    }
+    const cb = update?.callback_query;
+    const msg = cb?.message ?? update?.message;
+    const chatId = msg?.chat?.id != null ? String(msg.chat.id) : null;
+    if (!chatId) return { ok: true };
+    const updateId = String(update?.update_id ?? msg?.message_id ?? '');
+    if (!updateId) return { ok: true };
+
+    if (cb?.id) void this.telegram.answerCallback(String(cb.id));
+
+    const eventId = hash(`tg:${chatId}:${updateId}`);
+    const ev = await this.prisma.centralFinanceBotEvent.createMany({ data: [{ id: eventId }], skipDuplicates: true });
+    if (!ev.count) return { ok: true, duplicate: true };
+
+    const key = `tg:${chatId}`;
+    const row = await this.prisma.centralFinanceBotPhone.findUnique({ where: { phone: key } });
+    const rawText = cb ? (cb.data === 'confirm' ? 'confirmar' : cb.data === 'cancel' ? 'cancelar' : '') : String(msg.text ?? msg.caption ?? '');
+    const text = rawText.trim().slice(0, 4000);
+    const command = text.toLowerCase();
+
+    if (!row) {
+      if (command === '/start' || command === 'finanza') {
+        await this.telegram.send(
+          chatId,
+          `Hola, soy *Nubi Finanzas*.\n\nTu *Chat ID* de Telegram es: \`${chatId}\`\n\nAgrégalo en *Syncro Central → Finanzas → Nubi* (sección Telegram) para autorizar este chat privado.`,
+        );
+      }
+      return { ok: true };
+    }
+
+    let scope: string;
+    try {
+      scope = await requireFinanceScope(this.prisma, { id: row.userId, role: 'syncropos' }, row.workspace);
+    } catch {
+      return { ok: true };
+    }
+
+    const send = (reply: string, withButtons = false) => this.telegram.send(chatId, reply, withButtons);
+
+    if (command === '/start') {
+      await this.change(row, { activeUntil: minutes(30 * 24 * 60) });
+      await send(`¡Hola! Ya estoy lista contigo en *${row.workspace === 'personal' ? 'Mis finanzas' : 'Empresa Syncro'}*. Escríbeme o mándame notas de voz, fotos de tickets, captures o PDFs.`);
+      return { ok: true };
+    }
+    if (command === 'memoria') {
+      await send(row.memory.length ? 'Preferencias guardadas:\n' + row.memory.map(n => `• ${n}`).join('\n')
+        : 'Todavía no hay preferencias guardadas. Escribe «recordar» y una nota.');
+      return { ok: true };
+    }
+    if (command === 'olvidar memoria') {
+      if (await this.change(row, { memory: [] })) await send('Preferencias borradas. Tus registros financieros siguen guardados.');
+      return { ok: true };
+    }
+    if (command.startsWith('recordar ')) {
+      const note = text.slice(9).trim();
+      if (!note || note.length > 250 || /\b\d{8,}\b|\S+@\S+|\b(contrase[nñ]a|password|clave|pin|otp)\b/i.test(note)) {
+        await send('Guarda una preferencia de hasta 250 caracteres (sin claves ni números de cuenta).');
+      } else if (await this.change(row, { memory: [...row.memory.filter(v => v !== note), note].slice(-20), activeUntil: minutes(30 * 24 * 60) })) {
+        await send('¡Listo! Ya lo guardé en mi memoria.');
+      }
+      return { ok: true };
+    }
+
+    const pendingObj = row.pending as { id?: string; rows?: unknown; fiscal?: Prisma.InputJsonObject } | null;
+    const hasAttachment = Boolean(!cb && (msg.voice || msg.audio || msg.photo?.length || msg.document));
+    const isNaturalConfirm = !hasAttachment && !!pendingObj?.id && /^(confirmar|confirmo|confirmado|s[ií]|dale|ok|okay|listo|perfecto|claro|an[oó]talo|gu[aá]rdalo|de una|va|hagale|h[aá]gale|adelante)[\s!.,]*$/i.test(text);
+    const isNaturalCancel = !hasAttachment && !!pendingObj?.id && /^(cancelar|cancela|no|descartar|descarta|d[eé]jalo|olv[ií]dalo)[\s!.,]*$/i.test(text);
+
+    if (isNaturalConfirm && pendingObj?.id) {
+      let result: Awaited<ReturnType<typeof storeDrafts>> | null = null;
+      let calendarDrafts: (CalendarEventDraft | UpdateCalendarEventDraft | DeleteCalendarEventDraft)[] = [];
+      try {
+        result = await this.prisma.$transaction(async tx => {
+          const session = await tx.centralFinanceBotPhone.updateMany({
+            where: { phone: key, userId: row.userId, revision: row.revision },
+            data: { ...noDraft, activeUntil: minutes(30 * 24 * 60), revision: { increment: 1 } },
+          });
+          if (!session.count) return null;
+          const validated = validateDrafts(pendingObj.rows, todayKey());
+          const isCal = (d: FinanceDraft): d is CalendarEventDraft | UpdateCalendarEventDraft | DeleteCalendarEventDraft =>
+            d.kind === 'calendarEvent' || d.kind === 'updateCalendarEvent' || d.kind === 'deleteCalendarEvent';
+          calendarDrafts = validated.filter(isCal);
+          const financeOnly = validated.filter(d => !isCal(d));
+          if (!financeOnly.length) return { saved: 0, duplicates: 0 };
+          return storeDrafts(tx, scope, row.userId, pendingObj.id!, financeOnly);
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      } catch {
+        await send('No pude guardar ese lote. Revisa los datos e intenta de nuevo.');
+        return { ok: true };
+      }
+      let calendarDone = 0;
+      let calendarError = '';
+      if (result && calendarDrafts.length) {
+        for (const item of calendarDrafts) {
+          try {
+            if (item.kind === 'calendarEvent') {
+              await this.gcal.createEvent(row.userId, { summary: item.description, date: item.date, startTime: item.startTime, durationMinutes: item.durationMinutes, description: item.notes });
+            } else if (item.kind === 'updateCalendarEvent') {
+              await this.gcal.updateEvent(row.userId, item.eventId, { summary: item.description, date: item.date, startTime: item.startTime, durationMinutes: item.durationMinutes, description: item.notes });
+            } else {
+              await this.gcal.deleteEvent(row.userId, item.eventId);
+            }
+            calendarDone++;
+          } catch (err) {
+            calendarError = err instanceof Error ? err.message : 'Error en Google Calendar.';
+          }
+        }
+      }
+      if (result) {
+        const parts: string[] = [];
+        if (result.saved > 0) parts.push(`${result.saved === 1 ? '1 registro guardado' : `${result.saved} registros guardados`} en Syncro Finanzas`);
+        if (calendarDone > 0) parts.push(`${calendarDone === 1 ? '1 cambio aplicado' : `${calendarDone} cambios aplicados`} en Google Calendar`);
+        if (calendarError) parts.push(`⚠️ ${calendarError}`);
+        await send(`¡Listo! ${parts.join(' · ') || 'Sin cambios nuevos'}.${result.duplicates ? ` (Omití ${result.duplicates} duplicado(s)).` : ''}`);
+      }
+      return { ok: true };
+    }
+
+    if (isNaturalCancel) {
+      if (await this.change(row, { ...noDraft, activeUntil: minutes(30 * 24 * 60) })) {
+        await send('Perfecto, lo descarté sin problema.');
+      }
+      return { ok: true };
+    }
+
+    try {
+      void this.telegram.action(chatId, 'typing');
+      const date = todayKey();
+      let media: import('./finance-nubi-transport').FinanceMedia | undefined;
+      let effectiveText = text;
+      let wasAudio = false;
+      if (!cb && (msg.voice || msg.audio)) {
+        const fileId = msg.voice?.file_id ?? msg.audio?.file_id;
+        media = await this.telegram.downloadMedia(fileId, { kind: 'voice' });
+        if (media.type === 'input_audio') {
+          wasAudio = true;
+          const audioRes = await this.ai.transcribeAudio(media);
+          void this.recordAiUsage(row.userId, audioRes.usage, true);
+          effectiveText = text ? `${text}\n(Nota de voz): ${audioRes.text}` : audioRes.text;
+          media = undefined;
+        }
+      } else if (!cb && Array.isArray(msg.photo) && msg.photo.length) {
+        const best = msg.photo[msg.photo.length - 1];
+        media = await this.telegram.downloadMedia(best.file_id, { kind: 'photo' });
+      } else if (!cb && msg.document) {
+        media = await this.telegram.downloadMedia(msg.document.file_id, {
+          kind: 'document',
+          fileName: msg.document.file_name,
+          mimeType: msg.document.mime_type,
+        });
+      }
+
+      const submitted = effectiveText || (media ? 'Lee este archivo y dime qué debo registrar.' : '');
+      if (!submitted) return { ok: true };
+
+      const snapshot = await this.snapshot(scope, date, row.userId, { bcv: true, fiscal: true });
+      const history = Array.isArray(row.history) ? row.history as FinanceHistory : [];
+      const personalPlanRow = await this.prisma.centralFinancePlan.findUnique({ where: { scope: `personal:${row.userId}` }, select: { data: true } });
+      const selectedModel = typeof (personalPlanRow?.data as Record<string, any> | null)?.aiModel === 'string'
+        ? String((personalPlanRow?.data as Record<string, any>).aiModel)
+        : undefined;
+
+      const output = await this.ai.respond(history, submitted, media, { ...snapshot, esNotaDeVoz: wasAudio, preferenciasDelUsuario: row.memory }, selectedModel);
+      void this.recordAiUsage(row.userId, output.usage, false);
+
+      let drafts: FinanceDraft[] = [];
+      let question = output.reply;
+      if (output.drafts.length) {
+        try {
+          drafts = validateDrafts(output.drafts, date);
+        } catch (err) {
+          question = err instanceof Error ? err.message : 'Revisa los datos antes de guardar.';
+        }
+      }
+      const review = drafts.length ? '\n\n' + drafts.map((d, i) => `${i + 1}. ${describeDraft(d)}`).join('\n') : '';
+      const updatedHistory: FinanceHistory = [
+        ...history,
+        { role: 'user', content: submitted },
+        { role: 'assistant', content: (question + review).slice(0, 14_000) },
+      ].slice(-16) as FinanceHistory;
+      const learned = output.learn && !/\b\d{8,}\b|\S+@\S+|\b(contrase[nñ]a|password|clave|pin|otp)\b/i.test(output.learn)
+        ? [...row.memory.filter(v => v !== output.learn), output.learn].slice(-20)
+        : undefined;
+
+      await this.change(row, {
+        history: updatedHistory,
+        activeUntil: minutes(30 * 24 * 60),
+        ...(learned ? { memory: learned } : {}),
+        pending: drafts.length ? { id: eventId, rows: drafts } as Prisma.InputJsonObject : Prisma.DbNull,
+      });
+
+      let sentVoice = false;
+      if (output.voice && process.env.FISH_AUDIO_API_KEY) {
+        const spoken = output.voiceText || question;
+        if (spoken) {
+          void this.telegram.action(chatId, 'record_voice');
+          const audioB64 = await this.ai.synthesizeVoice(spoken);
+          if (audioB64) {
+            try {
+              await this.telegram.sendAudio(chatId, audioB64);
+              sentVoice = true;
+            } catch {
+              sentVoice = false;
+            }
+          }
+        }
+      }
+
+      if (drafts.length) {
+        const textBody = (sentVoice ? '' : (question || 'Aquí tienes el resumen.')) +
+          (sentVoice ? review.trimStart() : review) +
+          '\n\nToca *Guardar* o dime *dale* para registrarlo.';
+        await send(textBody.trim(), true);
+      } else if (!sentVoice) {
+        await send(question || 'Aquí tienes el resumen.');
+      }
+    } catch (error) {
+      const safeReason = error instanceof Error ? error.message.slice(0, 160) : 'unknown';
+      this.logger.warn(`No se pudo procesar un mensaje de Nubi Telegram: ${safeReason}`);
+      const detail = error instanceof Error && /^(Envía|No pude|OpenRouter)/.test(error.message)
+        ? error.message
+        : 'No pude procesar este mensaje. Intenta nuevamente.';
+      await send(detail);
+    }
+    return { ok: true };
   }
 
   async authorize(user: any, input: any) {
@@ -615,10 +893,12 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
           alerts.push(`• *Agenda hoy:* ${calendarEvents.slice(0, 3).map(e => e.summary).join(' · ')}`);
         }
         if (alerts.length) {
-          await this.transport.send(
-            row.phone,
-            `¡Buenos días! Aquí tienes tu radar de hoy en *Syncro Finanzas*:\n\n${alerts.join('\n')}\n\nSi necesitas ajustar algo o agendar un pendiente, escríbeme por aquí.`,
-          );
+          const msg = `¡Buenos días! Aquí tienes tu radar de hoy en *Syncro Finanzas*:\n\n${alerts.join('\n')}\n\nSi necesitas ajustar algo o agendar un pendiente, escríbeme por aquí.`;
+          if (row.phone.startsWith('tg:')) {
+            if (this.telegram.isConfigured()) await this.telegram.send(row.phone.slice(3), msg);
+          } else {
+            await this.transport.send(row.phone, msg);
+          }
         }
       } catch {
         // Keep cron resilient per user
@@ -667,7 +947,12 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
           totalDebt > 0 ? `• *Deudas totales:* ${usdFmt(totalDebt)}${topDebt ? ` · Prioridad #1: ${topDebt.name}` : ''}` : '• *Deudas:* $0.00',
           'Mañana arrancamos con foco. Si quieres que revisemos tu plan para esta semana, escríbeme.',
         ];
-        await this.transport.send(row.phone, lines.join('\n'));
+        const textMsg = lines.join('\n');
+        if (row.phone.startsWith('tg:')) {
+          if (this.telegram.isConfigured()) await this.telegram.send(row.phone.slice(3), textMsg);
+        } else {
+          await this.transport.send(row.phone, textMsg);
+        }
       } catch {
         // Keep cron resilient per user
       }
