@@ -3,8 +3,30 @@ import { nubiCategories } from './finance-nubi-drafts';
 import type { FinanceMedia } from './finance-nubi-transport';
 
 export type FinanceHistory = { role: 'user' | 'assistant'; content: string }[];
+export type AiCallUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  costUsd: number;
+};
+export type OpenRouterKeyInfo = {
+  usage: number;
+  usageDaily: number;
+  usageWeekly: number;
+  usageMonthly: number;
+  limit: number | null;
+  limitRemaining: number | null;
+};
 export const defaultFinanceModel = 'anthropic/claude-sonnet-4';
 const defaultAudioModel = 'google/gemini-2.5-flash';
+
+function extractUsage(raw: any): AiCallUsage {
+  const promptTokens = Number(raw?.prompt_tokens ?? 0) || 0;
+  const completionTokens = Number(raw?.completion_tokens ?? 0) || 0;
+  const totalTokens = Number(raw?.total_tokens ?? promptTokens + completionTokens) || 0;
+  const costUsd = Number(raw?.cost ?? 0) || 0;
+  return { promptTokens, completionTokens, totalTokens, costUsd };
+}
 
 const instructions = `Eres Nubi Finanzas de Syncro: la compañera y mentora financiera personal del usuario.
 PERSONALIDAD Y TONO (MUY IMPORTANTE):
@@ -51,7 +73,32 @@ Si modoFiscal es true: devuelve drafts vacío y fiscal como objeto (kind invoice
 
 @Injectable()
 export class FinanceNubiAi {
-  async transcribeAudio(audio: Extract<FinanceMedia, { type: 'input_audio' }>): Promise<string> {
+  async getKeyUsage(): Promise<OpenRouterKeyInfo | null> {
+    const key = process.env.OPENROUTER_API_KEY;
+    if (!key) return null;
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/key', {
+        headers: { Authorization: `Bearer ${key}` },
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!response.ok) return null;
+      const body = await response.json();
+      const d = body?.data;
+      if (!d) return null;
+      return {
+        usage: Number(d.usage ?? 0) || 0,
+        usageDaily: Number(d.usage_daily ?? 0) || 0,
+        usageWeekly: Number(d.usage_weekly ?? 0) || 0,
+        usageMonthly: Number(d.usage_monthly ?? 0) || 0,
+        limit: d.limit == null ? null : Number(d.limit),
+        limitRemaining: d.limit_remaining == null ? null : Number(d.limit_remaining),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async transcribeAudio(audio: Extract<FinanceMedia, { type: 'input_audio' }>): Promise<{ text: string; usage: AiCallUsage }> {
     const key = process.env.OPENROUTER_API_KEY;
     if (!key) throw new ServiceUnavailableException('OpenRouter no está configurado en el servidor');
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -68,6 +115,7 @@ export class FinanceNubiAi {
             ],
           },
         ],
+        usage: { include: true },
         max_tokens: 1000,
       }),
       signal: AbortSignal.timeout(45_000),
@@ -79,7 +127,7 @@ export class FinanceNubiAi {
     if (typeof transcript !== 'string' || !transcript.trim()) {
       throw new Error('No pude entender el audio. Intenta de nuevo.');
     }
-    return transcript.trim().slice(0, 3500);
+    return { text: transcript.trim().slice(0, 3500), usage: extractUsage(body.usage) };
   }
 
   async respond(history: FinanceHistory, text: string, media: FinanceMedia | undefined, context: object) {
@@ -99,6 +147,7 @@ export class FinanceNubiAi {
         ],
         provider: { zdr: true, data_collection: 'deny', require_parameters: true },
         response_format: { type: 'json_object' },
+        usage: { include: true },
         ...(media?.type === 'file' && { plugins: [{ id: 'file-parser', pdf: { engine: 'native' } }] }),
         max_tokens: 9000,
       }),
@@ -119,6 +168,7 @@ export class FinanceNubiAi {
       fiscal: interpreted.fiscal,
       remember: typeof interpreted.remember === 'string' ? interpreted.remember.slice(0, 9000) : '',
       learn: typeof interpreted.learn === 'string' ? interpreted.learn.trim().slice(0, 240) : '',
+      usage: extractUsage(body.usage),
     };
   }
 }

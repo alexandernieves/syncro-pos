@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BcvService } from '../settings/bcv.service';
 import { fiscalRecordData, fiscalSupport } from './central-fiscal-data';
 import { requireFinanceScope } from './finance-access';
-import { defaultFinanceModel, FinanceNubiAi, type FinanceHistory } from './finance-nubi-ai';
+import { defaultFinanceModel, FinanceNubiAi, type AiCallUsage, type FinanceHistory } from './finance-nubi-ai';
 import { describeDraft, storeDrafts, validateDrafts, type CalendarEventDraft, type DeleteCalendarEventDraft, type FinanceDraft, type LedgerDraft, type UpdateCalendarEventDraft } from './finance-nubi-drafts';
 import { financeNubiSecret, FinanceNubiTransport } from './finance-nubi-transport';
 import { FinanceGoogleCalendarService } from './finance-google-calendar.service';
@@ -55,7 +55,8 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
 
   async settings(user: any) {
     await requireFinanceScope(this.prisma, user, 'company');
-    const [status, phones, googleCalendar] = await Promise.all([
+    const personalScope = `personal:${user.id}`;
+    const [status, phones, googleCalendar, openRouterKey, personalPlan] = await Promise.all([
       this.transport.status().catch(() => ({ connected: false, state: 'UNAVAILABLE' })),
       this.prisma.centralFinanceBotPhone.findMany({
         where: { userId: user.id },
@@ -63,8 +64,44 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         orderBy: { createdAt: 'asc' },
       }),
       this.gcal.getStatus(user.id).catch(() => ({ configured: false, connected: false, email: null })),
+      this.ai.getKeyUsage().catch(() => null),
+      this.prisma.centralFinancePlan.findUnique({ where: { scope: personalScope }, select: { data: true } }),
     ]);
-    return { ...status, phones, googleCalendar, model: process.env.SYNCRO_FINANCE_OPENROUTER_MODEL || defaultFinanceModel, aiConfigured: !!process.env.OPENROUTER_API_KEY };
+    const aiUsage = (personalPlan?.data as Record<string, any> | null)?.aiUsage ?? null;
+    return { ...status, phones, googleCalendar, openRouterKey, aiUsage, model: process.env.SYNCRO_FINANCE_OPENROUTER_MODEL || defaultFinanceModel, aiConfigured: !!process.env.OPENROUTER_API_KEY };
+  }
+
+  private async recordAiUsage(userId: string, usage: AiCallUsage, isAudio = false) {
+    if (!usage.totalTokens && !usage.costUsd) return;
+    try {
+      const scope = `personal:${userId}`;
+      const month = todayKey().slice(0, 7);
+      const existing = await this.prisma.centralFinancePlan.findUnique({ where: { scope } });
+      const data = (existing?.data ?? { income: 0, grocery: 0, dining: 0, reserve: 0, payday1: 15, payday2: 31, obligations: [], debts: [] }) as Record<string, any>;
+      const prev = (data.aiUsage ?? {}) as Record<string, any>;
+      const sameMonth = prev.month === month;
+      const nextUsage = {
+        totalCalls: (Number(prev.totalCalls) || 0) + 1,
+        audioCalls: (Number(prev.audioCalls) || 0) + (isAudio ? 1 : 0),
+        promptTokens: (Number(prev.promptTokens) || 0) + usage.promptTokens,
+        completionTokens: (Number(prev.completionTokens) || 0) + usage.completionTokens,
+        totalTokens: (Number(prev.totalTokens) || 0) + usage.totalTokens,
+        totalCostUsd: Number(((Number(prev.totalCostUsd) || 0) + usage.costUsd).toFixed(6)),
+        month,
+        monthCalls: (sameMonth ? Number(prev.monthCalls) || 0 : 0) + 1,
+        monthTokens: (sameMonth ? Number(prev.monthTokens) || 0 : 0) + usage.totalTokens,
+        monthCostUsd: Number(((sameMonth ? Number(prev.monthCostUsd) || 0 : 0) + usage.costUsd).toFixed(6)),
+        lastCallAt: new Date().toISOString(),
+      };
+      const updated = { ...data, aiUsage: nextUsage };
+      await this.prisma.centralFinancePlan.upsert({
+        where: { scope },
+        create: { scope, data: updated as Prisma.InputJsonObject },
+        update: { data: updated as Prisma.InputJsonObject },
+      });
+    } catch {
+      // Never block chat response for telemetry
+    }
   }
 
   async connect(user: any) {
@@ -218,7 +255,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
     }
 
     const pendingObj = row.pending as { id?: string; rows?: unknown; fiscal?: Prisma.InputJsonObject } | null;
-    const isNaturalConfirm = !attachment && !!pendingObj?.id && /^(confirmar|confirmo|s[ií]|dale|ok|okay|listo|perfecto|claro|an[oó]talo|gu[aá]rdalo|de una|va|hagale|h[aá]gale|adelante)[\s!.,]*$/i.test(text);
+    const isNaturalConfirm = !attachment && !!pendingObj?.id && /^(confirmar|confirmo|confirmado|s[ií]|dale|ok|okay|listo|perfecto|claro|an[oó]talo|gu[aá]rdalo|de una|va|hagale|h[aá]gale|adelante)[\s!.,]*$/i.test(text);
     const isNaturalCancel = !attachment && !!pendingObj?.id && /^(cancelar|cancela|no|descartar|descarta|d[eé]jalo|olv[ií]dalo)[\s!.,]*$/i.test(text);
 
     if (isNaturalConfirm || (!attachment && command === 'confirmar')) {
@@ -323,8 +360,9 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
       let media = attachment ? await this.transport.media({ ...message, message: content }, attachment) : undefined;
       let effectiveText = text;
       if (media?.type === 'input_audio') {
-        const transcript = await this.ai.transcribeAudio(media);
-        effectiveText = text ? `${text}\n(Nota de voz): ${transcript}` : transcript;
+        const audioResult = await this.ai.transcribeAudio(media);
+        void this.recordAiUsage(row.userId, audioResult.usage, true);
+        effectiveText = text ? `${text}\n(Nota de voz): ${audioResult.text}` : audioResult.text;
         media = undefined;
       }
       if (fiscalKind) {
@@ -391,6 +429,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
       const submitted = effectiveText || (attachment ? 'Lee el archivo. Pregunta qué hacer si no queda claro.' : '');
       if (!submitted) return { ok: true };
       const output = await this.ai.respond(history, submitted, media, { ...snapshot, preferenciasDelUsuario: row.memory });
+      void this.recordAiUsage(row.userId, output.usage, false);
       let drafts: FinanceDraft[] = [];
       let question = output.reply;
       if (output.drafts.length) {
@@ -613,7 +652,10 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
     const totalLiabilitiesDrainCents = liabilitiesList.reduce((s: number, l: any) => s + Number(l.monthlyDrainCents || 0), 0);
 
     const safePlan = plan?.data ? { ...(plan.data as Record<string, unknown>) } : null;
-    if (safePlan && 'googleCalendar' in safePlan) delete safePlan.googleCalendar;
+    if (safePlan) {
+      delete safePlan.googleCalendar;
+      delete safePlan.aiUsage;
+    }
 
     return {
       fechaCaracas: today, saldoContablePorCuentaEnCentavosUSD: balances,

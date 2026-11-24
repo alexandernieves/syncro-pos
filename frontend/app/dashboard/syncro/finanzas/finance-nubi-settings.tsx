@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { CalendarDays, Copy, MessageCircle, QrCode, ShieldCheck } from "lucide-react";
+import { CalendarDays, Copy, Cpu, MessageCircle, QrCode, ShieldCheck } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { adminApi } from "@/lib/syncro-admin";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,27 @@ import { FinanceSelect } from "./finance-fields";
 const path = "/finance-nubi";
 const workspaceNames = { personal: "Mis finanzas", company: "Empresa Syncro" };
 type Phone = { phone: string; workspace: "personal" | "company"; activeUntil: string | null };
+type AiUsage = {
+  totalCalls: number;
+  audioCalls: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  totalCostUsd: number;
+  month: string;
+  monthCalls: number;
+  monthTokens: number;
+  monthCostUsd: number;
+  lastCallAt: string | null;
+};
+type OpenRouterKeyInfo = {
+  usage: number;
+  usageDaily: number;
+  usageWeekly: number;
+  usageMonthly: number;
+  limit: number | null;
+  limitRemaining: number | null;
+};
 type Settings = {
   connected: boolean;
   state: string;
@@ -19,7 +40,11 @@ type Settings = {
   model: string;
   aiConfigured: boolean;
   googleCalendar?: { configured: boolean; connected: boolean; email: string | null };
+  aiUsage?: AiUsage | null;
+  openRouterKey?: OpenRouterKeyInfo | null;
 };
+const usdMicro = (value: number) => `$${(value || 0).toFixed(4)}`;
+const intFmt = (value: number) => (value || 0).toLocaleString("es-VE");
 
 export default function FinanceNubiSettings() {
   const [settings, setSettings] = useState<Settings>();
@@ -103,6 +128,50 @@ export default function FinanceNubiSettings() {
           </div>
           <p className="text-sm text-muted-foreground">En el WhatsApp del bot abre Dispositivos vinculados y escanea el QR.</p>
         </div>}
+      </section>
+      <section className="space-y-3 rounded-2xl border bg-card p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Cpu className="size-5 text-primary" />
+            <h2 className="font-semibold">Consumo de IA (Nubi Finanzas · OpenRouter)</h2>
+          </div>
+          <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void act(load)}>Actualizar</Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <div className="rounded-xl border bg-muted/30 p-3">
+            <p className="text-[11px] font-medium text-muted-foreground">Costo este mes (chat)</p>
+            <p className="mt-0.5 text-lg font-bold tabular-nums text-primary">{usdMicro(settings.aiUsage?.monthCostUsd ?? 0)}</p>
+            <p className="text-[11px] text-muted-foreground">{intFmt(settings.aiUsage?.monthCalls ?? 0)} mensajes</p>
+          </div>
+          <div className="rounded-xl border bg-muted/30 p-3">
+            <p className="text-[11px] font-medium text-muted-foreground">Tokens este mes</p>
+            <p className="mt-0.5 text-lg font-bold tabular-nums">{intFmt(settings.aiUsage?.monthTokens ?? 0)}</p>
+            <p className="text-[11px] text-muted-foreground">{intFmt(settings.aiUsage?.audioCalls ?? 0)} audios totales</p>
+          </div>
+          <div className="rounded-xl border bg-muted/30 p-3">
+            <p className="text-[11px] font-medium text-muted-foreground">Costo acumulado (chat)</p>
+            <p className="mt-0.5 text-lg font-bold tabular-nums">{usdMicro(settings.aiUsage?.totalCostUsd ?? 0)}</p>
+            <p className="text-[11px] text-muted-foreground">{intFmt(settings.aiUsage?.totalTokens ?? 0)} tokens</p>
+          </div>
+          <div className="rounded-xl border bg-muted/30 p-3">
+            <p className="text-[11px] font-medium text-muted-foreground">OpenRouter API Key</p>
+            <p className="mt-0.5 text-lg font-bold tabular-nums">
+              {settings.openRouterKey ? usdMicro(settings.openRouterKey.usageMonthly) : "—"}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {settings.openRouterKey
+                ? settings.openRouterKey.limitRemaining != null
+                  ? `Quedan $${settings.openRouterKey.limitRemaining.toFixed(2)}`
+                  : `Hoy: ${usdMicro(settings.openRouterKey.usageDaily)}`
+                : "Sin datos de key"}
+            </p>
+          </div>
+        </div>
+        {settings.aiUsage && (
+          <p className="text-xs text-muted-foreground tabular-nums">
+            Detalle acumulado de Nubi Finanzas: {intFmt(settings.aiUsage.promptTokens)} tokens entrada · {intFmt(settings.aiUsage.completionTokens)} tokens salida · {intFmt(settings.aiUsage.totalCalls)} llamadas totales.
+          </p>
+        )}
       </section>
       <section className="space-y-3 rounded-2xl border bg-card p-4 sm:p-5">
         <div className="flex items-center gap-2"><CalendarDays className="size-5 text-primary" /><h2 className="font-semibold">Google Calendar (Agenda personal)</h2></div>

@@ -65,8 +65,9 @@ export class CentralFinanceController {
       this.prisma.centralFinancePlan.findUnique({ where: { scope } }),
     ]);
     const planData = plan?.data ? { ...(plan.data as Record<string, unknown>) } : null;
-    if (planData && 'googleCalendar' in planData) {
+    if (planData) {
       delete planData.googleCalendar;
+      delete planData.aiUsage;
     }
     return { entries, plan: planData };
   }
@@ -350,8 +351,12 @@ export class CentralFinanceController {
     if (data.horizonWeeks > 52) throw new BadRequestException('El horizonte máximo es de 52 semanas');
     if (data.payday1 > 31 || data.payday2 > 31 || (frequency === 'twice-monthly' && data.payday1 >= data.payday2)) throw new BadRequestException('Días de cobro inválidos');
     const existingPlan = await this.prisma.centralFinancePlan.findUnique({ where: { scope } });
-    const existingGcal = (existingPlan?.data as Record<string, unknown> | null)?.googleCalendar;
-    const stored = existingGcal ? { ...data, googleCalendar: existingGcal } : data;
+    const existingRaw = existingPlan?.data as Record<string, unknown> | null;
+    const stored = {
+      ...data,
+      ...(existingRaw?.googleCalendar ? { googleCalendar: existingRaw.googleCalendar } : {}),
+      ...(existingRaw?.aiUsage ? { aiUsage: existingRaw.aiUsage } : {}),
+    };
     await this.prisma.centralFinancePlan.upsert({ where: { scope }, create: { scope, data: stored }, update: { data: stored } });
     return data;
   }
