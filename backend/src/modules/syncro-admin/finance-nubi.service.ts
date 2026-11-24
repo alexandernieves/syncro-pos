@@ -364,7 +364,9 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
       const date = todayKey();
       let media = attachment ? await this.transport.media({ ...message, message: content }, attachment) : undefined;
       let effectiveText = text;
+      let wasAudio = false;
       if (media?.type === 'input_audio') {
+        wasAudio = true;
         const audioResult = await this.ai.transcribeAudio(media);
         void this.recordAiUsage(row.userId, audioResult.usage, true);
         effectiveText = text ? `${text}\n(Nota de voz): ${audioResult.text}` : audioResult.text;
@@ -433,7 +435,7 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
       const history = Array.isArray(row.history) ? row.history as FinanceHistory : [];
       const submitted = effectiveText || (attachment ? 'Lee el archivo. Pregunta qué hacer si no queda claro.' : '');
       if (!submitted) return { ok: true };
-      const output = await this.ai.respond(history, submitted, media, { ...snapshot, preferenciasDelUsuario: row.memory });
+      const output = await this.ai.respond(history, submitted, media, { ...snapshot, esNotaDeVoz: wasAudio, preferenciasDelUsuario: row.memory });
       void this.recordAiUsage(row.userId, output.usage, false);
       let drafts: FinanceDraft[] = [];
       let question = output.reply;
@@ -475,8 +477,30 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         pending: drafts.length ? { id: eventId, rows: drafts } as Prisma.InputJsonObject : Prisma.DbNull,
       });
       if (updated && row.activeUntil && row.activeUntil.getTime() > Date.now()) {
-        await send((question || 'Aquí tienes el resumen.') + review + repeatNote +
-          (drafts.length ? '\n\n¿Te lo dejo guardado así en la app? Solo dime *dale* o corrígeme cualquier detalle.' : ''));
+        let sentVoice = false;
+        if (output.voice && process.env.FISH_AUDIO_API_KEY) {
+          const spoken = output.voiceText || question;
+          if (spoken) {
+            void this.transport.recording(phone);
+            const audioB64 = await this.ai.synthesizeVoice(spoken);
+            if (audioB64) {
+              try {
+                await this.transport.sendAudio(phone, audioB64);
+                sentVoice = true;
+              } catch {
+                sentVoice = false;
+              }
+            }
+          }
+        }
+        if (drafts.length) {
+          const textBody = (sentVoice ? '' : (question || 'Aquí tienes el resumen.')) +
+            (sentVoice ? review.trimStart() : review) + repeatNote +
+            '\n\n¿Te lo dejo guardado así? Solo dime *dale* o corrígeme cualquier detalle.';
+          await send(textBody.trim());
+        } else if (!sentVoice) {
+          await send((question || 'Aquí tienes el resumen.') + repeatNote);
+        }
       }
     } catch (error) {
       if (fiscalKind) {

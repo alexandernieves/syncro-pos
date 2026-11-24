@@ -92,6 +92,21 @@ export class FinanceNubiTransport {
     }, 5_000).catch(() => {});
   }
 
+  async recording(phone: string) {
+    await this.request(`/chat/sendPresence/${instance}`, {
+      method: 'POST',
+      body: JSON.stringify({ number: phone, presence: 'recording', delay: 6000 }),
+    }, 5_000).catch(() => {});
+  }
+
+  async sendAudio(phone: string, audioBase64: string) {
+    const response = await this.request(`/message/sendWhatsAppAudio/${instance}`, {
+      method: 'POST',
+      body: JSON.stringify({ number: phone, audio: audioBase64, encoding: true }),
+    }, 25_000);
+    if (!response.ok) throw new ServiceUnavailableException('Evolution no pudo enviar la nota de voz');
+  }
+
   async send(phone: string, text: string) {
     // A large reviewed bank batch may need more than one WhatsApp message.
     let remaining = formatWhatsAppText(text);
