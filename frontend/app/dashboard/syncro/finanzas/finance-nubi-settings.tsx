@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { CalendarDays, Copy, Cpu, MessageCircle, QrCode, ShieldCheck } from "lucide-react";
+import { CalendarDays, Copy, Cpu, LogOut, MessageCircle, QrCode, ShieldCheck } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { adminApi } from "@/lib/syncro-admin";
 import { Button } from "@/components/ui/button";
@@ -116,11 +116,27 @@ export default function FinanceNubiSettings() {
         <div className="flex items-center gap-2"><MessageCircle className="size-5 text-primary" /><h2 className="font-semibold">Conecta el número de Nubi</h2></div>
         <p role="status" className="text-sm">{connected ? "WhatsApp conectado" : settings.state === "NOT_CONFIGURED" ? "Falta configurar Evolution o el secreto del webhook en el backend." : "WhatsApp sin conectar"}</p>
         {settings.aiConfigured ? <p className="text-xs text-muted-foreground">Modelo: {settings.model}</p> : <p className="text-sm text-destructive">Falta configurar la clave de OpenRouter.</p>}
-        <Button type="button" variant="outline" disabled={busy || settings.state === "NOT_CONFIGURED"} onClick={() => void act(async () => {
-          const result = await adminApi<{ qr: string | null; connected: boolean }>(path + "/connect", { method: "POST" });
-          setQr(result.qr ?? "");
-          if (!result.qr && !result.connected) throw new Error("El QR todavía no está disponible. Vuelve a generarlo.");
-        })}><QrCode /> {connected ? "Reparar conexión" : qr ? "Actualizar QR" : "Generar código QR"}</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" disabled={busy || settings.state === "NOT_CONFIGURED"} onClick={() => void act(async () => {
+            const result = await adminApi<{ qr: string | null; connected: boolean }>(path + "/connect", { method: "POST" });
+            setQr(result.qr ?? "");
+            if (!result.qr && !result.connected) throw new Error("El QR todavía no está disponible. Vuelve a generarlo.");
+          })}><QrCode /> {connected ? "Reparar conexión" : qr ? "Actualizar QR" : "Generar código QR"}</Button>
+          {connected && (
+            <Button
+              type="button"
+              variant="outline"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              disabled={busy}
+              onClick={() => void act(async () => {
+                await adminApi(path + "/disconnect", { method: "POST" });
+                setQr("");
+              })}
+            >
+              <LogOut className="size-4" /> Desconectar WhatsApp
+            </Button>
+          )}
+        </div>
         {qr && <div className="space-y-2">
           <div className="w-fit max-w-full rounded-xl bg-white p-3">
             {image ? <img src={image} width={224} height={224} alt="QR para vincular WhatsApp de Nubi Finanzas" />

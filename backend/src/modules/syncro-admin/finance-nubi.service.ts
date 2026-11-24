@@ -109,6 +109,11 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
     return this.transport.connect();
   }
 
+  async disconnect(user: any) {
+    await requireFinanceScope(this.prisma, user, 'company');
+    return this.transport.disconnect();
+  }
+
   async authorize(user: any, input: any) {
     await requireFinanceScope(this.prisma, user, 'company');
     const phone = phoneNumber(input?.phone);

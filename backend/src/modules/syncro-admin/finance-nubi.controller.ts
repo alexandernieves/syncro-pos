@@ -54,6 +54,13 @@ export class FinanceNubiController {
     return this.nubi.connect(req.user);
   }
 
+  @Post('disconnect')
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(JwtAuthGuard)
+  disconnect(@Req() req: any) {
+    return this.nubi.disconnect(req.user);
+  }
+
   @Post('phones')
   @UseGuards(JwtAuthGuard)
   authorize(@Req() req: any, @Body() input: unknown) {

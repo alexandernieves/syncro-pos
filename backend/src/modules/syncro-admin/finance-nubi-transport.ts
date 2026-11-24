@@ -77,6 +77,14 @@ export class FinanceNubiTransport {
     return { connected: false, state: 'QR', qr: typeof qr === 'string' && qr.length <= 500_000 ? qr : null };
   }
 
+  async disconnect() {
+    const response = await this.request(`/instance/logout/${instance}`, { method: 'DELETE' });
+    if (!response.ok && response.status !== 404) {
+      throw new ServiceUnavailableException('Evolution no pudo desconectar el WhatsApp');
+    }
+    return { connected: false, state: 'DISCONNECTED' };
+  }
+
   async typing(phone: string) {
     await this.request(`/chat/sendPresence/${instance}`, {
       method: 'POST',
