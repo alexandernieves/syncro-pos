@@ -196,39 +196,52 @@ export class FinanceNubiAi {
       max_tokens: 4000,
     };
     const isAnthropic = model.startsWith('anthropic/');
-    const callOpenRouter = (withJsonFormat: boolean) =>
+    const callOpenRouter = (opts: { withJsonFormat: boolean; withPrivacyFilter: boolean }) =>
       fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'Syncro Nubi Finanzas' },
         body: JSON.stringify({
-          ...basePayload,
-          ...(withJsonFormat ? { response_format: { type: 'json_object' } } : {}),
+          model,
+          messages: basePayload.messages,
+          usage: { include: true },
+          ...(opts.withPrivacyFilter ? { provider: { data_collection: 'deny' } } : {}),
+          ...(opts.withJsonFormat ? { response_format: { type: 'json_object' } } : {}),
+          ...(media?.type === 'file' && { plugins: [{ id: 'file-parser', pdf: { engine: 'native' } }] }),
+          max_tokens: 4000,
         }),
         signal: AbortSignal.timeout(85_000),
         redirect: 'error',
       });
 
-    let response = await callOpenRouter(!isAnthropic);
-    if (!response.ok && !isAnthropic && (response.status === 400 || response.status === 404)) {
-      response = await callOpenRouter(false);
+    let response = await callOpenRouter({ withJsonFormat: !isAnthropic, withPrivacyFilter: true });
+    if (!response.ok && (response.status === 400 || response.status === 404)) {
+      response = await callOpenRouter({ withJsonFormat: false, withPrivacyFilter: false });
     }
     if (!response.ok) {
-      throw new ServiceUnavailableException(`OpenRouter rechazó el modelo ${model} (${response.status}).`);
+      const errBody = await response.text().catch(() => '');
+      throw new ServiceUnavailableException(`OpenRouter (${model}) respondió ${response.status}${errBody.includes('credit') ? ' · revisa saldo en OpenRouter' : ''}.`);
     }
     const body = await response.json();
     const raw = body.choices?.[0]?.message?.content;
-    if (typeof raw !== 'string') throw new Error('No pude completar la lectura. Intenta con menos movimientos.');
+    if (typeof raw !== 'string' || !raw.trim()) throw new Error('No pude completar la lectura. Intenta con menos movimientos.');
     const cleaned = raw.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
     const firstBrace = cleaned.indexOf('{');
     const lastBrace = cleaned.lastIndexOf('}');
     const jsonSlice = firstBrace >= 0 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : cleaned;
-    const interpreted = JSON.parse(jsonSlice);
-    if (typeof interpreted?.reply !== 'string' || !Array.isArray(interpreted.drafts)) {
-      throw new Error('No pude interpretar ese mensaje con suficiente claridad. Intenta de nuevo.');
+    let interpreted: Record<string, any>;
+    try {
+      interpreted = JSON.parse(jsonSlice);
+    } catch {
+      // Fallback: if the model replied in plain text instead of JSON, still reply cleanly
+      interpreted = { reply: cleaned, drafts: [] };
     }
+    if (typeof interpreted?.reply !== 'string') {
+      interpreted = { ...interpreted, reply: cleaned, drafts: Array.isArray(interpreted?.drafts) ? interpreted.drafts : [] };
+    }
+    const drafts = Array.isArray(interpreted.drafts) ? interpreted.drafts : [];
     return {
       reply: interpreted.reply.trim().slice(0, 1200),
-      drafts: interpreted.drafts as unknown[],
+      drafts: drafts as unknown[],
       fiscal: interpreted.fiscal,
       voice: interpreted.voice === true,
       voiceText: typeof interpreted.voiceText === 'string' ? interpreted.voiceText.trim().slice(0, 320) : '',

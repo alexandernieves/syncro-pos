@@ -545,11 +545,13 @@ export class FinanceNubiService implements OnModuleInit, OnModuleDestroy {
         }
         return { ok: true };
       }
-      // Never log message content, document bodies, model output, credentials or provider responses.
-      this.logger.warn('No se pudo procesar un mensaje de Nubi Finanzas');
+      // Log only safe technical reason (never user content or credentials).
+      const safeReason = error instanceof Error ? error.message.slice(0, 160) : 'unknown';
+      this.logger.warn(`No se pudo procesar un mensaje de Nubi Finanzas: ${safeReason}`);
       const latest = await this.prisma.centralFinanceBotPhone.findUnique({ where: { phone }, select: { activeUntil: true, revision: true } });
       if (latest?.revision === row.revision && latest.activeUntil && latest.activeUntil.getTime() > Date.now()) {
-        const detail = error instanceof Error && /^(Envía|No pude abrir el archivo|No pude leer ese archivo)/.test(error.message) ? error.message
+        const detail = error instanceof Error && /^(Envía|No pude abrir el archivo|No pude leer ese archivo|No pude escuchar|OpenRouter)/.test(error.message)
+          ? error.message
           : 'No pude procesar este mensaje. Intenta nuevamente.';
         await send(detail);
       }
