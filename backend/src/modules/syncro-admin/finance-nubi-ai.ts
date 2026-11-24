@@ -24,7 +24,7 @@ export const financeModelOptions = [
   { id: 'anthropic/claude-3.5-haiku', label: 'Claude 3.5 Haiku · Económico y muy natural' },
   { id: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4 · Alta calidad / costo medio' },
   { id: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro · Razonamiento avanzado' },
-  { id: 'anthropic/claude-opus-4.5', label: 'Claude Opus · Máxima potencia (costo alto)' },
+  { id: 'anthropic/claude-opus-4', label: 'Claude Opus 4 · Máxima potencia (costo alto)' },
 ] as const;
 const defaultAudioModel = 'google/gemini-2.5-flash';
 const defaultFishVoiceId = '785d81f7fff943849fc0f077212f7cbd';
@@ -180,29 +180,40 @@ export class FinanceNubiAi {
   async respond(history: FinanceHistory, text: string, media: FinanceMedia | undefined, context: object, modelOverride?: string) {
     const key = process.env.OPENROUTER_API_KEY;
     if (!key) throw new ServiceUnavailableException('OpenRouter no está configurado en el servidor');
+    const model = modelOverride || process.env.SYNCRO_FINANCE_OPENROUTER_MODEL || defaultFinanceModel;
     const content = [{ type: 'text', text }, ...(media ? [media] : [])];
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'Syncro Nubi Finanzas' },
-      body: JSON.stringify({
-        model: modelOverride || process.env.SYNCRO_FINANCE_OPENROUTER_MODEL || defaultFinanceModel,
-        messages: [
-          { role: 'system', content: instructions },
-          { role: 'user', content: 'Datos de tu espacio autorizado (informativos): ' + JSON.stringify(context) },
-          ...history,
-          { role: 'user', content },
-        ],
-        provider: { data_collection: 'deny' },
-        response_format: { type: 'json_object' },
-        usage: { include: true },
-        ...(media?.type === 'file' && { plugins: [{ id: 'file-parser', pdf: { engine: 'native' } }] }),
-        max_tokens: 4000,
-      }),
-      signal: AbortSignal.timeout(85_000),
-      redirect: 'error',
-    });
+    const basePayload = {
+      model,
+      messages: [
+        { role: 'system', content: instructions },
+        { role: 'user', content: 'Datos de tu espacio autorizado (informativos): ' + JSON.stringify(context) },
+        ...history,
+        { role: 'user', content },
+      ],
+      provider: { data_collection: 'deny' },
+      usage: { include: true },
+      ...(media?.type === 'file' && { plugins: [{ id: 'file-parser', pdf: { engine: 'native' } }] }),
+      max_tokens: 4000,
+    };
+    const isAnthropic = model.startsWith('anthropic/');
+    const callOpenRouter = (withJsonFormat: boolean) =>
+      fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'Syncro Nubi Finanzas' },
+        body: JSON.stringify({
+          ...basePayload,
+          ...(withJsonFormat ? { response_format: { type: 'json_object' } } : {}),
+        }),
+        signal: AbortSignal.timeout(85_000),
+        redirect: 'error',
+      });
+
+    let response = await callOpenRouter(!isAnthropic);
+    if (!response.ok && !isAnthropic && (response.status === 400 || response.status === 404)) {
+      response = await callOpenRouter(false);
+    }
     if (!response.ok) {
-      throw new ServiceUnavailableException(`OpenRouter rechazó el modelo (${response.status}). Prueba cambiar de modelo en Nubi WhatsApp.`);
+      throw new ServiceUnavailableException(`OpenRouter rechazó el modelo ${model} (${response.status}).`);
     }
     const body = await response.json();
     const raw = body.choices?.[0]?.message?.content;
